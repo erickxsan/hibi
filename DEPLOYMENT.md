@@ -5,7 +5,7 @@ The recommended free stack is Supabase for authentication/database and Cloudflar
 ## 1. Create and configure Supabase
 
 1. Create a Supabase project.
-2. Apply `supabase/migrations/202607110001_initial_multi_account_workspaces.sql` using the Supabase SQL Editor, or link the Supabase CLI and run `supabase db push`.
+2. Apply `supabase/migrations/202607110001_initial_multi_account_workspaces.sql` using the Supabase SQL Editor, or link the Supabase CLI and run `supabase db push`. If SQL Editor was used, mark migration `202607110001` as applied before a future CLI `db push` so remote migration history stays aligned.
 3. In **Authentication → URL Configuration**, set the production Site URL to `https://usehibi.pages.dev/` and add these redirect URLs:
    - `http://127.0.0.1:4173/`
    - `https://usehibi.pages.dev/`
@@ -38,10 +38,11 @@ Follow the two-account procedure in `supabase/README.md`. With Docker Desktop an
 Use these project settings:
 
 - Framework preset: **Vite**
-- Build command: `pnpm build`
+- Build command: `pnpm test && pnpm build`
 - Build output directory: `dist`
 - Project name: **usehibi**
 - Production branch: **main**
+- Build runtime variables: `NODE_VERSION=22.16.0` and `PNPM_VERSION=11.7.0`
 - Environment variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and—only when Supabase CAPTCHA is enabled—`VITE_HCAPTCHA_SITE_KEY`
 
 The files in `public/` add SPA routing, anti-indexing, and browser security headers during the build. After the first deployment, add the final Pages URL to Supabase's allowed redirect URLs and test first-time Google registration, returning Google login, legacy email login, sign-out, and a second browser/device.
@@ -62,4 +63,6 @@ Because `localStorage` is tied to an exact origin, use this safe sequence:
 - Export periodic backups and keep them in protected storage.
 - Removing an Auth user through an admin operation cascades to that account's workspace.
 - Support contact: `hibicontact.old339@passinbox.com`. Ensure this mailbox remains available before publishing it as the account-deletion channel.
+- Public launch pages are available at `/privacy.html` and `/terms.html`. Review them for the operator's jurisdiction and keep the published support mailbox available.
+- A `pages.dev` hostname can run an External/In-production Google OAuth client, but it cannot provide the DNS ownership Google expects for a verified production brand. A later verified custom domain is recommended to remove the unverified-brand limitation.
 - Before leaving Google OAuth testing mode or promoting hibi publicly, publish a reviewed privacy notice and define consent, access, retention, and deletion procedures appropriate to the students' jurisdiction.

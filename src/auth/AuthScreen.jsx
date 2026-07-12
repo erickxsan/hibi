@@ -309,7 +309,14 @@ export function AuthScreen({
             <h2>Teaching organized.<br />Time reclaimed.</h2>
             <p>One calm place for your students, grades, classes, and payments.</p>
           </div>
-          <img className="auth-brand-art" src="/hibi-logo.png" alt="hibi cat resting on a class planner" />
+          <img
+            className="auth-brand-art"
+            src="/hibi-logo.png"
+            alt="hibi cat resting on a class planner"
+            loading="lazy"
+            decoding="async"
+            fetchPriority="low"
+          />
           <div className="auth-color-notes" aria-hidden="true">
             <span />
             <span />
@@ -441,6 +448,12 @@ export function AuthScreen({
               </button>
             </p>
           ) : null}
+
+          <footer className="auth-legal-links" aria-label="Legal and support links">
+            <a href="/privacy.html">Privacy</a>
+            <a href="/terms.html">Terms</a>
+            <a href="mailto:hibicontact.old339@passinbox.com">Support</a>
+          </footer>
         </div>
       </section>
     </main>

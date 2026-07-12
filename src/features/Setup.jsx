@@ -264,7 +264,14 @@ export default function Setup({ state, derived, actions, persistenceMode, intent
           </form>
 
           <section className="data-tools" aria-labelledby="data-tools-title">
-            <div className="panel-heading"><h2 id="data-tools-title">Backup and reset</h2><p>Your records stay in this browser unless you export a backup.</p></div>
+            <div className="panel-heading">
+              <h2 id="data-tools-title">Backup and reset</h2>
+              <p>
+                {persistenceMode === "cloud"
+                  ? "Your records sync to your private cloud workspace. Export a backup whenever you want an offline copy."
+                  : "Your records stay in this browser unless you export a backup."}
+              </p>
+            </div>
             <p className="privacy-note">JSON backups contain personal, grade, attendance, and payment information in readable text. Keep them in a private, protected location.</p>
             <div className="stacked-actions">
               <Button icon={Download} onClick={actions.exportJson}>Download JSON backup</Button>
@@ -324,7 +331,7 @@ export default function Setup({ state, derived, actions, persistenceMode, intent
       <ConfirmDialog
         open={Boolean(pendingImport)}
         title="Restore this backup?"
-        description={pendingImport ? `${pendingImport.name} contains ${pendingImport.counts.students} students, ${pendingImport.counts.groups} groups, ${pendingImport.counts.grades} grades, and ${pendingImport.counts.classes} class records. Restoring replaces the data currently saved in this browser.` : ""}
+        description={pendingImport ? `${pendingImport.name} contains ${pendingImport.counts.students} students, ${pendingImport.counts.groups} groups, ${pendingImport.counts.grades} grades, and ${pendingImport.counts.classes} class records. Restoring replaces the data currently saved in ${persistenceMode === "cloud" ? "your cloud workspace" : "this browser"}.` : ""}
         confirmLabel="Restore backup"
         tone="primary"
         busy={saving}

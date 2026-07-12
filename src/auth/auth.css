@@ -656,6 +656,33 @@
   cursor: wait;
 }
 
+.auth-legal-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 16px;
+  margin-top: 22px;
+  font-size: 11px;
+}
+
+.auth-legal-links a {
+  color: #5b6f6b;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.auth-legal-links a:hover {
+  color: #263d38;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.auth-legal-links a:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid #5f8981;
+  outline-offset: 3px;
+}
+
 @media (max-width: 720px) {
   .auth-screen {
     align-items: start;
