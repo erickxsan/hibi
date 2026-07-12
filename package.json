@@ -1,0 +1,25 @@
+{
+  "name": "hibi-class-manager",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "vitest run",
+    "test:db": "supabase test db"
+  },
+  "dependencies": {
+    "@hcaptcha/react-hcaptcha": "^2.0.2",
+    "@supabase/supabase-js": "2.57.4",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.8"
+  }
+}

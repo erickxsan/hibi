@@ -1,0 +1,155 @@
+.cloud-state-screen {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 28px;
+  background: var(--canvas);
+}
+
+.cloud-state-card,
+.cloud-migration-card {
+  width: min(680px, 100%);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.cloud-state-card {
+  display: grid;
+  max-width: 430px;
+  justify-items: center;
+  gap: 10px;
+  padding: 42px;
+  text-align: center;
+}
+
+.cloud-state-card .brand-mark { width: 58px; height: 58px; }
+.cloud-state-card h1,
+.cloud-migration-card h1 { margin: 0; letter-spacing: -0.035em; }
+.cloud-state-card p { margin: 0; color: var(--muted); }
+
+.cloud-state-spinner {
+  width: 24px;
+  height: 24px;
+  margin: 8px;
+  border: 3px solid var(--teal-soft);
+  border-top-color: var(--teal-strong);
+  border-radius: 50%;
+  animation: cloud-spin 700ms linear infinite;
+}
+
+@keyframes cloud-spin { to { transform: rotate(360deg); } }
+
+.cloud-state-icon {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  flex: 0 0 52px;
+  place-items: center;
+  border-radius: 15px;
+  background: var(--teal-soft);
+  color: var(--teal-strong);
+}
+
+.cloud-error-card .cloud-state-icon {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.cloud-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.cloud-migration-card { padding: 30px; }
+.cloud-migration-heading { display: flex; gap: 16px; }
+.cloud-migration-heading > div { min-width: 0; }
+.cloud-migration-heading > div > p:last-child { margin: 8px 0 0; color: var(--muted); }
+.cloud-eyebrow { margin: 0 0 3px; color: var(--teal-strong); font-size: 11px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
+
+.cloud-migration-counts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 26px 0 18px;
+}
+
+.cloud-migration-counts > div {
+  display: grid;
+  gap: 2px;
+  padding: 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background: #fbf8f1;
+}
+
+.cloud-migration-counts strong { font-size: 21px; }
+.cloud-migration-counts span { color: var(--muted); font-size: 11px; font-weight: 700; }
+
+.cloud-security-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 13px;
+  border-radius: 12px;
+  background: var(--olive-soft);
+  color: #426c46;
+}
+
+.cloud-security-note svg { flex: 0 0 auto; }
+.cloud-security-note p,
+.cloud-migration-error { margin: 0; font-size: 12px; }
+.cloud-migration-error { margin-top: 12px; color: var(--danger); }
+.cloud-migration-actions { justify-content: flex-end; }
+
+.manager-toolbar { display: flex; align-items: center; gap: 9px; }
+.cloud-mode-pill {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--mustard-soft);
+  color: #65501d;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+@media (max-width: 1000px) {
+  .manager-toolbar > .button { width: 44px; padding: 0; }
+  .manager-toolbar > .button span,
+  .manager-toolbar .account-trigger-copy,
+  .manager-toolbar .account-menu-trigger > svg { display: none; }
+  .manager-toolbar .account-menu-trigger {
+    min-width: 48px;
+    justify-content: center;
+    padding: 5px 6px;
+  }
+}
+
+@media (max-width: 780px) {
+  .cloud-state-screen { align-items: start; padding: 14px; }
+  .cloud-state-card,
+  .cloud-migration-card { margin-top: 8vh; }
+  .cloud-migration-card { padding: 22px; }
+  .cloud-migration-counts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cloud-migration-actions { align-items: stretch; flex-direction: column; }
+  .cloud-migration-actions .button { width: 100%; }
+  .cloud-mode-pill span { display: none; }
+  .cloud-mode-pill { width: 44px; justify-content: center; padding: 0; }
+}
+
+@media (max-width: 480px) {
+  .cloud-migration-heading { flex-direction: column; }
+  .manager-toolbar { gap: 6px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cloud-state-spinner { animation-duration: .01ms; }
+}
