@@ -45,7 +45,7 @@ Use these project settings:
 - Build runtime variables: `NODE_VERSION=22.16.0` and `PNPM_VERSION=11.7.0`
 - Environment variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and—only when Supabase CAPTCHA is enabled—`VITE_HCAPTCHA_SITE_KEY`
 
-The files in `public/` add SPA routing, anti-indexing, and browser security headers during the build. After the first deployment, add the final Pages URL to Supabase's allowed redirect URLs and test first-time Google registration, returning Google login, legacy email login, sign-out, and a second browser/device.
+The files in `public/` add anti-indexing and browser security headers during the build. Cloudflare Pages supplies SPA fallback automatically when no top-level `404.html` is present. After the first deployment, add the final Pages URL to Supabase's allowed redirect URLs and test first-time Google registration, returning Google login, legacy email login, sign-out, and a second browser/device.
 
 ## 4. Move existing local records
 
