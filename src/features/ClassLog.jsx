@@ -37,6 +37,7 @@ import { addDays, isDateOnly, todayDateOnly } from "../domain/dates";
 import { useHistoryBackedState } from "../hooks/useHistoryNavigation";
 import { confirmDiscard, draftChanged, useUnsavedChanges } from "../hooks/useUnsavedChanges";
 import { normalizeSearchText } from "../utils/searchText";
+import { getUiLocale, useI18n } from "../i18n";
 import "./class-log-mobile.css";
 
 const ATTENDANCE_LABELS = Object.freeze({
@@ -634,6 +635,7 @@ function ReviewPanel({ classDraft, selectedGroup, rows, summary, issues, currenc
 }
 
 function AdvancePaymentDrawer({ open, onClose, students, groupsById, existingRows = [], draft, setDraft, defaultHours, hourlyRate, asOfDate, currency, onSave, saving }) {
+  const { t } = useI18n();
   const selectedStudent = students.find((student) => student.id === draft.studentId);
   const selectedGroup = mapLookup(groupsById, selectedStudent?.groupId);
   const duplicateDates = draft.entries.filter((entry, index, all) => all.findIndex((item) => item.classDate === entry.classDate) !== index);
@@ -712,7 +714,7 @@ function AdvancePaymentDrawer({ open, onClose, students, groupsById, existingRow
             </Select>
           </Field>
           <Field label="Group">
-            <Input value={selectedGroup?.name || "Unassigned"} readOnly />
+            <Input value={selectedGroup?.name || t("Unassigned")} readOnly />
           </Field>
           <Field label="Payment date" required>
             <Input type="date" max={asOfDate} value={draft.paymentDate} onChange={(event) => setDraft((current) => ({ ...current, paymentDate: event.target.value }))} />
@@ -973,7 +975,7 @@ export default function ClassLog({ state = {}, derived = {}, asOfDate, actions =
   const hourlyRate = effectiveNumber(settings.hourlyRate ?? derived.hourlyRate, 50);
   const currencyCode = settings.currency || derived.currency || "MXN";
   const currency = useMemo(() => {
-    const formatter = new Intl.NumberFormat("es-MX", { style: "currency", currency: currencyCode, maximumFractionDigits: 2 });
+    const formatter = new Intl.NumberFormat(getUiLocale(), { style: "currency", currency: currencyCode, maximumFractionDigits: 2 });
     return (value) => formatter.format(effectiveNumber(value, 0));
   }, [currencyCode]);
 

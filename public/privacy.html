@@ -8,41 +8,68 @@
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/legal.css" />
   </head>
-  <body>
+  <body data-page="privacy">
     <main>
-      <a class="brand" href="/"><img src="/favicon.svg" alt="" />hibi</a>
-      <h1>Privacy policy</h1>
-      <p class="updated">Effective July 12, 2026</p>
+      <header class="legal-topbar">
+        <a class="brand" href="/"><img src="/favicon.svg" alt="" />hibi</a>
+        <div class="legal-language-toggle" role="group" aria-label="Language / Idioma">
+          <button type="button" data-set-language="en">EN</button>
+          <button type="button" data-set-language="es">ES</button>
+        </div>
+      </header>
 
-      <p>hibi is a class-management app for independent teachers. This policy explains what information the service uses and why.</p>
+      <article data-language="en">
+        <h1>Privacy policy</h1>
+        <p class="updated">Effective July 12, 2026</p>
+        <p>hibi is a class-management app for independent teachers. This policy explains what information the service uses and why.</p>
+        <h2>Information hibi processes</h2>
+        <ul>
+          <li><strong>Google account information:</strong> your name, email address, profile image, and account identifier when you choose Google Sign-In.</li>
+          <li><strong>Class records you enter:</strong> students, guardian contacts, phone numbers, groups, grades, attendance, class logs, payment records, notes, and preferences.</li>
+          <li><strong>Technical information:</strong> the limited security and delivery logs created by our hosting and database providers.</li>
+        </ul>
+        <h2>How information is used</h2>
+        <p>Information is used to authenticate you, provide your private workspace, synchronize your records across devices, secure the service, and respond to support requests. Google account information is used only for sign-in and account identification.</p>
+        <h2>Sharing and service providers</h2>
+        <p>hibi does not sell personal information. Data is processed by service providers needed to operate the app: Google for sign-in, Supabase for authentication and database hosting, and Cloudflare for website delivery and security. These providers process information under their own privacy terms.</p>
+        <h2>Student and guardian information</h2>
+        <p>Account holders decide what class records to enter and are responsible for having a lawful reason and any permission required to store them, especially information about minors. Do not enter information that is unnecessary for class management.</p>
+        <h2>Retention, export, and deletion</h2>
+        <p>You can export a JSON backup or clear your workspace from the app. To request deletion of your account and associated cloud data, contact the address below from the email used for your account. Limited records may be retained when required for security, fraud prevention, or legal compliance.</p>
+        <h2>Security and international processing</h2>
+        <p>hibi uses account-scoped database controls and reputable infrastructure providers. No online service can guarantee absolute security. Depending on provider infrastructure, information may be processed outside your country.</p>
+        <h2>Your choices</h2>
+        <p>You may stop using hibi, export or clear workspace data, revoke hibi's Google access in your Google Account, or contact us about access, correction, or deletion requests.</p>
+        <h2>Changes and contact</h2>
+        <p>This policy may be updated as the service changes. Material updates will be reflected by a new effective date. Questions or privacy requests can be sent to <a href="mailto:hibicontact.old339@passinbox.com">hibicontact.old339@passinbox.com</a>.</p>
+      </article>
 
-      <h2>Information hibi processes</h2>
-      <ul>
-        <li><strong>Google account information:</strong> your name, email address, profile image, and account identifier when you choose Google Sign-In.</li>
-        <li><strong>Class records you enter:</strong> students, guardian contacts, phone numbers, groups, grades, attendance, class logs, payment records, notes, and preferences.</li>
-        <li><strong>Technical information:</strong> the limited security and delivery logs created by our hosting and database providers.</li>
-      </ul>
-
-      <h2>How information is used</h2>
-      <p>Information is used to authenticate you, provide your private workspace, synchronize your records across devices, secure the service, and respond to support requests. Google account information is used only for sign-in and account identification.</p>
-
-      <h2>Sharing and service providers</h2>
-      <p>hibi does not sell personal information. Data is processed by service providers needed to operate the app: Google for sign-in, Supabase for authentication and database hosting, and Cloudflare for website delivery and security. These providers process information under their own privacy terms.</p>
-
-      <h2>Student and guardian information</h2>
-      <p>Account holders decide what class records to enter and are responsible for having a lawful reason and any permission required to store them, especially information about minors. Do not enter information that is unnecessary for class management.</p>
-
-      <h2>Retention, export, and deletion</h2>
-      <p>You can export a JSON backup or clear your workspace from the app. To request deletion of your account and associated cloud data, contact the address below from the email used for your account. Limited records may be retained when required for security, fraud prevention, or legal compliance.</p>
-
-      <h2>Security and international processing</h2>
-      <p>hibi uses account-scoped database controls and reputable infrastructure providers. No online service can guarantee absolute security. Depending on provider infrastructure, information may be processed outside your country.</p>
-
-      <h2>Your choices</h2>
-      <p>You may stop using hibi, export or clear workspace data, revoke hibi's Google access in your Google Account, or contact us about access, correction, or deletion requests.</p>
-
-      <h2>Changes and contact</h2>
-      <p>This policy may be updated as the service changes. Material updates will be reflected by a new effective date. Questions or privacy requests can be sent to <a href="mailto:hibicontact.old339@passinbox.com">hibicontact.old339@passinbox.com</a>.</p>
+      <article data-language="es" hidden>
+        <h1>Política de privacidad</h1>
+        <p class="updated">Vigente desde el 12 de julio de 2026</p>
+        <p>hibi es una aplicación de gestión de clases para docentes independientes. Esta política explica qué información utiliza el servicio y por qué.</p>
+        <h2>Información que procesa hibi</h2>
+        <ul>
+          <li><strong>Información de la cuenta de Google:</strong> tu nombre, correo electrónico, imagen de perfil e identificador de cuenta cuando eliges iniciar sesión con Google.</li>
+          <li><strong>Registros de clase que capturas:</strong> alumnos, contactos de padres o tutores, teléfonos, grupos, calificaciones, asistencia, registros de clases, pagos, notas y preferencias.</li>
+          <li><strong>Información técnica:</strong> los registros limitados de seguridad y entrega generados por nuestros proveedores de alojamiento y base de datos.</li>
+        </ul>
+        <h2>Cómo se utiliza la información</h2>
+        <p>La información se utiliza para autenticarte, ofrecerte un espacio privado, sincronizar tus registros entre dispositivos, proteger el servicio y responder solicitudes de soporte. La información de Google se usa únicamente para iniciar sesión e identificar tu cuenta.</p>
+        <h2>Compartición y proveedores del servicio</h2>
+        <p>hibi no vende información personal. Los datos son procesados por proveedores necesarios para operar la aplicación: Google para el inicio de sesión, Supabase para autenticación y alojamiento de la base de datos, y Cloudflare para entrega y seguridad del sitio. Estos proveedores procesan la información bajo sus propios términos de privacidad.</p>
+        <h2>Información de alumnos y tutores</h2>
+        <p>Los titulares de las cuentas deciden qué registros capturar y son responsables de contar con una razón legal y los permisos necesarios para almacenarlos, especialmente cuando se trate de menores. No captures información innecesaria para administrar las clases.</p>
+        <h2>Conservación, exportación y eliminación</h2>
+        <p>Puedes exportar un respaldo JSON o borrar tu espacio desde la aplicación. Para solicitar la eliminación de tu cuenta y sus datos en la nube, escribe a la dirección indicada abajo desde el correo asociado con tu cuenta. Algunos registros limitados pueden conservarse cuando sea necesario por seguridad, prevención de fraude o cumplimiento legal.</p>
+        <h2>Seguridad y procesamiento internacional</h2>
+        <p>hibi utiliza controles de base de datos aislados por cuenta y proveedores de infraestructura reconocidos. Ningún servicio en línea puede garantizar seguridad absoluta. Según la infraestructura de los proveedores, la información puede procesarse fuera de tu país.</p>
+        <h2>Tus opciones</h2>
+        <p>Puedes dejar de usar hibi, exportar o borrar los datos de tu espacio, revocar el acceso de hibi desde tu Cuenta de Google o contactarnos para solicitar acceso, corrección o eliminación.</p>
+        <h2>Cambios y contacto</h2>
+        <p>Esta política puede actualizarse conforme cambie el servicio. Las actualizaciones importantes se reflejarán con una nueva fecha de vigencia. Envía preguntas o solicitudes de privacidad a <a href="mailto:hibicontact.old339@passinbox.com">hibicontact.old339@passinbox.com</a>.</p>
+      </article>
     </main>
+    <script src="/legal-language.js" defer></script>
   </body>
 </html>

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { getUiLanguage, translateUiText } from "../i18n";
 
 export const DEFAULT_DISCARD_MESSAGE = "Discard your unsaved changes?";
 
@@ -14,7 +15,7 @@ export function draftChanged(current, baseline) {
 export function confirmDiscard(dirty, message = DEFAULT_DISCARD_MESSAGE) {
   if (!dirty) return true;
   if (typeof globalThis.confirm !== "function") return false;
-  return globalThis.confirm(message);
+  return globalThis.confirm(translateUiText(message, getUiLanguage()));
 }
 
 /**
@@ -28,7 +29,9 @@ export function useUnsavedChanges(registerNavigationBlocker, dirty, message = DE
 
   useEffect(() => {
     if (typeof registerNavigationBlocker !== "function") return undefined;
-    return registerNavigationBlocker(() => (stateRef.current.dirty ? stateRef.current.message : ""));
+    return registerNavigationBlocker(() => (stateRef.current.dirty
+      ? translateUiText(stateRef.current.message, getUiLanguage())
+      : ""));
   }, [registerNavigationBlocker]);
 
   useEffect(() => {

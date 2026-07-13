@@ -9,6 +9,7 @@ import {
   Mail,
 } from "lucide-react";
 import { BrandMark } from "../components/BrandMark";
+import { LanguageToggle } from "../i18n";
 import "./auth.css";
 
 function GoogleMark() {
@@ -324,6 +325,7 @@ export function AuthScreen({
         </aside>
 
         <div className="auth-form-panel">
+          <LanguageToggle className="auth-language-toggle" />
           {mode === AUTH_MODES.FORGOT_PASSWORD || mode === AUTH_MODES.RESET_PASSWORD ? (
             <button className="auth-back-button" type="button" onClick={() => changeMode(AUTH_MODES.SIGN_IN)}>
               <ArrowLeft aria-hidden="true" size={17} />

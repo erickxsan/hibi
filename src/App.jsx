@@ -13,6 +13,7 @@ import Home from "./features/Home";
 import Setup from "./features/Setup";
 import { useClassManager } from "./hooks/useClassManager";
 import { usePageNavigation } from "./hooks/useHistoryNavigation";
+import { LanguageToggle, useI18n } from "./i18n";
 
 const NAV_ITEMS = [
   { id: "home", label: "Home", href: "/", icon: LayoutDashboard },
@@ -43,6 +44,7 @@ function syncStatusFor(manager, cloudError) {
 }
 
 export function ClassManagerApplication({ persistence, user, cloudError, onSignOut, canNavigate }) {
+  useI18n();
   const manager = useClassManager({ persistence });
   const [intent, setIntent] = useState(null);
   const [signingOut, setSigningOut] = useState(false);
@@ -112,6 +114,7 @@ export function ClassManagerApplication({ persistence, user, cloudError, onSignO
                 {action.label}
               </Button>
             ) : null}
+            <LanguageToggle />
             {user ? (
               <AccountMenu
                 email={user.email}
@@ -289,6 +292,7 @@ function AuthenticatedCloudApplication() {
 }
 
 export default function App() {
+  useI18n();
   if (isCloudConfigured) return <AuthenticatedCloudApplication />;
   if (isLocalModeAllowed) return <ClassManagerApplication />;
   return <CloudConfigurationRequired />;

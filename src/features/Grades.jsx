@@ -18,6 +18,7 @@ import {
 import { todayDateOnly } from "../domain/dates";
 import { normalizeSearchText } from "../utils/searchText";
 import { confirmDiscard, draftChanged, useUnsavedChanges } from "../hooks/useUnsavedChanges";
+import { getUiLocale, useI18n } from "../i18n";
 
 const CATEGORIES = ["Quiz", "Exam", "Project", "Homework", "Participation", "Other"];
 const WORK_STATUSES = ["On time", "Late", "Missing", "Excused"];
@@ -25,7 +26,7 @@ const UNASSIGNED_GROUP = "__unassigned__";
 const today = () => todayDateOnly();
 const percentageFor = (score, maximum) => score == null || maximum == null || maximum <= 0 ? null : score / maximum;
 const formatPercent = (value) => value == null ? "—" : `${(value * 100).toFixed(1)}%`;
-const formatDate = (value) => value ? new Intl.DateTimeFormat("en-MX", { year: "numeric", month: "short", day: "numeric" }).format(new Date(`${value}T12:00:00`)) : "—";
+const formatDate = (value) => value ? new Intl.DateTimeFormat(getUiLocale(), { year: "numeric", month: "short", day: "numeric" }).format(new Date(`${value}T12:00:00`)) : "—";
 
 function toneForWorkStatus(status) {
   if (status === "Missing") return "danger";
@@ -35,6 +36,7 @@ function toneForWorkStatus(status) {
 }
 
 export default function Grades({ state, derived, actions, intent, clearIntent, registerNavigationBlocker }) {
+  const { language } = useI18n();
   const [filters, setFilters] = useState({ groupId: "all", studentId: "all", category: "all", workStatus: "all", search: "" });
   const [batchDraft, setBatchDraft] = useState(null);
   const [editDraft, setEditDraft] = useState(null);
@@ -211,7 +213,9 @@ export default function Grades({ state, derived, actions, intent, clearIntent, r
           }}><option value="">Choose group</option>{(state.groups || []).map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</Select></Field></div>
           <Field label="Assessment" required><Input value={batchDraft.assessment} onChange={(event) => setBatchDraft({ ...batchDraft, assessment: event.target.value })} placeholder="e.g. Linear equations quiz" /></Field>
           <div className="form-grid two-columns"><Field label="Category"><Select value={batchDraft.category} onChange={(event) => setBatchDraft({ ...batchDraft, category: event.target.value })}>{CATEGORIES.map((category) => <option key={category}>{category}</option>)}</Select></Field><Field label="Maximum" required><Input type="number" inputMode="decimal" min="0.01" step="0.01" value={batchDraft.maximum} onChange={(event) => setBatchDraft({ ...batchDraft, maximum: event.target.value })} /></Field></div>
-          <div className="drawer-section-heading"><div><h3>Enter scores</h3><p>{roster.length} active students in this group</p></div></div>
+          <div className="drawer-section-heading"><div><h3>Enter scores</h3><p>{roster.length} {language === "es"
+            ? (roster.length === 1 ? "alumno activo en este grupo" : "alumnos activos en este grupo")
+            : (roster.length === 1 ? "active student in this group" : "active students in this group")}</p></div></div>
           <div className="roster-list">
             {roster.map((student) => {
               const entry = batchDraft.entries[student.id] || { score: "", workStatus: "On time", feedback: "" };

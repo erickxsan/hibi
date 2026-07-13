@@ -154,6 +154,11 @@
   padding: 46px 48px;
 }
 
+.auth-language-toggle {
+  align-self: flex-end;
+  margin: -22px 0 16px;
+}
+
 .auth-heading {
   margin-bottom: 25px;
 }
@@ -738,6 +743,10 @@
   .auth-form-panel {
     width: 100%;
     padding: 34px max(24px, env(safe-area-inset-right)) calc(40px + env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+  }
+
+  .auth-language-toggle {
+    margin-top: -18px;
   }
 
   .auth-control {

@@ -2,11 +2,13 @@ import { useState } from "react";
 import { Cloud, DatabaseBackup, LogOut, RefreshCw, RotateCcw, ShieldCheck } from "lucide-react";
 import { BrandMark } from "../components/BrandMark";
 import { Button, ConfirmDialog } from "../components/ui";
+import { LanguageToggle } from "../i18n";
 import "./cloud.css";
 
 export function CloudLoading({ message = "Loading your private workspace…" }) {
   return (
     <main className="cloud-state-screen" aria-busy="true">
+      <LanguageToggle className="cloud-language-toggle" />
       <div className="cloud-state-card">
         <BrandMark />
         <span className="cloud-state-spinner" aria-hidden="true" />
@@ -36,6 +38,7 @@ export function CloudError({ error, onRetry, onSignOut, onReset }) {
   return (
     <>
       <main className="cloud-state-screen">
+        <LanguageToggle className="cloud-language-toggle" />
         <section className="cloud-state-card cloud-error-card" aria-labelledby="cloud-error-title">
           <span className="cloud-state-icon"><Cloud aria-hidden="true" /></span>
           <h1 id="cloud-error-title">Cloud workspace unavailable</h1>
@@ -63,6 +66,7 @@ export function CloudError({ error, onRetry, onSignOut, onReset }) {
 export function CloudConfigurationRequired() {
   return (
     <main className="cloud-state-screen">
+      <LanguageToggle className="cloud-language-toggle" />
       <section className="cloud-state-card cloud-error-card" aria-labelledby="cloud-config-title">
         <span className="cloud-state-icon"><Cloud aria-hidden="true" /></span>
         <h1 id="cloud-config-title">Cloud setup required</h1>
@@ -82,6 +86,7 @@ export function LocalDataMigration({ state, accountEmail, busy, error, onImport,
 
   return (
     <main className="cloud-state-screen">
+      <LanguageToggle className="cloud-language-toggle" />
       <section className="cloud-migration-card" aria-labelledby="migration-title">
         <div className="cloud-migration-heading">
           <span className="cloud-state-icon"><DatabaseBackup aria-hidden="true" /></span>

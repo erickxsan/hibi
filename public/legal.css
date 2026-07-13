@@ -30,6 +30,46 @@ main {
   box-shadow: 0 18px 55px rgba(38, 61, 56, 0.1);
 }
 
+.legal-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.legal-language-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px;
+  border: 1px solid #c7d8d4;
+  border-radius: 13px;
+  background: #fff;
+}
+
+.legal-language-toggle button {
+  min-width: 42px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #657a75;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.legal-language-toggle button.is-active {
+  background: #376d64;
+  color: #fff;
+}
+
+[hidden] {
+  display: none !important;
+}
+
 .brand {
   display: inline-flex;
   align-items: center;

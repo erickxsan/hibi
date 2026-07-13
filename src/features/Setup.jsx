@@ -20,6 +20,7 @@ import { normalizeSearchText } from "../utils/searchText";
 import { MAX_BACKUP_BYTES } from "../domain";
 import { confirmDiscard, draftChanged, useUnsavedChanges } from "../hooks/useUnsavedChanges";
 import { useHistoryBackedState } from "../hooks/useHistoryNavigation";
+import { getUiLocale, useI18n } from "../i18n";
 
 const EMPTY_STUDENT = {
   studentCode: "",
@@ -42,9 +43,10 @@ const EMPTY_GROUP = {
 };
 
 const formatPercent = (value) => (value == null ? "—" : `${(value * 100).toFixed(1)}%`);
-const formatMxn = (value) => new Intl.NumberFormat("en-MX", { style: "currency", currency: "MXN" }).format(value || 0);
+const formatMxn = (value) => new Intl.NumberFormat(getUiLocale(), { style: "currency", currency: "MXN" }).format(value || 0);
 
 export default function Setup({ state, derived, actions, persistenceMode, intent, clearIntent, registerNavigationBlocker }) {
+  const { language } = useI18n();
   const [tab, setTab] = useState("students");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -253,7 +255,14 @@ export default function Setup({ state, derived, actions, persistenceMode, intent
               <option value="Inactive">Inactive</option>
             </Select>
           ) : null}
-          <span className="toolbar-count">{tab === "students" ? visibleStudents.length : visibleGroups.length} {tab}</span>
+          <span className="toolbar-count">{(() => {
+            const count = tab === "students" ? visibleStudents.length : visibleGroups.length;
+            if (language !== "es") return `${count} ${tab}`;
+            const noun = tab === "students"
+              ? (count === 1 ? "alumno" : "alumnos")
+              : (count === 1 ? "grupo" : "grupos");
+            return `${count} ${noun}`;
+          })()}</span>
         </div>
       ) : null}
 

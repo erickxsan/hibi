@@ -21,30 +21,9 @@ import {
   StatusBadge,
   TableShell,
 } from "../components/ui";
+import { getUiLocale, useI18n } from "../i18n";
 
 const EMPTY_ARRAY = Object.freeze([]);
-const MONEY_FORMATTER = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
-const NUMBER_FORMATTER = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
-const MONTH_FORMATTER = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  year: "numeric",
-  timeZone: "UTC",
-});
-const SHORT_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "numeric",
-  timeZone: "UTC",
-});
-const LONG_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-  timeZone: "UTC",
-});
 
 function arrayOrEmpty(value) {
   return Array.isArray(value) ? value : EMPTY_ARRAY;
@@ -58,12 +37,16 @@ function finiteNumber(value) {
 
 function formatMoney(value) {
   const number = finiteNumber(value);
-  return number === null ? "\u2014" : MONEY_FORMATTER.format(number);
+  return number === null ? "\u2014" : new Intl.NumberFormat(getUiLocale(), {
+    style: "currency",
+    currency: "MXN",
+    maximumFractionDigits: 0,
+  }).format(number);
 }
 
 function formatNumber(value) {
   const number = finiteNumber(value);
-  return number === null ? "\u2014" : NUMBER_FORMATTER.format(number);
+  return number === null ? "\u2014" : new Intl.NumberFormat(getUiLocale(), { maximumFractionDigits: 0 }).format(number);
 }
 
 function formatPercent(value) {
@@ -79,15 +62,25 @@ function dateFromDateOnly(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function formatDate(value, formatter = LONG_DATE_FORMATTER) {
+function formatDate(value, style = "long") {
   const date = dateFromDateOnly(value);
-  return date ? formatter.format(date) : "\u2014";
+  if (!date) return "\u2014";
+  return new Intl.DateTimeFormat(getUiLocale(), {
+    month: "short",
+    day: "numeric",
+    ...(style === "long" ? { year: "numeric" } : {}),
+    timeZone: "UTC",
+  }).format(date);
 }
 
 function formatMonth(value) {
   const month = typeof value === "string" ? `${value.slice(0, 7)}-01` : "";
   const date = dateFromDateOnly(month);
-  return date ? MONTH_FORMATTER.format(date) : "\u2014";
+  return date ? new Intl.DateTimeFormat(getUiLocale(), {
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(date) : "\u2014";
 }
 
 function initials(name) {
@@ -237,7 +230,7 @@ function TrendPanel({ title, data, period = "week" }) {
             const value = finiteNumber(row?.collected ?? row?.amount ?? row?.value) ?? 0;
             const height = maximum > 0 ? Math.max(value > 0 ? 8 : 3, (value / maximum) * 120) : 3;
             const rawDate = period === "month" ? row?.month ?? row?.start : row?.start ?? row?.weekStart;
-            const label = period === "month" ? formatMonth(rawDate) : formatDate(rawDate, SHORT_DATE_FORMATTER);
+            const label = period === "month" ? formatMonth(rawDate) : formatDate(rawDate, "short");
             return (
               <div className="bar-item home-bar-item" key={`${rawDate ?? period}-${index}`}>
                 <span className="bar-value home-bar-value">{formatMoney(value)}</span>
@@ -259,6 +252,7 @@ function TrendPanel({ title, data, period = "week" }) {
 }
 
 export default function Home({ state = {}, derived = {}, asOfDate, actions = {}, navigate = () => {} }) {
+  const { language } = useI18n();
   const dashboard = derived?.dashboard ?? {};
   const preferences = state?.preferences ?? state?.settings ?? {};
   const students = arrayOrEmpty(state?.students);
@@ -490,7 +484,9 @@ export default function Home({ state = {}, derived = {}, asOfDate, actions = {},
                       </tbody>
                     </table>
                   </TableShell>
-                  <button className="home-table-link" type="button" onClick={() => navigate("setup")}>View all {studentRows.length} students</button>
+                  <button className="home-table-link" type="button" onClick={() => navigate("setup")}>{language === "es"
+                    ? `Ver ${studentRows.length === 1 ? "al alumno" : `los ${studentRows.length} alumnos`}`
+                    : `View all ${studentRows.length} ${studentRows.length === 1 ? "student" : "students"}`}</button>
                 </>
               ) : (
                 <EmptyState icon={UsersRound} title="No students yet" description="Add a student in Setup to see their snapshot." action={<Button onClick={() => navigate("setup")}>Go to Setup</Button>} />
