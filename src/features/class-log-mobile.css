@@ -1,0 +1,203 @@
+.mobile-roster-cards {
+  display: none;
+}
+
+@media (max-width: 780px) {
+  .class-log-page .roster-table-shell {
+    display: none;
+  }
+
+  .mobile-roster-cards {
+    display: grid;
+    gap: 12px;
+  }
+
+  .mobile-roster-card {
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    box-shadow: var(--shadow-small);
+  }
+
+  .mobile-roster-card-header {
+    display: flex;
+    min-width: 0;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 14px 14px 12px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+
+  .mobile-student-identity {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .mobile-student-copy {
+    display: grid;
+    min-width: 0;
+    gap: 1px;
+  }
+
+  .mobile-student-copy strong {
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-student-copy > span {
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  .mobile-roster-card-header .status-badge {
+    max-width: 45%;
+    flex: 0 0 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mobile-roster-field-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    padding: 13px 14px;
+  }
+
+  .mobile-roster-card .control,
+  .mobile-roster-card .select-control {
+    font-size: 16px;
+  }
+
+  .mobile-roster-card .attendance-picker {
+    min-width: 0;
+  }
+
+  .mobile-roster-card .attendance-picker .select-control {
+    min-height: 44px;
+    padding-top: 9px;
+    padding-bottom: 9px;
+  }
+
+  .mobile-roster-money-summary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin: 0 14px;
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-sm);
+    background: #f8f4ec;
+  }
+
+  .mobile-roster-money-summary > div {
+    display: grid;
+    gap: 2px;
+    padding: 10px 12px;
+  }
+
+  .mobile-roster-money-summary > div + div {
+    border-left: 1px solid var(--border-soft);
+  }
+
+  .mobile-roster-money-summary dt {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .mobile-roster-money-summary dd {
+    margin: 0;
+    color: var(--ink);
+    font-size: 15px;
+    font-weight: 850;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .mobile-roster-money-summary .has-outstanding dd {
+    color: var(--danger);
+  }
+
+  .mobile-roster-payment-grid {
+    padding-bottom: 14px;
+  }
+
+  .mobile-payment-method {
+    grid-column: 1 / -1;
+  }
+
+  .mobile-roster-details {
+    border-top: 1px solid var(--border-soft);
+  }
+
+  .mobile-roster-details summary {
+    display: flex;
+    min-height: 48px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    color: var(--teal-strong);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 800;
+    list-style: none;
+  }
+
+  .mobile-roster-details summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .mobile-roster-details summary::after {
+    width: 8px;
+    height: 8px;
+    flex: 0 0 8px;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    content: "";
+    transform: rotate(45deg) translateY(-2px);
+    transition: transform 150ms ease;
+  }
+
+  .mobile-roster-details[open] summary::after {
+    transform: rotate(225deg) translate(-2px, -2px);
+  }
+
+  .mobile-details-hint {
+    margin-left: auto;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 650;
+  }
+
+  .mobile-roster-details[open] summary {
+    border-bottom: 1px solid var(--border-soft);
+    background: var(--teal-soft);
+  }
+
+  .mobile-roster-detail-fields {
+    display: grid;
+    gap: 12px;
+    padding: 13px 14px 15px;
+  }
+
+  .mobile-roster-detail-fields .textarea {
+    min-height: 76px;
+  }
+}
+
+@media (max-width: 380px) {
+  .mobile-roster-field-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mobile-payment-method {
+    grid-column: auto;
+  }
+}

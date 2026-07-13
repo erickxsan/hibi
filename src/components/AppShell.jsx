@@ -1,33 +1,42 @@
 import { useEffect, useRef } from "react";
 import { BrandMark } from "./BrandMark";
 
-export function AppShell({ navItems, activePage, onNavigate, toolbar, children }) {
+export function AppShell({ navItems, activePage, navigationReason, onNavigate, toolbar, children }) {
   const mainRef = useRef(null);
+
+  const handleNavigation = (event, page) => {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    onNavigate(page);
+  };
 
   useEffect(() => {
     mainRef.current?.focus({ preventScroll: true });
-  }, [activePage]);
+    if (navigationReason === "push" || navigationReason === "replace") {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    }
+  }, [activePage, navigationReason]);
 
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main-content">Skip to content</a>
       <header className="app-header">
-        <button className="brand" type="button" onClick={() => onNavigate("home")} aria-label="Go to Home">
+        <a className="brand" href="/" onClick={(event) => handleNavigation(event, "home")} aria-label="Go to Home">
           <BrandMark />
           <span className="brand-copy"><strong>hibi</strong><span>Class companion</span></span>
-        </button>
+        </a>
 
         <nav className="primary-nav" aria-label="Primary navigation">
           {navItems.map((item) => (
-            <button
+            <a
               key={item.id}
-              type="button"
+              href={item.href}
               className={activePage === item.id ? "nav-item is-active" : "nav-item"}
-              onClick={() => onNavigate(item.id)}
+              onClick={(event) => handleNavigation(event, item.id)}
               aria-current={activePage === item.id ? "page" : undefined}
             >
               {item.label}
-            </button>
+            </a>
           ))}
         </nav>
 
@@ -42,16 +51,16 @@ export function AppShell({ navItems, activePage, onNavigate, toolbar, children }
         {navItems.map((item) => {
           const Icon = item.icon;
           return (
-            <button
+            <a
               key={item.id}
-              type="button"
+              href={item.href}
               className={activePage === item.id ? "mobile-nav-item is-active" : "mobile-nav-item"}
-              onClick={() => onNavigate(item.id)}
+              onClick={(event) => handleNavigation(event, item.id)}
               aria-current={activePage === item.id ? "page" : undefined}
             >
               <Icon aria-hidden="true" size={19} strokeWidth={1.8} />
               <span>{item.label}</span>
-            </button>
+            </a>
           );
         })}
       </nav>

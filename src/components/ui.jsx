@@ -1,5 +1,26 @@
 import { useEffect, useId, useRef } from "react";
+import { createPortal } from "react-dom";
 import { AlertCircle, CheckCircle2, ChevronDown, Search, X } from "lucide-react";
+import {
+  closeOverlayHistory,
+  pushOverlayHistory,
+  subscribeToAppHistory,
+} from "../navigation/appHistory";
+
+let openDrawerCount = 0;
+
+function lockDrawerBackground() {
+  openDrawerCount += 1;
+  document.body.classList.add("drawer-open");
+  document.querySelector(".app-shell")?.setAttribute("inert", "");
+}
+
+function unlockDrawerBackground() {
+  openDrawerCount = Math.max(0, openDrawerCount - 1);
+  if (openDrawerCount) return;
+  document.body.classList.remove("drawer-open");
+  document.querySelector(".app-shell")?.removeAttribute("inert");
+}
 
 export function Button({ children, variant = "secondary", icon: Icon, className = "", ...props }) {
   return (
@@ -105,20 +126,52 @@ export function EmptyState({ icon: Icon = AlertCircle, title, description, actio
 export function Drawer({ open, onClose, title, description, children, footer, size = "normal" }) {
   const titleId = useId();
   const descriptionId = useId();
+  const historyId = useId();
   const panelRef = useRef(null);
   const previousFocus = useRef(null);
+  const ownsHistoryEntry = useRef(false);
+  const closing = useRef(false);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
+  const requestClose = () => {
+    if (closing.current) return;
+    closing.current = true;
+    if (ownsHistoryEntry.current && closeOverlayHistory(historyId)) return;
+    if (onCloseRef.current?.() === false) closing.current = false;
+  };
+
   useEffect(() => {
     if (!open) return undefined;
+    closing.current = false;
     previousFocus.current = document.activeElement;
     const panel = panelRef.current;
     const firstFocusable = panel?.querySelector("button, input, select, textarea, [tabindex]:not([tabindex='-1'])");
     firstFocusable?.focus();
 
+    // Delaying the push by one task avoids duplicate entries from React
+    // StrictMode's development-only effect setup/cleanup replay.
+    const historyTimer = window.setTimeout(() => {
+      ownsHistoryEntry.current = Boolean(pushOverlayHistory(historyId));
+    }, 0);
+    const unsubscribe = subscribeToAppHistory({
+      beforePop: ({ previous, next }) => {
+        const wasOpen = previous?.overlays?.includes(historyId);
+        const remainsOpen = next?.overlays?.includes(historyId);
+        if (!wasOpen || remainsOpen) return true;
+        const accepted = onCloseRef.current?.() !== false;
+        if (!accepted) {
+          closing.current = false;
+          return false;
+        }
+        ownsHistoryEntry.current = false;
+        closing.current = false;
+        return true;
+      },
+    });
+
     const handleKeyDown = (event) => {
-      if (event.key === "Escape") onCloseRef.current?.();
+      if (event.key === "Escape") requestClose();
       if (event.key !== "Tab" || !panel) return;
       const focusable = [...panel.querySelectorAll("button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])")];
       if (!focusable.length) return;
@@ -133,17 +186,22 @@ export function Drawer({ open, onClose, title, description, children, footer, si
       }
     };
     document.addEventListener("keydown", handleKeyDown);
-    document.body.classList.add("drawer-open");
+    lockDrawerBackground();
     return () => {
+      window.clearTimeout(historyTimer);
+      unsubscribe();
       document.removeEventListener("keydown", handleKeyDown);
-      document.body.classList.remove("drawer-open");
+      unlockDrawerBackground();
+      if (ownsHistoryEntry.current) closeOverlayHistory(historyId);
+      ownsHistoryEntry.current = false;
+      closing.current = false;
       previousFocus.current?.focus?.();
     };
-  }, [open]);
+  }, [historyId, open]);
 
-  if (!open) return null;
-  return (
-    <div className="overlay" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+  if (!open || typeof document === "undefined") return null;
+  return createPortal(
+    <div className="overlay" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && requestClose()}>
       <section
         ref={panelRef}
         className={`drawer drawer-${size}`}
@@ -157,12 +215,13 @@ export function Drawer({ open, onClose, title, description, children, footer, si
             <h2 id={titleId}>{title}</h2>
             {description ? <p id={descriptionId}>{description}</p> : null}
           </div>
-          <IconButton label="Close" icon={X} onClick={onClose} />
+          <IconButton label="Close" icon={X} onClick={requestClose} />
         </header>
         <div className="drawer-body">{children}</div>
         {footer ? <footer className="drawer-footer">{footer}</footer> : null}
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

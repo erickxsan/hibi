@@ -315,7 +315,6 @@ export function AuthScreen({
             alt="hibi cat resting on a class planner"
             loading="lazy"
             decoding="async"
-            fetchPriority="low"
           />
           <div className="auth-color-notes" aria-hidden="true">
             <span />

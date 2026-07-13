@@ -2,6 +2,7 @@
   position: relative;
   display: grid;
   min-height: 100vh;
+  min-height: 100dvh;
   place-items: center;
   overflow: hidden;
   padding: 32px;
@@ -625,7 +626,7 @@
 .account-signout-button {
   display: flex;
   width: calc(100% - 24px);
-  min-height: 43px;
+  min-height: 44px;
   align-items: center;
   gap: 9px;
   margin: 0 12px 12px;
@@ -692,6 +693,7 @@
 
   .auth-frame {
     min-height: 100vh;
+    min-height: 100dvh;
     grid-template-columns: 1fr;
     border: 0;
     border-radius: 0;
@@ -700,7 +702,7 @@
 
   .auth-brand-panel {
     min-height: 195px;
-    padding: 24px;
+    padding: 24px max(24px, env(safe-area-inset-right)) 24px max(24px, env(safe-area-inset-left));
     border-right: 0;
     border-bottom: 1px solid #c7d8d4;
   }
@@ -735,7 +737,23 @@
 
   .auth-form-panel {
     width: 100%;
-    padding: 34px 24px 40px;
+    padding: 34px max(24px, env(safe-area-inset-right)) calc(40px + env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+  }
+
+  .auth-control {
+    font-size: 16px;
+  }
+
+  .auth-back-button {
+    min-height: 44px;
+  }
+
+  .auth-legal-links a {
+    display: inline-flex;
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
   }
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BookOpenCheck, CloudOff, GraduationCap, LayoutDashboard, NotebookTabs, Plus } from "lucide-react";
 import { AccountMenu, AUTH_MODES, AuthScreen } from "./auth";
 import { AppShell } from "./components/AppShell";
@@ -12,17 +12,17 @@ import Grades from "./features/Grades";
 import Home from "./features/Home";
 import Setup from "./features/Setup";
 import { useClassManager } from "./hooks/useClassManager";
+import { usePageNavigation } from "./hooks/useHistoryNavigation";
 
 const NAV_ITEMS = [
-  { id: "home", label: "Home", icon: LayoutDashboard },
-  { id: "setup", label: "Setup", icon: NotebookTabs },
-  { id: "grades", label: "Grades", icon: GraduationCap },
-  { id: "class-log", label: "Class Log", icon: BookOpenCheck },
+  { id: "home", label: "Home", href: "/", icon: LayoutDashboard },
+  { id: "setup", label: "Setup", href: "/setup", icon: NotebookTabs },
+  { id: "grades", label: "Grades", href: "/grades", icon: GraduationCap },
+  { id: "class-log", label: "Class Log", href: "/class-log", icon: BookOpenCheck },
 ];
 
 const PRIMARY_ACTIONS = {
   home: { label: "Log class", target: "class-log" },
-  setup: { label: "Add student", target: "setup" },
   grades: { label: "Add grades", target: "grades" },
   "class-log": { label: "Log class", target: "class-log" },
 };
@@ -42,24 +42,48 @@ function syncStatusFor(manager, cloudError) {
   return "synced";
 }
 
-function ClassManagerApplication({ persistence, user, cloudError, onSignOut }) {
+export function ClassManagerApplication({ persistence, user, cloudError, onSignOut, canNavigate }) {
   const manager = useClassManager({ persistence });
-  const [page, setPage] = useState("home");
   const [intent, setIntent] = useState(null);
   const [signingOut, setSigningOut] = useState(false);
+  const navigationBlockers = useRef(new Set());
+  const registerNavigationBlocker = useCallback((blocker) => {
+    if (typeof blocker !== "function") return () => {};
+    navigationBlockers.current.add(blocker);
+    return () => navigationBlockers.current.delete(blocker);
+  }, []);
+  const allowNavigation = useCallback((context) => {
+    if (canNavigate?.(context) === false) return false;
+    const messages = [...navigationBlockers.current]
+      .map((blocker) => blocker(context))
+      .filter(Boolean);
+    if (!messages.length) return true;
+    if (typeof globalThis.confirm !== "function") return false;
+    return globalThis.confirm([...new Set(messages)].join("\n\n"));
+  }, [canNavigate]);
+  const { page, navigate, navigationReason } = usePageNavigation({
+    canNavigate: allowNavigation,
+    onPageChange: () => setIntent(null),
+  });
 
   const action = PRIMARY_ACTIONS[page];
   const pageContent = useMemo(() => {
-    const common = { ...manager, intent, clearIntent: () => setIntent(null), navigate: setPage };
+    const common = {
+      ...manager,
+      intent,
+      clearIntent: () => setIntent(null),
+      navigate,
+      registerNavigationBlocker,
+    };
     if (page === "setup") return <Setup {...common} />;
     if (page === "grades") return <Grades {...common} />;
     if (page === "class-log") return <ClassLog {...common} />;
     return <Home {...common} />;
-  }, [intent, manager, page]);
+  }, [intent, manager, navigate, page, registerNavigationBlocker]);
 
   const handlePrimaryAction = () => {
-    setPage(action.target);
-    setIntent(page === "setup" ? "add-student" : page === "grades" ? "add-grades" : "new-class");
+    if (!action || !navigate(action.target)) return;
+    setIntent(page === "grades" ? "add-grades" : "new-class");
   };
 
   const handleSignOut = async () => {
@@ -77,15 +101,17 @@ function ClassManagerApplication({ persistence, user, cloudError, onSignOut }) {
       <AppShell
         navItems={NAV_ITEMS}
         activePage={page}
+        navigationReason={navigationReason}
         onNavigate={(nextPage) => {
-          setPage(nextPage);
-          setIntent(null);
+          if (navigate(nextPage)) setIntent(null);
         }}
         toolbar={
           <div className="manager-toolbar">
-            <Button variant="primary" icon={Plus} onClick={handlePrimaryAction} aria-label={action.label}>
-              {action.label}
-            </Button>
+            {action ? (
+              <Button variant="primary" icon={Plus} onClick={handlePrimaryAction} aria-label={action.label}>
+                {action.label}
+              </Button>
+            ) : null}
             {user ? (
               <AccountMenu
                 email={user.email}

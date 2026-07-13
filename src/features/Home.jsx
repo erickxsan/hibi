@@ -446,7 +446,7 @@ export default function Home({ state = {}, derived = {}, asOfDate, actions = {},
                   </table>
                 </TableShell>
               ) : (
-                <EmptyState icon={UsersRound} title="No groups yet" description="Add a group in Setup to begin." />
+                <EmptyState icon={UsersRound} title="No groups yet" description="Add a group in Setup to begin." action={<Button onClick={() => navigate("setup")}>Go to Setup</Button>} />
               )}
             </section>
 
@@ -493,7 +493,7 @@ export default function Home({ state = {}, derived = {}, asOfDate, actions = {},
                   <button className="home-table-link" type="button" onClick={() => navigate("setup")}>View all {studentRows.length} students</button>
                 </>
               ) : (
-                <EmptyState icon={UsersRound} title="No students yet" description="Add a student in Setup to see their snapshot." />
+                <EmptyState icon={UsersRound} title="No students yet" description="Add a student in Setup to see their snapshot." action={<Button onClick={() => navigate("setup")}>Go to Setup</Button>} />
               )}
             </section>
           </div>

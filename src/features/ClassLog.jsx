@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   CalendarDays,
@@ -34,7 +34,10 @@ import {
   PAYMENT_STATUSES,
 } from "../domain/constants";
 import { addDays, isDateOnly, todayDateOnly } from "../domain/dates";
+import { useHistoryBackedState } from "../hooks/useHistoryNavigation";
+import { confirmDiscard, draftChanged, useUnsavedChanges } from "../hooks/useUnsavedChanges";
 import { normalizeSearchText } from "../utils/searchText";
+import "./class-log-mobile.css";
 
 const ATTENDANCE_LABELS = Object.freeze({
   P: "Present",
@@ -140,7 +143,7 @@ function calculateClassLogRow(record, context) {
     ...record,
     student,
     studentName: record.studentName || student?.fullName || "Unknown student",
-    studentCode: student?.code || record.studentCode || "",
+    studentCode: student?.studentCode || student?.code || record.studentCode || "",
     groupId,
     groupName: record.groupName || group?.name || "Unassigned",
     effectiveHours: hours,
@@ -299,20 +302,153 @@ function ClassControls({ value, groups, onChange, onAdvance, onSave, saving, can
   );
 }
 
-function RosterTable({ rows, classStatus, currency, onChange }) {
+function MobileRosterCards({ rows, classStatus, currency, onChange }) {
+  return (
+    <section className="mobile-roster-cards" aria-label="Class roster">
+      {rows.map((row, index) => {
+        const attendanceDisabled = classStatus !== "Completed";
+        const hasMoreDetails = Boolean(row.draft.paymentReference || row.draft.notes);
+
+        return (
+          <article className="mobile-roster-card" key={row.studentId}>
+            <header className="mobile-roster-card-header">
+              <div className="mobile-student-identity">
+                <span
+                  className={`avatar student-avatar avatar-${["lilac", "teal", "pink", "olive"][index % 4]}`}
+                  aria-hidden="true"
+                >
+                  {initials(row.studentName)}
+                </span>
+                <span className="mobile-student-copy">
+                  <strong>{row.studentName}</strong>
+                  <span>{row.studentCode || "No ID"}</span>
+                </span>
+              </div>
+              <StatusBadge tone={paymentTone(row.paymentStatus)}>
+                {row.paymentStatus || "—"}
+              </StatusBadge>
+            </header>
+
+            <div className="mobile-roster-field-grid mobile-roster-attendance-grid">
+              <Field label="Attendance">
+                <AttendanceSelect
+                  value={row.draft.attendance}
+                  onChange={(next) => onChange(row.studentId, "attendance", next)}
+                  label={`Attendance for ${row.studentName}`}
+                  disabled={attendanceDisabled}
+                />
+              </Field>
+              <Field label="Hours">
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.25"
+                  inputMode="decimal"
+                  value={row.draft.hours}
+                  placeholder={String(row.effectiveHours)}
+                  onChange={(event) => onChange(row.studentId, "hours", event.target.value)}
+                  aria-label={`Hours for ${row.studentName}; blank uses the class default`}
+                />
+              </Field>
+            </div>
+
+            <dl className="mobile-roster-money-summary">
+              <div>
+                <dt>Charge</dt>
+                <dd>{currency(row.charge)}</dd>
+              </div>
+              <div className={row.outstanding ? "has-outstanding" : ""}>
+                <dt>Outstanding</dt>
+                <dd>{currency(row.outstanding)}</dd>
+              </div>
+            </dl>
+
+            <div className="mobile-roster-field-grid mobile-roster-payment-grid">
+              <Field label="Amount paid">
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={row.draft.amountPaid}
+                  onChange={(event) => onChange(row.studentId, "amountPaid", event.target.value)}
+                  aria-label={`Amount paid by ${row.studentName}`}
+                />
+              </Field>
+              <Field label="Payment date">
+                <Input
+                  type="date"
+                  value={row.draft.paymentDate}
+                  onChange={(event) => onChange(row.studentId, "paymentDate", event.target.value)}
+                  aria-label={`Payment date for ${row.studentName}`}
+                />
+              </Field>
+              <Field label="Method" className="mobile-payment-method">
+                <Select
+                  value={row.draft.paymentMethod}
+                  onChange={(event) => onChange(row.studentId, "paymentMethod", event.target.value)}
+                  aria-label={`Payment method for ${row.studentName}`}
+                >
+                  <option value="">—</option>
+                  {PAYMENT_METHODS.map((method) => <option value={method} key={method}>{method}</option>)}
+                </Select>
+              </Field>
+            </div>
+
+            <details className="mobile-roster-details">
+              <summary>
+                <span>More details</span>
+                <span className="mobile-details-hint">
+                  {hasMoreDetails ? "Added" : "Reference and notes"}
+                </span>
+              </summary>
+              <div className="mobile-roster-detail-fields">
+                <Field label="Reference">
+                  <Input
+                    value={row.draft.paymentReference}
+                    onChange={(event) => onChange(row.studentId, "paymentReference", event.target.value)}
+                    aria-label={`Payment reference for ${row.studentName}`}
+                    placeholder="Optional"
+                  />
+                </Field>
+                <Field label="Notes">
+                  <TextArea
+                    rows="2"
+                    value={row.draft.notes}
+                    onChange={(event) => onChange(row.studentId, "notes", event.target.value)}
+                    aria-label={`Notes for ${row.studentName}`}
+                    placeholder="Optional"
+                  />
+                </Field>
+              </div>
+            </details>
+          </article>
+        );
+      })}
+    </section>
+  );
+}
+
+function RosterTable({ rows, classStatus, currency, onChange, groupSelected = false, onGoToSetup }) {
   if (!rows.length) {
     return (
       <EmptyState
         icon={Users}
-        title="Choose a group to load its roster"
-        description="Only active students are included. You can manage enrollment from Setup."
+        title={groupSelected ? "This group has no active students" : "Choose a group to load its roster"}
+        description={groupSelected
+          ? "Add a student to this group in Setup, then return here to record the class."
+          : "Only active students are included. You can manage enrollment from Setup."}
+        action={groupSelected && onGoToSetup
+          ? <Button variant="primary" onClick={onGoToSetup}>Go to Setup</Button>
+          : null}
       />
     );
   }
 
   return (
-    <TableShell label="Class roster" className="roster-table-shell">
-      <table className="roster-table">
+    <>
+      <TableShell label="Class roster" className="roster-table-shell">
+        <table className="roster-table">
         <thead>
           <tr>
             <th scope="col" className="sticky-cell">Student</th>
@@ -413,8 +549,15 @@ function RosterTable({ rows, classStatus, currency, onChange }) {
             );
           })}
         </tbody>
-      </table>
-    </TableShell>
+        </table>
+      </TableShell>
+      <MobileRosterCards
+        rows={rows}
+        classStatus={classStatus}
+        currency={currency}
+        onChange={onChange}
+      />
+    </>
   );
 }
 
@@ -697,11 +840,15 @@ function EditClassDrawer({ open, onClose, draft, setDraft, students, existingRow
   );
 }
 
-function HistoryView({ rows, groups, students, context, currency, actions }) {
+function HistoryView({ rows, groups, students, context, currency, actions, registerNavigationBlocker }) {
   const [filters, setFilters] = useState({ search: "", groupId: "", classStatus: "", paymentStatus: "", dateFrom: "", dateTo: "" });
   const [editDraft, setEditDraft] = useState(null);
   const [deleteRow, setDeleteRow] = useState(null);
   const [saving, setSaving] = useState(false);
+  const editBaselineRef = useRef(null);
+  const editDirty = Boolean(editDraft) && draftChanged(editDraft, editBaselineRef.current);
+
+  useUnsavedChanges(registerNavigationBlocker, editDirty, "Discard your unsaved class-record changes?");
 
   const paymentStatuses = useMemo(() => [...new Set(rows.map((row) => row.paymentStatus).filter(Boolean))].sort(), [rows]);
   const filteredRows = useMemo(() => {
@@ -723,12 +870,26 @@ function HistoryView({ rows, groups, students, context, currency, actions }) {
   }, [filters, rows]);
 
   const updateFilter = (field, value) => setFilters((current) => ({ ...current, [field]: value }));
+  const openEdit = (row) => {
+    const next = { ...row };
+    editBaselineRef.current = next;
+    setEditDraft(next);
+  };
+  const closeEdit = () => {
+    if (!confirmDiscard(editDirty, "Discard your unsaved class-record changes?")) return false;
+    editBaselineRef.current = null;
+    setEditDraft(null);
+    return true;
+  };
   const saveEdit = async () => {
     if (!editDraft || !actions?.upsertClassLog) return;
     setSaving(true);
     try {
       const saved = await Promise.resolve(actions.upsertClassLog(persistedRecord(editDraft)));
-      if (saved) setEditDraft(null);
+      if (saved) {
+        editBaselineRef.current = null;
+        setEditDraft(null);
+      }
     } finally {
       setSaving(false);
     }
@@ -777,18 +938,18 @@ function HistoryView({ rows, groups, students, context, currency, actions }) {
                     <td><StatusBadge tone={paymentTone(row.paymentStatus)}>{row.paymentStatus || "—"}</StatusBadge></td>
                     <td className="numeric number-cell money-cell">{currency(row.outstanding)}</td>
                     <td>{row.paymentReference || "—"}</td>
-                    <td><div className="row-actions"><IconButton label={`Edit ${row.studentName}'s class on ${row.classDate}`} icon={Pencil} onClick={() => setEditDraft({ ...row })} /><IconButton label={`Delete ${row.studentName}'s class on ${row.classDate}`} icon={Trash2} onClick={() => setDeleteRow(row)} /></div></td>
+                    <td><div className="row-actions"><IconButton label={`Edit ${row.studentName}'s class on ${row.classDate}`} icon={Pencil} onClick={() => openEdit(row)} /><IconButton label={`Delete ${row.studentName}'s class on ${row.classDate}`} icon={Trash2} onClick={() => setDeleteRow(row)} /></div></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </TableShell>
         ) : (
-          <EmptyState icon={History} title="No matching class records" description="Try clearing one or more filters." />
+          <EmptyState icon={History} title="No matching class records" description="Try clearing one or more filters." action={Object.values(filters).some(Boolean) ? <Button onClick={() => setFilters({ search: "", groupId: "", classStatus: "", paymentStatus: "", dateFrom: "", dateTo: "" })}>Clear filters</Button> : null} />
         )}
       </section>
 
-      <EditClassDrawer open={Boolean(editDraft)} onClose={() => setEditDraft(null)} draft={editDraft} setDraft={setEditDraft} students={students} existingRows={rows} context={context} currency={currency} onSave={saveEdit} saving={saving} />
+      <EditClassDrawer open={Boolean(editDraft)} onClose={closeEdit} draft={editDraft} setDraft={setEditDraft} students={students} existingRows={rows} context={context} currency={currency} onSave={saveEdit} saving={saving} />
       <ConfirmDialog
         open={Boolean(deleteRow)}
         title="Delete class record?"
@@ -802,7 +963,7 @@ function HistoryView({ rows, groups, students, context, currency, actions }) {
   );
 }
 
-export default function ClassLog({ state = {}, derived = {}, asOfDate, actions = {}, intent, clearIntent }) {
+export default function ClassLog({ state = {}, derived = {}, asOfDate, actions = {}, intent, clearIntent, navigate, registerNavigationBlocker }) {
   const groups = useMemo(() => asArray(state.groups), [state.groups]);
   const students = useMemo(() => asArray(state.students), [state.students]);
   const classLogs = useMemo(() => asArray(state.classLogs), [state.classLogs]);
@@ -847,17 +1008,38 @@ export default function ClassLog({ state = {}, derived = {}, asOfDate, actions =
   const [advanceOpen, setAdvanceOpen] = useState(false);
   const [advanceDraft, setAdvanceDraft] = useState(() => makeAdvanceDraft(currentAsOfDate, defaultHours, hourlyRate));
   const [saving, setSaving] = useState(false);
+  const classBaselineRef = useRef({
+    classDraft: { groupId: "", classDate: currentAsOfDate, classStatus: "Completed", hours: defaultHours },
+    rosterDrafts: {},
+  });
+  const advanceBaselineRef = useRef(advanceDraft);
+  const classDirty = draftChanged({ classDraft, rosterDrafts }, classBaselineRef.current);
+  const advanceDirty = advanceOpen && draftChanged(advanceDraft, advanceBaselineRef.current);
+
+  useUnsavedChanges(registerNavigationBlocker, classDirty || advanceDirty, "Discard your unsaved class and payment changes?");
+
+  const changeMode = useHistoryBackedState({
+    key: "class-log-mode",
+    value: mode,
+    onChange: setMode,
+    defaultValue: "new",
+    allowedValues: ["new", "history"],
+    canChange: ({ from, to }) => from !== "new" || from === to || confirmDiscard(classDirty, "Discard your unsaved class changes?"),
+  });
 
   useEffect(() => {
     if (intent === "new-class") {
-      setMode("new");
+      changeMode("new");
       clearIntent?.();
     } else if (intent === "advance-payment") {
-      setMode("new");
+      changeMode("new");
+      const nextAdvance = makeAdvanceDraft(currentAsOfDate, defaultHours, hourlyRate);
+      advanceBaselineRef.current = nextAdvance;
+      setAdvanceDraft(nextAdvance);
       setAdvanceOpen(true);
       clearIntent?.();
     }
-  }, [clearIntent, intent]);
+  }, [changeMode, clearIntent, currentAsOfDate, defaultHours, hourlyRate, intent]);
 
   const activeStudents = useMemo(() => students
     .filter((student) => student.status !== "Inactive" && student.groupId === classDraft.groupId)
@@ -887,7 +1069,7 @@ export default function ClassLog({ state = {}, derived = {}, asOfDate, actions =
       paymentReference: draft.paymentReference,
       notes: draft.notes,
     });
-    return { ...calculateClassLogRow(record, context), draft, studentName: student.fullName, studentCode: student.code };
+    return { ...calculateClassLogRow(record, context), draft, studentName: student.fullName, studentCode: student.studentCode || student.code };
   }), [activeStudents, classDraft, context, rosterDrafts]);
 
   const summary = useMemo(() => rosterRows.reduce((total, row) => {
@@ -959,15 +1141,26 @@ export default function ClassLog({ state = {}, derived = {}, asOfDate, actions =
     setSaving(true);
     try {
       const saved = await Promise.resolve(actions.addClassLogs(rosterRows.map((row) => persistedRecord(row))));
-      if (saved) setRosterDrafts(Object.fromEntries(activeStudents.map((student) => [student.id, makeRosterDraft(classDraft.classStatus)])));
+      if (saved) {
+        const nextRosterDrafts = Object.fromEntries(activeStudents.map((student) => [student.id, makeRosterDraft(classDraft.classStatus)]));
+        classBaselineRef.current = { classDraft, rosterDrafts: nextRosterDrafts };
+        setRosterDrafts(nextRosterDrafts);
+      }
     } finally {
       setSaving(false);
     }
   };
 
   const openAdvance = () => {
-    setAdvanceDraft(makeAdvanceDraft(currentAsOfDate, defaultHours, hourlyRate));
+    const nextAdvance = makeAdvanceDraft(currentAsOfDate, defaultHours, hourlyRate);
+    advanceBaselineRef.current = nextAdvance;
+    setAdvanceDraft(nextAdvance);
     setAdvanceOpen(true);
+  };
+  const closeAdvance = () => {
+    if (!confirmDiscard(advanceDirty, "Discard this advance-payment draft?")) return false;
+    setAdvanceOpen(false);
+    return true;
   };
   const saveAdvance = async () => {
     if (!actions?.addClassLogs || !advanceDraft.studentId) return;
@@ -989,7 +1182,10 @@ export default function ClassLog({ state = {}, derived = {}, asOfDate, actions =
           : `Advance ${index + 1} of ${count}`,
       }));
       const saved = await Promise.resolve(actions.addClassLogs(records));
-      if (saved) setAdvanceOpen(false);
+      if (saved) {
+        advanceBaselineRef.current = advanceDraft;
+        setAdvanceOpen(false);
+      }
     } finally {
       setSaving(false);
     }
@@ -1000,7 +1196,7 @@ export default function ClassLog({ state = {}, derived = {}, asOfDate, actions =
       <div className="page-toolbar">
         <Tabs
           value={mode}
-          onChange={setMode}
+          onChange={changeMode}
           ariaLabel="Class Log views"
           items={[{ value: "new", label: "New class" }, { value: "history", label: "History" }]}
         />
@@ -1008,7 +1204,7 @@ export default function ClassLog({ state = {}, derived = {}, asOfDate, actions =
       </div>
 
       {mode === "history" ? (
-        <HistoryView rows={historyRows} groups={groups} students={students} context={context} currency={currency} actions={actions} />
+        <HistoryView rows={historyRows} groups={groups} students={students} context={context} currency={currency} actions={actions} registerNavigationBlocker={registerNavigationBlocker} />
       ) : (
         <div className="entry-layout">
           <main className="entry-main">
@@ -1028,7 +1224,14 @@ export default function ClassLog({ state = {}, derived = {}, asOfDate, actions =
               </div>
               <span className="roster-count"><Users aria-hidden="true" size={17} />{rosterRows.length} {rosterRows.length === 1 ? "student" : "students"}</span>
             </div>
-            <RosterTable rows={rosterRows} classStatus={classDraft.classStatus} currency={currency} onChange={setRosterField} />
+            <RosterTable
+              rows={rosterRows}
+              classStatus={classDraft.classStatus}
+              currency={currency}
+              onChange={setRosterField}
+              groupSelected={Boolean(classDraft.groupId)}
+              onGoToSetup={navigate ? () => navigate("setup") : undefined}
+            />
             {rosterRows.length ? (
               <section className="panel totals-bar" aria-label="Class totals">
                 <div className="pricing-note"><CircleDollarSign aria-hidden="true" /><span>Charges use {currency(hourlyRate)} per hour. Blank student hours use the {defaultHours}-hour class default.</span></div>
@@ -1049,7 +1252,7 @@ export default function ClassLog({ state = {}, derived = {}, asOfDate, actions =
 
       <AdvancePaymentDrawer
         open={advanceOpen}
-        onClose={() => setAdvanceOpen(false)}
+        onClose={closeAdvance}
         students={activeStudentOptions}
         groupsById={groupsById}
         existingRows={historyRows}
