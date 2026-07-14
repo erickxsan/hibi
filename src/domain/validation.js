@@ -5,6 +5,7 @@ import {
   GRADE_CATEGORIES,
   PAYMENT_METHODS,
   SCHEMA_VERSION,
+  STUDENT_AVATAR_IDS,
   STUDENT_STATUSES,
   WORK_STATUSES,
 } from "./constants.js";
@@ -97,6 +98,7 @@ export function validateStudent(student, state = null) {
   requiredText(errors, student.code, "code", "Student code");
   requiredText(errors, student.fullName, "fullName", "Student name");
   enumValue(errors, student.status, STUDENT_STATUSES, "status", "Student status");
+  if (student.avatarId) enumValue(errors, student.avatarId, STUDENT_AVATAR_IDS, "avatarId", "Student avatar");
   if (state && duplicateIn(state.students, "code", student.code, student.id)) {
     errors.push(issue("code", "duplicate", "Student code must be unique.", student.code));
   }
@@ -214,6 +216,21 @@ export function normalizeState(input) {
   const selectedMonth = isDateOnly(sourceSettings.selectedMonth)
     ? startOfMonth(sourceSettings.selectedMonth)
     : sourceSettings.selectedMonth ?? DEFAULT_SETTINGS.selectedMonth;
+  const normalizedStudents = (Array.isArray(source.students) ? source.students : []).map((student) => ({
+    id: normalizeText(student?.id),
+    code: normalizeText(student?.code),
+    fullName: normalizeText(student?.fullName),
+    avatarId: STUDENT_AVATAR_IDS.includes(student?.avatarId) ? student.avatarId : "",
+    groupIds: normalizeGroupIds(student),
+    isIndividual: Boolean(student?.isIndividual),
+    phone: normalizeText(student?.phone),
+    guardianContact: normalizeText(student?.guardianContact),
+    notes: normalizeText(student?.notes),
+    status: normalizeText(student?.status),
+  }));
+  const inferableGroupByStudent = new Map(normalizedStudents
+    .filter((student) => student.groupIds.length === 1)
+    .map((student) => [student.id, student.groupIds[0]]));
 
   return {
     version: normalizeNumber(source.version, SCHEMA_VERSION),
@@ -237,17 +254,7 @@ export function normalizeState(input) {
       assistantContact: normalizeText(group?.assistantContact),
       notes: normalizeText(group?.notes),
     })),
-    students: (Array.isArray(source.students) ? source.students : []).map((student) => ({
-      id: normalizeText(student?.id),
-      code: normalizeText(student?.code),
-      fullName: normalizeText(student?.fullName),
-      groupIds: normalizeGroupIds(student),
-      isIndividual: Boolean(student?.isIndividual),
-      phone: normalizeText(student?.phone),
-      guardianContact: normalizeText(student?.guardianContact),
-      notes: normalizeText(student?.notes),
-      status: normalizeText(student?.status),
-    })),
+    students: normalizedStudents,
     grades: (Array.isArray(source.grades) ? source.grades : []).map((grade) => ({
       id: normalizeText(grade?.id),
       date: normalizeText(grade?.date),
@@ -263,7 +270,7 @@ export function normalizeState(input) {
       id: normalizeText(row?.id),
       classDate: normalizeText(row?.classDate),
       studentId: normalizeText(row?.studentId),
-      groupId: normalizeText(row?.groupId),
+      groupId: normalizeText(row?.groupId) || inferableGroupByStudent.get(normalizeText(row?.studentId)) || "",
       startTime: normalizeText(row?.startTime),
       classTitle: normalizeText(row?.classTitle),
       classStatus: normalizeText(row?.classStatus),
@@ -371,7 +378,7 @@ export function validateState(input) {
   const classKeys = new Map();
   state.classLog.forEach((row, index) => {
     if (!row?.classDate || !row?.studentId) return;
-    const key = `${row.classDate}\u0000${row.studentId}`;
+    const key = `${row.classDate}\u0000${row.studentId}\u0000${row.startTime || ""}`;
     if (classKeys.has(key)) {
       warnings.push(issue(`classLog[${index}]`, "duplicate_student_class", "Student already has a class row on this date."));
     } else {

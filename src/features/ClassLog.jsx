@@ -27,6 +27,7 @@ import {
   Tabs,
   TextArea,
 } from "../components/ui";
+import { StudentAvatar } from "../components/StudentAvatar";
 import {
   ATTENDANCE_CODES,
   CLASS_STATUSES,
@@ -93,8 +94,13 @@ function mapLookup(mapLike, key) {
   return mapLike[key];
 }
 
+function studentGroupIds(student) {
+  if (Array.isArray(student?.groupIds)) return student.groupIds;
+  return student?.groupId ? [student.groupId] : [];
+}
+
 function studentGroupId(row, student) {
-  return row.groupId || student?.groupId || "";
+  return row.groupId || studentGroupIds(student)[0] || "";
 }
 
 /** Mirrors the calculated columns in the minimal workbook's Class Log sheet. */
@@ -181,15 +187,6 @@ function classStatusTone(status) {
   return "neutral";
 }
 
-function initials(name) {
-  return String(name || "?")
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("") || "?";
-}
-
 function makeRosterDraft(classStatus = "Completed") {
   return {
     attendance: classStatus === "Completed" ? "P" : "",
@@ -261,7 +258,7 @@ function AttendanceSelect({ value, onChange, label, disabled = false }) {
   );
 }
 
-function ClassControls({ value, groups, onChange, onAdvance, onSave, saving, canSave }) {
+function ClassControls({ value, groups, hasIndividualStudents, onChange, onAdvance, onSave, saving, canSave }) {
   return (
     <section className="panel class-controls" aria-label="Class details">
       <div className="form-grid class-control-grid">
@@ -276,6 +273,7 @@ function ClassControls({ value, groups, onChange, onAdvance, onSave, saving, can
           <Select value={value.groupId} onChange={(event) => onChange("groupId", event.target.value)}>
             <option value="">Choose a group</option>
             {groups.map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}
+            {hasIndividualStudents ? <option value={UNASSIGNED_GROUP}>Individual students</option> : null}
           </Select>
         </Field>
         <Field label="Class status" required>
@@ -306,7 +304,7 @@ function ClassControls({ value, groups, onChange, onAdvance, onSave, saving, can
 function MobileRosterCards({ rows, classStatus, currency, onChange }) {
   return (
     <section className="mobile-roster-cards" aria-label="Class roster">
-      {rows.map((row, index) => {
+      {rows.map((row) => {
         const attendanceDisabled = classStatus !== "Completed";
         const hasMoreDetails = Boolean(row.draft.paymentReference || row.draft.notes);
 
@@ -314,12 +312,7 @@ function MobileRosterCards({ rows, classStatus, currency, onChange }) {
           <article className="mobile-roster-card" key={row.studentId}>
             <header className="mobile-roster-card-header">
               <div className="mobile-student-identity">
-                <span
-                  className={`avatar student-avatar avatar-${["lilac", "teal", "pink", "olive"][index % 4]}`}
-                  aria-hidden="true"
-                >
-                  {initials(row.studentName)}
-                </span>
+                <StudentAvatar avatarId={row.avatarId} name={row.studentName} size="tiny" decorative />
                 <span className="mobile-student-copy">
                   <strong>{row.studentName}</strong>
                   <span>{row.studentCode || "No ID"}</span>
@@ -437,10 +430,10 @@ function RosterTable({ rows, classStatus, currency, onChange, groupSelected = fa
         icon={Users}
         title={groupSelected ? "This group has no active students" : "Choose a group to load its roster"}
         description={groupSelected
-          ? "Add a student to this group in Setup, then return here to record the class."
-          : "Only active students are included. You can manage enrollment from Setup."}
+          ? "Add a student to this group in Students, then return here to record the class."
+          : "Only active students are included. You can manage enrollment from Students."}
         action={groupSelected && onGoToSetup
-          ? <Button variant="primary" onClick={onGoToSetup}>Go to Setup</Button>
+          ? <Button variant="primary" onClick={onGoToSetup}>Go to Students</Button>
           : null}
       />
     );
@@ -465,13 +458,13 @@ function RosterTable({ rows, classStatus, currency, onChange, groupSelected = fa
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, index) => {
+          {rows.map((row) => {
             const attendanceDisabled = classStatus !== "Completed";
             return (
               <tr key={row.studentId}>
                 <th scope="row" className="sticky-cell">
                   <div className="person-cell student-cell">
-                    <span className={`avatar student-avatar avatar-${["lilac", "teal", "pink", "olive"][index % 4]}`} aria-hidden="true">{initials(row.studentName)}</span>
+                    <StudentAvatar avatarId={row.avatarId} name={row.studentName} size="tiny" decorative />
                     <span className="student-cell-copy">
                       <strong>{row.studentName}</strong>
                       <span>{row.studentCode || "No ID"}</span>
@@ -637,7 +630,7 @@ function ReviewPanel({ classDraft, selectedGroup, rows, summary, issues, currenc
 function AdvancePaymentDrawer({ open, onClose, students, groupsById, existingRows = [], draft, setDraft, defaultHours, hourlyRate, asOfDate, currency, onSave, saving }) {
   const { t } = useI18n();
   const selectedStudent = students.find((student) => student.id === draft.studentId);
-  const selectedGroup = mapLookup(groupsById, selectedStudent?.groupId);
+  const selectedGroup = mapLookup(groupsById, studentGroupIds(selectedStudent)[0]);
   const duplicateDates = draft.entries.filter((entry, index, all) => all.findIndex((item) => item.classDate === entry.classDate) !== index);
   const existingDates = draft.entries.filter((entry) => existingRows.some((row) => (
     row.studentId === draft.studentId && row.classDate === entry.classDate
@@ -930,7 +923,7 @@ function HistoryView({ rows, groups, students, context, currency, actions, regis
                 {filteredRows.map((row) => (
                   <tr key={row.id}>
                     <td>{row.classDate}</td>
-                    <td><strong>{row.studentName}</strong><span className="cell-subtitle">{row.studentCode}</span></td>
+                    <td><div className="person-cell"><StudentAvatar avatarId={row.student?.avatarId} name={row.studentName} size="tiny" decorative /><span><strong>{row.studentName}</strong><span className="cell-subtitle">{row.studentCode}</span></span></div></td>
                     <td>{row.groupName || "Unassigned"}</td>
                     <td><StatusBadge tone={classStatusTone(row.classStatus)}>{row.classStatus}</StatusBadge></td>
                     <td>{row.attendance ? <StatusBadge tone={attendanceTone(row.attendance)}>{ATTENDANCE_LABELS[row.attendance] || row.attendance}</StatusBadge> : "—"}</td>
@@ -968,7 +961,7 @@ function HistoryView({ rows, groups, students, context, currency, actions, regis
 export default function ClassLog({ state = {}, derived = {}, asOfDate, actions = {}, intent, clearIntent, navigate, registerNavigationBlocker }) {
   const groups = useMemo(() => asArray(state.groups), [state.groups]);
   const students = useMemo(() => asArray(state.students), [state.students]);
-  const classLogs = useMemo(() => asArray(state.classLogs), [state.classLogs]);
+  const classLogs = useMemo(() => asArray(state.classLog ?? state.classLogs), [state.classLog, state.classLogs]);
   const settings = state.settings || {};
   const currentAsOfDate = resolveAsOfDate(asOfDate, state);
   const defaultHours = effectiveNumber(settings.defaultClassHours ?? derived.defaultClassHours, 2);
@@ -1023,7 +1016,15 @@ export default function ClassLog({ state = {}, derived = {}, asOfDate, actions =
   const changeMode = useHistoryBackedState({
     key: "class-log-mode",
     value: mode,
-    onChange: setMode,
+    onChange: (nextMode) => {
+      if (nextMode === "history") {
+        const nextClassDraft = { groupId: "", classDate: currentAsOfDate, classStatus: "Completed", hours: defaultHours };
+        classBaselineRef.current = { classDraft: nextClassDraft, rosterDrafts: {} };
+        setClassDraft(nextClassDraft);
+        setRosterDrafts({});
+      }
+      setMode(nextMode);
+    },
     defaultValue: "new",
     allowedValues: ["new", "history"],
     canChange: ({ from, to }) => from !== "new" || from === to || confirmDiscard(classDirty, "Discard your unsaved class changes?"),
@@ -1032,6 +1033,9 @@ export default function ClassLog({ state = {}, derived = {}, asOfDate, actions =
   useEffect(() => {
     if (intent === "new-class") {
       changeMode("new");
+      clearIntent?.();
+    } else if (intent === "class-history") {
+      changeMode("history");
       clearIntent?.();
     } else if (intent === "advance-payment") {
       changeMode("new");
@@ -1044,7 +1048,12 @@ export default function ClassLog({ state = {}, derived = {}, asOfDate, actions =
   }, [changeMode, clearIntent, currentAsOfDate, defaultHours, hourlyRate, intent]);
 
   const activeStudents = useMemo(() => students
-    .filter((student) => student.status !== "Inactive" && student.groupId === classDraft.groupId)
+    .filter((student) => {
+      if (student.status === "Inactive") return false;
+      const groupIds = studentGroupIds(student);
+      if (classDraft.groupId === UNASSIGNED_GROUP) return Boolean(student.isIndividual) || groupIds.length === 0;
+      return groupIds.includes(classDraft.groupId);
+    })
     .sort((left, right) => String(left.fullName).localeCompare(String(right.fullName))), [classDraft.groupId, students]);
   const activeStudentOptions = useMemo(() => students
     .filter((student) => student.status !== "Inactive")
@@ -1062,6 +1071,7 @@ export default function ClassLog({ state = {}, derived = {}, asOfDate, actions =
     const record = persistedRecord({
       classDate: classDraft.classDate,
       studentId: student.id,
+      groupId: classDraft.groupId === UNASSIGNED_GROUP ? "" : classDraft.groupId,
       classStatus: classDraft.classStatus,
       attendance: draft.attendance,
       hours: draft.hours === "" ? classDraft.hours : draft.hours,
@@ -1071,7 +1081,7 @@ export default function ClassLog({ state = {}, derived = {}, asOfDate, actions =
       paymentReference: draft.paymentReference,
       notes: draft.notes,
     });
-    return { ...calculateClassLogRow(record, context), draft, studentName: student.fullName, studentCode: student.studentCode || student.code };
+    return { ...calculateClassLogRow(record, context), draft, studentName: student.fullName, studentCode: student.studentCode || student.code, avatarId: student.avatarId };
   }), [activeStudents, classDraft, context, rosterDrafts]);
 
   const summary = useMemo(() => rosterRows.reduce((total, row) => {
@@ -1087,7 +1097,7 @@ export default function ClassLog({ state = {}, derived = {}, asOfDate, actions =
 
   const issues = useMemo(() => {
     const result = [];
-    if (!classDraft.groupId) result.push({ key: "group", blocking: true, message: "Choose a group." });
+    if (!classDraft.groupId) result.push({ key: "group", blocking: true, message: "Choose a group or individual students." });
     if (!isDateOnly(classDraft.classDate)) result.push({ key: "date", blocking: true, message: "Choose a valid class date." });
     if (effectiveNumber(classDraft.hours, -1) < 0) result.push({ key: "hours", blocking: true, message: "Hours cannot be negative." });
     if (classDraft.groupId && !rosterRows.length) result.push({ key: "roster", blocking: true, message: "This group has no active students." });
@@ -1172,6 +1182,7 @@ export default function ClassLog({ state = {}, derived = {}, asOfDate, actions =
       const records = advanceDraft.entries.map((entry, index) => persistedRecord({
         classDate: entry.classDate,
         studentId: advanceDraft.studentId,
+        groupId: studentGroupIds(studentsById.get(advanceDraft.studentId))[0] || "",
         classStatus: "Scheduled",
         attendance: "",
         hours: entry.hours,
@@ -1213,6 +1224,7 @@ export default function ClassLog({ state = {}, derived = {}, asOfDate, actions =
             <ClassControls
               value={classDraft}
               groups={groups}
+              hasIndividualStudents={activeStudentOptions.some((student) => student.isIndividual || studentGroupIds(student).length === 0)}
               onChange={setClassField}
               onAdvance={openAdvance}
               onSave={saveClass}
@@ -1232,7 +1244,7 @@ export default function ClassLog({ state = {}, derived = {}, asOfDate, actions =
               currency={currency}
               onChange={setRosterField}
               groupSelected={Boolean(classDraft.groupId)}
-              onGoToSetup={navigate ? () => navigate("setup") : undefined}
+              onGoToSetup={navigate ? () => navigate("students") : undefined}
             />
             {rosterRows.length ? (
               <section className="panel totals-bar" aria-label="Class totals">
@@ -1247,7 +1259,7 @@ export default function ClassLog({ state = {}, derived = {}, asOfDate, actions =
             ) : null}
           </main>
           <div className="entry-sidebar">
-            <ReviewPanel classDraft={classDraft} selectedGroup={mapLookup(groupsById, classDraft.groupId)} rows={rosterRows} summary={summary} issues={issues} currency={currency} saving={saving} onSave={saveClass} />
+            <ReviewPanel classDraft={classDraft} selectedGroup={classDraft.groupId === UNASSIGNED_GROUP ? { name: "Individual students" } : mapLookup(groupsById, classDraft.groupId)} rows={rosterRows} summary={summary} issues={issues} currency={currency} saving={saving} onSave={saveClass} />
           </div>
         </div>
       )}

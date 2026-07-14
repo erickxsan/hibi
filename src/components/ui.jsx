@@ -1,25 +1,26 @@
 import { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
-import { AlertCircle, CheckCircle2, ChevronDown, Search, X } from "lucide-react";
+import { AlertCircle, ChevronDown, Search, X } from "lucide-react";
 import {
   closeOverlayHistory,
   pushOverlayHistory,
   subscribeToAppHistory,
 } from "../navigation/appHistory";
+import { BrandMark } from "./BrandMark";
 
 let openDrawerCount = 0;
 
 function lockDrawerBackground() {
   openDrawerCount += 1;
   document.body.classList.add("drawer-open");
-  document.querySelector(".app-shell")?.setAttribute("inert", "");
+  document.querySelector(".hibi-shell, .app-shell")?.setAttribute("inert", "");
 }
 
 function unlockDrawerBackground() {
   openDrawerCount = Math.max(0, openDrawerCount - 1);
   if (openDrawerCount) return;
   document.body.classList.remove("drawer-open");
-  document.querySelector(".app-shell")?.removeAttribute("inert");
+  document.querySelector(".hibi-shell, .app-shell")?.removeAttribute("inert");
 }
 
 export function Button({ children, variant = "secondary", icon: Icon, className = "", ...props }) {
@@ -251,7 +252,7 @@ export function ToastRegion({ toasts, onDismiss }) {
     <div className="toast-region" aria-live="polite" aria-label="Notifications">
       {toasts.map((toast) => (
         <div className={`toast toast-${toast.tone || "success"}`} key={toast.id}>
-          {toast.tone === "error" ? <AlertCircle aria-hidden="true" /> : <CheckCircle2 aria-hidden="true" />}
+          {toast.tone === "error" ? <AlertCircle aria-hidden="true" /> : <span className="toast-cat" aria-hidden="true"><BrandMark /></span>}
           <span>{toast.message}</span>
           <IconButton label="Dismiss notification" icon={X} onClick={() => onDismiss(toast.id)} />
         </div>

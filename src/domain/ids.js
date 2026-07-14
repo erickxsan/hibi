@@ -34,6 +34,7 @@ export function createStudent(overrides = {}) {
     id: createStableId("student"),
     code: "",
     fullName: "",
+    avatarId: "cat",
     groupIds: [],
     isIndividual: false,
     phone: "",

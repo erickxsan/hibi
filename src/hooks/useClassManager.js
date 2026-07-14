@@ -65,6 +65,7 @@ function canonicalStudent(draft) {
     id: draft.id,
     code: draft.studentCode ?? draft.code ?? "",
     fullName: draft.fullName ?? "",
+    avatarId: draft.avatarId ?? "",
     groupIds: Array.isArray(draft.groupIds) ? [...new Set(draft.groupIds.filter(Boolean))] : draft.groupId ? [draft.groupId] : [],
     isIndividual: Boolean(draft.isIndividual),
     phone: draft.studentPhone ?? draft.phone ?? "",

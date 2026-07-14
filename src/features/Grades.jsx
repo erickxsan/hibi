@@ -15,6 +15,7 @@ import {
   TableShell,
   TextArea,
 } from "../components/ui";
+import { StudentAvatar } from "../components/StudentAvatar";
 import { todayDateOnly } from "../domain/dates";
 import { normalizeSearchText } from "../utils/searchText";
 import { confirmDiscard, draftChanged, useUnsavedChanges } from "../hooks/useUnsavedChanges";
@@ -187,7 +188,7 @@ export default function Grades({ state, derived, actions, intent, clearIntent, r
               return (
                 <tr key={row.id}>
                   <td>{formatDate(row.date)}</td>
-                  <th scope="row" className="sticky-cell"><div className="person-cell"><span className="avatar avatar-lilac">{row.studentName?.split(/\s+/).map((part) => part[0]).slice(0, 2).join("")}</span><strong>{row.studentName || "Unknown student"}</strong></div></th>
+                  <th scope="row" className="sticky-cell"><div className="person-cell"><StudentAvatar avatarId={studentsById.get(row.studentId)?.avatarId} name={row.studentName} size="tiny" decorative /><strong>{row.studentName || "Unknown student"}</strong></div></th>
                   <td>{row.groupName || "Unassigned"}</td><td><strong>{row.assessment}</strong></td><td><StatusBadge tone="lilac">{row.category}</StatusBadge></td><td className="numeric">{row.score ?? "—"}</td><td className="numeric">{row.maximum}</td><td className={`numeric score-value ${low ? "is-low" : high ? "is-high" : ""}`}>{formatPercent(row.percentage)}</td><td><StatusBadge tone={toneForWorkStatus(row.workStatus)} icon={row.workStatus === "Missing" ? AlertTriangle : undefined}>{row.workStatus}</StatusBadge></td><td className="wrap-cell">{row.feedback || "—"}</td>
                   <td><div className="row-actions"><IconButton label={`Edit ${row.assessment} for ${row.studentName}`} icon={Pencil} onClick={() => openEdit(row)} /><IconButton label={`Delete ${row.assessment} for ${row.studentName}`} icon={Trash2} onClick={() => setDeleteTarget(row)} /></div></td>
                 </tr>
@@ -220,7 +221,7 @@ export default function Grades({ state, derived, actions, intent, clearIntent, r
           <div className="roster-list">
             {roster.map((student) => {
               const entry = batchDraft.entries[student.id] || { score: "", workStatus: "On time", feedback: "" };
-              return <div className="grade-roster-row" key={student.id}><div className="person-cell"><span className="avatar avatar-lilac">{student.fullName.split(/\s+/).map((part) => part[0]).slice(0, 2).join("")}</span><strong>{student.fullName}</strong></div><Field label="Score"><Input aria-label={`Score for ${student.fullName}`} type="number" inputMode="decimal" min="0" step="0.01" value={entry.score} onChange={(event) => updateEntry(student.id, { score: event.target.value })} /></Field><Field label="Work status"><Select aria-label={`Work status for ${student.fullName}`} value={entry.workStatus} onChange={(event) => updateEntry(student.id, { workStatus: event.target.value })}>{WORK_STATUSES.map((status) => <option key={status}>{status}</option>)}</Select></Field><Field label="Feedback"><Input aria-label={`Feedback for ${student.fullName}`} value={entry.feedback} onChange={(event) => updateEntry(student.id, { feedback: event.target.value })} /></Field></div>;
+              return <div className="grade-roster-row" key={student.id}><div className="person-cell"><StudentAvatar avatarId={student.avatarId} name={student.fullName} size="tiny" decorative /><strong>{student.fullName}</strong></div><Field label="Score"><Input aria-label={`Score for ${student.fullName}`} type="number" inputMode="decimal" min="0" step="0.01" value={entry.score} onChange={(event) => updateEntry(student.id, { score: event.target.value })} /></Field><Field label="Work status"><Select aria-label={`Work status for ${student.fullName}`} value={entry.workStatus} onChange={(event) => updateEntry(student.id, { workStatus: event.target.value })}>{WORK_STATUSES.map((status) => <option key={status}>{status}</option>)}</Select></Field><Field label="Feedback"><Input aria-label={`Feedback for ${student.fullName}`} value={entry.feedback} onChange={(event) => updateEntry(student.id, { feedback: event.target.value })} /></Field></div>;
             })}
           </div>
         </form> : null}

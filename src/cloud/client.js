@@ -4,9 +4,10 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim() ?? "";
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim()
   || import.meta.env.VITE_SUPABASE_ANON_KEY?.trim()
   || "";
+const forceLocalDevelopment = import.meta.env.DEV && import.meta.env.VITE_FORCE_LOCAL_MODE === "true";
 
-export const isCloudConfigured = Boolean(supabaseUrl && supabaseAnonKey);
-export const isLocalModeAllowed = import.meta.env.DEV || import.meta.env.VITE_ALLOW_LOCAL_MODE === "true";
+export const isCloudConfigured = !forceLocalDevelopment && Boolean(supabaseUrl && supabaseAnonKey);
+export const isLocalModeAllowed = forceLocalDevelopment || import.meta.env.DEV || import.meta.env.VITE_ALLOW_LOCAL_MODE === "true";
 export const hCaptchaSiteKey = import.meta.env.VITE_HCAPTCHA_SITE_KEY?.trim() ?? "";
 
 /**

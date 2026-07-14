@@ -17,6 +17,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
 });
 
 export const STUDENT_STATUSES = Object.freeze(["Active", "Inactive"]);
+export const STUDENT_AVATAR_IDS = Object.freeze(["cat", "dog", "penguin", "fox", "rabbit", "bear", "frog", "owl"]);
 export const CLASS_STATUSES = Object.freeze(["Scheduled", "Completed", "Cancelled"]);
 export const ATTENDANCE_CODES = Object.freeze(["P", "A", "L", "E"]);
 export const GRADE_CATEGORIES = Object.freeze([

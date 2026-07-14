@@ -67,6 +67,11 @@ export function ClassManagerApplication({ persistence, user, cloudError, onSignO
     canNavigate: allowNavigation,
     onPageChange: () => setIntent(null),
   });
+  const openPage = useCallback((nextPage, nextIntent = null) => {
+    if (!navigate(nextPage)) return false;
+    setIntent(nextIntent);
+    return true;
+  }, [navigate]);
 
   const pageContent = useMemo(() => {
     const common = {
@@ -74,6 +79,7 @@ export function ClassManagerApplication({ persistence, user, cloudError, onSignO
       intent,
       clearIntent: () => setIntent(null),
       navigate,
+      openPage,
       registerNavigationBlocker,
     };
     if (page === "students") return <Students {...common} />;
@@ -83,7 +89,7 @@ export function ClassManagerApplication({ persistence, user, cloudError, onSignO
     if (page === "payments") return <Payments {...common} />;
     if (page === "settings") return <Settings {...common} />;
     return <Home {...common} />;
-  }, [intent, manager, navigate, page, registerNavigationBlocker]);
+  }, [intent, manager, navigate, openPage, page, registerNavigationBlocker]);
 
   const handleSignOut = async () => {
     if (!onSignOut || signingOut) return;

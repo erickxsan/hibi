@@ -1,54 +1,260 @@
-import { useMemo, useState } from "react";
-import { Archive, ArrowLeft, Check, CreditCard, History, Pencil, Plus, Search, Star, Trash2, UserRound, UsersRound } from "lucide-react";
-import { Button, Drawer, Field, Input, Select, TextArea } from "../components/ui";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Archive,
+  ArrowLeft,
+  Check,
+  CreditCard,
+  History,
+  Pencil,
+  Plus,
+  Search,
+  Star,
+  Trash2,
+  UserRound,
+  UsersRound,
+} from "lucide-react";
+import { Button, ConfirmDialog, Drawer, Field, Input, Select, TextArea } from "../components/ui";
+import { AvatarPicker, StudentAvatar } from "../components/StudentAvatar";
+import { confirmDiscard, draftChanged, useUnsavedChanges } from "../hooks/useUnsavedChanges";
+import { useHistoryBackedState } from "../hooks/useHistoryNavigation";
+import { getUiLocale } from "../i18n";
+import { normalizeSearchText } from "../utils/searchText";
 
-const EMPTY = { id: "", studentCode: "", fullName: "", groupIds: [], isIndividual: false, studentPhone: "", guardianContact: "", importantNotes: "", status: "Active" };
-const initials = (name) => String(name || "?").split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase();
-const money = (value) => new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(Number(value || 0));
-const pct = (value) => value == null ? "—" : `${Math.round(value * 100)}%`;
+const EMPTY = Object.freeze({
+  id: "",
+  code: "",
+  fullName: "",
+  avatarId: "cat",
+  groupIds: [],
+  isIndividual: false,
+  phone: "",
+  guardianContact: "",
+  notes: "",
+  status: "Active",
+});
+
+const DETAIL_TABS = Object.freeze(["overview", "attendance", "grades", "history", "payments", "notes"]);
+
+function money(value) {
+  return new Intl.NumberFormat(getUiLocale(), { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(Number(value || 0));
+}
+
+function pct(value) {
+  return value == null ? "—" : `${Math.round(value * 100)}%`;
+}
 
 function EnrollmentTags({ student, groupsById }) {
-  return <div className="enrollment-tags">{student.isIndividual ? <span className="enroll-tag individual"><UserRound size={13}/>Individual</span> : null}{(student.groupIds || []).map((id) => groupsById.get(id)).filter(Boolean).map((group) => <span className="enroll-tag" key={group.id}><UsersRound size={13}/>{group.name}</span>)}{!student.isIndividual && !(student.groupIds || []).length ? <span className="enroll-tag muted">Unassigned</span> : null}</div>;
+  const groupIds = Array.isArray(student.groupIds) ? student.groupIds : student.groupId ? [student.groupId] : [];
+  return (
+    <div className="enrollment-tags">
+      {student.isIndividual || groupIds.length === 0 ? <span className="enroll-tag individual"><UserRound size={13} />Individual</span> : null}
+      {groupIds.map((id) => groupsById.get(id)).filter(Boolean).map((group) => <span className="enroll-tag" key={group.id}><UsersRound size={13} />{group.name}</span>)}
+    </div>
+  );
 }
 
 function StudentEditor({ draft, setDraft, groups }) {
   const [groupSearch, setGroupSearch] = useState("");
-  const filtered = groups.filter((group) => group.name.toLowerCase().includes(groupSearch.toLowerCase()));
-  const toggleGroup = (id) => setDraft({ ...draft, groupIds: draft.groupIds.includes(id) ? draft.groupIds.filter((value) => value !== id) : [...draft.groupIds, id] });
-  return <form id="student-editor" className="drawer-form" onSubmit={(event) => event.preventDefault()}>
-    <div className="form-grid two-columns"><Field label="Student ID" required><Input value={draft.studentCode} onChange={(e) => setDraft({ ...draft, studentCode: e.target.value })}/></Field><Field label="Status"><Select value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value })}><option>Active</option><option>Inactive</option></Select></Field></div>
-    <Field label="Full name" required><Input value={draft.fullName} onChange={(e) => setDraft({ ...draft, fullName: e.target.value })}/></Field>
-    <section className="compact-enrollment" aria-label="Enrollment"><div className="enrollment-heading"><div><strong>Enrollment</strong><span>Individual, groups, or both</span></div><label className="switch-row"><input type="checkbox" checked={draft.isIndividual} onChange={(e) => setDraft({ ...draft, isIndividual: e.target.checked })}/><span/><b>Individual classes</b></label></div>
-      <label className="mini-search"><Search size={15}/><input value={groupSearch} onChange={(e) => setGroupSearch(e.target.value)} placeholder="Search groups"/></label>
-      <div className="group-picker">{filtered.length ? filtered.map((group) => <button key={group.id} type="button" className={draft.groupIds.includes(group.id) ? "group-option selected" : "group-option"} onClick={() => toggleGroup(group.id)}><span>{group.name}<small>{group.scheduleRoom || group.subject || "No schedule"}</small></span>{draft.groupIds.includes(group.id) ? <Check size={16}/> : null}</button>) : <p>No groups match.</p>}</div>
-      <div className="selected-groups">{draft.groupIds.map((id) => groups.find((group) => group.id === id)).filter(Boolean).map((group) => <button type="button" key={group.id} onClick={() => toggleGroup(group.id)}>{group.name} ×</button>)}</div>
-    </section>
-    <Field label="Student phone"><Input type="tel" value={draft.studentPhone} onChange={(e) => setDraft({ ...draft, studentPhone: e.target.value })}/></Field>
-    <Field label="Parent / tutor"><TextArea rows="2" value={draft.guardianContact} onChange={(e) => setDraft({ ...draft, guardianContact: e.target.value })}/></Field>
-    <Field label="Notes"><TextArea rows="3" value={draft.importantNotes} onChange={(e) => setDraft({ ...draft, importantNotes: e.target.value })}/></Field>
-  </form>;
+  const needle = normalizeSearchText(groupSearch);
+  const filtered = groups.filter((group) => normalizeSearchText(`${group.name} ${group.subject} ${group.scheduleRoom}`).includes(needle));
+  const toggleGroup = (id) => setDraft((current) => ({
+    ...current,
+    groupIds: current.groupIds.includes(id)
+      ? current.groupIds.filter((value) => value !== id)
+      : [...current.groupIds, id],
+  }));
+
+  return (
+    <form id="student-editor" className="drawer-form" onSubmit={(event) => event.preventDefault()}>
+      <div className="form-grid two-columns">
+        <Field label="Student ID" required><Input value={draft.code} onChange={(event) => setDraft({ ...draft, code: event.target.value })} /></Field>
+        <Field label="Status"><Select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value })}><option>Active</option><option>Inactive</option></Select></Field>
+      </div>
+      <Field label="Full name" required><Input value={draft.fullName} onChange={(event) => setDraft({ ...draft, fullName: event.target.value })} /></Field>
+      <AvatarPicker value={draft.avatarId} onChange={(avatarId) => setDraft({ ...draft, avatarId })} />
+      <section className="compact-enrollment" aria-label="Enrollment">
+        <div className="enrollment-heading">
+          <div><strong>Enrollment</strong><span>Individual, groups, or both</span></div>
+          <label className="switch-row">
+            <input type="checkbox" checked={draft.isIndividual} onChange={(event) => setDraft({ ...draft, isIndividual: event.target.checked })} />
+            <span aria-hidden="true" /><b>Individual classes</b>
+          </label>
+        </div>
+        <label className="mini-search"><Search size={15} /><span className="sr-only">Search groups</span><input value={groupSearch} onChange={(event) => setGroupSearch(event.target.value)} placeholder="Search groups" /></label>
+        <div className="group-picker">
+          {filtered.length ? filtered.map((group) => (
+            <button key={group.id} type="button" className={draft.groupIds.includes(group.id) ? "group-option selected" : "group-option"} onClick={() => toggleGroup(group.id)}>
+              <span>{group.name}<small>{group.schedule || group.subject || "No schedule"}</small></span>
+              {draft.groupIds.includes(group.id) ? <Check size={16} /> : null}
+            </button>
+          )) : <p>No groups match.</p>}
+        </div>
+        <div className="selected-groups">
+          {draft.groupIds.map((id) => groups.find((group) => group.id === id)).filter(Boolean).map((group) => <button type="button" key={group.id} onClick={() => toggleGroup(group.id)}>{group.name} ×</button>)}
+        </div>
+      </section>
+      <Field label="Student phone"><Input type="tel" value={draft.phone} onChange={(event) => setDraft({ ...draft, phone: event.target.value })} /></Field>
+      <Field label="Parent / tutor"><TextArea rows="2" value={draft.guardianContact} onChange={(event) => setDraft({ ...draft, guardianContact: event.target.value })} /></Field>
+      <Field label="Notes"><TextArea rows="3" value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} /></Field>
+    </form>
+  );
 }
 
-export default function Students({ state, derived, actions }) {
+function StudentDetailContent({ tab, student, summary, grades, classes, onEdit }) {
+  if (tab === "attendance") {
+    return <article className="detail-card span-two"><header><h2>Attendance history</h2><History size={18} /></header>{classes.map((row) => <div className="history-line" key={row.id}><span>{row.classDate}</span><strong>{row.classTitle || row.groupName || "Individual class"}</strong><em>{row.attendance || "—"}</em></div>)}{!classes.length ? <p>No attendance records yet.</p> : null}</article>;
+  }
+  if (tab === "grades") {
+    return <article className="detail-card span-two"><header><h2>Grades</h2><Star size={18} /></header>{grades.map((row) => <div className="history-line" key={row.id}><span>{row.date}</span><strong>{row.assessment}</strong><em>{pct(row.percentage)}</em></div>)}{!grades.length ? <p>No grades yet.</p> : null}</article>;
+  }
+  if (tab === "history") {
+    return <article className="detail-card span-two"><header><h2>Class history</h2><History size={18} /></header>{classes.map((row) => <div className="history-line" key={row.id}><span>{row.classDate}</span><strong>{row.classTitle || row.groupName || "Individual class"}</strong><em>{row.classStatus}</em></div>)}{!classes.length ? <p>No classes yet.</p> : null}</article>;
+  }
+  if (tab === "payments") {
+    return <article className="detail-card span-two"><header><h2>Payments</h2><CreditCard size={18} /></header>{classes.map((row) => <div className="student-payment-line" key={row.id}><span>{row.classDate}<small>{row.paymentStatus}</small></span><strong>{money(row.recognizedPaid)}</strong><em>{money(row.outstanding)} pending</em></div>)}{!classes.length ? <p>No payment records yet.</p> : null}</article>;
+  }
+  if (tab === "notes") {
+    return <article className="detail-card span-two"><header><h2>Notes</h2><button type="button" onClick={onEdit}>Edit</button></header><p>{student.notes || "No notes yet."}</p></article>;
+  }
+  return (
+    <>
+      <article className="detail-card"><header><h2>Attendance</h2><span>This term</span></header><div className="large-stat">{pct(summary.attendance)}</div><p>{summary.attendedClasses || 0} of {summary.attendanceClasses || 0} recorded classes attended</p></article>
+      <article className="detail-card"><header><h2>Latest grades</h2><Star size={18} /></header>{grades.slice(0, 3).map((row) => <div className="mini-row" key={row.id}><span>{row.assessment}</span><strong>{pct(row.percentage)}</strong></div>)}{!grades.length ? <p>No grades yet.</p> : null}</article>
+      <article className="detail-card span-two"><header><h2>Class history</h2><History size={18} /></header>{classes.slice(0, 4).map((row) => <div className="history-line" key={row.id}><span>{row.classDate}</span><strong>{row.classTitle || row.groupName || "Individual class"}</strong><em>{row.attendance || "—"}</em></div>)}{!classes.length ? <p>No classes yet.</p> : null}</article>
+      <article className="detail-card"><header><h2>Payments</h2><CreditCard size={18} /></header><div className="large-stat">{money(summary.outstanding)}</div><p>Current outstanding balance</p></article>
+      <article className="detail-card"><header><h2>Notes</h2><button type="button" onClick={onEdit}>Edit</button></header><p>{student.notes || "No notes yet."}</p></article>
+    </>
+  );
+}
+
+export default function Students({ state, derived, actions, intent, clearIntent, registerNavigationBlocker }) {
   const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("all");
   const [selectedId, setSelectedId] = useState("");
+  const [detailTab, setDetailTab] = useState("overview");
   const [draft, setDraft] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const baselineRef = useRef(null);
+  const dirty = Boolean(draft) && draftChanged(draft, baselineRef.current);
   const groupsById = derived.groupsById || new Map();
-  const list = useMemo(() => state.students.filter((student) => [student.fullName, student.studentCode, student.guardianContact, ...(student.groupIds || []).map((id) => groupsById.get(id)?.name || "")].join(" ").toLowerCase().includes(query.toLowerCase())), [groupsById, query, state.students]);
+
+  useUnsavedChanges(registerNavigationBlocker, dirty, "Discard your unsaved student changes?");
+  const changeSelected = useHistoryBackedState({
+    key: "student-detail",
+    value: selectedId,
+    onChange: (value) => { setSelectedId(value); setDetailTab("overview"); },
+    defaultValue: "",
+    allowedValues: ["", ...state.students.map((student) => student.id)],
+    canChange: () => confirmDiscard(dirty, "Discard your unsaved student changes?"),
+  });
+
+  const list = useMemo(() => {
+    const needle = normalizeSearchText(query);
+    return state.students.filter((student) => {
+      if (status !== "all" && student.status !== status) return false;
+      const groupNames = (student.groupIds || []).map((id) => groupsById.get(id)?.name || "");
+      return normalizeSearchText([student.fullName, student.code, student.phone, student.guardianContact, ...groupNames].join(" ")).includes(needle);
+    });
+  }, [groupsById, query, state.students, status]);
+
   const student = state.students.find((item) => item.id === selectedId);
   const summary = derived.students.find((item) => item.id === selectedId) || {};
-  const studentGrades = derived.grades.filter((row) => row.studentId === selectedId).slice().sort((a,b) => b.date.localeCompare(a.date));
-  const studentClasses = derived.classLog.filter((row) => row.studentId === selectedId).slice().sort((a,b) => b.classDate.localeCompare(a.classDate));
-  const open = (item = EMPTY) => setDraft({ ...EMPTY, ...item, groupIds: [...(item.groupIds || [])] });
-  const save = async () => { if (await actions.upsertStudent(draft)) { setSelectedId(draft.id || ""); setDraft(null); } };
+  const studentGrades = derived.grades.filter((row) => row.studentId === selectedId).slice().sort((left, right) => right.date.localeCompare(left.date));
+  const studentClasses = derived.classLog.filter((row) => row.studentId === selectedId).slice().sort((left, right) => right.classDate.localeCompare(left.classDate));
 
-  if (student) return <div className="page detail-page"><button className="back-link" type="button" onClick={() => setSelectedId("")}><ArrowLeft size={17}/>Students</button><section className="detail-hero"><div className="profile-avatar">{initials(student.fullName)}</div><div className="detail-identity"><h1>{student.fullName}</h1><p>{student.studentCode} · {student.guardianContact || "No parent/tutor registered"}</p><EnrollmentTags student={student} groupsById={groupsById}/></div><div className="hero-actions"><Button icon={Pencil} onClick={() => open(student)}>Edit enrollment</Button>{student.status === "Active" ? <button className="hero-icon" type="button" title="Archive student" aria-label="Archive student" onClick={() => { if (confirm(`Archive ${student.fullName}?`)) actions.archiveStudent(student.id); }}><Archive size={18}/></button> : null}<button className="hero-icon danger" type="button" title="Delete student" aria-label="Delete student" onClick={async () => { if (confirm(`Delete ${student.fullName}?`)) { const removed = await actions.deleteStudent(student.id); if (removed) setSelectedId(""); } }}><Trash2 size={18}/></button></div></section>
-    <div className="detail-tabs"><button className="active">Overview</button><button>Attendance</button><button>Grades</button><button>History</button><button>Payments</button><button>Notes</button></div>
-    <section className="detail-grid"><article className="detail-card"><header><h2>Attendance</h2><span>This term</span></header><div className="large-stat">{pct(summary.attendance)}</div><p>{summary.attendedClasses || 0} of {summary.attendanceClasses || 0} recorded classes attended</p></article><article className="detail-card"><header><h2>Latest grades</h2><Star size={18}/></header>{studentGrades.slice(0,3).map((row) => <div className="mini-row" key={row.id}><span>{row.assessment}</span><strong>{pct(row.percentage)}</strong></div>)}{!studentGrades.length ? <p>No grades yet.</p> : null}</article><article className="detail-card span-two"><header><h2>Class history</h2><History size={18}/></header>{studentClasses.slice(0,4).map((row) => <div className="history-line" key={row.id}><span>{row.classDate}</span><strong>{row.classTitle || row.groupName || "Individual class"}</strong><em>{row.attendance || "—"}</em></div>)}{!studentClasses.length ? <p>No classes yet.</p> : null}</article><article className="detail-card"><header><h2>Payments</h2><CreditCard size={18}/></header><div className="large-stat">{money(summary.outstanding)}</div><p>Current outstanding balance</p></article><article className="detail-card"><header><h2>Notes</h2><button type="button" onClick={() => open(student)}>Edit</button></header><p>{student.importantNotes || "No notes yet."}</p></article></section>
-    <Drawer open={Boolean(draft)} onClose={() => setDraft(null)} title="Edit student" description="Individual and group enrollment can be combined." footer={<><Button onClick={() => setDraft(null)}>Cancel</Button><Button variant="primary" onClick={save}>Save student</Button></>}>{draft ? <StudentEditor draft={draft} setDraft={setDraft} groups={state.groups}/> : null}</Drawer></div>;
+  const open = (item = EMPTY) => {
+    const next = {
+      ...EMPTY,
+      ...item,
+      code: item.code ?? item.studentCode ?? "",
+      phone: item.phone ?? item.studentPhone ?? "",
+      notes: item.notes ?? item.importantNotes ?? "",
+      groupIds: [...(item.groupIds || (item.groupId ? [item.groupId] : []))],
+    };
+    baselineRef.current = next;
+    setDraft(next);
+  };
+  const closeDraft = () => {
+    if (!confirmDiscard(dirty, "Discard your unsaved student changes?")) return false;
+    baselineRef.current = null;
+    setDraft(null);
+    return true;
+  };
+  const save = async () => {
+    if (!draft || saving) return;
+    setSaving(true);
+    try {
+      if (await actions.upsertStudent(draft)) {
+        baselineRef.current = null;
+        setDraft(null);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
 
-  return <div className="page"><div className="page-heading"><div><h1>Students</h1><p>Keep profiles, enrollment, progress, and balances together.</p></div><Button variant="primary" icon={Plus} onClick={() => open()}>Add student</Button></div><label className="page-search"><Search size={17}/><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search students, parents, or groups"/></label>
-    <section className="people-list">{list.map((item) => { const itemSummary = derived.students.find((row) => row.id === item.id) || {}; return <button className="person-row" key={item.id} type="button" onClick={() => setSelectedId(item.id)}><span className="profile-avatar small">{initials(item.fullName)}</span><span className="person-main"><strong>{item.fullName}</strong><small>{item.guardianContact || item.studentPhone || item.studentCode}</small><EnrollmentTags student={item} groupsById={groupsById}/></span><span className="person-metric"><small>Attendance</small><strong>{pct(itemSummary.attendance)}</strong></span><span className="person-metric"><small>Balance</small><strong>{money(itemSummary.outstanding)}</strong></span><span className={item.status === "Active" ? "record-status active" : "record-status"}>{item.status}</span></button>; })}{!list.length ? <div className="empty-box"><UsersRound size={28}/><h2>No students found</h2><p>Add a student or adjust your search.</p></div> : null}</section>
-    <Drawer open={Boolean(draft)} onClose={() => setDraft(null)} title={draft?.id ? "Edit student" : "Add student"} description="Use individual classes, one or many groups, or both." footer={<><Button onClick={() => setDraft(null)}>Cancel</Button><Button variant="primary" onClick={save}>Save student</Button></>}>{draft ? <StudentEditor draft={draft} setDraft={setDraft} groups={state.groups}/> : null}</Drawer>
-  </div>;
+  useEffect(() => {
+    if (intent !== "add-student") return;
+    open();
+    clearIntent?.();
+  // `open` intentionally snapshots the latest empty model when the intent arrives.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clearIntent, intent]);
+
+  if (student) {
+    return (
+      <div className="page detail-page">
+        <button className="back-link" type="button" onClick={() => changeSelected("")}><ArrowLeft size={17} />Students</button>
+        <section className="detail-hero">
+          <StudentAvatar avatarId={student.avatarId} name={student.fullName} size="large" />
+          <div className="detail-identity"><h1>{student.fullName}</h1><p>{student.code} · {student.guardianContact || "No parent/tutor registered"}</p><EnrollmentTags student={student} groupsById={groupsById} /></div>
+          <div className="hero-actions">
+            <Button icon={Pencil} onClick={() => open(student)}>Edit student</Button>
+            {student.status === "Active" ? <button className="hero-icon" type="button" title="Archive student" aria-label="Archive student" onClick={() => setDeleteTarget({ type: "archive", student })}><Archive size={18} /></button> : null}
+            <button className="hero-icon danger" type="button" title="Delete student" aria-label="Delete student" onClick={() => setDeleteTarget({ type: "delete", student })}><Trash2 size={18} /></button>
+          </div>
+        </section>
+        <div className="detail-tabs" role="tablist" aria-label="Student details">
+          {DETAIL_TABS.map((tab) => <button type="button" role="tab" aria-selected={detailTab === tab} className={detailTab === tab ? "active" : ""} key={tab} onClick={() => setDetailTab(tab)}>{tab[0].toUpperCase() + tab.slice(1)}</button>)}
+        </div>
+        <section className="detail-grid"><StudentDetailContent tab={detailTab} student={student} summary={summary} grades={studentGrades} classes={studentClasses} onEdit={() => open(student)} /></section>
+        <Drawer open={Boolean(draft)} onClose={closeDraft} title="Edit student" description="Individual and group enrollment can be combined." footer={<><Button onClick={closeDraft}>Cancel</Button><Button variant="primary" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save student"}</Button></>}>
+          {draft ? <StudentEditor draft={draft} setDraft={setDraft} groups={state.groups} /> : null}
+        </Drawer>
+        <ConfirmDialog
+          open={Boolean(deleteTarget)}
+          title={deleteTarget?.type === "archive" ? `Archive ${student.fullName}?` : `Delete ${student.fullName}?`}
+          description={deleteTarget?.type === "archive" ? "The student becomes inactive while grades, attendance, and payment history stay available." : "Students with grades or class history cannot be deleted; archive them instead."}
+          confirmLabel={deleteTarget?.type === "archive" ? "Archive student" : "Delete student"}
+          tone={deleteTarget?.type === "archive" ? "primary" : "danger"}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={async () => {
+            const removed = deleteTarget?.type === "archive" ? await actions.archiveStudent(student.id) : await actions.deleteStudent(student.id);
+            if (removed) { setDeleteTarget(null); if (deleteTarget?.type === "delete") changeSelected(""); }
+          }}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="page">
+      <div className="page-heading"><div><h1>Students</h1><p>Keep profiles, enrollment, progress, and balances together.</p></div><Button variant="primary" icon={Plus} onClick={() => open()}>Add student</Button></div>
+      <div className="page-list-tools">
+        <label className="page-search"><Search size={17} /><span className="sr-only">Search students</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search students, parents, or groups" /></label>
+        <Select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Filter students by status"><option value="all">All statuses</option><option value="Active">Active</option><option value="Inactive">Inactive</option></Select>
+      </div>
+      <section className="people-list">
+        {list.map((item) => {
+          const itemSummary = derived.students.find((row) => row.id === item.id) || {};
+          return <button className="person-row" key={item.id} type="button" onClick={() => changeSelected(item.id)}><StudentAvatar avatarId={item.avatarId} name={item.fullName} size="small" decorative /><span className="person-main"><strong>{item.fullName}</strong><small>{item.guardianContact || item.phone || item.code}</small><EnrollmentTags student={item} groupsById={groupsById} /></span><span className="person-metric"><small>Attendance</small><strong>{pct(itemSummary.attendance)}</strong></span><span className="person-metric"><small>Balance</small><strong>{money(itemSummary.outstanding)}</strong></span><span className={item.status === "Active" ? "record-status active" : "record-status"}>{item.status}</span></button>;
+        })}
+        {!list.length ? <div className="empty-box"><UsersRound size={28} /><h2>No students found</h2><p>Add a student or adjust your filters.</p></div> : null}
+      </section>
+      <Drawer open={Boolean(draft)} onClose={closeDraft} title={draft?.id ? "Edit student" : "Add student"} description="Use individual classes, one or many groups, or both." footer={<><Button onClick={closeDraft}>Cancel</Button><Button variant="primary" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save student"}</Button></>}>
+        {draft ? <StudentEditor draft={draft} setDraft={setDraft} groups={state.groups} /> : null}
+      </Drawer>
+    </div>
+  );
 }

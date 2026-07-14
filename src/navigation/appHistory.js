@@ -10,6 +10,11 @@ export const APP_ROUTES = Object.freeze({
   settings: "/settings",
 });
 
+export const LEGACY_ROUTE_ALIASES = Object.freeze({
+  "/setup": "settings",
+  "/class-log": "classes",
+});
+
 const subscribers = new Set();
 let listeningWindow = null;
 let currentMetadata = null;
@@ -35,7 +40,9 @@ function validOverlayIds(value) {
 
 export function pageFromPath(pathname, routes = APP_ROUTES) {
   const normalized = normalizePath(pathname);
-  return Object.entries(routes).find(([, path]) => normalizePath(path) === normalized)?.[0] ?? null;
+  return Object.entries(routes).find(([, path]) => normalizePath(path) === normalized)?.[0]
+    ?? LEGACY_ROUTE_ALIASES[normalized]
+    ?? null;
 }
 
 export function pathForPage(page, routes = APP_ROUTES) {

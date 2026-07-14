@@ -97,6 +97,27 @@ describe("state and entity validation", () => {
     expect(validateStudent(hybrid, state).valid).toBe(true);
   });
 
+  it("backfills a legacy class group only when the relationship is unambiguous", () => {
+    const state = createSeedState();
+    const student = state.students[0];
+    const groupId = state.groups[0].id;
+    const legacy = {
+      ...state,
+      students: [{ ...student, groupId, groupIds: undefined }],
+      classLog: [{ ...state.classLog[0], studentId: student.id, groupId: undefined }],
+    };
+    const normalized = normalizeState(legacy);
+    expect(normalized.students[0].id).toBe(student.id);
+    expect(normalized.students[0].groupIds).toEqual([groupId]);
+    expect(normalized.classLog[0].groupId).toBe(groupId);
+
+    const ambiguous = normalizeState({
+      ...legacy,
+      students: [{ ...student, groupId: undefined, groupIds: state.groups.map((group) => group.id) }],
+    });
+    expect(ambiguous.classLog[0].groupId).toBe("");
+  });
+
   it("rejects an unsupported currency", () => {
     const state = createStarterState();
     state.settings.currency = "USD";
