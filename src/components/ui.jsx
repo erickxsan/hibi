@@ -7,6 +7,7 @@ import {
   subscribeToAppHistory,
 } from "../navigation/appHistory";
 import { BrandMark } from "./BrandMark";
+import { playHibiSound, primeHibiAudio } from "../utils/hibiSounds";
 
 let openDrawerCount = 0;
 
@@ -248,6 +249,26 @@ export function ConfirmDialog({ open, title, description, confirmLabel = "Delete
 }
 
 export function ToastRegion({ toasts, onDismiss }) {
+  const soundedToastIds = useRef(new Set());
+
+  useEffect(() => {
+    const prime = () => primeHibiAudio();
+    document.addEventListener("pointerdown", prime, { capture: true, once: true });
+    document.addEventListener("keydown", prime, { capture: true, once: true });
+    return () => {
+      document.removeEventListener("pointerdown", prime, true);
+      document.removeEventListener("keydown", prime, true);
+    };
+  }, []);
+
+  useEffect(() => {
+    toasts.forEach((toast) => {
+      if (soundedToastIds.current.has(toast.id)) return;
+      soundedToastIds.current.add(toast.id);
+      if (toast.tone !== "error") playHibiSound("success");
+    });
+  }, [toasts]);
+
   return (
     <div className="toast-region" aria-live="polite" aria-label="Notifications">
       {toasts.map((toast) => (

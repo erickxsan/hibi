@@ -38,6 +38,7 @@ import { addDays, isDateOnly, todayDateOnly } from "../domain/dates";
 import { useHistoryBackedState } from "../hooks/useHistoryNavigation";
 import { confirmDiscard, draftChanged, useUnsavedChanges } from "../hooks/useUnsavedChanges";
 import { normalizeSearchText } from "../utils/searchText";
+import { playHibiSound } from "../utils/hibiSounds";
 import { getUiLocale, useI18n } from "../i18n";
 import "./class-log-mobile.css";
 
@@ -1047,6 +1048,10 @@ export default function ClassLog({ state = {}, derived = {}, asOfDate, actions =
     }
   }, [changeMode, clearIntent, currentAsOfDate, defaultHours, hourlyRate, intent]);
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [mode]);
+
   const activeStudents = useMemo(() => students
     .filter((student) => {
       if (student.status === "Inactive") return false;
@@ -1138,15 +1143,21 @@ export default function ClassLog({ state = {}, derived = {}, asOfDate, actions =
     [studentId]: { ...(current[studentId] || makeRosterDraft(classDraft.classStatus)), [field]: value },
   }));
 
-  const markAllPresent = () => setRosterDrafts((current) => Object.fromEntries(activeStudents.map((student) => [student.id, {
-    ...(current[student.id] || makeRosterDraft(classDraft.classStatus)), attendance: "P",
-  }])));
-  const markAllPaid = () => setRosterDrafts((current) => Object.fromEntries(rosterRows.map((row) => [row.studentId, {
-    ...(current[row.studentId] || makeRosterDraft(classDraft.classStatus)),
-    amountPaid: row.charge,
-    paymentDate: classDraft.classDate > currentAsOfDate ? currentAsOfDate : classDraft.classDate,
-    paymentMethod: current[row.studentId]?.paymentMethod || "Cash",
-  }])));
+  const markAllPresent = () => {
+    setRosterDrafts((current) => Object.fromEntries(activeStudents.map((student) => [student.id, {
+      ...(current[student.id] || makeRosterDraft(classDraft.classStatus)), attendance: "P",
+    }])));
+    playHibiSound("attendance");
+  };
+  const markAllPaid = () => {
+    setRosterDrafts((current) => Object.fromEntries(rosterRows.map((row) => [row.studentId, {
+      ...(current[row.studentId] || makeRosterDraft(classDraft.classStatus)),
+      amountPaid: row.charge,
+      paymentDate: classDraft.classDate > currentAsOfDate ? currentAsOfDate : classDraft.classDate,
+      paymentMethod: current[row.studentId]?.paymentMethod || "Cash",
+    }])));
+    playHibiSound("payment");
+  };
 
   const saveClass = async () => {
     if (!actions?.addClassLogs || !rosterRows.length || issues.some((issue) => issue.blocking)) return;

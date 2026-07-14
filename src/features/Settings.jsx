@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Clock3, Download, Globe2, LockKeyhole, Trash2, Upload } from "lucide-react";
+import { Clock3, Download, Globe2, LockKeyhole, Trash2, Upload, Volume2 } from "lucide-react";
 import { Button, ConfirmDialog, Drawer, Field, Input } from "../components/ui";
 import { MAX_BACKUP_BYTES } from "../domain";
 import { confirmDiscard, draftChanged, useUnsavedChanges } from "../hooks/useUnsavedChanges";
 import { LanguageToggle } from "../i18n";
+import { getHibiSoundsEnabled, playHibiSound, setHibiSoundsEnabled } from "../utils/hibiSounds";
 
 function settingsDraft(settings) {
   return { ...settings, hourlyRateMxn: settings.hourlyRate };
@@ -14,6 +15,7 @@ export default function Settings({ state, actions, persistenceMode, registerNavi
   const [saving, setSaving] = useState(false);
   const [pendingImport, setPendingImport] = useState(null);
   const [clearTarget, setClearTarget] = useState("");
+  const [soundsEnabled, setSoundsEnabled] = useState(getHibiSoundsEnabled);
   const fileRef = useRef(null);
   const baselineRef = useRef(settingsDraft(state.settings));
   const dirty = draftChanged(draft, baselineRef.current);
@@ -63,9 +65,16 @@ export default function Settings({ state, actions, persistenceMode, registerNavi
     }
   };
 
+  const toggleSounds = () => {
+    const next = !soundsEnabled;
+    setSoundsEnabled(next);
+    setHibiSoundsEnabled(next);
+    if (next) playHibiSound("selection");
+  };
+
   return (
     <div className="page settings-page">
-      <div className="page-heading"><div><h1>Settings</h1><p>Manage classroom defaults, reporting dates, language, backup, and privacy.</p></div></div>
+      <div className="page-heading"><div><h1>Settings</h1><p>Manage classroom defaults, reporting dates, language, sounds, backup, and privacy.</p></div></div>
       <section className="settings-stack">
         <article className="settings-card">
           <div className="settings-icon yellow"><Clock3 size={22} /></div>
@@ -83,7 +92,16 @@ export default function Settings({ state, actions, persistenceMode, registerNavi
             </div>
           </div>
         </article>
-        <article className="settings-card"><div className="settings-icon blue"><Globe2 size={22} /></div><div className="settings-content"><h2>Language</h2><p>Choose the interface language.</p><LanguageToggle className="settings-language" /></div></article>
+        <article className="settings-card">
+          <div className="settings-icon blue"><Globe2 size={22} /></div>
+          <div className="settings-content">
+            <h2>Interface</h2><p>Choose the interface language and whether Hibi plays gentle feedback sounds.</p>
+            <div className="interface-settings">
+              <div className="interface-setting"><span><strong>Language</strong><small>Choose the interface language.</small></span><LanguageToggle className="settings-language" /></div>
+              <div className="interface-setting"><span className="sound-setting-copy"><Volume2 aria-hidden="true" size={18} /><span><strong>Sound effects</strong><small>A few gentle cues for saves, attendance, payments, and avatars.</small></span></span><button className="sound-toggle" type="button" role="switch" aria-checked={soundsEnabled} aria-label={soundsEnabled ? "Turn sound effects off" : "Turn sound effects on"} onClick={toggleSounds}><span aria-hidden="true" /><b>{soundsEnabled ? "On" : "Off"}</b></button></div>
+            </div>
+          </div>
+        </article>
         <article className="settings-card">
           <div className="settings-icon sage"><Download size={22} /></div>
           <div className="settings-content"><h2>Backup, import & export</h2><p>{persistenceMode === "cloud" ? "Your records sync to your private cloud workspace. Keep an offline JSON backup too." : "Your records are stored in this browser. Export a backup regularly."}</p><div className="button-cluster"><Button icon={Download} onClick={actions.exportJson}>Download backup</Button><Button icon={Upload} onClick={() => fileRef.current?.click()}>Restore backup</Button><input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={importFile} /></div></div>

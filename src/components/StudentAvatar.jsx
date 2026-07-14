@@ -1,5 +1,6 @@
 import { Check } from "lucide-react";
 import { STUDENT_AVATAR_IDS } from "../domain/constants";
+import { playHibiSound } from "../utils/hibiSounds";
 
 const AVATAR_META = Object.freeze({
   cat: { label: "Cat", tone: "lilac" },
@@ -50,7 +51,7 @@ export function AvatarPicker({ value, onChange }) {
         <div className="avatar-option-grid">
           {STUDENT_AVATARS.map((avatar) => (
             <label className={selected === avatar.id ? "avatar-option selected" : "avatar-option"} key={avatar.id}>
-              <input type="radio" name="student-avatar" value={avatar.id} checked={selected === avatar.id} onChange={() => onChange(avatar.id)} />
+              <input type="radio" name="student-avatar" value={avatar.id} checked={selected === avatar.id} onChange={() => { onChange(avatar.id); playHibiSound("selection"); }} />
               <StudentAvatar avatarId={avatar.id} name={avatar.label} size="small" decorative />
               <span>{avatar.label}</span>
               {selected === avatar.id ? <Check size={14} aria-hidden="true" /> : null}

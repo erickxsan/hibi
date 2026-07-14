@@ -149,6 +149,10 @@ export default function Students({ state, derived, actions, intent, clearIntent,
     canChange: () => confirmDiscard(dirty, "Discard your unsaved student changes?"),
   });
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [selectedId]);
+
   const list = useMemo(() => {
     const needle = normalizeSearchText(query);
     return state.students.filter((student) => {

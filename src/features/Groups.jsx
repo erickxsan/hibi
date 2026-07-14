@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   CalendarDays,
@@ -90,6 +90,10 @@ export default function Groups({ state, derived, actions, navigate, registerNavi
     allowedValues: ["", ...state.groups.map((group) => group.id)],
     canChange: () => confirmDiscard(dirty, "Discard your unsaved group changes?"),
   });
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [selectedId]);
 
   const group = state.groups.find((item) => item.id === selectedId);
   const summary = derived.groups.find((item) => item.id === selectedId) || {};
