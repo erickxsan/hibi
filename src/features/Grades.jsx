@@ -49,7 +49,8 @@ export default function Grades({ state, derived, actions, intent, clearIntent, r
   const studentsById = derived.studentsById || new Map((state.students || []).map((student) => [student.id, student]));
   const gradeRows = derived.gradeRows || (state.grades || []).map((grade) => {
     const student = studentsById.get(grade.studentId);
-    return { ...grade, studentName: student?.fullName, groupId: student?.groupId, groupName: groupsById.get(student?.groupId)?.name, percentage: percentageFor(grade.score, grade.maximum) };
+    const groupId = student?.groupIds?.[0] || "";
+    return { ...grade, studentName: student?.fullName, groupId, groupName: groupsById.get(groupId)?.name, percentage: percentageFor(grade.score, grade.maximum) };
   });
   const batchDirty = Boolean(batchDraft) && draftChanged(batchDraft, batchBaselineRef.current);
   const editDirty = Boolean(editDraft) && draftChanged(editDraft, editBaselineRef.current);
@@ -102,7 +103,7 @@ export default function Grades({ state, derived, actions, intent, clearIntent, r
 
   const roster = useMemo(() => {
     if (!batchDraft?.groupId) return [];
-    return (state.students || []).filter((student) => student.groupId === batchDraft.groupId && student.status === "Active");
+    return (state.students || []).filter((student) => student.groupIds?.includes(batchDraft.groupId) && student.status === "Active");
   }, [batchDraft?.groupId, state.students]);
 
   function createBatchDraft(groupId = "") {

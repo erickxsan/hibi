@@ -65,7 +65,8 @@ function canonicalStudent(draft) {
     id: draft.id,
     code: draft.studentCode ?? draft.code ?? "",
     fullName: draft.fullName ?? "",
-    groupId: draft.groupId ?? "",
+    groupIds: Array.isArray(draft.groupIds) ? [...new Set(draft.groupIds.filter(Boolean))] : draft.groupId ? [draft.groupId] : [],
+    isIndividual: Boolean(draft.isIndividual),
     phone: draft.studentPhone ?? draft.phone ?? "",
     guardianContact: draft.guardianContact ?? "",
     notes: draft.importantNotes ?? draft.notes ?? "",
@@ -92,6 +93,9 @@ function canonicalClassLog(draft) {
     id: draft.id,
     classDate: draft.classDate,
     studentId: draft.studentId,
+    groupId: draft.groupId ?? "",
+    startTime: draft.startTime ?? "",
+    classTitle: draft.classTitle ?? "",
     classStatus: draft.classStatus ?? "Completed",
     attendance: draft.attendance || null,
     hours: draft.hours === "" || draft.hours == null ? null : Number(draft.hours),
@@ -349,7 +353,7 @@ export function useClassManager({ persistence } = {}) {
   }, [commit, notify]);
 
   const deleteGroup = useCallback((id) => {
-    if (stateRef.current.students.some((student) => student.groupId === id)) {
+    if (stateRef.current.students.some((student) => student.groupIds?.includes(id))) {
       notify("Unassign or move every student before deleting this group.", "error");
       return Promise.resolve(false);
     }
@@ -422,7 +426,7 @@ export function useClassManager({ persistence } = {}) {
       notify(invalid.errors[0].message, "error");
       return false;
     }
-    const duplicate = items.find((item) => current.classLog.some((row) => row.studentId === item.studentId && row.classDate === item.classDate));
+    const duplicate = items.find((item) => current.classLog.some((row) => row.studentId === item.studentId && row.classDate === item.classDate && (row.startTime || "") === (item.startTime || "")));
     if (duplicate) {
       notify("A student already has a class record on this date. Review History before saving.", "error");
       return false;

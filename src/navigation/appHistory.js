@@ -2,9 +2,12 @@ export const APP_HISTORY_KEY = "__hibiNavigation";
 
 export const APP_ROUTES = Object.freeze({
   home: "/",
-  setup: "/setup",
+  students: "/students",
+  groups: "/groups",
+  classes: "/classes",
   grades: "/grades",
-  "class-log": "/class-log",
+  payments: "/payments",
+  settings: "/settings",
 });
 
 const subscribers = new Set();

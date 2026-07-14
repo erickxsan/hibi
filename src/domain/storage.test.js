@@ -7,6 +7,7 @@ import {
   exportState,
   importState,
   loadState,
+  normalizeState,
   safeLoadStateWithMigrations,
   safeLoadState,
   saveState,
@@ -144,6 +145,6 @@ describe("persistence and import/export", () => {
     const state = createSeedState();
     const text = exportState(state);
     expect(text).toContain("\n  \"settings\"");
-    expect(importState(text)).toEqual(state);
+    expect(importState(text)).toEqual(normalizeState(state));
   });
 });

@@ -57,6 +57,11 @@ function findById(items, id) {
   return items.find((item) => item?.id === id) ?? null;
 }
 
+function studentGroupIds(student) {
+  if (Array.isArray(student?.groupIds)) return student.groupIds;
+  return student?.groupId ? [student.groupId] : [];
+}
+
 function sum(items, selector) {
   return items.reduce((total, item) => total + numberOrZero(selector(item)), 0);
 }
@@ -82,7 +87,8 @@ export function gradePercentage(row) {
 export function deriveGradeRow(state, row) {
   const { students, groups } = arrays(state);
   const student = findById(students, row?.studentId);
-  const group = student ? findById(groups, student.groupId) : null;
+  const studentGroups = student ? studentGroupIds(student).map((id) => findById(groups, id)).filter(Boolean) : [];
+  const group = studentGroups[0] ?? null;
   return {
     ...row,
     // `maximum` is a view-model alias used by the compact grade editor.
@@ -93,6 +99,8 @@ export function deriveGradeRow(state, row) {
     group,
     groupId: group?.id ?? "",
     groupName: group?.name ?? "",
+    groups: studentGroups,
+    groupNames: studentGroups.map((item) => item.name),
     percentage: gradePercentage(row),
   };
 }
@@ -159,7 +167,7 @@ export function deriveClassLogRow(state, row, asOfDate) {
   const { students, groups } = arrays(state);
   const asOf = resolveAsOf(state, asOfDate);
   const student = findById(students, row?.studentId);
-  const group = student ? findById(groups, student.groupId) : null;
+  const group = findById(groups, row?.groupId) ?? (student ? findById(groups, studentGroupIds(student)[0]) : null);
   const config = settings(state);
   const effectiveHours = row?.classStatus === "Cancelled"
     ? 0
@@ -191,7 +199,8 @@ export function deriveStudent(state, studentId, asOfDate) {
   const asOf = resolveAsOf(state, asOfDate);
   const student = findById(data.students, studentId);
   if (!student) return null;
-  const group = findById(data.groups, student.groupId);
+  const studentGroups = studentGroupIds(student).map((id) => findById(data.groups, id)).filter(Boolean);
+  const group = studentGroups[0] ?? null;
   const gradeRows = data.grades.filter((row) => row?.studentId === studentId);
   const logRows = data.classLog.filter((row) => row?.studentId === studentId);
   const percentages = gradeRows.map(gradePercentage).filter(finiteNumber);
@@ -225,6 +234,8 @@ export function deriveStudent(state, studentId, asOfDate) {
     ...student,
     group,
     groupName: group?.name ?? "",
+    groups: studentGroups,
+    groupNames: studentGroups.map((item) => item.name),
     gradeAverage,
     attendance,
     attendedClasses: attended,
@@ -245,12 +256,12 @@ export function deriveGroup(state, groupId, asOfDate) {
   if (!group) return null;
   const selectedMonth = resolveSelectedMonth(state);
   const selectedMonthEnd = minDateOnly(endOfMonth(selectedMonth), asOf);
-  const students = data.students.filter((student) => student?.groupId === groupId);
+  const students = data.students.filter((student) => studentGroupIds(student).includes(groupId));
   const activeStudentRecords = students.filter((student) => student?.status === "Active");
   const derivedStudents = activeStudentRecords.map((student) => deriveStudent(state, student.id, asOf));
   const activeStudents = activeStudentRecords.length;
   const groupStudentIds = new Set(students.map((student) => student.id));
-  const groupLog = data.classLog.filter((row) => groupStudentIds.has(row?.studentId));
+  const groupLog = data.classLog.filter((row) => row?.groupId === groupId || (!row?.groupId && groupStudentIds.has(row?.studentId)));
   const config = settings(state);
   const collectedSelectedMonth = selectedMonth <= selectedMonthEnd
     ? amountCollectedInRange(groupLog, selectedMonth, selectedMonthEnd)
@@ -278,7 +289,7 @@ export function deriveGroup(state, groupId, asOfDate) {
 export function deriveUnassignedGroup(state, asOfDate) {
   const data = arrays(state);
   const asOf = resolveAsOf(state, asOfDate);
-  const students = data.students.filter((student) => !student?.groupId);
+  const students = data.students.filter((student) => student?.isIndividual || studentGroupIds(student).length === 0);
   if (!students.length) return null;
 
   const selectedMonth = resolveSelectedMonth(state);
@@ -287,7 +298,7 @@ export function deriveUnassignedGroup(state, asOfDate) {
   const derivedStudents = activeStudentRecords.map((student) => deriveStudent(state, student.id, asOf));
   const activeStudents = activeStudentRecords.length;
   const studentIds = new Set(students.map((student) => student.id));
-  const groupLog = data.classLog.filter((row) => studentIds.has(row?.studentId));
+  const groupLog = data.classLog.filter((row) => !row?.groupId && studentIds.has(row?.studentId));
 
   return {
     id: "__unassigned__",

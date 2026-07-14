@@ -11,11 +11,14 @@ import {
 describe("app history routes", () => {
   it("maps canonical and trailing-slash paths to finite app pages", () => {
     expect(pageFromPath("/", APP_ROUTES)).toBe("home");
-    expect(pageFromPath("/setup/", APP_ROUTES)).toBe("setup");
+    expect(pageFromPath("/students/", APP_ROUTES)).toBe("students");
+    expect(pageFromPath("/groups", APP_ROUTES)).toBe("groups");
+    expect(pageFromPath("/classes", APP_ROUTES)).toBe("classes");
     expect(pageFromPath("/grades", APP_ROUTES)).toBe("grades");
-    expect(pageFromPath("/class-log", APP_ROUTES)).toBe("class-log");
+    expect(pageFromPath("/payments", APP_ROUTES)).toBe("payments");
+    expect(pageFromPath("/settings", APP_ROUTES)).toBe("settings");
     expect(pageFromPath("/student/private-name", APP_ROUTES)).toBeNull();
-    expect(pathForPage("setup", APP_ROUTES)).toBe("/setup");
+    expect(pathForPage("students", APP_ROUTES)).toBe("/students");
     expect(pathForPage("missing", APP_ROUTES)).toBeNull();
   });
 

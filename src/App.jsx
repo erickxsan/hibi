@@ -1,32 +1,32 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BookOpenCheck, CloudOff, GraduationCap, LayoutDashboard, NotebookTabs, Plus } from "lucide-react";
+import { CalendarDays, CloudOff, CreditCard, GraduationCap, Home as HomeIcon, Settings as SettingsIcon, Users, UsersRound } from "lucide-react";
 import { AccountMenu, AUTH_MODES, AuthScreen } from "./auth";
 import { AppShell } from "./components/AppShell";
-import { Button, ToastRegion } from "./components/ui";
+import { ToastRegion } from "./components/ui";
 import { cloudAuth, hCaptchaSiteKey, isCloudConfigured, isLocalModeAllowed } from "./cloud";
 import { CloudConfigurationRequired, CloudError, CloudLoading, LocalDataMigration } from "./cloud/CloudStates";
 import { useCloudWorkspace } from "./cloud/useCloudWorkspace";
 import { safeLoadStateWithMigrations } from "./domain";
-import ClassLog from "./features/ClassLog";
+import Classes from "./features/Classes";
 import Grades from "./features/Grades";
+import Groups from "./features/Groups";
 import Home from "./features/Home";
-import Setup from "./features/Setup";
+import Payments from "./features/Payments";
+import Settings from "./features/Settings";
+import Students from "./features/Students";
 import { useClassManager } from "./hooks/useClassManager";
 import { usePageNavigation } from "./hooks/useHistoryNavigation";
-import { LanguageToggle, useI18n } from "./i18n";
+import { useI18n } from "./i18n";
 
 const NAV_ITEMS = [
-  { id: "home", label: "Home", href: "/", icon: LayoutDashboard },
-  { id: "setup", label: "Setup", href: "/setup", icon: NotebookTabs },
+  { id: "home", label: "Home", href: "/", icon: HomeIcon },
+  { id: "students", label: "Students", href: "/students", icon: Users },
+  { id: "groups", label: "Groups", href: "/groups", icon: UsersRound },
+  { id: "classes", label: "Classes", href: "/classes", icon: CalendarDays },
   { id: "grades", label: "Grades", href: "/grades", icon: GraduationCap },
-  { id: "class-log", label: "Class Log", href: "/class-log", icon: BookOpenCheck },
+  { id: "payments", label: "Payments", href: "/payments", icon: CreditCard },
+  { id: "settings", label: "Settings", href: "/settings", icon: SettingsIcon },
 ];
-
-const PRIMARY_ACTIONS = {
-  home: { label: "Log class", target: "class-log" },
-  grades: { label: "Add grades", target: "grades" },
-  "class-log": { label: "Log class", target: "class-log" },
-};
 
 const MIGRATION_MARKER_PREFIX = "minimal-class-manager:cloud-migration-dismissed:v1:";
 const LEGACY_DATA_CLAIM_KEY = "minimal-class-manager:legacy-data-claimed:v1";
@@ -68,7 +68,6 @@ export function ClassManagerApplication({ persistence, user, cloudError, onSignO
     onPageChange: () => setIntent(null),
   });
 
-  const action = PRIMARY_ACTIONS[page];
   const pageContent = useMemo(() => {
     const common = {
       ...manager,
@@ -77,16 +76,14 @@ export function ClassManagerApplication({ persistence, user, cloudError, onSignO
       navigate,
       registerNavigationBlocker,
     };
-    if (page === "setup") return <Setup {...common} />;
+    if (page === "students") return <Students {...common} />;
+    if (page === "groups") return <Groups {...common} />;
+    if (page === "classes") return <Classes {...common} />;
     if (page === "grades") return <Grades {...common} />;
-    if (page === "class-log") return <ClassLog {...common} />;
+    if (page === "payments") return <Payments {...common} />;
+    if (page === "settings") return <Settings {...common} />;
     return <Home {...common} />;
   }, [intent, manager, navigate, page, registerNavigationBlocker]);
-
-  const handlePrimaryAction = () => {
-    if (!action || !navigate(action.target)) return;
-    setIntent(page === "grades" ? "add-grades" : "new-class");
-  };
 
   const handleSignOut = async () => {
     if (!onSignOut || signingOut) return;
@@ -109,12 +106,6 @@ export function ClassManagerApplication({ persistence, user, cloudError, onSignO
         }}
         toolbar={
           <div className="manager-toolbar">
-            {action ? (
-              <Button variant="primary" icon={Plus} onClick={handlePrimaryAction} aria-label={action.label}>
-                {action.label}
-              </Button>
-            ) : null}
-            <LanguageToggle />
             {user ? (
               <AccountMenu
                 email={user.email}

@@ -73,14 +73,28 @@ describe("state and entity validation", () => {
 
   it("accepts unassigned students but rejects a nonblank unknown group", () => {
     const state = createStarterState();
-    const unassigned = createStudent({ code: "NEW-001", fullName: "Unassigned Student", groupId: "" });
+    const unassigned = createStudent({ code: "NEW-001", fullName: "Unassigned Student", groupIds: [] });
     expect(validateStudent(unassigned, state).valid).toBe(true);
 
-    const unknownGroup = { ...unassigned, id: "student_unknown_group", code: "NEW-002", groupId: "missing-group" };
+    const unknownGroup = { ...unassigned, id: "student_unknown_group", code: "NEW-002", groupIds: ["missing-group"] };
     expect(validateStudent(unknownGroup, state).errors).toEqual(
-      expect.arrayContaining([expect.objectContaining({ code: "unknown_reference", path: "groupId" })]),
+      expect.arrayContaining([expect.objectContaining({ code: "unknown_reference", path: "groupIds" })]),
     );
     expect(validateState(state).valid).toBe(true);
+  });
+
+  it("normalizes legacy enrollment and supports individual plus multiple groups", () => {
+    const state = createSeedState();
+    const legacy = { ...state.students[0] };
+    delete legacy.groupIds;
+    delete legacy.isIndividual;
+    legacy.groupId = state.groups[0].id;
+    const normalized = normalizeState({ ...state, students: [legacy] });
+    expect(normalized.students[0].groupIds).toEqual([state.groups[0].id]);
+    expect(normalized.students[0].isIndividual).toBe(false);
+
+    const hybrid = createStudent({ code: "HYB-001", fullName: "Hybrid Student", isIndividual: true, groupIds: state.groups.map((group) => group.id) });
+    expect(validateStudent(hybrid, state).valid).toBe(true);
   });
 
   it("rejects an unsupported currency", () => {

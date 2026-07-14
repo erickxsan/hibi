@@ -100,8 +100,16 @@ export function validateStudent(student, state = null) {
   if (state && duplicateIn(state.students, "code", student.code, student.id)) {
     errors.push(issue("code", "duplicate", "Student code must be unique.", student.code));
   }
-  if (state && student.groupId && !state.groups?.some((group) => group?.id === student.groupId)) {
-    errors.push(issue("groupId", "unknown_reference", "Student references a group that does not exist.", student.groupId));
+  if (student.groupIds !== undefined && !Array.isArray(student.groupIds)) errors.push(issue("groupIds", "invalid_type", "Student groups must be an array."));
+  if (student.isIndividual !== undefined && typeof student.isIndividual !== "boolean") errors.push(issue("isIndividual", "invalid_type", "Individual enrollment must be true or false."));
+  const seenGroups = new Set();
+  const legacyGroups = student.groupId ? [student.groupId] : [];
+  for (const groupId of Array.isArray(student.groupIds) ? student.groupIds : legacyGroups) {
+    if (seenGroups.has(groupId)) errors.push(issue("groupIds", "duplicate", "A student cannot be assigned to the same group twice.", groupId));
+    seenGroups.add(groupId);
+    if (state && groupId && !state.groups?.some((group) => group?.id === groupId)) {
+      errors.push(issue("groupIds", "unknown_reference", "Student references a group that does not exist.", groupId));
+    }
   }
   return result(errors, warnings);
 }
@@ -147,6 +155,9 @@ export function validateClassLogRow(row, state = null) {
   if (state && row.studentId && !state.students?.some((student) => student?.id === row.studentId)) {
     errors.push(issue("studentId", "unknown_reference", "Class row references a student that does not exist.", row.studentId));
   }
+  if (state && row.groupId && !state.groups?.some((group) => group?.id === row.groupId)) {
+    errors.push(issue("groupId", "unknown_reference", "Class row references a group that does not exist.", row.groupId));
+  }
   if (row.classStatus === "Completed" && !row.attendance) {
     warnings.push(issue("attendance", "attendance_missing", "Completed class has no attendance mark."));
   }
@@ -188,6 +199,15 @@ function normalizeOptionalNumber(value) {
   return value;
 }
 
+function normalizeGroupIds(student) {
+  const source = Array.isArray(student?.groupIds)
+    ? student.groupIds
+    : student?.groupId
+      ? [student.groupId]
+      : [];
+  return [...new Set(source.map(normalizeText).filter(Boolean))];
+}
+
 export function normalizeState(input) {
   const source = isRecord(input) ? input : {};
   const sourceSettings = isRecord(source.settings) ? source.settings : {};
@@ -221,7 +241,8 @@ export function normalizeState(input) {
       id: normalizeText(student?.id),
       code: normalizeText(student?.code),
       fullName: normalizeText(student?.fullName),
-      groupId: normalizeText(student?.groupId),
+      groupIds: normalizeGroupIds(student),
+      isIndividual: Boolean(student?.isIndividual),
       phone: normalizeText(student?.phone),
       guardianContact: normalizeText(student?.guardianContact),
       notes: normalizeText(student?.notes),
@@ -242,6 +263,9 @@ export function normalizeState(input) {
       id: normalizeText(row?.id),
       classDate: normalizeText(row?.classDate),
       studentId: normalizeText(row?.studentId),
+      groupId: normalizeText(row?.groupId),
+      startTime: normalizeText(row?.startTime),
+      classTitle: normalizeText(row?.classTitle),
       classStatus: normalizeText(row?.classStatus),
       attendance: normalizeOptionalText(row?.attendance),
       hours: normalizeOptionalNumber(row?.hours),
