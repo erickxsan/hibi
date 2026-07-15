@@ -36,9 +36,20 @@ export {
   createClassLogRow,
   createGrade,
   createGroup,
+  createScheduleChange,
+  createScheduleException,
   createStableId,
   createStudent,
 } from "./ids.js";
+
+export {
+  DAY_OPTIONS,
+  dayOfWeekForDate,
+  formatWeeklySchedule,
+  generateScheduledOccurrences,
+  resolveHourlyRate,
+} from "./schedule.js";
+export { studentMatchesFilters } from "./studentFilters.js";
 
 export { createSeedState, seedState } from "./seed.js";
 export { createStarterState } from "./starterState.js";

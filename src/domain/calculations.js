@@ -11,6 +11,7 @@ import {
   startOfWeek,
   todayDateOnly,
 } from "./dates.js";
+import { generateScheduledOccurrences, resolveHourlyRate } from "./schedule.js";
 
 function isRecord(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -109,11 +110,15 @@ export function calculateCharge(state, row) {
   const config = settings(state);
   if (!row?.classDate || !row?.studentId || !row?.classStatus) return null;
   if (row.classStatus === "Cancelled") return 0;
+  if (finiteNumber(row.appliedCharge)) return row.appliedCharge;
 
   // Blank hours use the default; an explicit 0 waives the charge.
   const effectiveHours = finiteNumber(row.hours) ? row.hours : config.defaultClassHours;
-  if (!finiteNumber(effectiveHours) || !finiteNumber(config.hourlyRate)) return null;
-  return effectiveHours * config.hourlyRate;
+  const hourlyRate = finiteNumber(row.appliedHourlyRate)
+    ? row.appliedHourlyRate
+    : resolveHourlyRate(state, row.studentId, row.groupId);
+  if (!finiteNumber(effectiveHours) || !finiteNumber(hourlyRate)) return null;
+  return effectiveHours * hourlyRate;
 }
 
 export function calculatePaymentStatus(state, row, asOfDate) {
@@ -187,6 +192,9 @@ export function deriveClassLogRow(state, row, asOfDate) {
     groupId: group?.id ?? "",
     groupName: group?.name ?? "",
     effectiveHours,
+    appliedHourlyRate: finiteNumber(row?.appliedHourlyRate)
+      ? row.appliedHourlyRate
+      : resolveHourlyRate(state, student, group),
     charge: calculateCharge(state, row),
     recognizedPaid,
     paymentStatus: calculatePaymentStatus(state, row, asOf),
@@ -267,6 +275,20 @@ export function deriveGroup(state, groupId, asOfDate) {
     ? amountCollectedInRange(groupLog, selectedMonth, selectedMonthEnd)
     : 0;
 
+  const scheduledOccurrences = group.weeklySchedule?.length
+    ? generateScheduledOccurrences(state, selectedMonth, endOfMonth(selectedMonth))
+      .filter((item) => item.groupId === groupId && item.status !== "Cancelled")
+    : [];
+  const idealRevenue = scheduledOccurrences.length
+    ? sum(scheduledOccurrences, (occurrence) => sum(activeStudentRecords, (student) => (
+      numberOrZero(resolveHourlyRate(state, student, group)) * numberOrZero(occurrence.durationHours)
+    )))
+    : sum(activeStudentRecords, (student) => (
+      numberOrZero(group.plannedSessionsPerMonth)
+      * numberOrZero(config.defaultClassHours)
+      * numberOrZero(resolveHourlyRate(state, student, group))
+    ));
+
   return {
     ...group,
     group,
@@ -278,11 +300,9 @@ export function deriveGroup(state, groupId, asOfDate) {
     missingAssignments: sum(derivedStudents, (student) => student.missingAssignments),
     collectedSelectedMonth,
     outstanding: sum(derivedStudents, (student) => student.outstanding),
-    idealRevenue:
-      activeStudents *
-      numberOrZero(group.plannedSessionsPerMonth) *
-      numberOrZero(config.defaultClassHours) *
-      numberOrZero(config.hourlyRate),
+    idealRevenue,
+    scheduledOccurrences: scheduledOccurrences.length,
+    effectiveHourlyRate: finiteNumber(group.hourlyRate) ? group.hourlyRate : config.hourlyRate,
   };
 }
 
@@ -420,12 +440,14 @@ export function deriveAll(state, asOfDate) {
   ];
   const grades = data.grades.map((row) => deriveGradeRow(state, row));
   const classLog = data.classLog.map((row) => deriveClassLogRow(state, row, asOf));
+  const upcomingClasses = generateScheduledOccurrences(state, asOf, addDays(asOf, 42));
   return {
     dashboard: deriveDashboard(state, asOf),
     students,
     groups,
     grades,
     classLog,
+    upcomingClasses,
     studentSummaries: students,
     groupSummaries: groups,
     gradeRows: grades,

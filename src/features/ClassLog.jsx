@@ -35,6 +35,7 @@ import {
   PAYMENT_STATUSES,
 } from "../domain/constants";
 import { addDays, isDateOnly, todayDateOnly } from "../domain/dates";
+import { resolveHourlyRate } from "../domain/schedule";
 import { useHistoryBackedState } from "../hooks/useHistoryNavigation";
 import { confirmDiscard, draftChanged, useUnsavedChanges } from "../hooks/useUnsavedChanges";
 import { normalizeSearchText } from "../utils/searchText";
@@ -113,8 +114,13 @@ function calculateClassLogRow(record, context) {
   const hasRequiredKey = Boolean(record.classDate && record.studentId);
   const hours = effectiveNumber(record.hours, defaultHours);
   const amountPaid = effectiveNumber(record.amountPaid, 0);
+  const resolvedRate = Number.isFinite(record.appliedHourlyRate)
+    ? record.appliedHourlyRate
+    : resolveHourlyRate({ settings: { hourlyRate }, students: student ? [student] : [], groups: group ? [group] : [] }, student, group);
   const charge = hasRequiredKey && record.classStatus
-    ? roundMoney(record.classStatus === "Cancelled" ? 0 : hours * hourlyRate)
+    ? roundMoney(record.classStatus === "Cancelled"
+      ? 0
+      : (Number.isFinite(record.appliedCharge) ? record.appliedCharge : hours * resolvedRate))
     : 0;
 
   let paymentStatus = "";
@@ -155,6 +161,8 @@ function calculateClassLogRow(record, context) {
     groupId,
     groupName: record.groupName || group?.name || "Unassigned",
     effectiveHours: hours,
+    appliedHourlyRate: resolvedRate,
+    appliedCharge: charge,
     charge,
     amountPaid,
     paymentStatus,
@@ -200,10 +208,25 @@ function makeRosterDraft(classStatus = "Completed") {
   };
 }
 
+function makeClassDraft(classDate, defaultHours, values = {}) {
+  return {
+    groupId: "",
+    classDate,
+    startTime: "",
+    classStatus: "Completed",
+    hours: defaultHours,
+    scheduleSlotId: "",
+    scheduleOccurrenceDate: "",
+    classTitle: "",
+    ...values,
+  };
+}
+
 function makeAdvanceDraft(asOfDate, defaultHours, hourlyRate) {
   const firstDate = addDays(asOfDate, 7);
   return {
     studentId: "",
+    groupId: "",
     paymentDate: asOfDate,
     paymentMethod: "Cash",
     paymentReference: `ADV-${asOfDate.replaceAll("-", "")}`,
@@ -222,9 +245,16 @@ function persistedRecord(record) {
     ...(record.id ? { id: record.id } : {}),
     classDate: record.classDate || "",
     studentId: record.studentId || "",
+    groupId: record.groupId || "",
+    startTime: record.startTime || "",
+    classTitle: String(record.classTitle || "").trim(),
+    scheduleSlotId: record.scheduleSlotId || "",
+    scheduleOccurrenceDate: record.scheduleOccurrenceDate || "",
     classStatus: record.classStatus || "Completed",
     attendance: record.attendance || "",
     hours: nullableNumber(record.hours),
+    appliedHourlyRate: nullableNumber(record.appliedHourlyRate),
+    appliedCharge: nullableNumber(record.appliedCharge),
     amountPaid: nullableNumber(record.amountPaid),
     paymentDate: record.paymentDate || null,
     paymentMethod: record.paymentMethod || "",
@@ -268,6 +298,13 @@ function ClassControls({ value, groups, hasIndividualStudents, onChange, onAdvan
             type="date"
             value={value.classDate}
             onChange={(event) => onChange("classDate", event.target.value)}
+          />
+        </Field>
+        <Field label="Start time">
+          <Input
+            type="time"
+            value={value.startTime || ""}
+            onChange={(event) => onChange("startTime", event.target.value)}
           />
         </Field>
         <Field label="Group" required>
@@ -569,6 +606,7 @@ function ReviewPanel({ classDraft, selectedGroup, rows, summary, issues, currenc
 
       <div className="review-facts">
         <SummaryLine label="Class date" value={classDraft.classDate || "—"} />
+        <SummaryLine label="Start time" value={classDraft.startTime || "—"} />
         <SummaryLine label="Group" value={selectedGroup?.name || "—"} />
         <SummaryLine
           label="Status"
@@ -631,7 +669,13 @@ function ReviewPanel({ classDraft, selectedGroup, rows, summary, issues, currenc
 function AdvancePaymentDrawer({ open, onClose, students, groupsById, existingRows = [], draft, setDraft, defaultHours, hourlyRate, asOfDate, currency, onSave, saving }) {
   const { t } = useI18n();
   const selectedStudent = students.find((student) => student.id === draft.studentId);
-  const selectedGroup = mapLookup(groupsById, studentGroupIds(selectedStudent)[0]);
+  const selectedGroupIds = studentGroupIds(selectedStudent);
+  const selectedGroup = mapLookup(groupsById, draft.groupId || selectedGroupIds[0]);
+  const selectedRate = resolveHourlyRate(
+    { settings: { hourlyRate }, students: selectedStudent ? [selectedStudent] : [], groups: selectedGroup ? [selectedGroup] : [] },
+    selectedStudent,
+    selectedGroup,
+  ) ?? hourlyRate;
   const duplicateDates = draft.entries.filter((entry, index, all) => all.findIndex((item) => item.classDate === entry.classDate) !== index);
   const existingDates = draft.entries.filter((entry) => existingRows.some((row) => (
     row.studentId === draft.studentId && row.classDate === entry.classDate
@@ -644,6 +688,7 @@ function AdvancePaymentDrawer({ open, onClose, students, groupsById, existingRow
   ));
   const valid = Boolean(
     selectedStudent
+    && (!draft.groupId || selectedGroupIds.includes(draft.groupId))
     && isDateOnly(draft.paymentDate)
     && draft.paymentDate <= asOfDate
     && draft.paymentMethod
@@ -655,13 +700,36 @@ function AdvancePaymentDrawer({ open, onClose, students, groupsById, existingRow
   );
   const total = draft.entries.reduce((sum, entry) => sum + effectiveNumber(entry.amountPaid, 0), 0);
 
+  const updateStudent = (studentId) => {
+    const student = students.find((item) => item.id === studentId);
+    const groupId = studentGroupIds(student)[0] || "";
+    const group = mapLookup(groupsById, groupId);
+    const rate = resolveHourlyRate({ settings: { hourlyRate }, students: student ? [student] : [], groups: group ? [group] : [] }, student, group) ?? hourlyRate;
+    setDraft((current) => ({
+      ...current,
+      studentId,
+      groupId,
+      entries: current.entries.map((entry) => ({ ...entry, amountPaid: roundMoney(effectiveNumber(entry.hours, 0) * rate) })),
+    }));
+  };
+
+  const updateGroup = (groupId) => {
+    const group = mapLookup(groupsById, groupId);
+    const rate = resolveHourlyRate({ settings: { hourlyRate }, students: selectedStudent ? [selectedStudent] : [], groups: group ? [group] : [] }, selectedStudent, group) ?? hourlyRate;
+    setDraft((current) => ({
+      ...current,
+      groupId,
+      entries: current.entries.map((entry) => ({ ...entry, amountPaid: roundMoney(effectiveNumber(entry.hours, 0) * rate) })),
+    }));
+  };
+
   const updateEntry = (key, field, value) => {
     setDraft((current) => ({
       ...current,
       entries: current.entries.map((entry) => {
         if (entry.key !== key) return entry;
         const next = { ...entry, [field]: value };
-        if (field === "hours") next.amountPaid = roundMoney(effectiveNumber(value, 0) * hourlyRate);
+        if (field === "hours") next.amountPaid = roundMoney(effectiveNumber(value, 0) * selectedRate);
         return next;
       }),
     }));
@@ -677,7 +745,7 @@ function AdvancePaymentDrawer({ open, onClose, students, groupsById, existingRow
           key: `${nextDate}-${Date.now()}`,
           classDate: nextDate,
           hours: defaultHours,
-          amountPaid: roundMoney(defaultHours * hourlyRate),
+          amountPaid: roundMoney(defaultHours * selectedRate),
         }],
       };
     });
@@ -702,13 +770,16 @@ function AdvancePaymentDrawer({ open, onClose, students, groupsById, existingRow
       <div className="drawer-form">
         <div className="form-grid form-grid-2 two-columns">
           <Field label="Student" required>
-            <Select value={draft.studentId} onChange={(event) => setDraft((current) => ({ ...current, studentId: event.target.value }))}>
+            <Select value={draft.studentId} onChange={(event) => updateStudent(event.target.value)}>
               <option value="">Choose a student</option>
               {students.map((student) => <option key={student.id} value={student.id}>{student.fullName}</option>)}
             </Select>
           </Field>
           <Field label="Group">
-            <Input value={selectedGroup?.name || t("Unassigned")} readOnly />
+            <Select value={draft.groupId || ""} onChange={(event) => updateGroup(event.target.value)} disabled={!selectedStudent}>
+              {(selectedStudent?.isIndividual || !selectedGroupIds.length) ? <option value="">{t("Individual / unassigned")}</option> : null}
+              {selectedGroupIds.map((groupId) => mapLookup(groupsById, groupId)).filter(Boolean).map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}
+            </Select>
           </Field>
           <Field label="Payment date" required>
             <Input type="date" max={asOfDate} value={draft.paymentDate} onChange={(event) => setDraft((current) => ({ ...current, paymentDate: event.target.value }))} />
@@ -740,7 +811,7 @@ function AdvancePaymentDrawer({ open, onClose, students, groupsById, existingRow
               <thead><tr><th scope="col">Class date</th><th scope="col">Hours</th><th scope="col">Allocated payment</th><th scope="col" className="numeric number-cell">Charge</th><th scope="col"><span className="sr-only">Remove</span></th></tr></thead>
               <tbody>
                 {draft.entries.map((entry) => {
-                  const charge = roundMoney(effectiveNumber(entry.hours, 0) * hourlyRate);
+                  const charge = roundMoney(effectiveNumber(entry.hours, 0) * selectedRate);
                   return (
                     <tr key={entry.key}>
                       <td><Input type="date" min={addDays(asOfDate, 1)} value={entry.classDate} onChange={(event) => updateEntry(entry.key, "classDate", event.target.value)} aria-label="Future class date" /></td>
@@ -772,7 +843,10 @@ function AdvancePaymentDrawer({ open, onClose, students, groupsById, existingRow
 function EditClassDrawer({ open, onClose, draft, setDraft, students, existingRows = [], context, currency, onSave, saving }) {
   const calculated = draft ? calculateClassLogRow(draft, context) : null;
   const duplicatesAnotherRow = Boolean(draft && existingRows.some((row) => (
-    row.id !== draft.id && row.studentId === draft.studentId && row.classDate === draft.classDate
+    row.id !== draft.id
+    && row.studentId === draft.studentId
+    && row.classDate === draft.classDate
+    && (row.startTime || "") === (draft.startTime || "")
   )));
   const invalid = !draft
     || !isDateOnly(draft.classDate)
@@ -805,6 +879,7 @@ function EditClassDrawer({ open, onClose, draft, setDraft, students, existingRow
               </Select>
             </Field>
             <Field label="Class date" required><Input type="date" value={draft.classDate || ""} onChange={(event) => setDraft((current) => ({ ...current, classDate: event.target.value }))} /></Field>
+            <Field label="Start time"><Input type="time" value={draft.startTime || ""} onChange={(event) => setDraft((current) => ({ ...current, startTime: event.target.value }))} /></Field>
             <Field label="Class status" required>
               <Select value={draft.classStatus || "Completed"} onChange={(event) => setDraft((current) => ({ ...current, classStatus: event.target.value, attendance: event.target.value === "Completed" ? (current.attendance || "P") : "" }))}>
                 {CLASS_STATUSES.map((status) => <option value={status} key={status}>{status}</option>)}
@@ -959,7 +1034,7 @@ function HistoryView({ rows, groups, students, context, currency, actions, regis
   );
 }
 
-export default function ClassLog({ state = {}, derived = {}, asOfDate, actions = {}, intent, clearIntent, navigate, registerNavigationBlocker }) {
+export default function ClassLog({ state = {}, derived = {}, asOfDate, actions = {}, intent, clearIntent, navigate, registerNavigationBlocker, prefill, onPrefillConsumed }) {
   const groups = useMemo(() => asArray(state.groups), [state.groups]);
   const students = useMemo(() => asArray(state.students), [state.students]);
   const classLogs = useMemo(() => asArray(state.classLog ?? state.classLogs), [state.classLog, state.classLogs]);
@@ -999,13 +1074,13 @@ export default function ClassLog({ state = {}, derived = {}, asOfDate, actions =
   }), [context, sourceRows]);
 
   const [mode, setMode] = useState("new");
-  const [classDraft, setClassDraft] = useState({ groupId: "", classDate: currentAsOfDate, classStatus: "Completed", hours: defaultHours });
+  const [classDraft, setClassDraft] = useState(() => makeClassDraft(currentAsOfDate, defaultHours));
   const [rosterDrafts, setRosterDrafts] = useState({});
   const [advanceOpen, setAdvanceOpen] = useState(false);
   const [advanceDraft, setAdvanceDraft] = useState(() => makeAdvanceDraft(currentAsOfDate, defaultHours, hourlyRate));
   const [saving, setSaving] = useState(false);
   const classBaselineRef = useRef({
-    classDraft: { groupId: "", classDate: currentAsOfDate, classStatus: "Completed", hours: defaultHours },
+    classDraft: makeClassDraft(currentAsOfDate, defaultHours),
     rosterDrafts: {},
   });
   const advanceBaselineRef = useRef(advanceDraft);
@@ -1019,7 +1094,7 @@ export default function ClassLog({ state = {}, derived = {}, asOfDate, actions =
     value: mode,
     onChange: (nextMode) => {
       if (nextMode === "history") {
-        const nextClassDraft = { groupId: "", classDate: currentAsOfDate, classStatus: "Completed", hours: defaultHours };
+        const nextClassDraft = makeClassDraft(currentAsOfDate, defaultHours);
         classBaselineRef.current = { classDraft: nextClassDraft, rosterDrafts: {} };
         setClassDraft(nextClassDraft);
         setRosterDrafts({});
@@ -1049,6 +1124,25 @@ export default function ClassLog({ state = {}, derived = {}, asOfDate, actions =
   }, [changeMode, clearIntent, currentAsOfDate, defaultHours, hourlyRate, intent]);
 
   useEffect(() => {
+    if (!prefill) return;
+    changeMode("new");
+    const nextClassDraft = makeClassDraft(currentAsOfDate, defaultHours, {
+      groupId: prefill.groupId || "",
+      classDate: prefill.classDate || currentAsOfDate,
+      startTime: prefill.startTime || "",
+      classStatus: prefill.classStatus || "Completed",
+      hours: prefill.durationHours ?? defaultHours,
+      scheduleSlotId: prefill.scheduleSlotId || "",
+      scheduleOccurrenceDate: prefill.occurrenceDate || prefill.classDate || "",
+      classTitle: prefill.classTitle || "",
+    });
+    classBaselineRef.current = { classDraft: nextClassDraft, rosterDrafts: {} };
+    setClassDraft(nextClassDraft);
+    setRosterDrafts({});
+    onPrefillConsumed?.();
+  }, [changeMode, currentAsOfDate, defaultHours, onPrefillConsumed, prefill]);
+
+  useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }, [mode]);
 
@@ -1075,9 +1169,13 @@ export default function ClassLog({ state = {}, derived = {}, asOfDate, actions =
     const draft = rosterDrafts[student.id] || makeRosterDraft(classDraft.classStatus);
     const record = persistedRecord({
       classDate: classDraft.classDate,
+      startTime: classDraft.startTime,
       studentId: student.id,
       groupId: classDraft.groupId === UNASSIGNED_GROUP ? "" : classDraft.groupId,
       classStatus: classDraft.classStatus,
+      scheduleSlotId: classDraft.scheduleSlotId,
+      scheduleOccurrenceDate: classDraft.scheduleOccurrenceDate,
+      classTitle: classDraft.classTitle,
       attendance: draft.attendance,
       hours: draft.hours === "" ? classDraft.hours : draft.hours,
       amountPaid: draft.amountPaid,
@@ -1110,8 +1208,10 @@ export default function ClassLog({ state = {}, derived = {}, asOfDate, actions =
     if (missingAttendance) result.push({ key: "attendance", blocking: true, message: `Choose attendance for ${missingAttendance} ${missingAttendance === 1 ? "student" : "students"}.` });
     const blockingPaymentRows = rosterRows.filter((row) => BLOCKING_PAYMENT_STATUSES.has(row.paymentStatus));
     if (blockingPaymentRows.length) result.push({ key: "payment", blocking: true, message: `${blockingPaymentRows.length} payment ${blockingPaymentRows.length === 1 ? "entry needs" : "entries need"} attention.` });
-    const duplicateCount = rosterRows.filter((row) => classLogs.some((saved) => saved.classDate === row.classDate && saved.studentId === row.studentId)).length;
-    if (duplicateCount) result.push({ key: "duplicates", blocking: true, message: `${duplicateCount} ${duplicateCount === 1 ? "student already has" : "students already have"} a record on this date. Edit it in History instead.` });
+    const duplicateCount = rosterRows.filter((row) => classLogs.some((saved) => saved.classDate === row.classDate
+      && saved.studentId === row.studentId
+      && (saved.startTime || "") === (row.startTime || ""))).length;
+    if (duplicateCount) result.push({ key: "duplicates", blocking: true, message: `${duplicateCount} ${duplicateCount === 1 ? "student already has" : "students already have"} a record at this date and time. Edit it in History instead.` });
     const outstandingCount = rosterRows.filter((row) => row.outstanding > 0).length;
     if (outstandingCount) result.push({ key: "outstanding", blocking: false, message: `${outstandingCount} ${outstandingCount === 1 ? "student has" : "students have"} an outstanding balance.` });
     const missingMethodCount = rosterRows.filter((row) => row.amountPaid > 0 && !row.draft.paymentMethod).length;
@@ -1193,7 +1293,7 @@ export default function ClassLog({ state = {}, derived = {}, asOfDate, actions =
       const records = advanceDraft.entries.map((entry, index) => persistedRecord({
         classDate: entry.classDate,
         studentId: advanceDraft.studentId,
-        groupId: studentGroupIds(studentsById.get(advanceDraft.studentId))[0] || "",
+        groupId: advanceDraft.groupId || "",
         classStatus: "Scheduled",
         attendance: "",
         hours: entry.hours,
@@ -1259,7 +1359,7 @@ export default function ClassLog({ state = {}, derived = {}, asOfDate, actions =
             />
             {rosterRows.length ? (
               <section className="panel totals-bar" aria-label="Class totals">
-                <div className="pricing-note"><CircleDollarSign aria-hidden="true" /><span>Charges use {currency(hourlyRate)} per hour. Blank student hours use the {defaultHours}-hour class default.</span></div>
+                <div className="pricing-note"><CircleDollarSign aria-hidden="true" /><span>Rates use the student override, then the group rate, then the {currency(hourlyRate)} account default. Blank student hours use the {defaultHours}-hour class default.</span></div>
                 <div className="totals-values">
                   <SummaryLine label="Charges" value={currency(summary.charges)} />
                   <SummaryLine label="Paid" value={currency(summary.paid)} />

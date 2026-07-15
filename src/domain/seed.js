@@ -287,6 +287,8 @@ const BASE_SEED = {
       notes: "DEMO — advance 2 of 2",
     },
   ],
+  scheduleExceptions: [],
+  scheduleChanges: [],
 };
 
 function deepFreeze(value) {
