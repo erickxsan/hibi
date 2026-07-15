@@ -5,7 +5,7 @@ export const APP_ROUTES = Object.freeze({
   students: "/students",
   groups: "/groups",
   classes: "/classes",
-  grades: "/grades",
+  grades: "/progress",
   payments: "/payments",
   settings: "/settings",
 });
@@ -13,6 +13,7 @@ export const APP_ROUTES = Object.freeze({
 export const LEGACY_ROUTE_ALIASES = Object.freeze({
   "/setup": "settings",
   "/class-log": "classes",
+  "/grades": "grades",
 });
 
 const subscribers = new Set();

@@ -14,6 +14,7 @@ describe("app history routes", () => {
     expect(pageFromPath("/students/", APP_ROUTES)).toBe("students");
     expect(pageFromPath("/groups", APP_ROUTES)).toBe("groups");
     expect(pageFromPath("/classes", APP_ROUTES)).toBe("classes");
+    expect(pageFromPath("/progress", APP_ROUTES)).toBe("grades");
     expect(pageFromPath("/grades", APP_ROUTES)).toBe("grades");
     expect(pageFromPath("/payments", APP_ROUTES)).toBe("payments");
     expect(pageFromPath("/settings", APP_ROUTES)).toBe("settings");
@@ -21,6 +22,7 @@ describe("app history routes", () => {
     expect(pageFromPath("/class-log", APP_ROUTES)).toBe("classes");
     expect(pageFromPath("/student/private-name", APP_ROUTES)).toBeNull();
     expect(pathForPage("students", APP_ROUTES)).toBe("/students");
+    expect(pathForPage("grades", APP_ROUTES)).toBe("/progress");
     expect(pathForPage("missing", APP_ROUTES)).toBeNull();
   });
 

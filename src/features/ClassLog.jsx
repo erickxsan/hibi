@@ -770,9 +770,9 @@ function AdvancePaymentDrawer({ open, onClose, students, groupsById, existingRow
       <div className="drawer-form">
         <div className="form-grid form-grid-2 two-columns">
           <Field label="Student" required>
-            <Select value={draft.studentId} onChange={(event) => updateStudent(event.target.value)}>
+            <Select variant="student" searchable value={draft.studentId} onChange={(event) => updateStudent(event.target.value)}>
               <option value="">Choose a student</option>
-              {students.map((student) => <option key={student.id} value={student.id}>{student.fullName}</option>)}
+              {students.map((student) => <option key={student.id} value={student.id} data-avatar-id={student.avatarId} data-meta={student.code}>{student.fullName}</option>)}
             </Select>
           </Field>
           <Field label="Group">
@@ -874,8 +874,8 @@ function EditClassDrawer({ open, onClose, draft, setDraft, students, existingRow
         <div className="drawer-form">
           <div className="form-grid form-grid-2 two-columns">
             <Field label="Student" required>
-              <Select value={draft.studentId} onChange={(event) => setDraft((current) => ({ ...current, studentId: event.target.value }))}>
-                {students.map((student) => <option value={student.id} key={student.id}>{student.fullName}</option>)}
+              <Select variant="student" searchable value={draft.studentId} onChange={(event) => setDraft((current) => ({ ...current, studentId: event.target.value }))}>
+                {students.map((student) => <option value={student.id} key={student.id} data-avatar-id={student.avatarId} data-meta={student.code}>{student.fullName}</option>)}
               </Select>
             </Field>
             <Field label="Class date" required><Input type="date" value={draft.classDate || ""} onChange={(event) => setDraft((current) => ({ ...current, classDate: event.target.value }))} /></Field>

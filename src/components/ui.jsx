@@ -1,6 +1,6 @@
-import { useEffect, useId, useRef } from "react";
+import { cloneElement, isValidElement, useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
-import { AlertCircle, ChevronDown, Search, X } from "lucide-react";
+import { AlertCircle, Search, X } from "lucide-react";
 import {
   closeOverlayHistory,
   pushOverlayHistory,
@@ -8,6 +8,7 @@ import {
 } from "../navigation/appHistory";
 import { BrandMark } from "./BrandMark";
 import { playHibiSound, primeHibiAudio } from "../utils/hibiSounds";
+export { GroupSelect, MultiSelect, Select, StudentSelect } from "./SelectControl";
 
 let openDrawerCount = 0;
 
@@ -43,10 +44,14 @@ export function IconButton({ label, icon: Icon, className = "", ...props }) {
 }
 
 export function Field({ label, hint, error, required, children, className = "" }) {
+  const labelId = useId();
+  const labelledChild = isValidElement(children) && !children.props["aria-label"] && !children.props["aria-labelledby"]
+    ? cloneElement(children, { "aria-labelledby": labelId, "aria-invalid": error ? "true" : children.props["aria-invalid"] })
+    : children;
   return (
     <label className={`field ${className}`.trim()}>
-      <span className="field-label">{label}{required ? <span aria-hidden="true"> *</span> : null}</span>
-      {children}
+      <span className="field-label" id={labelId}>{label}{required ? <span aria-hidden="true"> *</span> : null}</span>
+      {labelledChild}
       {error ? <span className="field-error" role="alert">{error}</span> : null}
       {!error && hint ? <span className="field-hint">{hint}</span> : null}
     </label>
@@ -55,15 +60,6 @@ export function Field({ label, hint, error, required, children, className = "" }
 
 export function Input({ className = "", ...props }) {
   return <input className={`control ${className}`.trim()} {...props} />;
-}
-
-export function Select({ className = "", children, ...props }) {
-  return (
-    <span className={`select-wrap ${className}`.trim()}>
-      <select className="control select-control" {...props}>{children}</select>
-      <ChevronDown className="select-chevron" aria-hidden="true" size={17} strokeWidth={1.8} />
-    </span>
-  );
 }
 
 export function TextArea({ className = "", ...props }) {
@@ -174,7 +170,10 @@ export function Drawer({ open, onClose, title, description, children, footer, si
     });
 
     const handleKeyDown = (event) => {
-      if (event.key === "Escape") requestClose();
+      if (event.key === "Escape") {
+        if (document.querySelector(".select-popover")) return;
+        requestClose();
+      }
       if (event.key !== "Tab" || !panel) return;
       const focusable = [...panel.querySelectorAll("button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])")];
       if (!focusable.length) return;

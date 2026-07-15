@@ -163,6 +163,13 @@ function applyGeneratedId(factory, canonicalDraft) {
   return factory(fields);
 }
 
+function upsertManyById(currentItems, nextItems) {
+  const nextById = new Map(nextItems.map((item) => [item.id, item]));
+  const merged = currentItems.map((item) => nextById.get(item.id) || item);
+  const existingIds = new Set(currentItems.map((item) => item.id));
+  return [...merged, ...nextItems.filter((item) => !existingIds.has(item.id))];
+}
+
 export function useClassManager({ persistence } = {}) {
   const uiStorageKey = persistence?.uiStorageKey || UI_STORAGE_KEY;
   const initial = useMemo(() => {
@@ -491,6 +498,34 @@ export function useClassManager({ persistence } = {}) {
 
   const deleteClassLog = useCallback((id) => commit((current) => ({ ...current, classLog: current.classLog.filter((row) => row.id !== id) }), "Class record deleted"), [commit]);
 
+  const saveProgress = useCallback(({ classRecords = [], gradeRecords = [] } = {}) => {
+    const current = stateRef.current;
+    const classItems = classRecords.map((draft) => applyGeneratedId(createClassLogRow, canonicalClassLog(draft, current)));
+    const gradeItems = gradeRecords.map((draft) => applyGeneratedId(createGrade, canonicalGrade(draft)));
+    if (!classItems.length) {
+      notify("Choose a class with active students first.", "error");
+      return false;
+    }
+    const proposed = {
+      ...current,
+      classLog: upsertManyById(current.classLog, classItems),
+      grades: upsertManyById(current.grades, gradeItems),
+    };
+    const classError = classItems.map((item) => validateClassLogRow(item, proposed)).find((validation) => !validation.valid);
+    const gradeError = gradeItems.map((item) => validateGrade(item, proposed)).find((validation) => !validation.valid);
+    const error = classError || gradeError;
+    if (error) {
+      notify(error.errors[0].message, "error");
+      return false;
+    }
+    const studentCount = new Set(classItems.map((item) => item.studentId)).size;
+    return commit((latest) => ({
+      ...latest,
+      classLog: upsertManyById(latest.classLog, classItems),
+      grades: upsertManyById(latest.grades, gradeItems),
+    }), `Progress saved for ${studentCount} student${studentCount === 1 ? "" : "s"}`);
+  }, [commit, notify]);
+
   const upsertScheduleException = useCallback((draft) => {
     const item = applyGeneratedId(createScheduleException, canonicalScheduleException(draft));
     return commit((current) => ({
@@ -552,6 +587,7 @@ export function useClassManager({ persistence } = {}) {
     addClassLogs,
     addClassLog: upsertClassLog,
     deleteClassLog,
+    saveProgress,
     upsertScheduleException,
     upsertScheduleChange,
     exportJson,
@@ -559,7 +595,7 @@ export function useClassManager({ persistence } = {}) {
     clearAll,
     clearLegacyLocalData,
     notify,
-  }), [addClassLogs, addGrades, archiveStudent, clearAll, clearLegacyLocalData, deleteClassLog, deleteGrade, deleteGroup, deleteStudent, exportJson, importJson, notify, updatePreferences, updateSettings, upsertClassLog, upsertGrade, upsertGroup, upsertScheduleChange, upsertScheduleException, upsertStudent]);
+  }), [addClassLogs, addGrades, archiveStudent, clearAll, clearLegacyLocalData, deleteClassLog, deleteGrade, deleteGroup, deleteStudent, exportJson, importJson, notify, saveProgress, updatePreferences, updateSettings, upsertClassLog, upsertGrade, upsertGroup, upsertScheduleChange, upsertScheduleException, upsertStudent]);
 
   return useMemo(() => ({
     state: viewState,

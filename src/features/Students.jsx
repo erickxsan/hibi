@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive,
   ArrowLeft,
-  Check,
   CreditCard,
   DollarSign,
   Filter,
@@ -15,7 +14,7 @@ import {
   UserRound,
   UsersRound,
 } from "lucide-react";
-import { Button, ConfirmDialog, Drawer, Field, Input, Select, TextArea } from "../components/ui";
+import { Button, ConfirmDialog, Drawer, Field, Input, MultiSelect, Select, TextArea } from "../components/ui";
 import { AvatarPicker, StudentAvatar } from "../components/StudentAvatar";
 import { confirmDiscard, draftChanged, useUnsavedChanges } from "../hooks/useUnsavedChanges";
 import { useHistoryBackedState } from "../hooks/useHistoryNavigation";
@@ -58,16 +57,8 @@ function EnrollmentTags({ student, groupsById }) {
 }
 
 function StudentEditor({ draft, setDraft, groups, defaultRate }) {
-  const [groupSearch, setGroupSearch] = useState("");
-  const needle = normalizeSearchText(groupSearch);
-  const filtered = groups.filter((group) => normalizeSearchText(`${group.name} ${group.subject} ${group.scheduleRoom}`).includes(needle));
-  const toggleGroup = (id) => setDraft((current) => ({
-    ...current,
-    groupIds: current.groupIds.includes(id)
-      ? current.groupIds.filter((value) => value !== id)
-      : [...current.groupIds, id],
-  }));
   const selectedGroups = draft.groupIds.map((id) => groups.find((group) => group.id === id)).filter(Boolean);
+  const groupOptions = groups.map((group) => ({ value: group.id, label: group.name, meta: group.schedule || group.subject || "No schedule" }));
   const inheritedRate = selectedGroups.length === 1 && Number.isFinite(selectedGroups[0].hourlyRate)
     ? selectedGroups[0].hourlyRate
     : defaultRate;
@@ -88,18 +79,7 @@ function StudentEditor({ draft, setDraft, groups, defaultRate }) {
             <span aria-hidden="true" /><b>Individual classes</b>
           </label>
         </div>
-        <label className="mini-search"><Search size={15} /><span className="sr-only">Search groups</span><input value={groupSearch} onChange={(event) => setGroupSearch(event.target.value)} placeholder="Search groups" /></label>
-        <div className="group-picker">
-          {filtered.length ? filtered.map((group) => (
-            <button key={group.id} type="button" className={draft.groupIds.includes(group.id) ? "group-option selected" : "group-option"} onClick={() => toggleGroup(group.id)}>
-              <span>{group.name}<small>{group.schedule || group.subject || "No schedule"}</small></span>
-              {draft.groupIds.includes(group.id) ? <Check size={16} /> : null}
-            </button>
-          )) : <p>No groups match.</p>}
-        </div>
-        <div className="selected-groups">
-          {draft.groupIds.map((id) => groups.find((group) => group.id === id)).filter(Boolean).map((group) => <button type="button" key={group.id} onClick={() => toggleGroup(group.id)}>{group.name} ×</button>)}
-        </div>
+        <MultiSelect ariaLabel="Assign groups" value={draft.groupIds} options={groupOptions} onChange={(groupIds) => setDraft((current) => ({ ...current, groupIds }))} placeholder="Choose groups" emptyMessage="No groups match" variant="group" />
       </section>
       <details className="optional-settings pricing-settings">
         <summary><span><DollarSign size={17} /><strong>Pricing</strong></span><small>{Number.isFinite(draft.customHourlyRate) ? `${money(draft.customHourlyRate)} / hour override` : selectedGroups.length > 1 ? "Uses each group rate" : `${money(inheritedRate)} / hour inherited`}</small></summary>

@@ -8,10 +8,10 @@ import { CloudConfigurationRequired, CloudError, CloudLoading, LocalDataMigratio
 import { useCloudWorkspace } from "./cloud/useCloudWorkspace";
 import { safeLoadStateWithMigrations } from "./domain";
 import Classes from "./features/Classes";
-import Grades from "./features/Grades";
 import Groups from "./features/Groups";
 import Home from "./features/Home";
 import Payments from "./features/Payments";
+import Progress from "./features/Progress";
 import Settings from "./features/Settings";
 import Students from "./features/Students";
 import { useClassManager } from "./hooks/useClassManager";
@@ -23,7 +23,7 @@ const NAV_ITEMS = [
   { id: "students", label: "Students", href: "/students", icon: Users },
   { id: "groups", label: "Groups", href: "/groups", icon: UsersRound },
   { id: "classes", label: "Classes", href: "/classes", icon: CalendarDays },
-  { id: "grades", label: "Grades", href: "/grades", icon: GraduationCap },
+  { id: "grades", label: "Progress", href: "/progress", icon: GraduationCap },
   { id: "payments", label: "Payments", href: "/payments", icon: CreditCard },
   { id: "settings", label: "Settings", href: "/settings", icon: SettingsIcon },
 ];
@@ -85,7 +85,7 @@ export function ClassManagerApplication({ persistence, user, cloudError, onSignO
     if (page === "students") return <Students {...common} />;
     if (page === "groups") return <Groups {...common} />;
     if (page === "classes") return <Classes {...common} />;
-    if (page === "grades") return <Grades {...common} />;
+    if (page === "grades") return <Progress {...common} />;
     if (page === "payments") return <Payments {...common} />;
     if (page === "settings") return <Settings {...common} />;
     return <Home {...common} />;
