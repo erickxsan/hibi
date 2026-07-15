@@ -4,6 +4,8 @@ import {
   ArrowLeft,
   Check,
   CreditCard,
+  DollarSign,
+  Filter,
   History,
   Pencil,
   Plus,
@@ -18,6 +20,7 @@ import { AvatarPicker, StudentAvatar } from "../components/StudentAvatar";
 import { confirmDiscard, draftChanged, useUnsavedChanges } from "../hooks/useUnsavedChanges";
 import { useHistoryBackedState } from "../hooks/useHistoryNavigation";
 import { getUiLocale } from "../i18n";
+import { studentMatchesFilters } from "../domain/studentFilters";
 import { normalizeSearchText } from "../utils/searchText";
 
 const EMPTY = Object.freeze({
@@ -27,6 +30,7 @@ const EMPTY = Object.freeze({
   avatarId: "cat",
   groupIds: [],
   isIndividual: false,
+  customHourlyRate: null,
   phone: "",
   guardianContact: "",
   notes: "",
@@ -53,7 +57,7 @@ function EnrollmentTags({ student, groupsById }) {
   );
 }
 
-function StudentEditor({ draft, setDraft, groups }) {
+function StudentEditor({ draft, setDraft, groups, defaultRate }) {
   const [groupSearch, setGroupSearch] = useState("");
   const needle = normalizeSearchText(groupSearch);
   const filtered = groups.filter((group) => normalizeSearchText(`${group.name} ${group.subject} ${group.scheduleRoom}`).includes(needle));
@@ -63,6 +67,10 @@ function StudentEditor({ draft, setDraft, groups }) {
       ? current.groupIds.filter((value) => value !== id)
       : [...current.groupIds, id],
   }));
+  const selectedGroups = draft.groupIds.map((id) => groups.find((group) => group.id === id)).filter(Boolean);
+  const inheritedRate = selectedGroups.length === 1 && Number.isFinite(selectedGroups[0].hourlyRate)
+    ? selectedGroups[0].hourlyRate
+    : defaultRate;
 
   return (
     <form id="student-editor" className="drawer-form" onSubmit={(event) => event.preventDefault()}>
@@ -93,6 +101,16 @@ function StudentEditor({ draft, setDraft, groups }) {
           {draft.groupIds.map((id) => groups.find((group) => group.id === id)).filter(Boolean).map((group) => <button type="button" key={group.id} onClick={() => toggleGroup(group.id)}>{group.name} ×</button>)}
         </div>
       </section>
+      <details className="optional-settings pricing-settings">
+        <summary><span><DollarSign size={17} /><strong>Pricing</strong></span><small>{Number.isFinite(draft.customHourlyRate) ? `${money(draft.customHourlyRate)} / hour override` : selectedGroups.length > 1 ? "Uses each group rate" : `${money(inheritedRate)} / hour inherited`}</small></summary>
+        <div className="optional-settings-body">
+          <label className="switch-row pricing-switch">
+            <input type="checkbox" checked={Number.isFinite(draft.customHourlyRate)} onChange={(event) => setDraft({ ...draft, customHourlyRate: event.target.checked ? inheritedRate : null })} />
+            <span aria-hidden="true" /><b>Override inherited rate</b>
+          </label>
+          {Number.isFinite(draft.customHourlyRate) ? <Field label="Custom hourly rate"><Input type="number" min="0" step="1" value={draft.customHourlyRate} onChange={(event) => setDraft({ ...draft, customHourlyRate: Number(event.target.value) })} /><small>MXN / hour</small></Field> : <p>{selectedGroups.length > 1 ? "This student uses the relevant group rate for each class, then the account default when a group has no rate." : `Inherited rate: ${money(inheritedRate)} per hour.`}</p>}
+        </div>
+      </details>
       <Field label="Student phone"><Input type="tel" value={draft.phone} onChange={(event) => setDraft({ ...draft, phone: event.target.value })} /></Field>
       <Field label="Parent / tutor"><TextArea rows="2" value={draft.guardianContact} onChange={(event) => setDraft({ ...draft, guardianContact: event.target.value })} /></Field>
       <Field label="Notes"><TextArea rows="3" value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} /></Field>
@@ -130,6 +148,7 @@ function StudentDetailContent({ tab, student, summary, grades, classes, onEdit }
 export default function Students({ state, derived, actions, intent, clearIntent, registerNavigationBlocker }) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
+  const [filters, setFilters] = useState({ groupIds: [], groupMatch: "any", enrollment: [] });
   const [selectedId, setSelectedId] = useState("");
   const [detailTab, setDetailTab] = useState("overview");
   const [draft, setDraft] = useState(null);
@@ -138,6 +157,7 @@ export default function Students({ state, derived, actions, intent, clearIntent,
   const baselineRef = useRef(null);
   const dirty = Boolean(draft) && draftChanged(draft, baselineRef.current);
   const groupsById = derived.groupsById || new Map();
+  const activeFilterCount = filters.groupIds.length + filters.enrollment.length + (status === "all" ? 0 : 1);
 
   useUnsavedChanges(registerNavigationBlocker, dirty, "Discard your unsaved student changes?");
   const changeSelected = useHistoryBackedState({
@@ -157,10 +177,11 @@ export default function Students({ state, derived, actions, intent, clearIntent,
     const needle = normalizeSearchText(query);
     return state.students.filter((student) => {
       if (status !== "all" && student.status !== status) return false;
+      if (!studentMatchesFilters(student, filters)) return false;
       const groupNames = (student.groupIds || []).map((id) => groupsById.get(id)?.name || "");
       return normalizeSearchText([student.fullName, student.code, student.phone, student.guardianContact, ...groupNames].join(" ")).includes(needle);
     });
-  }, [groupsById, query, state.students, status]);
+  }, [filters, groupsById, query, state.students, status]);
 
   const student = state.students.find((item) => item.id === selectedId);
   const summary = derived.students.find((item) => item.id === selectedId) || {};
@@ -224,7 +245,7 @@ export default function Students({ state, derived, actions, intent, clearIntent,
         </div>
         <section className="detail-grid"><StudentDetailContent tab={detailTab} student={student} summary={summary} grades={studentGrades} classes={studentClasses} onEdit={() => open(student)} /></section>
         <Drawer open={Boolean(draft)} onClose={closeDraft} title="Edit student" description="Individual and group enrollment can be combined." footer={<><Button onClick={closeDraft}>Cancel</Button><Button variant="primary" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save student"}</Button></>}>
-          {draft ? <StudentEditor draft={draft} setDraft={setDraft} groups={state.groups} /> : null}
+          {draft ? <StudentEditor draft={draft} setDraft={setDraft} groups={state.groups} defaultRate={state.settings.hourlyRate} /> : null}
         </Drawer>
         <ConfirmDialog
           open={Boolean(deleteTarget)}
@@ -248,6 +269,14 @@ export default function Students({ state, derived, actions, intent, clearIntent,
       <div className="page-list-tools">
         <label className="page-search"><Search size={17} /><span className="sr-only">Search students</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search students, parents, or groups" /></label>
         <Select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Filter students by status"><option value="all">All statuses</option><option value="Active">Active</option><option value="Inactive">Inactive</option></Select>
+        <details className="student-filter-menu">
+          <summary><Filter size={16} />Filters{activeFilterCount ? <span>{activeFilterCount}</span> : null}</summary>
+          <div className="student-filter-panel">
+            <div className="filter-panel-heading"><strong>Filter students</strong>{activeFilterCount ? <button type="button" onClick={() => { setStatus("all"); setFilters({ groupIds: [], groupMatch: "any", enrollment: [] }); }}>Clear all</button> : null}</div>
+            <fieldset><legend>Enrollment</legend>{[["individual", "Individual only"], ["group", "Group classes"], ["both", "Individual + group"]].map(([value, label]) => <label key={value}><input type="checkbox" checked={filters.enrollment.includes(value)} onChange={() => setFilters((current) => ({ ...current, enrollment: current.enrollment.includes(value) ? current.enrollment.filter((item) => item !== value) : [...current.enrollment, value] }))} />{label}</label>)}</fieldset>
+            <fieldset><legend>Groups</legend><div className="filter-group-list">{state.groups.map((group) => <label key={group.id}><input type="checkbox" checked={filters.groupIds.includes(group.id)} onChange={() => setFilters((current) => ({ ...current, groupIds: current.groupIds.includes(group.id) ? current.groupIds.filter((id) => id !== group.id) : [...current.groupIds, group.id] }))} />{group.name}</label>)}</div>{filters.groupIds.length > 1 ? <div className="filter-match"><span>Match</span><button type="button" className={filters.groupMatch === "any" ? "active" : ""} onClick={() => setFilters((current) => ({ ...current, groupMatch: "any" }))}>Any</button><button type="button" className={filters.groupMatch === "all" ? "active" : ""} onClick={() => setFilters((current) => ({ ...current, groupMatch: "all" }))}>All</button></div> : null}</fieldset>
+          </div>
+        </details>
       </div>
       <section className="people-list">
         {list.map((item) => {
@@ -257,7 +286,7 @@ export default function Students({ state, derived, actions, intent, clearIntent,
         {!list.length ? <div className="empty-box"><UsersRound size={28} /><h2>No students found</h2><p>Add a student or adjust your filters.</p></div> : null}
       </section>
       <Drawer open={Boolean(draft)} onClose={closeDraft} title={draft?.id ? "Edit student" : "Add student"} description="Use individual classes, one or many groups, or both." footer={<><Button onClick={closeDraft}>Cancel</Button><Button variant="primary" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save student"}</Button></>}>
-        {draft ? <StudentEditor draft={draft} setDraft={setDraft} groups={state.groups} /> : null}
+        {draft ? <StudentEditor draft={draft} setDraft={setDraft} groups={state.groups} defaultRate={state.settings.hourlyRate} /> : null}
       </Drawer>
     </div>
   );

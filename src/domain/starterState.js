@@ -16,5 +16,7 @@ export function createStarterState(options = {}) {
     students: [],
     grades: [],
     classLog: [],
+    scheduleExceptions: [],
+    scheduleChanges: [],
   };
 }

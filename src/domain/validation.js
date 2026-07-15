@@ -55,6 +55,13 @@ function dateOnly(errors, value, path, label, { optional = false } = {}) {
   if (!isDateOnly(value)) errors.push(issue(path, "invalid_date", `${label} must use YYYY-MM-DD.`, value));
 }
 
+function timeOnly(errors, value, path, label, { optional = false } = {}) {
+  if (optional && (value === null || value === "" || value === undefined)) return;
+  if (typeof value !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) {
+    errors.push(issue(path, "invalid_time", `${label} must use HH:MM.`, value));
+  }
+}
+
 function duplicateIn(items, field, value, exceptId) {
   if (!value || !Array.isArray(items)) return false;
   const normalized = typeof value === "string" ? value.trim().toLocaleLowerCase() : value;
@@ -84,6 +91,14 @@ export function validateGroup(group, state = null) {
     min: 0,
     integer: true,
   });
+  finiteNumber(errors, group.hourlyRate, "hourlyRate", "Group hourly rate", { min: 0, optional: true });
+  if (group.weeklySchedule !== undefined && !Array.isArray(group.weeklySchedule)) errors.push(issue("weeklySchedule", "invalid_type", "Weekly schedule must be an array."));
+  (group.weeklySchedule || []).forEach((slot, index) => {
+    requiredText(errors, slot?.id, `weeklySchedule[${index}].id`, "Schedule slot ID");
+    finiteNumber(errors, slot?.dayOfWeek, `weeklySchedule[${index}].dayOfWeek`, "Schedule day", { min: 1, max: 7, integer: true });
+    timeOnly(errors, slot?.startTime, `weeklySchedule[${index}].startTime`, "Schedule time");
+    finiteNumber(errors, slot?.durationHours, `weeklySchedule[${index}].durationHours`, "Schedule duration", { min: 0 });
+  });
   if (state && duplicateIn(state.groups, "name", group.name, group.id)) {
     errors.push(issue("name", "duplicate", "Group name must be unique.", group.name));
   }
@@ -104,6 +119,7 @@ export function validateStudent(student, state = null) {
   }
   if (student.groupIds !== undefined && !Array.isArray(student.groupIds)) errors.push(issue("groupIds", "invalid_type", "Student groups must be an array."));
   if (student.isIndividual !== undefined && typeof student.isIndividual !== "boolean") errors.push(issue("isIndividual", "invalid_type", "Individual enrollment must be true or false."));
+  finiteNumber(errors, student.customHourlyRate, "customHourlyRate", "Custom hourly rate", { min: 0, optional: true });
   const seenGroups = new Set();
   const legacyGroups = student.groupId ? [student.groupId] : [];
   for (const groupId of Array.isArray(student.groupIds) ? student.groupIds : legacyGroups) {
@@ -151,6 +167,9 @@ export function validateClassLogRow(row, state = null) {
   enumValue(errors, row.attendance, ATTENDANCE_CODES, "attendance", "Attendance", { optional: true });
   finiteNumber(errors, row.hours, "hours", "Hours", { min: 0, optional: true });
   finiteNumber(errors, row.amountPaid, "amountPaid", "Amount paid", { min: 0, optional: true });
+  finiteNumber(errors, row.appliedHourlyRate, "appliedHourlyRate", "Applied hourly rate", { min: 0, optional: true });
+  finiteNumber(errors, row.appliedCharge, "appliedCharge", "Applied charge", { min: 0, optional: true });
+  timeOnly(errors, row.startTime, "startTime", "Class time", { optional: true });
   dateOnly(errors, row.paymentDate, "paymentDate", "Payment date", { optional: true });
   enumValue(errors, row.paymentMethod, PAYMENT_METHODS, "paymentMethod", "Payment method", { optional: true });
 
@@ -223,6 +242,7 @@ export function normalizeState(input) {
     avatarId: STUDENT_AVATAR_IDS.includes(student?.avatarId) ? student.avatarId : "",
     groupIds: normalizeGroupIds(student),
     isIndividual: Boolean(student?.isIndividual),
+    customHourlyRate: normalizeOptionalNumber(student?.customHourlyRate),
     phone: normalizeText(student?.phone),
     guardianContact: normalizeText(student?.guardianContact),
     notes: normalizeText(student?.notes),
@@ -232,7 +252,7 @@ export function normalizeState(input) {
     .filter((student) => student.groupIds.length === 1)
     .map((student) => [student.id, student.groupIds[0]]));
 
-  return {
+  const normalized = {
     version: normalizeNumber(source.version, SCHEMA_VERSION),
     settings: {
       currency: normalizeText(sourceSettings.currency ?? DEFAULT_SETTINGS.currency),
@@ -250,6 +270,13 @@ export function normalizeState(input) {
       grade: normalizeText(group?.grade),
       subject: normalizeText(group?.subject),
       schedule: normalizeText(group?.schedule),
+      hourlyRate: normalizeOptionalNumber(group?.hourlyRate),
+      weeklySchedule: (Array.isArray(group?.weeklySchedule) ? group.weeklySchedule : []).map((slot, index) => ({
+        id: normalizeText(slot?.id) || `slot_${normalizeText(group?.id)}_${index + 1}`,
+        dayOfWeek: normalizeNumber(slot?.dayOfWeek, 1),
+        startTime: normalizeText(slot?.startTime),
+        durationHours: normalizeNumber(slot?.durationHours, sourceSettings.defaultClassHours ?? DEFAULT_SETTINGS.defaultClassHours),
+      })),
       plannedSessionsPerMonth: normalizeNumber(group?.plannedSessionsPerMonth, 0),
       assistantContact: normalizeText(group?.assistantContact),
       notes: normalizeText(group?.notes),
@@ -273,16 +300,81 @@ export function normalizeState(input) {
       groupId: normalizeText(row?.groupId) || inferableGroupByStudent.get(normalizeText(row?.studentId)) || "",
       startTime: normalizeText(row?.startTime),
       classTitle: normalizeText(row?.classTitle),
+      scheduleSlotId: normalizeText(row?.scheduleSlotId),
+      scheduleOccurrenceDate: normalizeText(row?.scheduleOccurrenceDate),
       classStatus: normalizeText(row?.classStatus),
       attendance: normalizeOptionalText(row?.attendance),
       hours: normalizeOptionalNumber(row?.hours),
+      appliedHourlyRate: normalizeOptionalNumber(row?.appliedHourlyRate),
+      appliedCharge: normalizeOptionalNumber(row?.appliedCharge),
       amountPaid: normalizeOptionalNumber(row?.amountPaid),
       paymentDate: normalizeOptionalText(row?.paymentDate),
       paymentMethod: normalizeText(row?.paymentMethod),
       paymentReference: normalizeText(row?.paymentReference),
       notes: normalizeText(row?.notes),
     })),
+    scheduleExceptions: (Array.isArray(source.scheduleExceptions) ? source.scheduleExceptions : []).map((item, index) => ({
+      id: normalizeText(item?.id) || `schedule_exception_${index + 1}`,
+      groupId: normalizeText(item?.groupId),
+      scheduleSlotId: normalizeText(item?.scheduleSlotId),
+      occurrenceDate: normalizeText(item?.occurrenceDate),
+      classDate: normalizeText(item?.classDate),
+      startTime: normalizeText(item?.startTime),
+      durationHours: normalizeOptionalNumber(item?.durationHours),
+      status: normalizeText(item?.status) || "Scheduled",
+      kind: item?.kind === "added" ? "added" : "override",
+    })),
+    scheduleChanges: (Array.isArray(source.scheduleChanges) ? source.scheduleChanges : []).map((item, index) => ({
+      id: normalizeText(item?.id) || `schedule_change_${index + 1}`,
+      groupId: normalizeText(item?.groupId),
+      scheduleSlotId: normalizeText(item?.scheduleSlotId),
+      effectiveFrom: normalizeText(item?.effectiveFrom),
+      dayOfWeek: normalizeNumber(item?.dayOfWeek, 1),
+      startTime: normalizeText(item?.startTime),
+      durationHours: normalizeOptionalNumber(item?.durationHours),
+    })),
   };
+
+  const groupsById = new Map(normalized.groups.map((group) => [group.id, group]));
+  const studentsById = new Map(normalized.students.map((student) => [student.id, student]));
+  normalized.classLog.forEach((row) => {
+    const student = studentsById.get(row.studentId);
+    const group = groupsById.get(row.groupId);
+    const inheritedRate = student?.customHourlyRate ?? group?.hourlyRate ?? normalized.settings.hourlyRate;
+    if (row.appliedHourlyRate === null && Number.isFinite(inheritedRate)) row.appliedHourlyRate = inheritedRate;
+    if (row.appliedCharge === null && Number.isFinite(row.appliedHourlyRate)) {
+      const hours = row.hours === null ? normalized.settings.defaultClassHours : row.hours;
+      row.appliedCharge = row.classStatus === "Cancelled" ? 0 : hours * row.appliedHourlyRate;
+    }
+  });
+  return normalized;
+}
+
+function validateScheduleException(item, state) {
+  const errors = [];
+  requiredText(errors, item?.id, "id", "Schedule exception ID");
+  requiredText(errors, item?.groupId, "groupId", "Schedule exception group");
+  dateOnly(errors, item?.occurrenceDate, "occurrenceDate", "Original occurrence date");
+  dateOnly(errors, item?.classDate, "classDate", "Exception class date");
+  timeOnly(errors, item?.startTime, "startTime", "Exception time");
+  finiteNumber(errors, item?.durationHours, "durationHours", "Exception duration", { min: 0 });
+  enumValue(errors, item?.status, CLASS_STATUSES, "status", "Exception status");
+  if (!['override', 'added'].includes(item?.kind)) errors.push(issue("kind", "invalid_enum", "Exception kind must be override or added."));
+  if (state && !state.groups.some((group) => group.id === item.groupId)) errors.push(issue("groupId", "unknown_reference", "Schedule exception references a missing group."));
+  return result(errors, []);
+}
+
+function validateScheduleChange(item, state) {
+  const errors = [];
+  requiredText(errors, item?.id, "id", "Schedule change ID");
+  requiredText(errors, item?.groupId, "groupId", "Schedule change group");
+  requiredText(errors, item?.scheduleSlotId, "scheduleSlotId", "Schedule slot");
+  dateOnly(errors, item?.effectiveFrom, "effectiveFrom", "Effective date");
+  finiteNumber(errors, item?.dayOfWeek, "dayOfWeek", "Schedule day", { min: 1, max: 7, integer: true });
+  timeOnly(errors, item?.startTime, "startTime", "Schedule time");
+  finiteNumber(errors, item?.durationHours, "durationHours", "Schedule duration", { min: 0 });
+  if (state && !state.groups.some((group) => group.id === item.groupId)) errors.push(issue("groupId", "unknown_reference", "Schedule change references a missing group."));
+  return result(errors, []);
 }
 
 function duplicateIdErrors(collection, path) {
@@ -342,7 +434,10 @@ export function validateState(input) {
   for (const key of ["groups", "students", "grades", "classLog"]) {
     if (!Array.isArray(input[key])) errors.push(issue(key, "invalid_type", `${key} must be an array.`));
   }
-  if (errors.some((entry) => entry.code === "invalid_type" && ["groups", "students", "grades", "classLog"].includes(entry.path))) {
+  for (const key of ["scheduleExceptions", "scheduleChanges"]) {
+    if (input[key] !== undefined && !Array.isArray(input[key])) errors.push(issue(key, "invalid_type", `${key} must be an array.`));
+  }
+  if (errors.some((entry) => entry.code === "invalid_type" && ["groups", "students", "grades", "classLog", "scheduleExceptions", "scheduleChanges"].includes(entry.path))) {
     return result(errors, warnings);
   }
 
@@ -367,11 +462,21 @@ export function validateState(input) {
     errors.push(...checked.errors);
     warnings.push(...checked.warnings);
   });
+  (state.scheduleExceptions || []).forEach((item, index) => {
+    const checked = withPrefix(validateScheduleException(item, state), `scheduleExceptions[${index}]`);
+    errors.push(...checked.errors);
+  });
+  (state.scheduleChanges || []).forEach((item, index) => {
+    const checked = withPrefix(validateScheduleChange(item, state), `scheduleChanges[${index}]`);
+    errors.push(...checked.errors);
+  });
 
   errors.push(...duplicateIdErrors(state.groups, "groups"));
   errors.push(...duplicateIdErrors(state.students, "students"));
   errors.push(...duplicateIdErrors(state.grades, "grades"));
   errors.push(...duplicateIdErrors(state.classLog, "classLog"));
+  errors.push(...duplicateIdErrors(state.scheduleExceptions || [], "scheduleExceptions"));
+  errors.push(...duplicateIdErrors(state.scheduleChanges || [], "scheduleChanges"));
   errors.push(...duplicateFieldErrors(state.groups, "name", "groups", "Group name"));
   errors.push(...duplicateFieldErrors(state.students, "code", "students", "Student code"));
 

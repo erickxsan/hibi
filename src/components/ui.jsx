@@ -25,8 +25,9 @@ function unlockDrawerBackground() {
 }
 
 export function Button({ children, variant = "secondary", icon: Icon, className = "", ...props }) {
+  const accessibleName = props["aria-label"] || (typeof children === "string" ? children : undefined);
   return (
-    <button className={`button button-${variant} ${className}`.trim()} type="button" {...props}>
+    <button className={`button button-${variant} ${className}`.trim()} type="button" aria-label={accessibleName} {...props}>
       {Icon ? <Icon aria-hidden="true" size={18} strokeWidth={1.8} /> : null}
       <span>{children}</span>
     </button>

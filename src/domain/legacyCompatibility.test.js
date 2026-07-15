@@ -37,9 +37,13 @@ describe("legacy workspace compatibility", () => {
     const state = normalizeState({ version: 1, settings: settings(), groups: [], students: [legacyStudent()], grades: [], classLog: [legacyClass()] });
     expect(state.students[0]).toMatchObject({ id: "student_legacy", avatarId: "", groupIds: [], isIndividual: false });
     expect(state.classLog[0]).toMatchObject({ id: "class_legacy", groupId: "" });
+    expect(state).toMatchObject({ scheduleExceptions: [], scheduleChanges: [] });
+    expect(state.classLog[0]).toMatchObject({ appliedHourlyRate: 50, appliedCharge: 100 });
     const derived = deriveAll(state);
     expect(derived.groups.find((item) => item.isUnassigned)?.studentCount).toBe(1);
     expect(derived.students[0].outstanding).toBe(50);
+    state.settings.hourlyRate = 500;
+    expect(deriveAll(state).classLog[0].charge).toBe(100);
   });
 
   it("preserves IDs, grades, notes, payments, settings, and a legacy group relationship", () => {

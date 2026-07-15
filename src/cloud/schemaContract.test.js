@@ -6,6 +6,10 @@ const migration = readFileSync(
   new URL("../../supabase/migrations/202607110001_initial_multi_account_workspaces.sql", import.meta.url),
   "utf8",
 ).toLowerCase();
+const scheduleDefaultsMigration = readFileSync(
+  new URL("../../supabase/migrations/202607140001_schedule_defaults.sql", import.meta.url),
+  "utf8",
+).toLowerCase();
 
 describe("Supabase schema contract", () => {
   it("matches the table and revision RPC used by the browser client", () => {
@@ -44,5 +48,12 @@ describe("Supabase schema contract", () => {
     expect(migration).toContain("grant execute on function public.save_workspace_state(uuid, bigint, jsonb)");
     expect(migration).toContain("grant execute on function public.reset_workspace_state(uuid)");
     expect(migration).toContain("to authenticated");
+  });
+
+  it("adds schedule collections only to new-workspace defaults", () => {
+    expect(scheduleDefaultsMigration).toContain("create or replace function private.initial_workspace_state");
+    expect(scheduleDefaultsMigration).toContain("'scheduleexceptions', '[]'::jsonb");
+    expect(scheduleDefaultsMigration).toContain("'schedulechanges', '[]'::jsonb");
+    expect(scheduleDefaultsMigration).not.toContain("update public.workspaces");
   });
 });

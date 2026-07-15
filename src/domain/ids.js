@@ -22,6 +22,8 @@ export function createGroup(overrides = {}) {
     grade: "",
     subject: "",
     schedule: "",
+    hourlyRate: null,
+    weeklySchedule: [],
     plannedSessionsPerMonth: 8,
     assistantContact: "",
     notes: "",
@@ -37,6 +39,7 @@ export function createStudent(overrides = {}) {
     avatarId: "cat",
     groupIds: [],
     isIndividual: false,
+    customHourlyRate: null,
     phone: "",
     guardianContact: "",
     notes: "",
@@ -68,14 +71,46 @@ export function createClassLogRow(overrides = {}) {
     groupId: "",
     startTime: "",
     classTitle: "",
+    scheduleSlotId: "",
+    scheduleOccurrenceDate: "",
     classStatus: "Completed",
     attendance: "P",
     hours: null,
+    appliedHourlyRate: null,
+    appliedCharge: null,
     amountPaid: null,
     paymentDate: null,
     paymentMethod: "",
     paymentReference: "",
     notes: "",
+    ...overrides,
+  };
+}
+
+export function createScheduleException(overrides = {}) {
+  return {
+    id: createStableId("schedule-exception"),
+    groupId: "",
+    scheduleSlotId: "",
+    occurrenceDate: "",
+    classDate: "",
+    startTime: "",
+    durationHours: null,
+    status: "Scheduled",
+    kind: "override",
+    ...overrides,
+  };
+}
+
+export function createScheduleChange(overrides = {}) {
+  return {
+    id: createStableId("schedule-change"),
+    groupId: "",
+    scheduleSlotId: "",
+    effectiveFrom: "",
+    dayOfWeek: 1,
+    startTime: "",
+    durationHours: null,
     ...overrides,
   };
 }

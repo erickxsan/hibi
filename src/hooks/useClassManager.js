@@ -4,11 +4,14 @@ import {
   createExportFilename,
   createGrade,
   createGroup,
+  createScheduleChange,
+  createScheduleException,
   createStarterState,
   createStudent,
   deriveAll,
   exportState,
   importState,
+  resolveHourlyRate,
   REAL_ROSTER_BACKUP_KEY,
   REAL_ROSTER_MIGRATION_KEY,
   safeLoadStateWithMigrations,
@@ -54,6 +57,13 @@ function canonicalGroup(draft) {
     grade: draft.grade,
     subject: draft.subject,
     schedule: draft.scheduleRoom ?? draft.schedule ?? "",
+    hourlyRate: draft.hourlyRate === "" || draft.hourlyRate == null ? null : Number(draft.hourlyRate),
+    weeklySchedule: Array.isArray(draft.weeklySchedule) ? draft.weeklySchedule.map((slot) => ({
+      id: slot.id,
+      dayOfWeek: Number(slot.dayOfWeek),
+      startTime: slot.startTime,
+      durationHours: Number(slot.durationHours),
+    })) : [],
     plannedSessionsPerMonth: Number(draft.plannedSessionsPerMonth ?? 0),
     assistantContact: draft.assistantContact ?? "",
     notes: draft.notes ?? "",
@@ -68,6 +78,7 @@ function canonicalStudent(draft) {
     avatarId: draft.avatarId ?? "",
     groupIds: Array.isArray(draft.groupIds) ? [...new Set(draft.groupIds.filter(Boolean))] : draft.groupId ? [draft.groupId] : [],
     isIndividual: Boolean(draft.isIndividual),
+    customHourlyRate: draft.customHourlyRate === "" || draft.customHourlyRate == null ? null : Number(draft.customHourlyRate),
     phone: draft.studentPhone ?? draft.phone ?? "",
     guardianContact: draft.guardianContact ?? "",
     notes: draft.importantNotes ?? draft.notes ?? "",
@@ -89,7 +100,15 @@ function canonicalGrade(draft) {
   };
 }
 
-function canonicalClassLog(draft) {
+function canonicalClassLog(draft, state) {
+  const hours = draft.hours === "" || draft.hours == null ? null : Number(draft.hours);
+  const appliedHourlyRate = Number.isFinite(draft.appliedHourlyRate)
+    ? draft.appliedHourlyRate
+    : resolveHourlyRate(state, draft.studentId, draft.groupId);
+  const effectiveHours = hours === null ? state.settings.defaultClassHours : hours;
+  const appliedCharge = Number.isFinite(draft.appliedCharge)
+    ? draft.appliedCharge
+    : draft.classStatus === "Cancelled" ? 0 : effectiveHours * appliedHourlyRate;
   return {
     id: draft.id,
     classDate: draft.classDate,
@@ -97,14 +116,44 @@ function canonicalClassLog(draft) {
     groupId: draft.groupId ?? "",
     startTime: draft.startTime ?? "",
     classTitle: draft.classTitle ?? "",
+    scheduleSlotId: draft.scheduleSlotId ?? "",
+    scheduleOccurrenceDate: draft.scheduleOccurrenceDate ?? "",
     classStatus: draft.classStatus ?? "Completed",
     attendance: draft.attendance || null,
-    hours: draft.hours === "" || draft.hours == null ? null : Number(draft.hours),
+    hours,
+    appliedHourlyRate,
+    appliedCharge,
     amountPaid: draft.amountPaid === "" || draft.amountPaid == null ? 0 : Number(draft.amountPaid),
     paymentDate: draft.paymentDate || null,
     paymentMethod: draft.paymentMethod ?? draft.method ?? "",
     paymentReference: draft.paymentReference ?? draft.reference ?? "",
     notes: draft.notes ?? "",
+  };
+}
+
+function canonicalScheduleException(draft) {
+  return {
+    id: draft.id,
+    groupId: draft.groupId ?? "",
+    scheduleSlotId: draft.scheduleSlotId ?? "",
+    occurrenceDate: draft.occurrenceDate ?? draft.classDate ?? "",
+    classDate: draft.classDate ?? "",
+    startTime: draft.startTime ?? "",
+    durationHours: Number(draft.durationHours),
+    status: draft.status ?? "Scheduled",
+    kind: draft.kind === "added" ? "added" : "override",
+  };
+}
+
+function canonicalScheduleChange(draft) {
+  return {
+    id: draft.id,
+    groupId: draft.groupId ?? "",
+    scheduleSlotId: draft.scheduleSlotId ?? "",
+    effectiveFrom: draft.effectiveFrom ?? "",
+    dayOfWeek: Number(draft.dayOfWeek),
+    startTime: draft.startTime ?? "",
+    durationHours: Number(draft.durationHours),
   };
 }
 
@@ -358,7 +407,12 @@ export function useClassManager({ persistence } = {}) {
       notify("Unassign or move every student before deleting this group.", "error");
       return Promise.resolve(false);
     }
-    return commit((current) => ({ ...current, groups: current.groups.filter((group) => group.id !== id) }), "Group deleted");
+    return commit((current) => ({
+      ...current,
+      groups: current.groups.filter((group) => group.id !== id),
+      scheduleExceptions: current.scheduleExceptions.filter((item) => item.groupId !== id),
+      scheduleChanges: current.scheduleChanges.filter((item) => item.groupId !== id),
+    }), "Group deleted");
   }, [commit, notify]);
 
   const upsertStudent = useCallback((draft) => {
@@ -406,7 +460,7 @@ export function useClassManager({ persistence } = {}) {
   const deleteGrade = useCallback((id) => commit((current) => ({ ...current, grades: current.grades.filter((grade) => grade.id !== id) }), "Grade deleted"), [commit]);
 
   const upsertClassLog = useCallback((draft) => {
-    const item = applyGeneratedId(createClassLogRow, canonicalClassLog(draft));
+    const item = applyGeneratedId(createClassLogRow, canonicalClassLog(draft, stateRef.current));
     const validation = validateClassLogRow(item, stateRef.current);
     if (!validation.valid) {
       notify(validation.errors[0].message, "error");
@@ -416,7 +470,7 @@ export function useClassManager({ persistence } = {}) {
   }, [commit, notify]);
 
   const addClassLogs = useCallback((drafts) => {
-    const items = drafts.map((draft) => applyGeneratedId(createClassLogRow, canonicalClassLog(draft)));
+    const items = drafts.map((draft) => applyGeneratedId(createClassLogRow, canonicalClassLog(draft, stateRef.current)));
     if (!items.length) {
       notify("Choose a group with active students first.", "error");
       return false;
@@ -429,13 +483,28 @@ export function useClassManager({ persistence } = {}) {
     }
     const duplicate = items.find((item) => current.classLog.some((row) => row.studentId === item.studentId && row.classDate === item.classDate && (row.startTime || "") === (item.startTime || "")));
     if (duplicate) {
-      notify("A student already has a class record on this date. Review History before saving.", "error");
+      notify("A student already has a class record at this date and time. Review History before saving.", "error");
       return false;
     }
     return commit((current) => ({ ...current, classLog: [...current.classLog, ...items] }), `Class saved for ${items.length} student${items.length === 1 ? "" : "s"}`);
   }, [commit, notify]);
 
   const deleteClassLog = useCallback((id) => commit((current) => ({ ...current, classLog: current.classLog.filter((row) => row.id !== id) }), "Class record deleted"), [commit]);
+
+  const upsertScheduleException = useCallback((draft) => {
+    const item = applyGeneratedId(createScheduleException, canonicalScheduleException(draft));
+    return commit((current) => ({
+      ...current,
+      scheduleExceptions: current.scheduleExceptions.some((entry) => entry.id === item.id)
+        ? current.scheduleExceptions.map((entry) => entry.id === item.id ? item : entry)
+        : [...current.scheduleExceptions, item],
+    }), draft.id ? "Class exception updated" : "Class exception added");
+  }, [commit]);
+
+  const upsertScheduleChange = useCallback((draft) => {
+    const item = applyGeneratedId(createScheduleChange, canonicalScheduleChange(draft));
+    return commit((current) => ({ ...current, scheduleChanges: [...current.scheduleChanges, item] }), "Future schedule updated");
+  }, [commit]);
 
   const exportJson = useCallback(() => {
     const current = stateRef.current;
@@ -453,7 +522,7 @@ export function useClassManager({ persistence } = {}) {
     }
   }, [commit, notify]);
 
-  const clearAll = useCallback(() => commit((current) => ({ ...current, groups: [], students: [], grades: [], classLog: [] }), "All records cleared"), [commit]);
+  const clearAll = useCallback(() => commit((current) => ({ ...current, groups: [], students: [], grades: [], classLog: [], scheduleExceptions: [], scheduleChanges: [] }), "All records cleared"), [commit]);
   const clearLegacyLocalData = useCallback(() => {
     if (persistenceRef.current?.mode !== "cloud") return false;
     try {
@@ -483,12 +552,14 @@ export function useClassManager({ persistence } = {}) {
     addClassLogs,
     addClassLog: upsertClassLog,
     deleteClassLog,
+    upsertScheduleException,
+    upsertScheduleChange,
     exportJson,
     importJson,
     clearAll,
     clearLegacyLocalData,
     notify,
-  }), [addClassLogs, addGrades, archiveStudent, clearAll, clearLegacyLocalData, deleteClassLog, deleteGrade, deleteGroup, deleteStudent, exportJson, importJson, notify, updatePreferences, updateSettings, upsertClassLog, upsertGrade, upsertGroup, upsertStudent]);
+  }), [addClassLogs, addGrades, archiveStudent, clearAll, clearLegacyLocalData, deleteClassLog, deleteGrade, deleteGroup, deleteStudent, exportJson, importJson, notify, updatePreferences, updateSettings, upsertClassLog, upsertGrade, upsertGroup, upsertScheduleChange, upsertScheduleException, upsertStudent]);
 
   return useMemo(() => ({
     state: viewState,

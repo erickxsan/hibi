@@ -4,12 +4,13 @@ import { assertValidState, normalizeState } from "./validation.js";
 
 function collectionFingerprint(state) {
   const normalized = normalizeState(state);
+  const legacyClassLog = normalized.classLog.map(({ appliedHourlyRate: _rate, appliedCharge: _charge, ...row }) => row);
   return JSON.stringify({
     version: normalized.version,
     groups: normalized.groups,
     students: normalized.students,
     grades: normalized.grades,
-    classLog: normalized.classLog,
+    classLog: legacyClassLog,
   });
 }
 
