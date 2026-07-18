@@ -41,27 +41,49 @@ function OptionArtwork({ option, variant }) {
   return null;
 }
 
+function focusWithoutPageScroll(element) {
+  if (!element) return;
+  try {
+    element.focus({ preventScroll: true });
+  } catch {
+    const { scrollX, scrollY } = window;
+    element.focus();
+    window.scrollTo({ left: scrollX, top: scrollY, behavior: "auto" });
+  }
+}
+
+function scrollOptionInsideList(optionId) {
+  const option = document.getElementById(optionId);
+  const list = option?.closest(".select-options");
+  if (!option || !list) return;
+  const optionRect = option.getBoundingClientRect();
+  const listRect = list.getBoundingClientRect();
+  if (optionRect.top < listRect.top) list.scrollTop -= listRect.top - optionRect.top;
+  else if (optionRect.bottom > listRect.bottom) list.scrollTop += optionRect.bottom - listRect.bottom;
+}
+
+function isCompactChoiceViewport() {
+  return typeof window !== "undefined" && window.matchMedia("(max-width: 640px)").matches;
+}
+
 function useChoicePopover({ open, setOpen, triggerRef, menuRef, activeIndex, setActiveIndex, optionCount, onChoose, searchable }) {
   const overlayId = useId();
   const ownsHistory = useRef(false);
-  const previousFocus = useRef(null);
-
   const close = (returnFocus = true) => {
     if (ownsHistory.current && closeOverlayHistory(overlayId)) return;
     setOpen(false);
-    if (returnFocus) requestAnimationFrame(() => triggerRef.current?.focus());
+    if (returnFocus) requestAnimationFrame(() => focusWithoutPageScroll(triggerRef.current));
   };
 
   useEffect(() => {
     if (!open) return undefined;
-    previousFocus.current = document.activeElement;
     const timer = window.setTimeout(() => { ownsHistory.current = Boolean(pushOverlayHistory(overlayId)); }, 0);
     const unsubscribe = subscribeToAppHistory({
       beforePop: ({ previous, next }) => {
         if (!previous?.overlays?.includes(overlayId) || next?.overlays?.includes(overlayId)) return true;
         ownsHistory.current = false;
         setOpen(false);
-        requestAnimationFrame(() => triggerRef.current?.focus());
+        requestAnimationFrame(() => focusWithoutPageScroll(triggerRef.current));
         return true;
       },
     });
@@ -95,14 +117,16 @@ function useChoicePopover({ open, setOpen, triggerRef, menuRef, activeIndex, set
       setActiveIndex((current) => {
         if (!optionCount) return -1;
         const next = current < 0 ? (direction > 0 ? 0 : optionCount - 1) : (current + direction + optionCount) % optionCount;
-        requestAnimationFrame(() => document.getElementById(`${overlayId}-option-${next}`)?.scrollIntoView({ block: "nearest" }));
+        requestAnimationFrame(() => scrollOptionInsideList(`${overlayId}-option-${next}`));
         return next;
       });
       return;
     }
     if (event.key === "Home" || event.key === "End") {
       event.preventDefault();
-      setActiveIndex(event.key === "Home" ? 0 : Math.max(0, optionCount - 1));
+      const next = event.key === "Home" ? 0 : Math.max(0, optionCount - 1);
+      setActiveIndex(next);
+      requestAnimationFrame(() => scrollOptionInsideList(`${overlayId}-option-${next}`));
       return;
     }
     if (event.key === "Enter" && activeIndex >= 0) {
@@ -121,11 +145,11 @@ function useChoicePopover({ open, setOpen, triggerRef, menuRef, activeIndex, set
 
 function usePopoverPosition(open, triggerRef) {
   const [position, setPosition] = useState({});
-  const [mobile, setMobile] = useState(false);
+  const [mobile, setMobile] = useState(isCompactChoiceViewport);
   useEffect(() => {
     if (!open) return undefined;
     const update = () => {
-      const compact = window.matchMedia("(max-width: 640px)").matches;
+      const compact = isCompactChoiceViewport();
       setMobile(compact);
       if (compact || !triggerRef.current) return;
       const rect = triggerRef.current.getBoundingClientRect();
@@ -177,7 +201,7 @@ function ChoiceMenu({
 }) {
   const searchRef = useRef(null);
   useEffect(() => {
-    const focusMenu = () => (searchable ? searchRef.current : menuRef.current)?.focus();
+    const focusMenu = () => focusWithoutPageScroll(!mobile && searchable ? searchRef.current : menuRef.current);
     focusMenu();
     const timer = window.setTimeout(focusMenu, 0);
     return () => window.clearTimeout(timer);
@@ -193,7 +217,6 @@ function ChoiceMenu({
       aria-multiselectable={!searchable && multiple ? "true" : undefined}
       aria-activedescendant={!searchable && activeIndex >= 0 ? optionId(activeIndex) : undefined}
       tabIndex={searchable ? -1 : 0}
-      autoFocus={!searchable}
       onKeyDown={onKeyDown}
     >
       {mobile ? <div className="select-sheet-head"><span aria-hidden="true" /><strong>Choose an option</strong><button type="button" aria-label="Close selector" onClick={onClose}><X size={18} /></button></div> : null}
@@ -201,7 +224,7 @@ function ChoiceMenu({
         <label className="select-search">
           <Search aria-hidden="true" size={17} />
           <span className="sr-only">Search options</span>
-          <input ref={searchRef} role="combobox" aria-label="Search options" aria-expanded="true" aria-controls={listId} aria-activedescendant={activeIndex >= 0 ? optionId(activeIndex) : undefined} value={query} onChange={(event) => { setQuery(event.target.value); setActiveIndex(0); }} placeholder="Search…" autoComplete="off" autoFocus />
+          <input ref={searchRef} role="combobox" aria-label="Search options" aria-expanded="true" aria-controls={listId} aria-activedescendant={activeIndex >= 0 ? optionId(activeIndex) : undefined} value={query} onChange={(event) => { setQuery(event.target.value); setActiveIndex(0); }} placeholder="Search…" autoComplete="off" />
           {query ? <button type="button" aria-label="Clear search" onClick={() => { setQuery(""); setActiveIndex(0); }}><X size={15} /></button> : null}
         </label>
       ) : null}
@@ -272,7 +295,7 @@ export function Select({
     onChange?.({ target: { value: option.value, name: props.name }, currentTarget: { value: option.value, name: props.name } });
     setOpen(false);
     setQuery("");
-    requestAnimationFrame(() => triggerRef.current?.focus());
+    requestAnimationFrame(() => focusWithoutPageScroll(triggerRef.current));
   };
   const popover = useChoicePopover({ open, setOpen, triggerRef, menuRef, activeIndex, setActiveIndex, optionCount: filteredOptions.length, onChoose: choose, searchable: shouldSearch });
 

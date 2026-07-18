@@ -393,7 +393,7 @@ a {
 .page {
   display: grid;
   gap: 22px;
-  animation: page-enter 180ms ease both;
+  animation: page-enter 180ms ease;
 }
 
 @keyframes page-enter {
@@ -1113,7 +1113,7 @@ a {
 .toast-error { border-color: #e1aaa5; color: var(--danger); }
 @keyframes toast-enter { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 .toast-cat { width:26px; height:26px; display:grid; place-items:center; border-radius:50%; background:#e7f0df; animation:cat-thank-you 420ms cubic-bezier(.2,.9,.3,1.25) both; }.toast-cat .brand-mark { width:21px; height:21px; color:var(--hibi-forest); }.toast-cat .brand-mark path:first-child { fill:#f4dd9b; }
-.route-stage { animation:route-settle 180ms ease-out both; }
+.route-stage { animation:route-settle 180ms ease-out; }
 @keyframes route-settle { from { opacity:.78; transform:translateY(3px); } to { opacity:1; transform:none; } }
 @keyframes cat-thank-you { 0% { transform:scale(.72) rotate(-7deg); } 62% { transform:scale(1.1) rotate(4deg); } 100% { transform:scale(1) rotate(0); } }
 
@@ -2019,7 +2019,7 @@ a {
 .page-list-tools {
   max-width: 850px;
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) 180px auto;
+  grid-template-columns: minmax(260px, 1fr) auto;
   align-items: center;
   gap: 10px;
   margin-bottom: 17px;
@@ -2052,6 +2052,7 @@ a {
   top: calc(100% + 8px);
   right: 0;
   width: min(330px, calc(100vw - 34px));
+  max-height: min(70dvh, 560px);
   display: grid;
   gap: 13px;
   padding: 16px;
@@ -2059,12 +2060,21 @@ a {
   border-radius: 14px;
   background: var(--hibi-surface);
   box-shadow: 0 14px 36px rgba(39, 53, 43, .16);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .filter-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .filter-panel-heading button { border: 0; background: transparent; color: var(--hibi-forest); font-weight: 750; cursor: pointer; }
+.filter-panel-actions { display:flex; align-items:center; gap:10px; }
+.filter-panel-done { display:none; }
 .student-filter-panel fieldset { display: grid; gap: 8px; padding: 0; border: 0; }
 .student-filter-panel legend { margin-bottom: 7px; color: var(--hibi-muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
 .student-filter-panel label { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.filter-status-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; padding: 4px; border-radius: 11px; background: #f1eee6; }
+.filter-status-options button { min-height: 34px; padding: 4px 7px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--hibi-muted); font: inherit; font-size: 12px; font-weight: 750; cursor: pointer; }
+.filter-status-options button:hover { color: var(--hibi-forest-dark); }
+.filter-status-options button.active { border-color: #c9d6c3; background: var(--hibi-surface); box-shadow: 0 1px 3px rgba(39, 53, 43, .08); color: var(--hibi-forest); }
+.filter-status-options button:focus-visible { outline: 3px solid rgba(36, 95, 74, .14); }
 .filter-group-list { max-height: 170px; display: grid; gap: 8px; overflow-y: auto; }
 .filter-match { display: flex; align-items: center; gap: 5px; padding-top: 5px; color: var(--hibi-muted); font-size: 11px; }
 .filter-match button { min-height: 28px; padding: 0 10px; border: 1px solid var(--hibi-border); border-radius: 999px; background: transparent; cursor: pointer; }
@@ -2169,7 +2179,7 @@ a {
   .insight-strip { margin-bottom: 2px; }
   .insight-strip button { min-height: 66px; padding: 10px; }
   .insight-strip button > svg:last-child { display: none; }
-  .page-list-tools { max-width: none; grid-template-columns: minmax(0, 1fr) 145px auto; }
+  .page-list-tools { max-width: none; grid-template-columns: minmax(0, 1fr) auto; }
   .student-payment-line { grid-template-columns: minmax(0, 1fr) auto; }
   .student-payment-line em { grid-column: 1 / -1; }
   .settings-controls-expanded { grid-template-columns: 1fr; }
@@ -2376,14 +2386,14 @@ tbody .gradebook-student-column,tbody .attendance-student-column { display:flex;
 .select-wrap.is-open .select-trigger .select-chevron,.multi-select.is-open .select-chevron { transform:translateY(-50%) rotate(180deg); }
 .select-option-icon { width:32px; height:32px; display:grid; flex:0 0 auto; place-items:center; border-radius:9px; background:var(--hibi-sage); color:var(--hibi-forest); }
 
-.select-popover { z-index:1200; display:grid; align-content:start; gap:7px; padding:7px; overflow:hidden; border:1px solid #d9cdbb; border-radius:15px; background:rgba(255,253,248,.99); box-shadow:0 16px 38px rgba(63,51,35,.16),0 3px 10px rgba(63,51,35,.08); color:var(--ink); }
+.select-popover { z-index:1200; display:flex; flex-direction:column; gap:7px; padding:7px; overflow:hidden; border:1px solid #d9cdbb; border-radius:15px; background:rgba(255,253,248,.99); box-shadow:0 16px 38px rgba(63,51,35,.16),0 3px 10px rgba(63,51,35,.08); color:var(--ink); }
 .select-popover:focus { outline:0; }
 .select-search { display:flex; min-height:42px; align-items:center; gap:8px; padding:0 10px; border:1px solid var(--border); border-radius:11px; background:#fff; color:var(--muted); }
 .select-search:focus-within { border-color:var(--teal); box-shadow:0 0 0 3px rgba(47,126,121,.13); }
 .select-search input { min-width:0; flex:1; border:0; background:transparent; color:var(--ink); font:inherit; outline:0; }
 .select-search button,.select-sheet-head button { width:32px; height:32px; display:grid; place-items:center; padding:0; border:0; border-radius:8px; background:transparent; color:var(--muted); cursor:pointer; }
 .select-search button:hover,.select-sheet-head button:hover { background:#f3eee5; color:var(--ink); }
-.select-options { min-height:0; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; scrollbar-color:#c9beae transparent; }
+.select-options { min-height:0; flex:1 1 auto; overflow-y:auto; overscroll-behavior:contain; touch-action:pan-y; -webkit-overflow-scrolling:touch; scrollbar-width:thin; scrollbar-color:#c9beae transparent; }
 .select-option { width:100%; min-height:42px; display:flex; align-items:center; gap:9px; padding:5px 9px; border:1px solid transparent; border-radius:10px; background:transparent; color:var(--ink); font-size:14px; text-align:left; cursor:pointer; }
 .select-option:hover:not(:disabled),.select-option.is-active:not(:disabled) { border-color:#eadfce; background:#fff8ec; }
 .select-option.is-active:not(:disabled) { border-color:var(--teal); box-shadow:inset 0 0 0 1px var(--teal); }
@@ -2432,4 +2442,10 @@ tbody .gradebook-student-column,tbody .attendance-student-column { display:flex;
 .icon-button:hover { border-color:#cfc1ae; background:#fff; color:var(--hibi-forest); }
 
 @media (prefers-reduced-motion:reduce) { .select-trigger .select-chevron,.multi-select-trigger .select-chevron { transition:none; }.select-spinner { animation:none; } }
-@media (max-width:640px) { .select-trigger,.multi-select-trigger { min-height:48px; }.select-option { min-height:48px; }.multi-select-chip { max-width:124px; } }
+@media (max-width:640px) {
+  .select-trigger,.multi-select-trigger { min-height:48px; }
+  .select-option { min-height:48px; }
+  .multi-select-chip { max-width:124px; }
+  .student-filter-panel { position:fixed; z-index:1180; top:auto; right:12px; bottom:calc(96px + env(safe-area-inset-bottom)); left:12px; width:auto; max-height:min(70dvh,520px); }
+  .filter-panel-done { display:inline-flex; min-height:32px; align-items:center; padding:0 5px; }
+}
