@@ -5,8 +5,29 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim()
   || import.meta.env.VITE_SUPABASE_ANON_KEY?.trim()
   || "";
 const forceLocalDevelopment = import.meta.env.DEV && import.meta.env.VITE_FORCE_LOCAL_MODE === "true";
-export const cloudWritesEnabled = !import.meta.env.DEV
-  || import.meta.env.VITE_ENABLE_CLOUD_WRITES_IN_DEV === "true";
+const DEFAULT_CLOUD_WRITE_ORIGIN = "https://usehibi.pages.dev";
+
+export function isCloudWriteLocationAllowed({
+  isDevelopment = import.meta.env.DEV,
+  enableDevelopmentWrites = import.meta.env.VITE_ENABLE_CLOUD_WRITES_IN_DEV === "true",
+  allowedOrigins = import.meta.env.VITE_CLOUD_WRITE_ORIGINS || DEFAULT_CLOUD_WRITE_ORIGIN,
+  origin = globalThis.location?.origin ?? "",
+} = {}) {
+  if (isDevelopment) return enableDevelopmentWrites;
+  const normalizedOrigin = String(origin).trim().replace(/\/$/, "");
+  if (!normalizedOrigin) return false;
+  return String(allowedOrigins)
+    .split(",")
+    .map((entry) => entry.trim().replace(/\/$/, ""))
+    .filter(Boolean)
+    .includes(normalizedOrigin);
+}
+
+// A Cloudflare preview is a production Vite build, so import.meta.env.PROD is
+// not sufficient protection. Only the explicitly approved public origin may
+// mutate the production Supabase project. Preview and staging URLs are
+// read-only unless a maintainer deliberately allow-lists their origin.
+export const cloudWritesEnabled = isCloudWriteLocationAllowed();
 
 export const isCloudConfigured = !forceLocalDevelopment && Boolean(supabaseUrl && supabaseAnonKey);
 export const isLocalModeAllowed = forceLocalDevelopment || import.meta.env.DEV || import.meta.env.VITE_ALLOW_LOCAL_MODE === "true";

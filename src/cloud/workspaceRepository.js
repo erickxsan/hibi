@@ -8,7 +8,9 @@ import {
 
 export const WORKSPACES_TABLE = "workspaces";
 export const SAVE_WORKSPACE_RPC = "save_workspace_state";
-export const RESET_WORKSPACE_RPC = "reset_workspace_state";
+export const REPLACE_WORKSPACE_RPC = "replace_workspace_state";
+export const RESTORE_WORKSPACE_RPC = "restore_workspace_snapshot";
+export const RECOVERY_SNAPSHOTS_TABLE = "workspace_recovery_snapshots";
 
 export class CloudPersistenceError extends Error {
   constructor(message = "Cloud records could not be loaded or saved.", options) {
@@ -75,6 +77,17 @@ function isRevisionConflict(error) {
 }
 
 function persistenceFailure(message, error) {
+  const providerMessage = String(error?.message || "");
+  if ([
+    "workspace_collection_delete_blocked",
+    "workspace_large_delete_blocked",
+    "workspace_mass_delete_blocked",
+  ].some((code) => providerMessage.includes(code))) {
+    return new CloudPersistenceError("Hibi blocked an unexpected loss of records. Your previous cloud version is still intact.", { cause: error });
+  }
+  if (providerMessage.includes("empty_workspace_replacement_blocked")) {
+    return new CloudPersistenceError("Hibi will not replace a populated workspace with an empty backup.", { cause: error });
+  }
   return new CloudPersistenceError(error?.message || message, { cause: error });
 }
 
@@ -87,7 +100,7 @@ export function createWorkspaceRepository(client = supabase, { allowWrites = tru
 
   function requireWritesEnabled() {
     if (!allowWrites) {
-      throw new CloudPersistenceError("Cloud writes are disabled in local development. Use a staging Supabase project, or explicitly enable development writes for a maintenance session.");
+      throw new CloudPersistenceError("Cloud writes are disabled on this preview or development address. Open the official Hibi site to make changes.");
     }
   }
 
@@ -159,15 +172,99 @@ export function createWorkspaceRepository(client = supabase, { allowWrites = tru
     return saved;
   }
 
-  async function resetWorkspace(expectedOwnerId) {
+  async function replaceWorkspace(state, expectedRevision, expectedOwnerId) {
     requireWritesEnabled();
     const user = await requireUser(expectedOwnerId);
-    const { data, error } = await cloud().rpc(RESET_WORKSPACE_RPC, {
+    const nextState = canonicalState(state);
+    assertStateSize(nextState);
+    const revision = normalizeRevision(expectedRevision);
+    const { data, error } = await cloud().rpc(REPLACE_WORKSPACE_RPC, {
       p_expected_owner_id: expectedOwnerId || user.id,
+      p_expected_revision: revision,
+      p_state: nextState,
+      p_confirmation: `replace:${revision}`,
     });
-    if (error) throw persistenceFailure("The cloud workspace could not be reset.", error);
+    if (error && isRevisionConflict(error)) {
+      const latest = await fetchWorkspace(expectedOwnerId || user.id);
+      if (!latest) throw persistenceFailure("The latest cloud records could not be recovered.", error);
+      throw new WorkspaceConflictError({
+        latestState: latest.state,
+        latestRevision: latest.revision,
+        latestUpdatedAt: latest.updatedAt,
+        cause: error,
+      });
+    }
+    if (error) throw persistenceFailure("The backup could not replace the cloud workspace.", error);
     const row = firstRow(data);
-    if (!row) throw new CloudPersistenceError("The reset cloud workspace response was empty.");
+    if (!row) throw new CloudPersistenceError("The replacement cloud workspace response was empty.");
+    return workspaceFromRow(row);
+  }
+
+  async function listRecoverySnapshots(expectedOwnerId) {
+    const user = await requireUser(expectedOwnerId);
+    const ownerId = expectedOwnerId || user.id;
+    const { data, error } = await cloud()
+      .from(RECOVERY_SNAPSHOTS_TABLE)
+      .select("id, owner_id, source_revision, reason, created_at")
+      .eq("owner_id", ownerId)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (error) throw persistenceFailure("Recovery history could not be loaded.", error);
+    return (data || []).map((row) => ({
+      id: row.id,
+      ownerId: row.owner_id,
+      revision: normalizeRevision(row.source_revision),
+      reason: row.reason,
+      capturedAt: row.created_at,
+      source: "cloud-snapshot",
+    }));
+  }
+
+  async function loadRecoverySnapshot(snapshotId, expectedOwnerId) {
+    const user = await requireUser(expectedOwnerId);
+    const ownerId = expectedOwnerId || user.id;
+    const { data, error } = await cloud()
+      .from(RECOVERY_SNAPSHOTS_TABLE)
+      .select("id, owner_id, state, source_revision, reason, created_at")
+      .eq("owner_id", ownerId)
+      .eq("id", snapshotId)
+      .maybeSingle();
+    if (error) throw persistenceFailure("The recovery copy could not be loaded.", error);
+    if (!data) return null;
+    if (data.owner_id !== ownerId) throw new CloudAuthenticationError("The recovery copy did not belong to the expected account.");
+    return {
+      id: data.id,
+      ownerId: data.owner_id,
+      state: canonicalState(data.state),
+      revision: normalizeRevision(data.source_revision),
+      reason: data.reason,
+      capturedAt: data.created_at,
+      source: "cloud-snapshot",
+    };
+  }
+
+  async function restoreRecoverySnapshot(snapshotId, expectedRevision, expectedOwnerId) {
+    requireWritesEnabled();
+    const user = await requireUser(expectedOwnerId);
+    const revision = normalizeRevision(expectedRevision);
+    const { data, error } = await cloud().rpc(RESTORE_WORKSPACE_RPC, {
+      p_expected_owner_id: expectedOwnerId || user.id,
+      p_snapshot_id: snapshotId,
+      p_expected_revision: revision,
+    });
+    if (error && isRevisionConflict(error)) {
+      const latest = await fetchWorkspace(expectedOwnerId || user.id);
+      if (!latest) throw persistenceFailure("The latest cloud records could not be recovered.", error);
+      throw new WorkspaceConflictError({
+        latestState: latest.state,
+        latestRevision: latest.revision,
+        latestUpdatedAt: latest.updatedAt,
+        cause: error,
+      });
+    }
+    if (error) throw persistenceFailure("The recovery copy could not be restored.", error);
+    const row = firstRow(data);
+    if (!row) throw new CloudPersistenceError("The restored cloud workspace response was empty.");
     return workspaceFromRow(row);
   }
 
@@ -215,7 +312,10 @@ export function createWorkspaceRepository(client = supabase, { allowWrites = tru
     loadWorkspace,
     loadOrCreateWorkspace,
     saveWorkspace,
-    resetWorkspace,
+    replaceWorkspace,
+    listRecoverySnapshots,
+    loadRecoverySnapshot,
+    restoreRecoverySnapshot,
     subscribeToWorkspace,
   };
 }

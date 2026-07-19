@@ -3,7 +3,42 @@ import {
   CloudAuthenticationError,
   CloudConfigurationError,
   createAuthService,
+  isCloudWriteLocationAllowed,
 } from "./client.js";
+
+describe("cloud write origin guard", () => {
+  it("allows the canonical production origin and blocks Cloudflare previews", () => {
+    expect(isCloudWriteLocationAllowed({
+      isDevelopment: false,
+      origin: "https://usehibi.pages.dev",
+    })).toBe(true);
+    expect(isCloudWriteLocationAllowed({
+      isDevelopment: false,
+      origin: "https://feature-branch.usehibi.pages.dev",
+    })).toBe(false);
+  });
+
+  it("requires an explicit opt-in for local writes", () => {
+    expect(isCloudWriteLocationAllowed({
+      isDevelopment: true,
+      enableDevelopmentWrites: false,
+      origin: "http://127.0.0.1:4173",
+    })).toBe(false);
+    expect(isCloudWriteLocationAllowed({
+      isDevelopment: true,
+      enableDevelopmentWrites: true,
+      origin: "http://127.0.0.1:4173",
+    })).toBe(true);
+  });
+
+  it("supports an explicit future custom-domain allow-list", () => {
+    expect(isCloudWriteLocationAllowed({
+      isDevelopment: false,
+      allowedOrigins: "https://usehibi.pages.dev, https://hibi.example/",
+      origin: "https://hibi.example",
+    })).toBe(true);
+  });
+});
 
 describe("cloud auth service", () => {
   it("fails clearly when cloud environment variables are absent", async () => {

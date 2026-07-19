@@ -49,6 +49,24 @@ describe("persistence and import/export", () => {
     expect(() => deserializeState(JSON.stringify(bad))).toThrow(DomainValidationError);
   });
 
+  it("fills safely defaulted fields before strict validation", () => {
+    const legacy = createStarterState();
+    delete legacy.settings.recentProjectionWeeks;
+    delete legacy.scheduleExceptions;
+    delete legacy.scheduleChanges;
+
+    const restored = deserializeState(JSON.stringify(legacy));
+
+    expect(restored.settings.recentProjectionWeeks).toBe(4);
+    expect(restored.scheduleExceptions).toEqual([]);
+    expect(restored.scheduleChanges).toEqual([]);
+  });
+
+  it("does not normalize an unrecognized document into an empty workspace", () => {
+    expect(() => deserializeState(JSON.stringify({ version: 1, settings: {} })))
+      .toThrow("not valid class-manager data");
+  });
+
   it("loads the public-safe empty starter when empty and saves valid data to localStorage-compatible storage", () => {
     const storage = memoryStorage();
     expect(loadState(storage).students).toEqual([]);

@@ -31,9 +31,9 @@ describe("workspace repository", () => {
     const repository = createWorkspaceRepository(client, { allowWrites: false });
 
     await expect(repository.saveWorkspace(createStarterState(), 0, "user-1"))
-      .rejects.toThrow("Cloud writes are disabled in local development");
-    await expect(repository.resetWorkspace("user-1"))
-      .rejects.toThrow("Cloud writes are disabled in local development");
+      .rejects.toThrow("Cloud writes are disabled");
+    await expect(repository.replaceWorkspace(createStarterState(), 0, "user-1"))
+      .rejects.toThrow("Cloud writes are disabled");
     expect(client.auth.getUser).not.toHaveBeenCalled();
     expect(client.rpc).not.toHaveBeenCalled();
   });
@@ -111,7 +111,7 @@ describe("workspace repository", () => {
     expect(client.rpc).toBeUndefined();
   });
 
-  it("recovers an unreadable account through the owner-bound reset RPC", async () => {
+  it("replaces a workspace only through the explicit revision-aware RPC", async () => {
     const state = createStarterState();
     const client = authenticatedClient({
       rpc: vi.fn(async () => ({
@@ -120,10 +120,13 @@ describe("workspace repository", () => {
       })),
     });
 
-    const result = await createWorkspaceRepository(client).resetWorkspace("user-1");
+    const result = await createWorkspaceRepository(client).replaceWorkspace(state, 4, "user-1");
 
-    expect(client.rpc).toHaveBeenCalledWith("reset_workspace_state", {
+    expect(client.rpc).toHaveBeenCalledWith("replace_workspace_state", {
       p_expected_owner_id: "user-1",
+      p_expected_revision: 4,
+      p_state: state,
+      p_confirmation: "replace:4",
     });
     expect(result).toMatchObject({ state, revision: 5 });
   });
@@ -150,6 +153,62 @@ describe("workspace repository", () => {
     expect(error).toBeInstanceOf(WorkspaceConflictError);
     expect(error.latestState).toEqual(latest);
     expect(error.latestRevision).toBe(3);
+  });
+
+  it("explains when the server blocks unexpected record loss", async () => {
+    const client = authenticatedClient({
+      rpc: vi.fn(async () => ({
+        data: null,
+        error: { code: "22023", message: "workspace_collection_delete_blocked" },
+      })),
+    });
+
+    await expect(createWorkspaceRepository(client).saveWorkspace(createStarterState(), 2, "user-1"))
+      .rejects.toThrow("previous cloud version is still intact");
+  });
+
+  it("lists only owner-bound recovery metadata without downloading snapshot state", async () => {
+    const query = {
+      select: vi.fn(() => query),
+      eq: vi.fn(() => query),
+      order: vi.fn(() => query),
+      limit: vi.fn(async () => ({
+        data: [{
+          id: "snapshot-1",
+          owner_id: "user-1",
+          source_revision: 6,
+          reason: "save",
+          created_at: "2026-07-19T12:00:00Z",
+        }],
+        error: null,
+      })),
+    };
+    const client = authenticatedClient({ from: vi.fn(() => query) });
+
+    const points = await createWorkspaceRepository(client).listRecoverySnapshots("user-1");
+
+    expect(query.select).toHaveBeenCalledWith("id, owner_id, source_revision, reason, created_at");
+    expect(points).toEqual([expect.objectContaining({ id: "snapshot-1", revision: 6, source: "cloud-snapshot" })]);
+  });
+
+  it("restores a snapshot through the revision-aware recovery RPC", async () => {
+    const state = createStarterState();
+    const client = authenticatedClient({
+      rpc: vi.fn(async () => ({
+        data: [{ state, revision: 9, updated_at: "2026-07-19T12:30:00Z" }],
+        error: null,
+      })),
+    });
+
+    const restored = await createWorkspaceRepository(client)
+      .restoreRecoverySnapshot("snapshot-1", 8, "user-1");
+
+    expect(client.rpc).toHaveBeenCalledWith("restore_workspace_snapshot", {
+      p_expected_owner_id: "user-1",
+      p_snapshot_id: "snapshot-1",
+      p_expected_revision: 8,
+    });
+    expect(restored.revision).toBe(9);
   });
 
   it("delivers canonical realtime updates and removes its channel", async () => {

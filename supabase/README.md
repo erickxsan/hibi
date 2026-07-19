@@ -1,6 +1,6 @@
 # Supabase backend
 
-This schema stores one revisioned JSON state per authenticated user. Signup creates the workspace automatically; deleting the Auth user through an admin/service operation safely removes it through `ON DELETE CASCADE`. Browser clients can read their own row and can write only through `save_workspace_state`, so they cannot bypass optimistic concurrency. The `anon` role has no table or RPC access. The migration also enables the table for Supabase Realtime when that publication is available.
+This schema stores one revisioned JSON state per authenticated user. Signup creates the workspace automatically. Browser clients can read their own row and can write only through revision-aware RPCs, so they cannot bypass optimistic concurrency. Ordinary saves reject suspicious collection loss, intentional backup replacement is a separate archived operation, and recent pre-write states are retained in an owner-isolated recovery table. The legacy reset RPC is not executable by browser accounts. Auth-user deletion is restricted while workspace data exists, preventing an accidental dashboard deletion from cascading through the canonical row and its recovery history. The `anon` role has no table or RPC access.
 
 ## Apply it
 
@@ -14,7 +14,7 @@ supabase db push
 
 If this repository has not been initialized for the CLI yet, run `supabase init` once first. For a new local stack, `supabase start` followed by `supabase db reset` applies the migration and `seed.sql`.
 
-Dashboard alternative: open **SQL Editor**, paste and run `migrations/202607110001_initial_multi_account_workspaces.sql`. Do not paste `seed.sql` before the migration.
+Dashboard alternative: open **SQL Editor** and apply every file in `migrations/` in filename order. Do not paste `seed.sql` into a production project.
 
 ## Verify isolation with two accounts
 
@@ -70,4 +70,4 @@ supabase db reset
 supabase test db
 ```
 
-`tests/workspaces_rls.test.sql` creates two temporary Auth accounts inside a rolled-back transaction and verifies trigger creation, A/B isolation, denied direct writes, denied anonymous reads, revision conflicts, owner binding, and account-deletion cascade.
+`tests/workspaces_rls.test.sql` creates two temporary Auth accounts inside a rolled-back transaction and verifies trigger creation, A/B isolation, denied direct writes, denied anonymous reads, revision conflicts, mass-deletion guards, archived replacement, disabled reset access, owner binding, and protection against accidental Auth-user deletion.

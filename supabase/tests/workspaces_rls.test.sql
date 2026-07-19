@@ -1,6 +1,6 @@
 begin;
 
-select plan(19);
+select plan(25);
 
 insert into auth.users (
   id,
@@ -124,6 +124,49 @@ select throws_ok(
   'workspace_revision_conflict',
   'stale revisions are rejected'
 );
+select lives_ok(
+  $$select * from public.save_workspace_state(
+    '11111111-1111-4111-8111-111111111111',
+    1,
+    pg_catalog.jsonb_set(
+      (select state from public.workspaces),
+      '{students}',
+      '[{"id":"one"},{"id":"two"},{"id":"three"}]'::jsonb
+    )
+  )$$,
+  'ordinary save can add records before loss-guard testing'
+);
+select throws_ok(
+  $$select * from public.save_workspace_state(
+    '11111111-1111-4111-8111-111111111111',
+    2,
+    pg_catalog.jsonb_set((select state from public.workspaces), '{students}', '[]'::jsonb)
+  )$$,
+  '22023',
+  'workspace_collection_delete_blocked',
+  'ordinary save cannot wipe an existing collection'
+);
+select lives_ok(
+  $$select * from public.replace_workspace_state(
+    '11111111-1111-4111-8111-111111111111',
+    2,
+    pg_catalog.jsonb_set(
+      (select state from public.workspaces),
+      '{students}',
+      '[{"id":"one"}]'::jsonb
+    ),
+    'replace:2'
+  )$$,
+  'explicit replacement can intentionally reduce a collection after archiving'
+);
+select throws_ok(
+  $$select * from public.reset_workspace_state(
+    '11111111-1111-4111-8111-111111111111'
+  )$$,
+  '42501',
+  null,
+  'authenticated clients cannot execute the legacy reset RPC'
+);
 
 reset role;
 set local role authenticated;
@@ -170,11 +213,24 @@ select throws_ok(
 );
 
 reset role;
-delete from auth.users where id = '11111111-1111-4111-8111-111111111111';
+select throws_ok(
+  $$update public.workspaces
+    set revision = revision + 1
+    where owner_id = '11111111-1111-4111-8111-111111111111'$$,
+  '42501',
+  'direct_workspace_update_blocked',
+  'privileged direct workspace mutation is blocked outside guarded RPCs'
+);
+select throws_ok(
+  $$delete from auth.users where id = '11111111-1111-4111-8111-111111111111'$$,
+  '23503',
+  null,
+  'an accidental Auth-user deletion is blocked while workspace data exists'
+);
 select is(
   (select count(*) from public.workspaces where owner_id = '11111111-1111-4111-8111-111111111111'),
-  0::bigint,
-  'deleting an Auth account cascades to its workspace'
+  1::bigint,
+  'blocked Auth-user deletion leaves the workspace intact'
 );
 
 select * from finish();

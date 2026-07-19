@@ -178,7 +178,6 @@ export default function Setup({ state, derived, actions, persistenceMode, intent
       if (deleteTarget.type === "archive-student") saved = await actions.archiveStudent(deleteTarget.item.id);
       if (deleteTarget.type === "student") saved = await actions.deleteStudent(deleteTarget.item.id);
       if (deleteTarget.type === "group") saved = await actions.deleteGroup(deleteTarget.item.id);
-      if (deleteTarget.type === "clear-all") saved = await actions.clearAll();
       if (deleteTarget.type === "clear-local") saved = actions.clearLegacyLocalData();
       if (saved) setDeleteTarget(null);
     } finally {
@@ -329,7 +328,7 @@ export default function Setup({ state, derived, actions, persistenceMode, intent
 
           <section className="data-tools" aria-labelledby="data-tools-title">
             <div className="panel-heading">
-              <h2 id="data-tools-title">Backup and reset</h2>
+              <h2 id="data-tools-title">Backup and restore</h2>
               <p>
                 {persistenceMode === "cloud"
                   ? "Your records sync to your private cloud workspace. Export a backup whenever you want an offline copy."
@@ -341,7 +340,6 @@ export default function Setup({ state, derived, actions, persistenceMode, intent
               <Button icon={Download} onClick={actions.exportJson}>Download JSON backup</Button>
               <Button icon={Upload} onClick={() => importRef.current?.click()}>Restore JSON backup</Button>
               <input ref={importRef} type="file" accept="application/json,.json" onChange={handleImport} hidden />
-              <Button variant="danger" icon={Trash2} onClick={() => setDeleteTarget({ type: "clear-all" })}>Clear all data</Button>
               {persistenceMode === "cloud" ? <Button icon={Trash2} onClick={() => setDeleteTarget({ type: "clear-local" })}>Remove old local browser copy</Button> : null}
             </div>
           </section>
@@ -384,9 +382,9 @@ export default function Setup({ state, derived, actions, persistenceMode, intent
 
       <ConfirmDialog
         open={Boolean(deleteTarget)}
-        title={deleteTarget?.type === "clear-all" ? (persistenceMode === "cloud" ? "Clear all cloud data?" : "Clear all data?") : deleteTarget?.type === "clear-local" ? "Remove the old local copy?" : deleteTarget?.type === "archive-student" ? `Archive ${deleteTarget?.item?.fullName || "student"}?` : `Delete ${deleteTarget?.item?.fullName || deleteTarget?.item?.name || "record"}?`}
+        title={deleteTarget?.type === "clear-local" ? "Remove the old local copy?" : deleteTarget?.type === "archive-student" ? `Archive ${deleteTarget?.item?.fullName || "student"}?` : `Delete ${deleteTarget?.item?.fullName || deleteTarget?.item?.name || "record"}?`}
         description={deleteTarget?.type === "archive-student" ? "The student becomes inactive while grade, attendance, and payment history stays available." : deleteTarget?.type === "group" ? "Groups with assigned students cannot be deleted." : deleteTarget?.type === "clear-local" ? "This removes only the legacy browser copy on this device. Your signed-in cloud workspace remains available." : "This cannot be undone without a JSON backup."}
-        confirmLabel={deleteTarget?.type === "archive-student" ? "Archive student" : deleteTarget?.type === "clear-all" ? "Clear all data" : deleteTarget?.type === "clear-local" ? "Remove local copy" : "Delete"}
+        confirmLabel={deleteTarget?.type === "archive-student" ? "Archive student" : deleteTarget?.type === "clear-local" ? "Remove local copy" : "Delete"}
         tone={deleteTarget?.type === "archive-student" ? "primary" : "danger"}
         busy={saving}
         onClose={() => setDeleteTarget(null)}

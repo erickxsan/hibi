@@ -13,7 +13,9 @@ export {
 export {
   CloudPersistenceError,
   createWorkspaceRepository,
-  RESET_WORKSPACE_RPC,
+  RECOVERY_SNAPSHOTS_TABLE,
+  REPLACE_WORKSPACE_RPC,
+  RESTORE_WORKSPACE_RPC,
   SAVE_WORKSPACE_RPC,
   WORKSPACES_TABLE,
   WorkspaceConflictError,

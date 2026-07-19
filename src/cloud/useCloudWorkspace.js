@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { deviceRecoveryStore } from "./deviceRecoveryStore";
 import { WorkspaceConflictError, workspaceRepository } from "./workspaceRepository";
 
 export function useCloudWorkspace(user) {
@@ -8,6 +9,16 @@ export function useCloudWorkspace(user) {
   const [reloadToken, setReloadToken] = useState(0);
   const revisionRef = useRef(0);
   const workspaceRef = useRef(null);
+
+  const captureDeviceCopy = useCallback(async (state, revision, source, updatedAt = null) => {
+    try {
+      return await deviceRecoveryStore.capture({ ownerId: user.id, state, revision, source, updatedAt });
+    } catch {
+      // IndexedDB can be unavailable or full. Cloud persistence remains usable,
+      // and Settings will still expose server-side recovery snapshots.
+      return null;
+    }
+  }, [user.id]);
 
   const applyWorkspace = useCallback((incoming) => {
     if (!incoming || incoming.revision < revisionRef.current) return false;
@@ -28,6 +39,7 @@ export function useCloudWorkspace(user) {
       .then((loaded) => {
         if (!active) return;
         applyWorkspace(loaded);
+        void captureDeviceCopy(loaded.state, loaded.revision, "cloud-load", loaded.updatedAt);
       })
       .catch((caught) => {
         if (active) setError(caught);
@@ -38,10 +50,11 @@ export function useCloudWorkspace(user) {
     return () => {
       active = false;
     };
-  }, [applyWorkspace, reloadToken, user.id]);
+  }, [applyWorkspace, captureDeviceCopy, reloadToken, user.id]);
 
   const save = useCallback(async (state) => {
     try {
+      await captureDeviceCopy(state, revisionRef.current, "pending-save");
       const saved = await workspaceRepository.saveWorkspace(state, revisionRef.current, user.id);
       if (!applyWorkspace(saved)) {
         const latest = await workspaceRepository.loadWorkspace(user.id);
@@ -50,6 +63,7 @@ export function useCloudWorkspace(user) {
         setError(null);
         return workspaceRef.current.state;
       }
+      void captureDeviceCopy(saved.state, saved.revision, "cloud-save", saved.updatedAt);
       setError(null);
       return saved.state;
     } catch (caught) {
@@ -67,14 +81,74 @@ export function useCloudWorkspace(user) {
       }
       throw caught;
     }
-  }, [applyWorkspace, user.id]);
+  }, [applyWorkspace, captureDeviceCopy, user.id]);
 
-  const reset = useCallback(async () => {
-    const recovered = await workspaceRepository.resetWorkspace(user.id);
-    applyWorkspace(recovered);
-    setError(null);
-    return workspaceRef.current?.state ?? recovered.state;
-  }, [applyWorkspace, user.id]);
+  const replace = useCallback(async (state) => {
+    try {
+      await captureDeviceCopy(state, revisionRef.current, "pending-save");
+      const replaced = await workspaceRepository.replaceWorkspace(state, revisionRef.current, user.id);
+      applyWorkspace(replaced);
+      void captureDeviceCopy(replaced.state, replaced.revision, "cloud-replace", replaced.updatedAt);
+      setError(null);
+      return workspaceRef.current?.state ?? replaced.state;
+    } catch (caught) {
+      if (caught instanceof WorkspaceConflictError) {
+        applyWorkspace({
+          state: caught.latestState,
+          revision: caught.latestRevision,
+          updatedAt: caught.latestUpdatedAt,
+        });
+      }
+      throw caught;
+    }
+  }, [applyWorkspace, captureDeviceCopy, user.id]);
+
+  const listRecoveryPoints = useCallback(async () => {
+    const [cloudPoints, devicePoints] = await Promise.all([
+      workspaceRepository.listRecoverySnapshots(user.id),
+      deviceRecoveryStore.list(user.id).catch(() => []),
+    ]);
+    return [...cloudPoints, ...devicePoints]
+      .sort((left, right) => String(right.capturedAt).localeCompare(String(left.capturedAt)));
+  }, [user.id]);
+
+  const loadRecoveryPoint = useCallback(async (point) => {
+    if (point?.source === "cloud-snapshot") {
+      return workspaceRepository.loadRecoverySnapshot(point.id, user.id);
+    }
+    return deviceRecoveryStore.load(user.id, point?.id);
+  }, [user.id]);
+
+  const restoreRecoveryPoint = useCallback(async (point) => {
+    await captureDeviceCopy(
+      workspaceRef.current?.state,
+      revisionRef.current,
+      "before-restore",
+      workspaceRef.current?.updatedAt,
+    );
+    try {
+      const recovered = point?.source === "cloud-snapshot"
+        ? await workspaceRepository.restoreRecoverySnapshot(point.id, revisionRef.current, user.id)
+        : await (async () => {
+            const copy = await deviceRecoveryStore.load(user.id, point?.id);
+            if (!copy) throw new Error("That device recovery copy is no longer available.");
+            return workspaceRepository.replaceWorkspace(copy.state, revisionRef.current, user.id);
+          })();
+      applyWorkspace(recovered);
+      void captureDeviceCopy(recovered.state, recovered.revision, "cloud-restore", recovered.updatedAt);
+      setError(null);
+      return workspaceRef.current?.state ?? recovered.state;
+    } catch (caught) {
+      if (caught instanceof WorkspaceConflictError) {
+        applyWorkspace({
+          state: caught.latestState,
+          revision: caught.latestRevision,
+          updatedAt: caught.latestUpdatedAt,
+        });
+      }
+      throw caught;
+    }
+  }, [applyWorkspace, captureDeviceCopy, user.id]);
 
   const subscribe = useCallback((onChange) => {
     let disposed = false;
@@ -82,7 +156,10 @@ export function useCloudWorkspace(user) {
     workspaceRepository.subscribeToWorkspace((incoming) => {
       if (disposed) return;
       if (incoming.revision <= revisionRef.current) return;
-      if (applyWorkspace(incoming)) onChange(incoming.state);
+      if (applyWorkspace(incoming)) {
+        void captureDeviceCopy(incoming.state, incoming.revision, "cloud-realtime", incoming.updatedAt);
+        onChange(incoming.state);
+      }
     }, {
       userId: user.id,
       onStatus: (status) => {
@@ -92,7 +169,10 @@ export function useCloudWorkspace(user) {
           void workspaceRepository.loadWorkspace(user.id)
             .then((latest) => {
               if (disposed || !latest || latest.revision <= revisionRef.current) return;
-              if (applyWorkspace(latest)) onChange(latest.state);
+              if (applyWorkspace(latest)) {
+                void captureDeviceCopy(latest.state, latest.revision, "cloud-reconnect", latest.updatedAt);
+                onChange(latest.state);
+              }
             })
             .catch((caught) => {
               if (!disposed) setError(caught);
@@ -116,17 +196,21 @@ export function useCloudWorkspace(user) {
       disposed = true;
       if (cleanup) void Promise.resolve(cleanup()).catch(() => {});
     };
-  }, [applyWorkspace, user.id]);
+  }, [applyWorkspace, captureDeviceCopy, user.id]);
 
   const persistence = useMemo(() => workspace ? {
     mode: "cloud",
     uiStorageKey: `minimal-class-manager:ui:v1:${user.id}`,
     initialState: workspace.state,
     save,
+    replace,
     subscribe,
-  } : null, [save, subscribe, user.id, workspace]);
+    listRecoveryPoints,
+    loadRecoveryPoint,
+    restoreRecoveryPoint,
+  } : null, [listRecoveryPoints, loadRecoveryPoint, replace, restoreRecoveryPoint, save, subscribe, user.id, workspace]);
 
   const retry = useCallback(() => setReloadToken((current) => current + 1), []);
 
-  return { workspace, persistence, loading, error, retry, reset, save };
+  return { workspace, persistence, loading, error, retry, save, replace };
 }

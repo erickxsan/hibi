@@ -226,7 +226,7 @@ export function useClassManager({ persistence } = {}) {
     }
   }, [uiPreferences, uiStorageKey]);
 
-  const commit = useCallback((recipe, successMessage) => {
+  const commit = useCallback((recipe, successMessage, { replace = false } = {}) => {
     pendingWrites.current += 1;
     if (persistenceRef.current?.mode === "cloud") setSyncStatus("saving");
 
@@ -236,7 +236,11 @@ export function useClassManager({ persistence } = {}) {
         if (!mountedRef.current) return false;
         const next = importState(serializeState(recipe(stateRef.current)));
         const adapter = persistenceRef.current;
-        const result = adapter?.save ? await adapter.save(next) : saveState(next);
+        const result = replace && adapter?.replace
+          ? await adapter.replace(next)
+          : adapter?.save
+            ? await adapter.save(next)
+            : saveState(next);
         if (!mountedRef.current) return false;
         const saved = importState(serializeState(result?.state ?? result ?? next));
         stateRef.current = saved;
@@ -550,14 +554,21 @@ export function useClassManager({ persistence } = {}) {
   const importJson = useCallback((text) => {
     try {
       const imported = importState(text);
-      return commit(() => imported, "Backup restored");
+      const currentTotal = [stateRef.current.groups, stateRef.current.students, stateRef.current.grades, stateRef.current.classLog]
+        .reduce((total, items) => total + items.length, 0);
+      const importedTotal = [imported.groups, imported.students, imported.grades, imported.classLog]
+        .reduce((total, items) => total + items.length, 0);
+      if (currentTotal > 0 && importedTotal === 0) {
+        notify("Hibi will not replace a populated workspace with an empty backup.", "error");
+        return Promise.resolve(false);
+      }
+      return commit(() => imported, "Backup restored", { replace: true });
     } catch (error) {
       notify(messageForError(error), "error");
       return Promise.resolve(false);
     }
   }, [commit, notify]);
 
-  const clearAll = useCallback(() => commit((current) => ({ ...current, groups: [], students: [], grades: [], classLog: [], scheduleExceptions: [], scheduleChanges: [] }), "All records cleared"), [commit]);
   const clearLegacyLocalData = useCallback(() => {
     if (persistenceRef.current?.mode !== "cloud") return false;
     try {
@@ -570,6 +581,57 @@ export function useClassManager({ persistence } = {}) {
       notify(messageForError(error), "error");
       return false;
     }
+  }, [notify]);
+
+  const listRecoveryPoints = useCallback(async () => {
+    const list = persistenceRef.current?.listRecoveryPoints;
+    return typeof list === "function" ? list() : [];
+  }, []);
+
+  const exportRecoveryPoint = useCallback(async (point) => {
+    const load = persistenceRef.current?.loadRecoveryPoint;
+    if (typeof load !== "function") return false;
+    try {
+      const copy = await load(point);
+      if (!copy?.state) throw new Error("That recovery copy is no longer available.");
+      downloadText(`hibi-recovery-${String(copy.capturedAt || "copy").slice(0, 10)}.json`, exportState(copy.state));
+      notify("Recovery copy downloaded");
+      return true;
+    } catch (error) {
+      notify(messageForError(error), "error");
+      return false;
+    }
+  }, [notify]);
+
+  const restoreRecoveryPoint = useCallback((point) => {
+    const operation = async () => {
+      const restore = persistenceRef.current?.restoreRecoveryPoint;
+      if (typeof restore !== "function") return false;
+      pendingWrites.current += 1;
+      setSyncStatus("saving");
+      try {
+        const result = await restore(point);
+        const restored = importState(serializeState(result?.state ?? result));
+        if (!mountedRef.current) return false;
+        stateRef.current = restored;
+        persistedSnapshot.current = serializeState(restored);
+        setCanonicalState(restored);
+        setSyncStatus("saved");
+        notify("Recovery copy restored");
+        return true;
+      } catch (error) {
+        if (mountedRef.current) {
+          setSyncStatus("error");
+          notify(messageForError(error), "error");
+        }
+        return false;
+      } finally {
+        pendingWrites.current = Math.max(0, pendingWrites.current - 1);
+      }
+    };
+    const queued = operationQueue.current.then(operation, operation);
+    operationQueue.current = queued.then(() => undefined, () => undefined);
+    return queued;
   }, [notify]);
 
   const actions = useMemo(() => ({
@@ -592,10 +654,12 @@ export function useClassManager({ persistence } = {}) {
     upsertScheduleChange,
     exportJson,
     importJson,
-    clearAll,
     clearLegacyLocalData,
+    listRecoveryPoints,
+    exportRecoveryPoint,
+    restoreRecoveryPoint,
     notify,
-  }), [addClassLogs, addGrades, archiveStudent, clearAll, clearLegacyLocalData, deleteClassLog, deleteGrade, deleteGroup, deleteStudent, exportJson, importJson, notify, saveProgress, updatePreferences, updateSettings, upsertClassLog, upsertGrade, upsertGroup, upsertScheduleChange, upsertScheduleException, upsertStudent]);
+  }), [addClassLogs, addGrades, archiveStudent, clearLegacyLocalData, deleteClassLog, deleteGrade, deleteGroup, deleteStudent, exportJson, exportRecoveryPoint, importJson, listRecoveryPoints, notify, restoreRecoveryPoint, saveProgress, updatePreferences, updateSettings, upsertClassLog, upsertGrade, upsertGroup, upsertScheduleChange, upsertScheduleException, upsertStudent]);
 
   return useMemo(() => ({
     state: viewState,

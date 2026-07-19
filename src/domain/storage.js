@@ -9,7 +9,6 @@ import {
   assertValidState,
   DomainValidationError,
   normalizeState,
-  validateState,
 } from "./validation.js";
 
 export class StorageUnavailableError extends Error {
@@ -41,6 +40,32 @@ export function serializeState(state, { pretty = false } = {}) {
   return JSON.stringify(normalized, null, pretty ? 2 : 0);
 }
 
+function assertRecognizableStateEnvelope(parsed) {
+  const errors = [];
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    errors.push({ path: "", code: "invalid_type", message: "Imported data must be a JSON object." });
+  } else {
+    if (parsed.version !== 1) {
+      errors.push({ path: "version", code: "unsupported_version", message: "This backup version is not supported." });
+    }
+    if (!parsed.settings || typeof parsed.settings !== "object" || Array.isArray(parsed.settings)) {
+      errors.push({ path: "settings", code: "invalid_type", message: "Settings must be an object." });
+    }
+    for (const key of ["groups", "students", "grades", "classLog"]) {
+      if (!Array.isArray(parsed[key])) {
+        errors.push({ path: key, code: "invalid_type", message: `${key} must be an array.` });
+      }
+    }
+  }
+  if (errors.length) {
+    throw new DomainValidationError("The selected file is not valid class-manager data.", {
+      valid: false,
+      errors,
+      warnings: [],
+    });
+  }
+}
+
 /** Parse and strictly validate an imported JSON document before accepting it. */
 export function deserializeState(text) {
   if (typeof text !== "string") {
@@ -66,10 +91,11 @@ export function deserializeState(text) {
     );
   }
 
-  const rawValidation = validateState(parsed);
-  if (!rawValidation.valid) {
-    throw new DomainValidationError("The selected file is not valid class-manager data.", rawValidation);
-  }
+  // Persisted workspaces are long-lived. Validate the stable document envelope
+  // first, then normalize optional/new fields before strict validation. This
+  // keeps an older valid workspace readable when a release adds a field with a
+  // safe default, without accepting arbitrary JSON as an empty workspace.
+  assertRecognizableStateEnvelope(parsed);
   const normalized = normalizeState(parsed);
   assertValidState(normalized);
   return normalized;
