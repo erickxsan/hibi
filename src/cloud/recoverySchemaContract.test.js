@@ -8,7 +8,7 @@ const migration = readFileSync(
 
 describe("workspace recovery schema", () => {
   it("archives owner-bound workspace revisions before save, reset, and restore", () => {
-    expect(migration).toContain("create table public.workspace_recovery_snapshots");
+    expect(migration).toContain("create table if not exists public.workspace_recovery_snapshots");
     expect(migration).toContain("workspace_recovery_snapshots_select_own");
     expect(migration).toContain("perform private.archive_workspace_snapshot");
     expect(migration).toContain("workspace_mass_delete_blocked");

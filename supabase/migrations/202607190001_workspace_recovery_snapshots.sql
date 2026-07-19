@@ -2,7 +2,7 @@
 -- is additive: the canonical workspaces table and all existing rows remain
 -- unchanged.
 
-create table public.workspace_recovery_snapshots (
+create table if not exists public.workspace_recovery_snapshots (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references auth.users(id) on delete cascade,
   state jsonb not null,
@@ -11,17 +11,29 @@ create table public.workspace_recovery_snapshots (
   created_at timestamptz not null default clock_timestamp()
 );
 
-create index workspace_recovery_snapshots_owner_created_idx
+create index if not exists workspace_recovery_snapshots_owner_created_idx
   on public.workspace_recovery_snapshots (owner_id, created_at desc);
 
 alter table public.workspace_recovery_snapshots enable row level security;
 alter table public.workspace_recovery_snapshots force row level security;
 
-create policy workspace_recovery_snapshots_select_own
-on public.workspace_recovery_snapshots
-for select
-to authenticated
-using (owner_id = (select auth.uid()));
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_catalog.pg_policies
+    where schemaname = 'public'
+      and tablename = 'workspace_recovery_snapshots'
+      and policyname = 'workspace_recovery_snapshots_select_own'
+  ) then
+    create policy workspace_recovery_snapshots_select_own
+    on public.workspace_recovery_snapshots
+    for select
+    to authenticated
+    using (owner_id = (select auth.uid()));
+  end if;
+end;
+$$;
 
 revoke all on table public.workspace_recovery_snapshots from public, anon, authenticated;
 grant select on table public.workspace_recovery_snapshots to authenticated;
@@ -301,4 +313,3 @@ revoke all on function public.restore_workspace_snapshot(uuid, uuid, bigint)
   from public, anon, authenticated;
 grant execute on function public.restore_workspace_snapshot(uuid, uuid, bigint)
   to authenticated;
-
