@@ -26,6 +26,18 @@ function selectResult(result) {
 }
 
 describe("workspace repository", () => {
+  it("blocks development writes before contacting Supabase", async () => {
+    const client = authenticatedClient({ rpc: vi.fn() });
+    const repository = createWorkspaceRepository(client, { allowWrites: false });
+
+    await expect(repository.saveWorkspace(createStarterState(), 0, "user-1"))
+      .rejects.toThrow("Cloud writes are disabled in local development");
+    await expect(repository.resetWorkspace("user-1"))
+      .rejects.toThrow("Cloud writes are disabled in local development");
+    expect(client.auth.getUser).not.toHaveBeenCalled();
+    expect(client.rpc).not.toHaveBeenCalled();
+  });
+
   it("loads an existing revision and validates its JSONB state", async () => {
     const state = createStarterState();
     const selection = selectResult({

@@ -1,6 +1,7 @@
 import { deserializeState, MAX_BACKUP_BYTES } from "../domain/index.js";
 import {
   CloudAuthenticationError,
+  cloudWritesEnabled,
   requireCloudClient,
   supabase,
 } from "./client.js";
@@ -81,8 +82,14 @@ function persistenceFailure(message, error) {
  * One authenticated account owns one JSONB workspace. Keeping all canonical app
  * state in one row makes a complete edit atomic and preserves import/export.
  */
-export function createWorkspaceRepository(client = supabase) {
+export function createWorkspaceRepository(client = supabase, { allowWrites = true } = {}) {
   const cloud = () => requireCloudClient(client);
+
+  function requireWritesEnabled() {
+    if (!allowWrites) {
+      throw new CloudPersistenceError("Cloud writes are disabled in local development. Use a staging Supabase project, or explicitly enable development writes for a maintenance session.");
+    }
+  }
 
   async function requireUser(expectedOwnerId) {
     const { data, error } = await cloud().auth.getUser();
@@ -118,6 +125,7 @@ export function createWorkspaceRepository(client = supabase) {
   }
 
   async function saveWorkspace(state, expectedRevision, expectedOwnerId) {
+    requireWritesEnabled();
     const user = await requireUser(expectedOwnerId);
     const nextState = canonicalState(state);
     assertStateSize(nextState);
@@ -152,6 +160,7 @@ export function createWorkspaceRepository(client = supabase) {
   }
 
   async function resetWorkspace(expectedOwnerId) {
+    requireWritesEnabled();
     const user = await requireUser(expectedOwnerId);
     const { data, error } = await cloud().rpc(RESET_WORKSPACE_RPC, {
       p_expected_owner_id: expectedOwnerId || user.id,
@@ -211,4 +220,4 @@ export function createWorkspaceRepository(client = supabase) {
   };
 }
 
-export const workspaceRepository = createWorkspaceRepository();
+export const workspaceRepository = createWorkspaceRepository(supabase, { allowWrites: cloudWritesEnabled });

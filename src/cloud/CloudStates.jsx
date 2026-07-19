@@ -1,7 +1,6 @@
-import { useState } from "react";
-import { Cloud, DatabaseBackup, LogOut, RefreshCw, RotateCcw, ShieldCheck } from "lucide-react";
+import { Cloud, DatabaseBackup, LogOut, RefreshCw, ShieldCheck } from "lucide-react";
 import { BrandMark } from "../components/BrandMark";
-import { Button, ConfirmDialog } from "../components/ui";
+import { Button } from "../components/ui";
 import { LanguageToggle } from "../i18n";
 import "./cloud.css";
 
@@ -19,47 +18,21 @@ export function CloudLoading({ message = "Loading your private workspace…" }) 
   );
 }
 
-export function CloudError({ error, onRetry, onSignOut, onReset }) {
-  const [confirmReset, setConfirmReset] = useState(false);
-  const [resetting, setResetting] = useState(false);
-  const [resetError, setResetError] = useState("");
-  const resetWorkspace = async () => {
-    setResetting(true);
-    setResetError("");
-    try {
-      await onReset?.();
-      setConfirmReset(false);
-    } catch (caught) {
-      setResetError(caught?.message || "The workspace could not be reset.");
-    } finally {
-      setResetting(false);
-    }
-  };
+export function CloudError({ error, onRetry, onSignOut }) {
   return (
-    <>
-      <main className="cloud-state-screen">
-        <LanguageToggle className="cloud-language-toggle" />
-        <section className="cloud-state-card cloud-error-card" aria-labelledby="cloud-error-title">
-          <span className="cloud-state-icon"><Cloud aria-hidden="true" /></span>
-          <h1 id="cloud-error-title">Cloud workspace unavailable</h1>
-          <p>{error?.message || "The secure workspace could not be loaded. Check your connection and try again."}</p>
-          <div className="cloud-state-actions">
-            <Button variant="primary" icon={RefreshCw} onClick={onRetry}>Try again</Button>
-            {onReset ? <Button variant="danger" icon={RotateCcw} onClick={() => setConfirmReset(true)}>Reset unreadable data</Button> : null}
-            <Button icon={LogOut} onClick={onSignOut}>Sign out</Button>
-          </div>
-        </section>
-      </main>
-      <ConfirmDialog
-        open={confirmReset}
-        title="Reset this cloud workspace?"
-        description={`Use this only when the saved workspace is unreadable. It permanently replaces the account data with an empty workspace; restore a trusted JSON backup afterward.${resetError ? ` Reset failed: ${resetError}` : ""}`}
-        confirmLabel="Reset workspace"
-        busy={resetting}
-        onClose={() => setConfirmReset(false)}
-        onConfirm={resetWorkspace}
-      />
-    </>
+    <main className="cloud-state-screen">
+      <LanguageToggle className="cloud-language-toggle" />
+      <section className="cloud-state-card cloud-error-card" aria-labelledby="cloud-error-title">
+        <span className="cloud-state-icon"><Cloud aria-hidden="true" /></span>
+        <h1 id="cloud-error-title">Cloud workspace unavailable</h1>
+        <p>{error?.message || "The secure workspace could not be loaded. Check your connection and try again."}</p>
+        <p>Your saved records have not been replaced. Retry or sign out, then contact support if the problem continues.</p>
+        <div className="cloud-state-actions">
+          <Button variant="primary" icon={RefreshCw} onClick={onRetry}>Try again</Button>
+          <Button icon={LogOut} onClick={onSignOut}>Sign out</Button>
+        </div>
+      </section>
+    </main>
   );
 }
 
@@ -76,7 +49,7 @@ export function CloudConfigurationRequired() {
   );
 }
 
-export function LocalDataMigration({ state, accountEmail, busy, error, onImport, onSkip }) {
+export function LocalDataMigration({ state, accountEmail, busy, error, recoveryMode = false, onImport, onSkip }) {
   const counts = {
     students: state.students.length,
     groups: state.groups.length,
@@ -91,9 +64,9 @@ export function LocalDataMigration({ state, accountEmail, busy, error, onImport,
         <div className="cloud-migration-heading">
           <span className="cloud-state-icon"><DatabaseBackup aria-hidden="true" /></span>
           <div>
-            <p className="cloud-eyebrow">One-time migration</p>
-            <h1 id="migration-title">Move this browser’s records online?</h1>
-            <p>We found local class data on this device. You can copy it into the private workspace for <strong>{accountEmail}</strong>.</p>
+            <p className="cloud-eyebrow">{recoveryMode ? "Recovery copy found" : "One-time migration"}</p>
+            <h1 id="migration-title">{recoveryMode ? "Recover this browser’s saved records?" : "Move this browser’s records online?"}</h1>
+            <p>We found local class data on this device. You can {recoveryMode ? "restore" : "copy"} it into the private workspace for <strong>{accountEmail}</strong>.</p>
           </div>
         </div>
 
@@ -110,7 +83,7 @@ export function LocalDataMigration({ state, accountEmail, busy, error, onImport,
         </div>
         {error ? <p className="cloud-migration-error" role="alert">{error}</p> : null}
         <div className="cloud-state-actions cloud-migration-actions">
-          <Button variant="primary" icon={Cloud} onClick={onImport} disabled={busy}>{busy ? "Moving records…" : "Move records online"}</Button>
+          <Button variant="primary" icon={Cloud} onClick={onImport} disabled={busy}>{busy ? "Restoring records…" : recoveryMode ? "Restore records from this browser" : "Move records online"}</Button>
           <Button onClick={onSkip} disabled={busy}>Start with an empty cloud workspace</Button>
         </div>
       </section>

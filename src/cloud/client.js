@@ -5,6 +5,8 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim()
   || import.meta.env.VITE_SUPABASE_ANON_KEY?.trim()
   || "";
 const forceLocalDevelopment = import.meta.env.DEV && import.meta.env.VITE_FORCE_LOCAL_MODE === "true";
+export const cloudWritesEnabled = !import.meta.env.DEV
+  || import.meta.env.VITE_ENABLE_CLOUD_WRITES_IN_DEV === "true";
 
 export const isCloudConfigured = !forceLocalDevelopment && Boolean(supabaseUrl && supabaseAnonKey);
 export const isLocalModeAllowed = forceLocalDevelopment || import.meta.env.DEV || import.meta.env.VITE_ALLOW_LOCAL_MODE === "true";

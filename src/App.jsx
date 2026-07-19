@@ -138,14 +138,14 @@ export function ClassManagerApplication({ persistence, user, cloudError, onSignO
 
 function CloudWorkspaceApplication({ session }) {
   const user = session.user;
-  const { workspace, persistence, loading, error, retry, reset, save } = useCloudWorkspace(user);
+  const { workspace, persistence, loading, error, retry, save } = useCloudWorkspace(user);
   const localSnapshot = useMemo(() => safeLoadStateWithMigrations(), [user.id]);
   const markerKey = `${MIGRATION_MARKER_PREFIX}${user.id}`;
-  const [migrationSkipped, setMigrationSkipped] = useState(() => {
+  const [dismissedCloudRevision, setDismissedCloudRevision] = useState(() => {
     try {
-      return localStorage.getItem(markerKey) === "yes";
+      return localStorage.getItem(markerKey) || "";
     } catch {
-      return false;
+      return "";
     }
   });
   const [legacyClaim, setLegacyClaim] = useState(() => {
@@ -160,11 +160,10 @@ function CloudWorkspaceApplication({ session }) {
 
   if (loading) return <CloudLoading />;
   if (!workspace || !persistence) {
-    const recoverable = error?.name === "DomainValidationError" || /invalid|unreadable/i.test(error?.message || "");
-    return <CloudError error={error} onRetry={retry} onReset={recoverable ? reset : undefined} onSignOut={() => cloudAuth.signOut()} />;
+    return <CloudError error={error} onRetry={retry} onSignOut={() => cloudAuth.signOut()} />;
   }
 
-  const needsMigration = !migrationSkipped
+  const needsMigration = dismissedCloudRevision !== String(workspace.revision)
     && (!legacyClaim || legacyClaim === user.id)
     && hasRecords(localSnapshot.state)
     && !hasRecords(workspace.state);
@@ -178,12 +177,12 @@ function CloudWorkspaceApplication({ session }) {
         inMemoryLegacyClaim = user.id;
         try {
           localStorage.setItem(LEGACY_DATA_CLAIM_KEY, user.id);
-          localStorage.setItem(markerKey, "yes");
+          localStorage.setItem(markerKey, String(workspace.revision + 1));
         } catch {
           // The cloud copy is already owner-bound even if this local marker fails.
         }
         setLegacyClaim(user.id);
-        setMigrationSkipped(true);
+        setDismissedCloudRevision(String(workspace.revision + 1));
       } catch (caught) {
         setMigrationError(caught?.message || "The local records could not be moved online.");
       } finally {
@@ -192,11 +191,11 @@ function CloudWorkspaceApplication({ session }) {
     };
     const skipMigration = () => {
       try {
-        localStorage.setItem(markerKey, "yes");
+        localStorage.setItem(markerKey, String(workspace.revision));
       } catch {
         // The in-memory choice still prevents a loop in this session.
       }
-      setMigrationSkipped(true);
+      setDismissedCloudRevision(String(workspace.revision));
     };
     return (
       <LocalDataMigration
@@ -204,6 +203,7 @@ function CloudWorkspaceApplication({ session }) {
         accountEmail={user.email}
         busy={migrationBusy}
         error={migrationError}
+        recoveryMode={workspace.revision > 0}
         onImport={importLocalData}
         onSkip={skipMigration}
       />
