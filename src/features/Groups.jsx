@@ -31,7 +31,7 @@ function pct(value) {
   return value == null ? "—" : `${Math.round(value * 100)}%`;
 }
 
-function GroupEditor({ draft, setDraft, defaultHours, defaultRate }) {
+export function GroupEditor({ draft, setDraft, defaultHours, defaultRate }) {
   const addSchedule = () => setDraft((current) => ({ ...current, weeklySchedule: [...current.weeklySchedule, { id: createStableId("slot"), dayOfWeek: 1, startTime: "16:00", durationHours: defaultHours }] }));
   const updateSchedule = (id, patch) => setDraft((current) => ({ ...current, weeklySchedule: current.weeklySchedule.map((slot) => slot.id === id ? { ...slot, ...patch } : slot) }));
   const removeSchedule = (id) => setDraft((current) => ({ ...current, weeklySchedule: current.weeklySchedule.filter((slot) => slot.id !== id) }));

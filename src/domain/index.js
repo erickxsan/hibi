@@ -5,6 +5,7 @@ export {
   GRADE_CATEGORIES,
   MAX_BACKUP_BYTES,
   PAYMENT_METHODS,
+  PAYMENT_RECORD_STATES,
   PAYMENT_STATUSES,
   REAL_ROSTER_BACKUP_KEY,
   REAL_ROSTER_MIGRATION_KEY,
@@ -34,6 +35,7 @@ export {
 
 export {
   createClassLogRow,
+  createClassSchedule,
   createGrade,
   createGroup,
   createScheduleChange,
@@ -74,6 +76,7 @@ export {
   DomainValidationError,
   normalizeState,
   validateClassLogRow,
+  validateClassSchedule,
   validateGrade,
   validateGroup,
   validateState,

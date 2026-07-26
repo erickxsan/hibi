@@ -3,7 +3,7 @@ import { Ellipsis, X } from "lucide-react";
 import { BrandMark } from "./BrandMark";
 import { closeOverlayHistory, pushOverlayHistory, subscribeToAppHistory } from "../navigation/appHistory";
 
-const MOBILE_PRIMARY = new Set(["home", "students", "classes", "payments"]);
+const MOBILE_PRIMARY = new Set(["home", "community", "classes"]);
 
 export function AppShell({ navItems, activePage, navigationReason, onNavigate, toolbar, children }) {
   const mainRef = useRef(null);
@@ -73,7 +73,7 @@ export function AppShell({ navItems, activePage, navigationReason, onNavigate, t
   const secondary = navItems.filter((item) => !MOBILE_PRIMARY.has(item.id));
   const secondaryActive = secondary.some((item) => item.id === activePage);
 
-  return <div className="hibi-shell">
+  return <div className={`hibi-shell page-${activePage}`}>
     <a className="skip-link" href="#main-content">Skip to content</a>
     <aside className="hibi-sidebar">
       <a className="hibi-brand" href="/" onClick={(event) => go(event, "home")} aria-label="Hibi home">
@@ -88,7 +88,7 @@ export function AppShell({ navItems, activePage, navigationReason, onNavigate, t
       <header className="hibi-topbar"><a className="mobile-brand" href="/" onClick={(event) => go(event, "home")}><span>Hibi</span><b>★</b></a><div className="topbar-tools">{toolbar}</div></header>
       <main id="main-content" ref={mainRef} tabIndex="-1" className="hibi-main"><div className="route-stage" key={activePage}>{children}</div></main>
     </section>
-    <nav className="hibi-mobile-nav" aria-label="Mobile navigation">
+    <nav className="hibi-mobile-nav" aria-label="Mobile navigation" style={{ "--mobile-nav-count": primary.length + 1 }}>
       {primary.map((item) => { const Icon = item.icon; return <a key={item.id} href={item.href} onClick={(event) => go(event, item.id)} className={activePage === item.id ? "mobile-link active" : "mobile-link"}><Icon size={20}/><span>{item.label}</span></a>; })}
       <button ref={moreButtonRef} className={secondaryActive || moreOpen ? "mobile-link active" : "mobile-link"} type="button" aria-expanded={moreOpen} aria-controls={moreHistoryId} onClick={() => moreOpen ? closeMore() : setMoreOpen(true)}><Ellipsis size={21}/><span>More</span></button>
     </nav>

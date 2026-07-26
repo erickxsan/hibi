@@ -4,6 +4,7 @@ import {
   DEFAULT_SETTINGS,
   GRADE_CATEGORIES,
   PAYMENT_METHODS,
+  PAYMENT_RECORD_STATES,
   SCHEMA_VERSION,
   STUDENT_AVATAR_IDS,
   STUDENT_STATUSES,
@@ -156,6 +157,26 @@ export function validateGrade(grade, state = null) {
   return result(errors, warnings);
 }
 
+export function validateClassSchedule(item, state = null) {
+  const errors = [];
+  if (!isRecord(item)) return result([issue("", "invalid_type", "Class schedule must be an object.")]);
+  requiredText(errors, item.id, "id", "Class schedule ID");
+  enumValue(errors, item.recurrence, ["once", "weekly"], "recurrence", "Class frequency");
+  enumValue(errors, item.format, ["group", "individual"], "format", "Class format");
+  dateOnly(errors, item.startDate, "startDate", "Start date");
+  timeOnly(errors, item.startTime, "startTime", "Start time");
+  finiteNumber(errors, item.durationHours, "durationHours", "Class duration", { min: 0.25 });
+  finiteNumber(errors, item.intervalWeeks, "intervalWeeks", "Repeat interval", { min: 1, integer: true });
+  if (!Array.isArray(item.daysOfWeek)) errors.push(issue("daysOfWeek", "invalid_type", "Class days must be an array."));
+  (item.daysOfWeek || []).forEach((day, index) => finiteNumber(errors, day, `daysOfWeek[${index}]`, "Class day", { min: 1, max: 7, integer: true }));
+  if (item.recurrence === "weekly" && !(item.daysOfWeek || []).length) errors.push(issue("daysOfWeek", "required", "Choose at least one class day."));
+  if (item.format === "group") requiredText(errors, item.groupId, "groupId", "Class group");
+  if (item.format === "individual") requiredText(errors, item.studentId, "studentId", "Class student");
+  if (state && item.groupId && !state.groups?.some((group) => group.id === item.groupId)) errors.push(issue("groupId", "unknown_reference", "Class schedule references a missing group."));
+  if (state && item.studentId && !state.students?.some((student) => student.id === item.studentId)) errors.push(issue("studentId", "unknown_reference", "Class schedule references a missing student."));
+  return result(errors, []);
+}
+
 export function validateClassLogRow(row, state = null) {
   const errors = [];
   const warnings = [];
@@ -172,6 +193,7 @@ export function validateClassLogRow(row, state = null) {
   timeOnly(errors, row.startTime, "startTime", "Class time", { optional: true });
   dateOnly(errors, row.paymentDate, "paymentDate", "Payment date", { optional: true });
   enumValue(errors, row.paymentMethod, PAYMENT_METHODS, "paymentMethod", "Payment method", { optional: true });
+  enumValue(errors, row.paymentState, PAYMENT_RECORD_STATES, "paymentState", "Payment state", { optional: true });
 
   if (state && row.studentId && !state.students?.some((student) => student?.id === row.studentId)) {
     errors.push(issue("studentId", "unknown_reference", "Class row references a student that does not exist.", row.studentId));
@@ -292,6 +314,7 @@ export function normalizeState(input) {
       maxScore: normalizeOptionalNumber(grade?.maxScore),
       workStatus: normalizeText(grade?.workStatus),
       feedback: normalizeText(grade?.feedback),
+      classSessionKey: normalizeText(grade?.classSessionKey),
     })),
     classLog: (Array.isArray(source.classLog) ? source.classLog : []).map((row) => ({
       id: normalizeText(row?.id),
@@ -308,10 +331,23 @@ export function normalizeState(input) {
       appliedHourlyRate: normalizeOptionalNumber(row?.appliedHourlyRate),
       appliedCharge: normalizeOptionalNumber(row?.appliedCharge),
       amountPaid: normalizeOptionalNumber(row?.amountPaid),
+      paymentState: PAYMENT_RECORD_STATES.includes(row?.paymentState) ? row.paymentState : "",
       paymentDate: normalizeOptionalText(row?.paymentDate),
       paymentMethod: normalizeText(row?.paymentMethod),
       paymentReference: normalizeText(row?.paymentReference),
       notes: normalizeText(row?.notes),
+    })),
+    classSchedules: (Array.isArray(source.classSchedules) ? source.classSchedules : []).map((item, index) => ({
+      id: normalizeText(item?.id) || `class_schedule_${index + 1}`,
+      recurrence: item?.recurrence === "weekly" ? "weekly" : "once",
+      format: item?.format === "individual" ? "individual" : "group",
+      groupId: normalizeText(item?.groupId),
+      studentId: normalizeText(item?.studentId),
+      startDate: normalizeText(item?.startDate),
+      startTime: normalizeText(item?.startTime),
+      durationHours: normalizeNumber(item?.durationHours, sourceSettings.defaultClassHours ?? DEFAULT_SETTINGS.defaultClassHours),
+      intervalWeeks: normalizeNumber(item?.intervalWeeks, 1),
+      daysOfWeek: [...new Set((Array.isArray(item?.daysOfWeek) ? item.daysOfWeek : []).map((day) => normalizeNumber(day, 1)))],
     })),
     scheduleExceptions: (Array.isArray(source.scheduleExceptions) ? source.scheduleExceptions : []).map((item, index) => ({
       id: normalizeText(item?.id) || `schedule_exception_${index + 1}`,
@@ -434,10 +470,10 @@ export function validateState(input) {
   for (const key of ["groups", "students", "grades", "classLog"]) {
     if (!Array.isArray(input[key])) errors.push(issue(key, "invalid_type", `${key} must be an array.`));
   }
-  for (const key of ["scheduleExceptions", "scheduleChanges"]) {
+  for (const key of ["classSchedules", "scheduleExceptions", "scheduleChanges"]) {
     if (input[key] !== undefined && !Array.isArray(input[key])) errors.push(issue(key, "invalid_type", `${key} must be an array.`));
   }
-  if (errors.some((entry) => entry.code === "invalid_type" && ["groups", "students", "grades", "classLog", "scheduleExceptions", "scheduleChanges"].includes(entry.path))) {
+  if (errors.some((entry) => entry.code === "invalid_type" && ["groups", "students", "grades", "classLog", "classSchedules", "scheduleExceptions", "scheduleChanges"].includes(entry.path))) {
     return result(errors, warnings);
   }
 
@@ -462,6 +498,10 @@ export function validateState(input) {
     errors.push(...checked.errors);
     warnings.push(...checked.warnings);
   });
+  (state.classSchedules || []).forEach((item, index) => {
+    const checked = withPrefix(validateClassSchedule(item, state), `classSchedules[${index}]`);
+    errors.push(...checked.errors);
+  });
   (state.scheduleExceptions || []).forEach((item, index) => {
     const checked = withPrefix(validateScheduleException(item, state), `scheduleExceptions[${index}]`);
     errors.push(...checked.errors);
@@ -475,6 +515,7 @@ export function validateState(input) {
   errors.push(...duplicateIdErrors(state.students, "students"));
   errors.push(...duplicateIdErrors(state.grades, "grades"));
   errors.push(...duplicateIdErrors(state.classLog, "classLog"));
+  errors.push(...duplicateIdErrors(state.classSchedules || [], "classSchedules"));
   errors.push(...duplicateIdErrors(state.scheduleExceptions || [], "scheduleExceptions"));
   errors.push(...duplicateIdErrors(state.scheduleChanges || [], "scheduleChanges"));
   errors.push(...duplicateFieldErrors(state.groups, "name", "groups", "Group name"));

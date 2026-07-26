@@ -59,6 +59,7 @@ export function createGrade(overrides = {}) {
     maxScore: null,
     workStatus: "On time",
     feedback: "",
+    classSessionKey: "",
     ...overrides,
   };
 }
@@ -79,10 +80,27 @@ export function createClassLogRow(overrides = {}) {
     appliedHourlyRate: null,
     appliedCharge: null,
     amountPaid: null,
+    paymentState: "Pending",
     paymentDate: null,
     paymentMethod: "",
     paymentReference: "",
     notes: "",
+    ...overrides,
+  };
+}
+
+export function createClassSchedule(overrides = {}) {
+  return {
+    id: createStableId("class-schedule"),
+    recurrence: "once",
+    format: "group",
+    groupId: "",
+    studentId: "",
+    startDate: "",
+    startTime: "",
+    durationHours: 2,
+    intervalWeeks: 1,
+    daysOfWeek: [],
     ...overrides,
   };
 }

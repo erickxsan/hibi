@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CalendarDays, CloudOff, CreditCard, GraduationCap, Home as HomeIcon, Settings as SettingsIcon, Users, UsersRound } from "lucide-react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BarChart3, CalendarDays, CloudOff, Home as HomeIcon, Settings as SettingsIcon, UsersRound } from "lucide-react";
 import { AccountMenu, AUTH_MODES, AuthScreen } from "./auth";
 import { AppShell } from "./components/AppShell";
 import { ToastRegion } from "./components/ui";
@@ -7,26 +7,31 @@ import { cloudAuth, hCaptchaSiteKey, isCloudConfigured, isLocalModeAllowed } fro
 import { CloudConfigurationRequired, CloudError, CloudLoading, LocalDataMigration } from "./cloud/CloudStates";
 import { useCloudWorkspace } from "./cloud/useCloudWorkspace";
 import { safeLoadStateWithMigrations } from "./domain";
-import Classes from "./features/Classes";
-import Groups from "./features/Groups";
-import Home from "./features/Home";
-import Payments from "./features/Payments";
-import Progress from "./features/Progress";
-import Settings from "./features/Settings";
-import Students from "./features/Students";
 import { useClassManager } from "./hooks/useClassManager";
 import { usePageNavigation } from "./hooks/useHistoryNavigation";
 import { useI18n } from "./i18n";
 
 const NAV_ITEMS = [
   { id: "home", label: "Home", href: "/", icon: HomeIcon },
-  { id: "students", label: "Students", href: "/students", icon: Users },
-  { id: "groups", label: "Groups", href: "/groups", icon: UsersRound },
+  { id: "community", label: "Community", href: "/community", icon: UsersRound },
   { id: "classes", label: "Classes", href: "/classes", icon: CalendarDays },
-  { id: "grades", label: "Progress", href: "/progress", icon: GraduationCap },
-  { id: "payments", label: "Payments", href: "/payments", icon: CreditCard },
+  { id: "grades", label: "Tracking", href: "/progress", icon: BarChart3 },
   { id: "settings", label: "Settings", href: "/settings", icon: SettingsIcon },
 ];
+
+const Home = lazy(() => import("./features/Home"));
+const Community = lazy(() => import("./features/Community"));
+const Classes = lazy(() => import("./features/Classes"));
+const Tracking = lazy(() => import("./features/Tracking"));
+// Keep the legacy route and payment workflows available without advertising a
+// separate navigation destination. Classes, Tracking, and Home still use the
+// same underlying payment records.
+const Payments = lazy(() => import("./features/Payments"));
+const Settings = lazy(() => import("./features/Settings"));
+
+function PageFallback() {
+  return <div className="route-loading" role="status" aria-live="polite">Loading…</div>;
+}
 
 const MIGRATION_MARKER_PREFIX = "minimal-class-manager:cloud-migration-dismissed:v1:";
 const LEGACY_DATA_CLAIM_KEY = "minimal-class-manager:legacy-data-claimed:v1";
@@ -82,10 +87,11 @@ export function ClassManagerApplication({ persistence, user, cloudError, onSignO
       openPage,
       registerNavigationBlocker,
     };
-    if (page === "students") return <Students {...common} />;
-    if (page === "groups") return <Groups {...common} />;
+    if (page === "community" || page === "students" || page === "groups") {
+      return <Community {...common} initialView={page === "students" ? "students" : page === "groups" ? "groups" : undefined} />;
+    }
     if (page === "classes") return <Classes {...common} />;
-    if (page === "grades") return <Progress {...common} />;
+    if (page === "grades") return <Tracking {...common} />;
     if (page === "payments") return <Payments {...common} />;
     if (page === "settings") return <Settings {...common} />;
     return <Home {...common} />;
@@ -105,7 +111,7 @@ export function ClassManagerApplication({ persistence, user, cloudError, onSignO
     <>
       <AppShell
         navItems={NAV_ITEMS}
-        activePage={page}
+        activePage={page === "students" || page === "groups" ? "community" : page}
         navigationReason={navigationReason}
         onNavigate={(nextPage) => {
           if (navigate(nextPage)) setIntent(null);
@@ -129,7 +135,7 @@ export function ClassManagerApplication({ persistence, user, cloudError, onSignO
           </div>
         }
       >
-        {pageContent}
+        <Suspense fallback={<PageFallback />}>{pageContent}</Suspense>
       </AppShell>
       <ToastRegion toasts={manager.toasts} onDismiss={manager.dismissToast} />
     </>

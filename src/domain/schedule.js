@@ -50,11 +50,23 @@ function occurrenceId(groupId, scheduleSlotId, occurrenceDate) {
   return `${groupId}:${scheduleSlotId}:${occurrenceDate}`;
 }
 
+function daysBetween(left, right) {
+  return Math.round((parseDateOnly(right).getTime() - parseDateOnly(left).getTime()) / 86400000);
+}
+
+function classScheduleOccursOn(schedule, date) {
+  if (date < schedule.startDate) return false;
+  if (schedule.recurrence === "once") return date === schedule.startDate;
+  if (!(schedule.daysOfWeek || []).includes(dayOfWeekForDate(date))) return false;
+  return Math.floor(daysBetween(schedule.startDate, date) / 7) % Math.max(1, Number(schedule.intervalWeeks) || 1) === 0;
+}
+
 export function generateScheduledOccurrences(state, startDate, endDate) {
   if (!isDateOnly(startDate) || !isDateOnly(endDate) || startDate > endDate) return [];
   const groups = Array.isArray(state?.groups) ? state.groups : [];
   const exceptions = Array.isArray(state?.scheduleExceptions) ? state.scheduleExceptions : [];
   const classLog = Array.isArray(state?.classLog) ? state.classLog : [];
+  const classSchedules = Array.isArray(state?.classSchedules) ? state.classSchedules : [];
   const exceptionByKey = new Map(exceptions
     .filter((item) => item.kind !== "added")
     .map((item) => [`${item.groupId}:${item.scheduleSlotId}:${item.occurrenceDate}`, item]));
@@ -110,6 +122,38 @@ export function generateScheduledOccurrences(state, startDate, endDate) {
         && row.classDate === exception.classDate
         && (row.startTime || "") === (exception.startTime || "")),
     });
+  }
+
+  for (const schedule of classSchedules) {
+    const group = schedule.format === "group" ? groups.find((item) => item.id === schedule.groupId) : null;
+    const student = schedule.format === "individual"
+      ? (state.students || []).find((item) => item.id === schedule.studentId)
+      : null;
+    if ((schedule.format === "group" && !group) || (schedule.format === "individual" && !student)) continue;
+    const from = schedule.startDate > startDate ? schedule.startDate : startDate;
+    for (let date = from; date <= endDate; date = addDays(date, 1)) {
+      if (!classScheduleOccursOn(schedule, date)) continue;
+      const recorded = classLog.some((row) => row.classDate === date
+        && (row.startTime || "") === (schedule.startTime || "")
+        && (schedule.format === "group" ? row.groupId === schedule.groupId : row.studentId === schedule.studentId));
+      result.push({
+        id: `${schedule.id}:${date}`,
+        classScheduleId: schedule.id,
+        groupId: schedule.groupId || "",
+        groupName: group?.name || student?.fullName || "",
+        studentId: schedule.studentId || "",
+        studentName: student?.fullName || "",
+        format: schedule.format,
+        scheduleSlotId: schedule.id,
+        occurrenceDate: date,
+        classDate: date,
+        startTime: schedule.startTime,
+        durationHours: schedule.durationHours,
+        status: "Scheduled",
+        kind: schedule.recurrence === "weekly" ? "recurring" : "added",
+        recorded,
+      });
+    }
   }
 
   return result

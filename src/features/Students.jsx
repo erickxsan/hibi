@@ -46,7 +46,7 @@ function pct(value) {
   return value == null ? "—" : `${Math.round(value * 100)}%`;
 }
 
-function EnrollmentTags({ student, groupsById }) {
+export function EnrollmentTags({ student, groupsById }) {
   const groupIds = Array.isArray(student.groupIds) ? student.groupIds : student.groupId ? [student.groupId] : [];
   return (
     <div className="enrollment-tags">
@@ -56,7 +56,7 @@ function EnrollmentTags({ student, groupsById }) {
   );
 }
 
-function StudentEditor({ draft, setDraft, groups, defaultRate }) {
+export function StudentEditor({ draft, setDraft, groups, defaultRate }) {
   const selectedGroups = draft.groupIds.map((id) => groups.find((group) => group.id === id)).filter(Boolean);
   const groupOptions = groups.map((group) => ({ value: group.id, label: group.name, meta: group.schedule || group.subject || "No schedule" }));
   const inheritedRate = selectedGroups.length === 1 && Number.isFinite(selectedGroups[0].hourlyRate)

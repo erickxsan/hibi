@@ -2,6 +2,7 @@ export const APP_HISTORY_KEY = "__hibiNavigation";
 
 export const APP_ROUTES = Object.freeze({
   home: "/",
+  community: "/community",
   students: "/students",
   groups: "/groups",
   classes: "/classes",

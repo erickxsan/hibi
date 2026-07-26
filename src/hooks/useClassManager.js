@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createClassLogRow,
+  createClassSchedule,
   createExportFilename,
   createGrade,
   createGroup,
@@ -19,6 +20,7 @@ import {
   serializeState,
   STORAGE_KEY,
   validateClassLogRow,
+  validateClassSchedule,
   validateGrade,
   validateGroup,
   validateStudent,
@@ -50,13 +52,13 @@ function messageForError(error) {
   return detail || error?.message || "That change could not be saved.";
 }
 
-function canonicalGroup(draft) {
+export function canonicalGroup(draft) {
   return {
     id: draft.id,
     name: draft.name,
     grade: draft.grade,
     subject: draft.subject,
-    schedule: draft.scheduleRoom ?? draft.schedule ?? "",
+    schedule: draft.schedule ?? draft.scheduleRoom ?? "",
     hourlyRate: draft.hourlyRate === "" || draft.hourlyRate == null ? null : Number(draft.hourlyRate),
     weeklySchedule: Array.isArray(draft.weeklySchedule) ? draft.weeklySchedule.map((slot) => ({
       id: slot.id,
@@ -70,18 +72,18 @@ function canonicalGroup(draft) {
   };
 }
 
-function canonicalStudent(draft) {
+export function canonicalStudent(draft) {
   return {
     id: draft.id,
-    code: draft.studentCode ?? draft.code ?? "",
+    code: draft.code ?? draft.studentCode ?? "",
     fullName: draft.fullName ?? "",
     avatarId: draft.avatarId ?? "",
     groupIds: Array.isArray(draft.groupIds) ? [...new Set(draft.groupIds.filter(Boolean))] : draft.groupId ? [draft.groupId] : [],
     isIndividual: Boolean(draft.isIndividual),
     customHourlyRate: draft.customHourlyRate === "" || draft.customHourlyRate == null ? null : Number(draft.customHourlyRate),
-    phone: draft.studentPhone ?? draft.phone ?? "",
+    phone: draft.phone ?? draft.studentPhone ?? "",
     guardianContact: draft.guardianContact ?? "",
-    notes: draft.importantNotes ?? draft.notes ?? "",
+    notes: draft.notes ?? draft.importantNotes ?? "",
     status: draft.status ?? "Active",
   };
 }
@@ -97,6 +99,7 @@ function canonicalGrade(draft) {
     maxScore: Number(draft.maximum ?? draft.maxScore),
     workStatus: draft.workStatus ?? "On time",
     feedback: draft.feedback ?? "",
+    classSessionKey: draft.classSessionKey ?? "",
   };
 }
 
@@ -124,10 +127,26 @@ function canonicalClassLog(draft, state) {
     appliedHourlyRate,
     appliedCharge,
     amountPaid: draft.amountPaid === "" || draft.amountPaid == null ? 0 : Number(draft.amountPaid),
+    paymentState: draft.paymentState ?? "",
     paymentDate: draft.paymentDate || null,
     paymentMethod: draft.paymentMethod ?? draft.method ?? "",
     paymentReference: draft.paymentReference ?? draft.reference ?? "",
     notes: draft.notes ?? "",
+  };
+}
+
+function canonicalClassSchedule(draft) {
+  return {
+    id: draft.id,
+    recurrence: draft.recurrence === "weekly" ? "weekly" : "once",
+    format: draft.format === "individual" ? "individual" : "group",
+    groupId: draft.format === "individual" ? "" : draft.groupId ?? "",
+    studentId: draft.format === "individual" ? draft.studentId ?? "" : "",
+    startDate: draft.startDate ?? "",
+    startTime: draft.startTime ?? "",
+    durationHours: Number(draft.durationHours),
+    intervalWeeks: Number(draft.intervalWeeks || 1),
+    daysOfWeek: Array.isArray(draft.daysOfWeek) ? [...new Set(draft.daysOfWeek.map(Number))] : [],
   };
 }
 
@@ -168,6 +187,32 @@ function upsertManyById(currentItems, nextItems) {
   const merged = currentItems.map((item) => nextById.get(item.id) || item);
   const existingIds = new Set(currentItems.map((item) => item.id));
   return [...merged, ...nextItems.filter((item) => !existingIds.has(item.id))];
+}
+
+export async function persistRecipe({ baseState, recipe, adapter, replace = false }) {
+  const canonicalize = (state) => importState(serializeState(state));
+  const persist = async (state) => {
+    const result = replace && adapter?.replace
+      ? await adapter.replace(state)
+      : adapter?.save
+        ? await adapter.save(state)
+        : saveState(state);
+    return canonicalize(result?.state ?? result ?? state);
+  };
+
+  const next = canonicalize(recipe(baseState));
+  try {
+    return { state: await persist(next), mergedConflict: false };
+  } catch (error) {
+    // A regular edit is a deterministic mutation and can be applied once to
+    // the newest revision, preserving unrelated changes from another device.
+    // Full backup replacement is intentionally never merged automatically.
+    if (replace || !error?.latestState || typeof adapter?.save !== "function") throw error;
+    const latest = canonicalize(error.latestState);
+    const rebased = canonicalize(recipe(latest));
+    const retried = await adapter.save(rebased);
+    return { state: canonicalize(retried?.state ?? retried ?? rebased), mergedConflict: true };
+  }
 }
 
 export function useClassManager({ persistence } = {}) {
@@ -234,18 +279,19 @@ export function useClassManager({ persistence } = {}) {
       let synchronized = false;
       try {
         if (!mountedRef.current) return false;
-        const next = importState(serializeState(recipe(stateRef.current)));
         const adapter = persistenceRef.current;
-        const result = replace && adapter?.replace
-          ? await adapter.replace(next)
-          : adapter?.save
-            ? await adapter.save(next)
-            : saveState(next);
+        const result = await persistRecipe({
+          baseState: stateRef.current,
+          recipe,
+          adapter,
+          replace,
+        });
         if (!mountedRef.current) return false;
-        const saved = importState(serializeState(result?.state ?? result ?? next));
+        const saved = importState(serializeState(result.state));
         stateRef.current = saved;
         persistedSnapshot.current = serializeState(saved);
         setCanonicalState(saved);
+        if (result.mergedConflict) notify("Your edit was safely combined with a newer cloud change.");
         if (successMessage) notify(successMessage);
         synchronized = true;
         return true;
@@ -530,6 +576,21 @@ export function useClassManager({ persistence } = {}) {
     }), `Progress saved for ${studentCount} student${studentCount === 1 ? "" : "s"}`);
   }, [commit, notify]);
 
+  const upsertClassSchedule = useCallback((draft) => {
+    const item = applyGeneratedId(createClassSchedule, canonicalClassSchedule(draft));
+    const validation = validateClassSchedule(item, stateRef.current);
+    if (!validation.valid) {
+      notify(validation.errors[0].message, "error");
+      return false;
+    }
+    return commit((current) => ({
+      ...current,
+      classSchedules: current.classSchedules.some((entry) => entry.id === item.id)
+        ? current.classSchedules.map((entry) => entry.id === item.id ? item : entry)
+        : [...current.classSchedules, item],
+    }), draft.id ? "Class schedule updated" : "Class created");
+  }, [commit, notify]);
+
   const upsertScheduleException = useCallback((draft) => {
     const item = applyGeneratedId(createScheduleException, canonicalScheduleException(draft));
     return commit((current) => ({
@@ -650,6 +711,7 @@ export function useClassManager({ persistence } = {}) {
     addClassLog: upsertClassLog,
     deleteClassLog,
     saveProgress,
+    upsertClassSchedule,
     upsertScheduleException,
     upsertScheduleChange,
     exportJson,
@@ -659,7 +721,7 @@ export function useClassManager({ persistence } = {}) {
     exportRecoveryPoint,
     restoreRecoveryPoint,
     notify,
-  }), [addClassLogs, addGrades, archiveStudent, clearLegacyLocalData, deleteClassLog, deleteGrade, deleteGroup, deleteStudent, exportJson, exportRecoveryPoint, importJson, listRecoveryPoints, notify, restoreRecoveryPoint, saveProgress, updatePreferences, updateSettings, upsertClassLog, upsertGrade, upsertGroup, upsertScheduleChange, upsertScheduleException, upsertStudent]);
+  }), [addClassLogs, addGrades, archiveStudent, clearLegacyLocalData, deleteClassLog, deleteGrade, deleteGroup, deleteStudent, exportJson, exportRecoveryPoint, importJson, listRecoveryPoints, notify, restoreRecoveryPoint, saveProgress, updatePreferences, updateSettings, upsertClassLog, upsertClassSchedule, upsertGrade, upsertGroup, upsertScheduleChange, upsertScheduleException, upsertStudent]);
 
   return useMemo(() => ({
     state: viewState,

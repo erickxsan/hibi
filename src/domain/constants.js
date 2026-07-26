@@ -30,6 +30,7 @@ export const GRADE_CATEGORIES = Object.freeze([
 ]);
 export const WORK_STATUSES = Object.freeze(["On time", "Late", "Missing", "Excused"]);
 export const PAYMENT_METHODS = Object.freeze(["Cash", "Transfer", "Card", "Other"]);
+export const PAYMENT_RECORD_STATES = Object.freeze(["Paid", "Pending", "Unpaid"]);
 
 export const PAYMENT_STATUSES = Object.freeze({
   UNKNOWN_STUDENT: "Unknown student",

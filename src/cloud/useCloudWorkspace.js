@@ -54,7 +54,10 @@ export function useCloudWorkspace(user) {
 
   const save = useCallback(async (state) => {
     try {
-      await captureDeviceCopy(state, revisionRef.current, "pending-save");
+      const previous = workspaceRef.current;
+      if (previous?.state) {
+        await captureDeviceCopy(previous.state, previous.revision, "before-save", previous.updatedAt);
+      }
       const saved = await workspaceRepository.saveWorkspace(state, revisionRef.current, user.id);
       if (!applyWorkspace(saved)) {
         const latest = await workspaceRepository.loadWorkspace(user.id);
@@ -85,7 +88,10 @@ export function useCloudWorkspace(user) {
 
   const replace = useCallback(async (state) => {
     try {
-      await captureDeviceCopy(state, revisionRef.current, "pending-save");
+      const previous = workspaceRef.current;
+      if (previous?.state) {
+        await captureDeviceCopy(previous.state, previous.revision, "before-replace", previous.updatedAt);
+      }
       const replaced = await workspaceRepository.replaceWorkspace(state, revisionRef.current, user.id);
       applyWorkspace(replaced);
       void captureDeviceCopy(replaced.state, replaced.revision, "cloud-replace", replaced.updatedAt);
