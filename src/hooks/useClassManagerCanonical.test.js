@@ -84,4 +84,20 @@ describe("class manager cloud conflict handling", () => {
       .rejects.toBe(conflict);
     expect(adapter.save).not.toHaveBeenCalled();
   });
+
+  it("never rebases a reviewed import after a cloud revision conflict", async () => {
+    const base = createStarterState();
+    const conflict = Object.assign(new Error("conflict"), { latestState: createStarterState() });
+    const adapter = { importRecords: vi.fn().mockRejectedValue(conflict), save: vi.fn() };
+
+    await expect(persistRecipe({
+      baseState: base,
+      recipe: (state) => state,
+      adapter,
+      importMetadata: { fileHash: "a".repeat(64) },
+    })).rejects.toBe(conflict);
+
+    expect(adapter.importRecords).toHaveBeenCalledTimes(1);
+    expect(adapter.save).not.toHaveBeenCalled();
+  });
 });

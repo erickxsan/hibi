@@ -1,19 +1,29 @@
 import { useEffect, useRef, useState } from "react";
-import { Clock3, Download, Globe2, History, LockKeyhole, RotateCcw, Upload, Volume2 } from "lucide-react";
-import { Button, ConfirmDialog, Drawer, Field, Input } from "../components/ui";
+import { Clock3, Download, FilePlus2, Globe2, History, LockKeyhole, RotateCcw, ShieldCheck, Upload, Volume2 } from "lucide-react";
+import { Button, ConfirmDialog, Drawer, Field, Input, Select } from "../components/ui";
 import { importState, MAX_BACKUP_BYTES } from "../domain";
 import { confirmDiscard, draftChanged, useUnsavedChanges } from "../hooks/useUnsavedChanges";
-import { LanguageToggle } from "../i18n";
+import { LanguageToggle, useI18n } from "../i18n";
 import { getHibiSoundsEnabled, playHibiSound, setHibiSoundsEnabled } from "../utils/hibiSounds";
 
 function settingsDraft(settings) {
   return { ...settings, hourlyRateMxn: settings.hourlyRate };
 }
 
+async function sha256(text) {
+  const bytes = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 export default function Settings({ state, actions, persistenceMode, registerNavigationBlocker }) {
+  const { t } = useI18n();
   const [draft, setDraft] = useState(() => settingsDraft(state.settings));
   const [saving, setSaving] = useState(false);
   const [pendingImport, setPendingImport] = useState(null);
+  const [pendingRecordImport, setPendingRecordImport] = useState(null);
+  const [recordImportDecisions, setRecordImportDecisions] = useState({});
+  const [recordImportBusy, setRecordImportBusy] = useState(false);
   const [importConfirmation, setImportConfirmation] = useState("");
   const [clearTarget, setClearTarget] = useState("");
   const [recoveryOpen, setRecoveryOpen] = useState(false);
@@ -22,6 +32,7 @@ export default function Settings({ state, actions, persistenceMode, registerNavi
   const [pendingRecovery, setPendingRecovery] = useState(null);
   const [soundsEnabled, setSoundsEnabled] = useState(getHibiSoundsEnabled);
   const fileRef = useRef(null);
+  const recordsFileRef = useRef(null);
   const baselineRef = useRef(settingsDraft(state.settings));
   const dirty = draftChanged(draft, baselineRef.current);
 
@@ -80,6 +91,44 @@ export default function Settings({ state, actions, persistenceMode, registerNavi
     }
   };
 
+  const previewRecordImport = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (file.size > MAX_BACKUP_BYTES) {
+      actions.notify("That backup is larger than the 5 MB safety limit.", "error");
+      return;
+    }
+    setRecordImportBusy(true);
+    try {
+      const text = await file.text();
+      const fileHash = await sha256(text);
+      const plan = await actions.previewImportRecords(text, fileHash);
+      setRecordImportDecisions({});
+      setPendingRecordImport({ ...plan, text, fileHash, name: file.name });
+    } catch (error) {
+      actions.notify(error?.message || "The selected file is not a valid Hibi backup.", "error");
+    } finally {
+      setRecordImportBusy(false);
+    }
+  };
+
+  const applyRecordImport = async () => {
+    if (!pendingRecordImport || recordImportBusy || pendingRecordImport.previousImport) return;
+    setRecordImportBusy(true);
+    try {
+      const success = await actions.importRecords(pendingRecordImport.text, {
+        fileHash: pendingRecordImport.fileHash,
+        sourceName: pendingRecordImport.name,
+        decisions: recordImportDecisions,
+        signature: pendingRecordImport.signature,
+      });
+      if (success) setPendingRecordImport(null);
+    } finally {
+      setRecordImportBusy(false);
+    }
+  };
+
   const openRecoveryHistory = async () => {
     setRecoveryOpen(true);
     setRecoveryLoading(true);
@@ -129,13 +178,46 @@ export default function Settings({ state, actions, persistenceMode, registerNavi
         </article>
         <article className="settings-card">
           <div className="settings-icon sage"><Download size={22} /></div>
-          <div className="settings-content"><h2>Backup, import & export</h2><p>{persistenceMode === "cloud" ? "Your records sync to your private cloud workspace. Hibi also keeps recent recovery copies." : "Your records are stored in this browser. Export a backup regularly."}</p><div className="button-cluster"><Button icon={Download} onClick={actions.exportJson}>Download backup</Button><Button icon={Upload} onClick={() => fileRef.current?.click()}>Restore backup</Button>{persistenceMode === "cloud" ? <Button icon={History} onClick={openRecoveryHistory}>Recovery history</Button> : null}<input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={importFile} /></div></div>
+          <div className="settings-content">
+            <h2>Records, backups & recovery</h2>
+            <p>{persistenceMode === "cloud" ? "Add records safely or keep a complete recovery copy of your private cloud workspace." : "Add records safely and export a backup regularly."}</p>
+            <div className="settings-data-actions">
+              <div className="settings-data-action safe-import-action"><span><strong>Import records</strong><small>Add records from another Hibi JSON backup. Existing records and settings are never removed.</small></span><Button variant="primary" icon={FilePlus2} disabled={recordImportBusy} onClick={() => recordsFileRef.current?.click()}>{recordImportBusy ? "Reading…" : "Import records"}</Button></div>
+              <div className="settings-data-action"><span><strong>Backup & recovery</strong><small>Download everything, or intentionally replace the workspace from a trusted full backup.</small></span><div className="button-cluster"><Button icon={Download} onClick={actions.exportJson}>Download backup</Button><Button icon={Upload} onClick={() => fileRef.current?.click()}>Restore full backup</Button>{persistenceMode === "cloud" ? <Button icon={History} onClick={openRecoveryHistory}>Recovery history</Button> : null}</div></div>
+            </div>
+            <input ref={recordsFileRef} type="file" accept=".json,application/json" hidden onChange={previewRecordImport} />
+            <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={importFile} />
+          </div>
         </article>
         <article className="settings-card">
           <div className="settings-icon lilac"><LockKeyhole size={22} /></div>
           <div className="settings-content"><h2>Data & privacy</h2><p>Backups include student, parent, grade, attendance, and payment data. Store them privately.</p>{persistenceMode === "cloud" ? <div className="danger-line secondary-danger"><span><strong>Remove old browser copy</strong><small>Your signed-in cloud workspace and recovery history are not affected.</small></span><Button onClick={() => setClearTarget("local")}>Remove local copy</Button></div> : null}</div>
         </article>
       </section>
+
+      <Drawer
+        open={Boolean(pendingRecordImport)}
+        onClose={() => setPendingRecordImport(null)}
+        title="Review record import"
+        description={pendingRecordImport ? `${pendingRecordImport.name} was compared with the records currently saved in Hibi.` : ""}
+        size="normal"
+        footer={<><Button onClick={() => setPendingRecordImport(null)}>Cancel</Button><Button variant="primary" icon={ShieldCheck} disabled={recordImportBusy || Boolean(pendingRecordImport?.previousImport)} onClick={applyRecordImport}>{recordImportBusy ? "Importing…" : t(`Import ${pendingRecordImport ? pendingRecordImport.summary.added + Object.values(recordImportDecisions).filter((value) => value === "use-imported").length : 0} records`)}</Button></>}
+      >
+        {pendingRecordImport ? <div className="record-import-review">
+          <div className="import-safety-note"><ShieldCheck size={22} aria-hidden="true" /><span><strong>No existing records will be deleted.</strong><small>Conflicts keep the current Hibi version unless you explicitly choose the imported version.</small></span></div>
+          {pendingRecordImport.previousImport ? <div className="import-repeat-warning"><strong>This exact file was already imported.</strong><span>Imported {new Date(pendingRecordImport.previousImport.createdAt).toLocaleString()}. Reusing it is blocked to prevent duplicate work.</span></div> : null}
+          <dl className="record-import-summary">
+            <div><dt>New</dt><dd>{pendingRecordImport.summary.added}</dd></div>
+            <div><dt>Exact duplicates</dt><dd>{pendingRecordImport.summary.duplicates}</dd></div>
+            <div><dt>Needs review</dt><dd>{pendingRecordImport.summary.conflicts}</dd></div>
+            <div><dt>Will be deleted</dt><dd>0</dd></div>
+          </dl>
+          <div className="record-import-collections">
+            {Object.entries(pendingRecordImport.summary.byCollection).filter(([, counts]) => counts.added || counts.duplicates || counts.conflicts).map(([collection, counts]) => <div key={collection}><strong>{pendingRecordImport.entries.find((entry) => entry.collection === collection)?.collectionLabel || collection}</strong><span>{t(`${counts.added} new · ${counts.duplicates} duplicates · ${counts.conflicts} review`)}</span></div>)}
+          </div>
+          {pendingRecordImport.summary.conflicts ? <section className="record-import-conflicts"><div><h3>Resolve possible duplicates</h3><p>“Keep current” is the safest default.</p></div>{pendingRecordImport.entries.filter((entry) => entry.status === "conflict").map((entry) => <article key={entry.key}><span><strong>{entry.label}</strong><small>{entry.collectionLabel} · {entry.reason}</small></span><Select aria-label={`Import choice for ${entry.label}`} value={recordImportDecisions[entry.key] || "keep-current"} onChange={(event) => setRecordImportDecisions((current) => ({ ...current, [entry.key]: event.target.value }))}><option value="keep-current">Keep current</option><option value="use-imported">Use imported</option></Select></article>)}</section> : null}
+        </div> : null}
+      </Drawer>
 
       <Drawer open={Boolean(pendingImport)} onClose={() => setPendingImport(null)} title="Restore this backup?" description={pendingImport ? `${pendingImport.name} will replace the current workspace data. The current version will be kept in recovery history first.` : ""} size="compact" footer={<><Button onClick={() => setPendingImport(null)}>Cancel</Button><Button variant="danger" disabled={Boolean(pendingImport?.removals.length) && importConfirmation !== "RESTORE"} onClick={async () => { if (await actions.importJson(pendingImport.text)) setPendingImport(null); }}>Restore backup</Button></>}>
         {pendingImport ? <><dl className="import-summary"><div><dt>Students</dt><dd>{pendingImport.currentCounts.students} → {pendingImport.counts.students}</dd></div><div><dt>Groups</dt><dd>{pendingImport.currentCounts.groups} → {pendingImport.counts.groups}</dd></div><div><dt>Grades</dt><dd>{pendingImport.currentCounts.grades} → {pendingImport.counts.grades}</dd></div><div><dt>Class records</dt><dd>{pendingImport.currentCounts.classes} → {pendingImport.counts.classes}</dd></div></dl>{pendingImport.removals.length ? <Field label="Type RESTORE to confirm record removal"><Input value={importConfirmation} onChange={(event) => setImportConfirmation(event.target.value)} autoComplete="off" /></Field> : null}</> : null}

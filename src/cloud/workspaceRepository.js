@@ -11,6 +11,10 @@ export const SAVE_WORKSPACE_RPC = "save_workspace_state";
 export const REPLACE_WORKSPACE_RPC = "replace_workspace_state";
 export const RESTORE_WORKSPACE_RPC = "restore_workspace_snapshot";
 export const RECOVERY_SNAPSHOTS_TABLE = "workspace_recovery_snapshots";
+export const APPLY_IMPORT_RPC = "apply_workspace_import";
+export const IMPORT_JOBS_TABLE = "workspace_import_jobs";
+
+const SHA256_RE = /^[0-9a-f]{64}$/;
 
 export class CloudPersistenceError extends Error {
   constructor(message = "Cloud records could not be loaded or saved.", options) {
@@ -87,6 +91,9 @@ function persistenceFailure(message, error) {
   }
   if (providerMessage.includes("empty_workspace_replacement_blocked")) {
     return new CloudPersistenceError("Hibi will not replace a populated workspace with an empty backup.", { cause: error });
+  }
+  if (providerMessage.includes("workspace_import_would_remove_records")) {
+    return new CloudPersistenceError("Hibi blocked an import that could remove existing records. Reopen the preview and try again.", { cause: error });
   }
   return new CloudPersistenceError(error?.message || message, { cause: error });
 }
@@ -198,6 +205,64 @@ export function createWorkspaceRepository(client = supabase, { allowWrites = tru
     const row = firstRow(data);
     if (!row) throw new CloudPersistenceError("The replacement cloud workspace response was empty.");
     return workspaceFromRow(row);
+  }
+
+  async function findImportJob(fileHash, expectedOwnerId) {
+    if (!SHA256_RE.test(String(fileHash || ""))) throw new TypeError("A valid SHA-256 file hash is required.");
+    const user = await requireUser(expectedOwnerId);
+    const ownerId = expectedOwnerId || user.id;
+    const { data, error } = await cloud()
+      .from(IMPORT_JOBS_TABLE)
+      .select("id, owner_id, file_hash, source_name, base_revision, result_revision, summary, created_at")
+      .eq("owner_id", ownerId)
+      .eq("file_hash", fileHash)
+      .maybeSingle();
+    if (error) throw persistenceFailure("Import history could not be checked.", error);
+    if (!data) return null;
+    return {
+      id: data.id,
+      ownerId: data.owner_id,
+      fileHash: data.file_hash,
+      sourceName: data.source_name,
+      baseRevision: normalizeRevision(data.base_revision),
+      resultRevision: normalizeRevision(data.result_revision),
+      summary: data.summary || {},
+      createdAt: data.created_at,
+    };
+  }
+
+  async function applyWorkspaceImport(state, expectedRevision, expectedOwnerId, metadata = {}) {
+    requireWritesEnabled();
+    const user = await requireUser(expectedOwnerId);
+    const nextState = canonicalState(state);
+    assertStateSize(nextState);
+    const revision = normalizeRevision(expectedRevision);
+    const fileHash = String(metadata.fileHash || "");
+    if (!SHA256_RE.test(fileHash)) throw new TypeError("A valid SHA-256 file hash is required.");
+    const summary = metadata.summary && typeof metadata.summary === "object" ? metadata.summary : {};
+    const { data, error } = await cloud().rpc(APPLY_IMPORT_RPC, {
+      p_expected_owner_id: expectedOwnerId || user.id,
+      p_expected_revision: revision,
+      p_state: nextState,
+      p_file_hash: fileHash,
+      p_source_name: String(metadata.sourceName || "").slice(0, 255),
+      p_summary: summary,
+      p_confirmation: `import:${revision}:${fileHash}`,
+    });
+    if (error && isRevisionConflict(error)) {
+      const latest = await fetchWorkspace(expectedOwnerId || user.id);
+      if (!latest) throw persistenceFailure("The latest cloud records could not be recovered.", error);
+      throw new WorkspaceConflictError({
+        latestState: latest.state,
+        latestRevision: latest.revision,
+        latestUpdatedAt: latest.updatedAt,
+        cause: error,
+      });
+    }
+    if (error) throw persistenceFailure("The records could not be imported.", error);
+    const row = firstRow(data);
+    if (!row) throw new CloudPersistenceError("The imported cloud workspace response was empty.");
+    return { ...workspaceFromRow(row), alreadyImported: Boolean(row.already_imported) };
   }
 
   async function listRecoverySnapshots(expectedOwnerId) {
@@ -313,6 +378,8 @@ export function createWorkspaceRepository(client = supabase, { allowWrites = tru
     loadOrCreateWorkspace,
     saveWorkspace,
     replaceWorkspace,
+    findImportJob,
+    applyWorkspaceImport,
     listRecoverySnapshots,
     loadRecoverySnapshot,
     restoreRecoverySnapshot,

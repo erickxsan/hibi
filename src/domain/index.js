@@ -52,6 +52,7 @@ export {
   resolveHourlyRate,
 } from "./schedule.js";
 export { studentMatchesFilters } from "./studentFilters.js";
+export { buildImportPlan, IMPORT_COLLECTIONS } from "./importRecords.js";
 
 export { createSeedState, seedState } from "./seed.js";
 export { createStarterState } from "./starterState.js";

@@ -9,6 +9,7 @@ import {
   createScheduleException,
   createStarterState,
   createStudent,
+  buildImportPlan,
   deriveAll,
   exportState,
   importState,
@@ -202,10 +203,12 @@ function upsertManyById(currentItems, nextItems) {
   return [...merged, ...nextItems.filter((item) => !existingIds.has(item.id))];
 }
 
-export async function persistRecipe({ baseState, recipe, adapter, replace = false }) {
+export async function persistRecipe({ baseState, recipe, adapter, replace = false, importMetadata = null }) {
   const canonicalize = (state) => importState(serializeState(state));
   const persist = async (state) => {
-    const result = replace && adapter?.replace
+    const result = importMetadata && adapter?.importRecords
+      ? await adapter.importRecords(state, importMetadata)
+      : replace && adapter?.replace
       ? await adapter.replace(state)
       : adapter?.save
         ? await adapter.save(state)
@@ -220,7 +223,7 @@ export async function persistRecipe({ baseState, recipe, adapter, replace = fals
     // A regular edit is a deterministic mutation and can be applied once to
     // the newest revision, preserving unrelated changes from another device.
     // Full backup replacement is intentionally never merged automatically.
-    if (replace || !error?.latestState || typeof adapter?.save !== "function") throw error;
+    if (replace || importMetadata || !error?.latestState || typeof adapter?.save !== "function") throw error;
     const latest = canonicalize(error.latestState);
     const rebased = canonicalize(recipe(latest));
     const retried = await adapter.save(rebased);
@@ -298,7 +301,7 @@ export function useClassManager({ persistence } = {}) {
     }
   }, [uiPreferences, uiStorageKey]);
 
-  const commit = useCallback((recipe, successMessage, { replace = false } = {}) => {
+  const commit = useCallback((recipe, successMessage, { replace = false, importMetadata = null } = {}) => {
     pendingWrites.current += 1;
     if (persistenceRef.current?.mode === "cloud") setSyncStatus("saving");
 
@@ -312,6 +315,7 @@ export function useClassManager({ persistence } = {}) {
           recipe,
           adapter,
           replace,
+          importMetadata,
         });
         if (!mountedRef.current) return false;
         const saved = importState(serializeState(result.state));
@@ -662,6 +666,36 @@ export function useClassManager({ persistence } = {}) {
     }
   }, [commit, notify]);
 
+  const previewImportRecords = useCallback(async (text, fileHash) => {
+    const imported = importState(text);
+    const plan = buildImportPlan(stateRef.current, imported);
+    const findImportJob = persistenceRef.current?.findImportJob;
+    const previousImport = typeof findImportJob === "function" ? await findImportJob(fileHash) : null;
+    return { ...plan, previousImport };
+  }, []);
+
+  const importRecords = useCallback((text, { fileHash, sourceName, decisions = {}, signature } = {}) => {
+    try {
+      const imported = importState(text);
+      return commit((current) => {
+        const fresh = buildImportPlan(current, imported, decisions);
+        if (fresh.signature !== signature) {
+          throw new Error("Your records changed after the preview. Reopen the file and review the updated conflicts.");
+        }
+        return fresh.candidate;
+      }, "Records imported safely", {
+        importMetadata: {
+          fileHash,
+          sourceName,
+          summary: buildImportPlan(stateRef.current, imported, decisions).summary,
+        },
+      });
+    } catch (error) {
+      notify(messageForError(error), "error");
+      return Promise.resolve(false);
+    }
+  }, [commit, notify]);
+
   const clearLegacyLocalData = useCallback(() => {
     if (persistenceRef.current?.mode !== "cloud") return false;
     try {
@@ -748,12 +782,14 @@ export function useClassManager({ persistence } = {}) {
     upsertScheduleChange,
     exportJson,
     importJson,
+    previewImportRecords,
+    importRecords,
     clearLegacyLocalData,
     listRecoveryPoints,
     exportRecoveryPoint,
     restoreRecoveryPoint,
     notify,
-  }), [addClassLogs, addGrades, archiveStudent, clearLegacyLocalData, deleteClassLog, deleteGrade, deleteGroup, deleteStudent, exportJson, exportRecoveryPoint, importJson, listRecoveryPoints, notify, restoreRecoveryPoint, saveProgress, updatePreferences, updateSettings, upsertClassLog, upsertClassSchedule, upsertGrade, upsertGroup, upsertScheduleChange, upsertScheduleException, upsertStudent]);
+  }), [addClassLogs, addGrades, archiveStudent, clearLegacyLocalData, deleteClassLog, deleteGrade, deleteGroup, deleteStudent, exportJson, exportRecoveryPoint, importJson, importRecords, listRecoveryPoints, notify, previewImportRecords, restoreRecoveryPoint, saveProgress, updatePreferences, updateSettings, upsertClassLog, upsertClassSchedule, upsertGrade, upsertGroup, upsertScheduleChange, upsertScheduleException, upsertStudent]);
 
   return useMemo(() => ({
     state: viewState,

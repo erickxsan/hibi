@@ -131,6 +131,62 @@ describe("workspace repository", () => {
     expect(result).toMatchObject({ state, revision: 5 });
   });
 
+  it("applies an additive import through the audited revision-aware RPC", async () => {
+    const state = createStarterState();
+    const fileHash = "a".repeat(64);
+    const client = authenticatedClient({
+      rpc: vi.fn(async () => ({
+        data: [{ state, revision: 6, updated_at: "2026-07-27T12:00:00Z", already_imported: false }],
+        error: null,
+      })),
+    });
+
+    const result = await createWorkspaceRepository(client).applyWorkspaceImport(state, 5, "user-1", {
+      fileHash,
+      sourceName: "backup.json",
+      summary: { added: 3 },
+    });
+
+    expect(client.rpc).toHaveBeenCalledWith("apply_workspace_import", {
+      p_expected_owner_id: "user-1",
+      p_expected_revision: 5,
+      p_state: state,
+      p_file_hash: fileHash,
+      p_source_name: "backup.json",
+      p_summary: { added: 3 },
+      p_confirmation: `import:5:${fileHash}`,
+    });
+    expect(result).toMatchObject({ state, revision: 6, alreadyImported: false });
+  });
+
+  it("checks owner-bound import history by SHA-256 hash", async () => {
+    const fileHash = "b".repeat(64);
+    const query = {
+      select: vi.fn(() => query),
+      eq: vi.fn(() => query),
+      maybeSingle: vi.fn(async () => ({
+        data: {
+          id: "job-1",
+          owner_id: "user-1",
+          file_hash: fileHash,
+          source_name: "backup.json",
+          base_revision: 4,
+          result_revision: 5,
+          summary: { added: 2 },
+          created_at: "2026-07-27T12:00:00Z",
+        },
+        error: null,
+      })),
+    };
+    const client = authenticatedClient({ from: vi.fn(() => query) });
+
+    const result = await createWorkspaceRepository(client).findImportJob(fileHash, "user-1");
+
+    expect(query.eq).toHaveBeenNthCalledWith(1, "owner_id", "user-1");
+    expect(query.eq).toHaveBeenNthCalledWith(2, "file_hash", fileHash);
+    expect(result).toMatchObject({ id: "job-1", fileHash, resultRevision: 5 });
+  });
+
   it("refreshes the latest state and raises a typed conflict", async () => {
     const local = createStarterState();
     const latest = createStarterState();

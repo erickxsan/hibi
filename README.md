@@ -34,3 +34,7 @@ Before changing from the local address to a hosted domain, download a JSON backu
 After signing into the hosted app, restore that JSON backup from the same Setup screen. If cloud mode is enabled on the original local address, the app also offers a one-time automatic migration into the signed-in account.
 
 JSON backups are plaintext and may contain student, guardian, attendance, grade, and payment information. Store them privately.
+
+## JSON imports
+
+**Import records** is additive: it previews new records, exact duplicates, and possible conflicts before saving. Existing records are never removed, conflicts keep the current value by default, related IDs are remapped, and an identical file is not applied twice. **Restore full backup** remains a separate recovery operation that intentionally replaces the workspace after an explicit confirmation.

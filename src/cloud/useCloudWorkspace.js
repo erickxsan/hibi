@@ -109,6 +109,40 @@ export function useCloudWorkspace(user) {
     }
   }, [applyWorkspace, captureDeviceCopy, user.id]);
 
+  const importRecords = useCallback(async (state, metadata) => {
+    try {
+      const previous = workspaceRef.current;
+      if (previous?.state) {
+        await captureDeviceCopy(previous.state, previous.revision, "before-import", previous.updatedAt);
+      }
+      const imported = await workspaceRepository.applyWorkspaceImport(
+        state,
+        revisionRef.current,
+        user.id,
+        metadata,
+      );
+      applyWorkspace(imported);
+      if (!imported.alreadyImported) {
+        void captureDeviceCopy(imported.state, imported.revision, "cloud-import", imported.updatedAt);
+      }
+      setError(null);
+      return imported;
+    } catch (caught) {
+      if (caught instanceof WorkspaceConflictError) {
+        applyWorkspace({
+          state: caught.latestState,
+          revision: caught.latestRevision,
+          updatedAt: caught.latestUpdatedAt,
+        });
+      }
+      throw caught;
+    }
+  }, [applyWorkspace, captureDeviceCopy, user.id]);
+
+  const findImportJob = useCallback((fileHash) => (
+    workspaceRepository.findImportJob(fileHash, user.id)
+  ), [user.id]);
+
   const listRecoveryPoints = useCallback(async () => {
     const [cloudPoints, devicePoints] = await Promise.all([
       workspaceRepository.listRecoverySnapshots(user.id),
@@ -210,13 +244,15 @@ export function useCloudWorkspace(user) {
     initialState: workspace.state,
     save,
     replace,
+    importRecords,
+    findImportJob,
     subscribe,
     listRecoveryPoints,
     loadRecoveryPoint,
     restoreRecoveryPoint,
-  } : null, [listRecoveryPoints, loadRecoveryPoint, replace, restoreRecoveryPoint, save, subscribe, user.id, workspace]);
+  } : null, [findImportJob, importRecords, listRecoveryPoints, loadRecoveryPoint, replace, restoreRecoveryPoint, save, subscribe, user.id, workspace]);
 
   const retry = useCallback(() => setReloadToken((current) => current + 1), []);
 
-  return { workspace, persistence, loading, error, retry, save, replace };
+  return { workspace, persistence, loading, error, retry, save, replace, importRecords };
 }
