@@ -2721,7 +2721,7 @@ tbody .gradebook-student-column,tbody .attendance-student-column { display:flex;
 .tracking-heading h1 { margin:0; color:var(--hibi-forest-dark); font-family:Georgia,"Times New Roman",serif; font-size:42px; line-height:1; letter-spacing:-.035em; }
 .tracking-heading h1 span { color:#80bf3d; font-family:inherit; font-size:.7em; }
 .tracking-heading p { margin:8px 0 0; color:var(--hibi-muted); font-size:14px; }
-.tracking-top-actions { min-width:0; display:grid; grid-template-columns:minmax(190px,220px) minmax(240px,310px) auto; align-items:end; gap:12px; }
+.tracking-top-actions { min-width:0; display:grid; grid-template-columns:minmax(180px,210px) minmax(220px,310px) auto auto; align-items:end; gap:12px; }
 .tracking-select { min-width:0; display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; gap:9px; }
 .tracking-select>strong { color:#3c4642; font-size:11px; white-space:nowrap; }
 .tracking-select>.select-wrap { min-width:0; }
@@ -2739,6 +2739,13 @@ tbody .gradebook-student-column,tbody .attendance-student-column { display:flex;
 .tracking-tabs button.active { color:var(--hibi-forest); }
 .tracking-tabs button.active::after { background:#137051; }
 .tracking-tabs button:focus-visible,.tracking-mode button:focus-visible { outline:3px solid rgba(19,112,81,.18); outline-offset:2px; }
+.tracking-historical-banner { min-height:58px; display:flex; align-items:center; justify-content:space-between; gap:16px; margin:12px 0 0; padding:9px 12px 9px 15px; border:1px solid #ecd4a4; border-radius:12px; background:#fff8e8; color:#60491f; }
+.tracking-historical-banner>span { display:flex; align-items:center; gap:10px; }
+.tracking-historical-banner>span>svg { flex:0 0 auto; color:#c98112; }
+.tracking-historical-banner>span>span { display:grid; gap:2px; }
+.tracking-historical-banner strong { font-size:12px; }
+.tracking-historical-banner small { color:#796b50; font-size:10px; }
+.tracking-historical-banner .button { min-height:36px; background:#fffdf8; }
 .tracking-context { min-height:74px; display:flex; align-items:center; gap:28px; padding:16px 2px; }
 .tracking-mode { display:flex; align-items:center; gap:12px; }
 .tracking-mode>strong { font-size:11px; white-space:nowrap; }
@@ -2810,10 +2817,22 @@ tbody .gradebook-student-column,tbody .attendance-student-column { display:flex;
 .tracking-recent-row .tracking-person { min-width:0; }.tracking-recent-row .tracking-person .student-avatar { flex:0 0 auto; }
 .tracking-side-link { width:100%; min-height:38px; display:flex; align-items:center; justify-content:center; gap:8px; margin:10px 0 -7px; border:0; border-top:1px solid #eee7dd; background:transparent; color:var(--hibi-forest); font:800 10px/1 inherit; cursor:pointer; }
 .tracking-empty-copy { color:var(--hibi-muted); font-size:10px; line-height:1.5; }
+.tracking-date-settings { display:grid; gap:18px; }
+.tracking-date-mode { display:grid; grid-template-columns:1fr 1fr; overflow:hidden; padding:3px; border:1px solid #ded5c8; border-radius:12px; background:#f6f2eb; }
+.tracking-date-mode button { min-height:42px; padding:0 14px; border:0; border-radius:9px; background:transparent; color:#59615f; font:800 12px/1 inherit; cursor:pointer; }
+.tracking-date-mode button.active { background:#fff; color:var(--hibi-forest); box-shadow:0 2px 10px rgba(44,55,48,.08); }
+.tracking-date-mode button:focus-visible { outline:3px solid rgba(19,112,81,.18); outline-offset:1px; }
+.tracking-date-note { display:grid; grid-template-columns:auto 1fr; align-items:start; gap:11px; padding:14px; border:1px solid #d9e8d3; border-radius:12px; background:#f2f8ef; color:var(--hibi-forest); }
+.tracking-date-note>div { display:grid; gap:4px; }
+.tracking-date-note strong { color:var(--hibi-forest-dark); font-size:12px; }
+.tracking-date-note p { margin:0; color:#52645d; font-size:12px; line-height:1.55; }
+.tracking-date-note time { font-weight:850; }
+.tracking-date-note.historical { border-color:#ecd4a4; background:#fff8e8; }
+.tracking-date-note.historical>svg { color:#c98112; }
 
 @media (max-width:1320px) {
   .tracking-heading { display:grid; align-items:flex-start; }
-  .tracking-top-actions { width:100%; grid-template-columns:180px minmax(210px,1fr) auto; }
+  .tracking-top-actions { width:100%; grid-template-columns:180px minmax(210px,1fr) auto auto; }
   .tracking-content-grid { grid-template-columns:1fr; }
   .tracking-sidebar { grid-template-columns:1fr 1fr; }
   .tracking-summary>div { grid-template-columns:repeat(5,minmax(130px,1fr)); overflow:auto; }
@@ -2821,7 +2840,7 @@ tbody .gradebook-student-column,tbody .attendance-student-column { display:flex;
 
 @media (max-width:980px) {
   .tracking-heading { display:grid; }
-  .tracking-top-actions { width:100%; grid-template-columns:minmax(150px,.8fr) minmax(200px,1.2fr) auto; }
+  .tracking-top-actions { width:100%; grid-template-columns:minmax(150px,.8fr) minmax(200px,1.2fr) auto auto; }
   .tracking-context { align-items:stretch; flex-wrap:wrap; gap:12px; }
   .tracking-context>.tracking-select { width:calc(50% - 6px); }
   .tracking-mode { width:100%; }.tracking-mode>div { flex:1; }.tracking-mode button { flex:1; }
@@ -2830,8 +2849,8 @@ tbody .gradebook-student-column,tbody .attendance-student-column { display:flex;
 @media (max-width:720px) {
   .tracking-heading h1 { font-size:34px; }
   .tracking-heading p { font-size:12px; }
-  .tracking-top-actions { grid-template-columns:1fr auto; }
-  .tracking-top-actions>.tracking-select { grid-column:1; }.tracking-search { grid-column:1/-1; grid-row:2; }.tracking-top-actions>.button { grid-column:2; grid-row:1; padding-inline:11px; }
+  .tracking-top-actions { grid-template-columns:1fr auto auto; }
+  .tracking-top-actions>.tracking-select { grid-column:1; }.tracking-search { grid-column:1/-1; grid-row:2; }.tracking-top-actions>.button { padding-inline:11px; }
   .tracking-tabs { gap:0; }.tracking-tabs button { min-width:0; flex:1; padding-inline:4px; }
   .tracking-context>.tracking-select { width:100%; }
   .tracking-select { grid-template-columns:70px minmax(0,1fr); }
@@ -2845,6 +2864,8 @@ tbody .gradebook-student-column,tbody .attendance-student-column { display:flex;
   .tracking-sidebar { grid-template-columns:1fr; }
   .tracking-chart,.tracking-payment-chart,.tracking-table-shell,.tracking-sidebar { min-width:0; max-width:100%; }
   .tracking-table-shell { margin-right:0; border-radius:0 0 15px 15px; }
+  .tracking-historical-banner { align-items:stretch; flex-direction:column; }
+  .tracking-historical-banner .button { width:100%; }
 }
 
 /* Classes workspace — daily attendance, payments and grades in one flow. */

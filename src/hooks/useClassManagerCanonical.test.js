@@ -1,8 +1,21 @@
 import { describe, expect, it, vi } from "vitest";
 import { createStarterState } from "../domain";
-import { canonicalGroup, canonicalStudent, persistRecipe } from "./useClassManager";
+import { canonicalGroup, canonicalStudent, operationalStateForDate, persistRecipe } from "./useClassManager";
 
 describe("class manager draft canonicalization", () => {
+  it("uses the real operational date without mutating persisted legacy dates", () => {
+    const state = createStarterState();
+    state.settings.asOfDate = "2026-01-12";
+    state.settings.selectedMonth = "2026-01-01";
+
+    const result = operationalStateForDate(state, "2026-08-15");
+
+    expect(result.settings.asOfDate).toBe("2026-08-15");
+    expect(result.settings.selectedMonth).toBe("2026-08-01");
+    expect(state.settings.asOfDate).toBe("2026-01-12");
+    expect(state.settings.selectedMonth).toBe("2026-01-01");
+  });
+
   it("prefers current student fields over legacy view aliases", () => {
     const result = canonicalStudent({
       id: "s1",

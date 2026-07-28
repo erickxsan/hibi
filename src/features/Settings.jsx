@@ -37,7 +37,6 @@ export default function Settings({ state, actions, persistenceMode, registerNavi
     setSaving(true);
     try {
       await actions.updateSettings(draft);
-      await actions.updatePreferences({ selectedMonth: draft.selectedMonth, asOfDate: draft.asOfDate });
       baselineRef.current = draft;
     } finally {
       setSaving(false);
@@ -102,7 +101,7 @@ export default function Settings({ state, actions, persistenceMode, registerNavi
 
   return (
     <div className="page settings-page">
-      <div className="page-heading"><div><h1>Settings</h1><p>Manage classroom defaults, reporting dates, language, sounds, backup, and privacy.</p></div></div>
+      <div className="page-heading"><div><h1>Settings</h1><p>Manage classroom defaults, language, sounds, backup, and privacy.</p></div></div>
       <section className="settings-stack">
         <article className="settings-card">
           <div className="settings-icon yellow"><Clock3 size={22} /></div>
@@ -114,8 +113,6 @@ export default function Settings({ state, actions, persistenceMode, registerNavi
               <Field label="Projection window"><Input type="number" min="1" step="1" value={draft.recentProjectionWeeks} onChange={(event) => setDraft({ ...draft, recentProjectionWeeks: Number(event.target.value) })} /><small>weeks</small></Field>
               <Field label="Low grade threshold"><Input type="number" min="0" max="100" step="1" value={Math.round(draft.lowGradeThreshold * 100)} onChange={(event) => setDraft({ ...draft, lowGradeThreshold: Number(event.target.value) / 100 })} /><small>percent</small></Field>
               <Field label="Low attendance threshold"><Input type="number" min="0" max="100" step="1" value={Math.round(draft.lowAttendanceThreshold * 100)} onChange={(event) => setDraft({ ...draft, lowAttendanceThreshold: Number(event.target.value) / 100 })} /><small>percent</small></Field>
-              <Field label="Selected report month"><Input type="month" value={draft.selectedMonth.slice(0, 7)} onChange={(event) => setDraft({ ...draft, selectedMonth: `${event.target.value}-01` })} /></Field>
-              <Field label="Balances calculated through"><Input type="date" value={draft.asOfDate} onChange={(event) => setDraft({ ...draft, asOfDate: event.target.value })} /></Field>
               <Button variant="primary" onClick={save} disabled={!dirty || saving}>{saving ? "Saving…" : "Save defaults"}</Button>
             </div>
           </div>

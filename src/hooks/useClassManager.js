@@ -18,7 +18,9 @@ import {
   safeLoadStateWithMigrations,
   saveState,
   serializeState,
+  startOfMonth,
   STORAGE_KEY,
+  todayDateOnly,
   validateClassLogRow,
   validateClassSchedule,
   validateGrade,
@@ -27,6 +29,17 @@ import {
 } from "../domain";
 
 const UI_STORAGE_KEY = "minimal-class-manager:ui:v1";
+
+export function operationalStateForDate(state, date = todayDateOnly()) {
+  return {
+    ...state,
+    settings: {
+      ...state.settings,
+      asOfDate: date,
+      selectedMonth: startOfMonth(date),
+    },
+  };
+}
 
 function loadUiPreferences(storageKey = UI_STORAGE_KEY) {
   try {
@@ -226,6 +239,7 @@ export function useClassManager({ persistence } = {}) {
     }
   }, []);
   const [canonicalState, setCanonicalState] = useState(initial.state);
+  const [operationalDate, setOperationalDate] = useState(() => todayDateOnly());
   const [uiPreferences, setUiPreferences] = useState(() => loadUiPreferences(uiStorageKey));
   const [toasts, setToasts] = useState(() => initial.error ? [{ id: "storage-warning", tone: "error", message: "A browser-storage issue was detected. Your saved bytes were not overwritten automatically." }] : []);
   const timers = useRef(new Map());
@@ -242,6 +256,19 @@ export function useClassManager({ persistence } = {}) {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const refreshOperationalDate = () => {
+      const next = todayDateOnly();
+      setOperationalDate((current) => current === next ? current : next);
+    };
+    const timer = window.setInterval(refreshOperationalDate, 60_000);
+    document.addEventListener("visibilitychange", refreshOperationalDate);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refreshOperationalDate);
     };
   }, []);
 
@@ -364,9 +391,14 @@ export function useClassManager({ persistence } = {}) {
     });
   }, [notify]);
 
+  const operationalState = useMemo(
+    () => operationalStateForDate(canonicalState, operationalDate),
+    [canonicalState, operationalDate],
+  );
+
   const rawDerived = useMemo(
-    () => deriveAll(canonicalState, canonicalState.settings.asOfDate),
-    [canonicalState],
+    () => deriveAll(operationalState, operationalDate),
+    [operationalDate, operationalState],
   );
 
   const groups = useMemo(() => canonicalState.groups.map((group) => ({ ...group, scheduleRoom: group.schedule })), [canonicalState.groups]);
@@ -392,11 +424,11 @@ export function useClassManager({ persistence } = {}) {
     : studentSummaries.find((student) => student.status === "Active")?.id || "";
 
   const viewState = useMemo(() => ({
-    ...canonicalState,
-    settings: { ...canonicalState.settings, hourlyRateMxn: canonicalState.settings.hourlyRate },
+    ...operationalState,
+    settings: { ...operationalState.settings, hourlyRateMxn: operationalState.settings.hourlyRate },
     preferences: {
-      selectedMonth: canonicalState.settings.selectedMonth,
-      asOfDate: canonicalState.settings.asOfDate,
+      selectedMonth: operationalState.settings.selectedMonth,
+      asOfDate: operationalDate,
       selectedStudentId,
     },
     groups,
@@ -404,7 +436,7 @@ export function useClassManager({ persistence } = {}) {
     grades: gradeRows,
     classLog: canonicalState.classLog,
     classLogs: canonicalState.classLog,
-  }), [canonicalState, gradeRows, groups, selectedStudentId, students]);
+  }), [canonicalState.classLog, gradeRows, groups, operationalDate, operationalState, selectedStudentId, students]);
 
   const derived = useMemo(() => ({
     ...rawDerived,
@@ -608,9 +640,9 @@ export function useClassManager({ persistence } = {}) {
 
   const exportJson = useCallback(() => {
     const current = stateRef.current;
-    downloadText(createExportFilename(current.settings.asOfDate), exportState(current));
+    downloadText(createExportFilename(operationalDate), exportState(current));
     notify("Backup downloaded");
-  }, [notify]);
+  }, [notify, operationalDate]);
 
   const importJson = useCallback((text) => {
     try {
@@ -726,11 +758,11 @@ export function useClassManager({ persistence } = {}) {
   return useMemo(() => ({
     state: viewState,
     derived,
-    asOfDate: canonicalState.settings.asOfDate,
+    asOfDate: operationalDate,
     syncStatus,
     persistenceMode: persistence?.mode || "local",
     actions,
     toasts,
     dismissToast,
-  }), [actions, canonicalState.settings.asOfDate, derived, dismissToast, persistence?.mode, syncStatus, toasts, viewState]);
+  }), [actions, derived, dismissToast, operationalDate, persistence?.mode, syncStatus, toasts, viewState]);
 }
