@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Copy,
   EllipsisVertical,
   Filter,
+  Mail,
   Pencil,
   Plus,
   Save,
   Search,
+  ShieldCheck,
   Trash2,
   UserRound,
   UsersRound,
@@ -23,6 +27,12 @@ import { getUiLocale, useI18n } from "../i18n";
 import { normalizeSearchText } from "../utils/searchText";
 import { EnrollmentTags, StudentEditor } from "./Students";
 import { GroupEditor } from "./Groups";
+import {
+  CONTACT_VIEWS,
+  groupContactRows,
+  primaryContactForStudent,
+  uniqueAvailableContacts,
+} from "./communityContacts";
 
 const COMMUNITY_VIEWS = Object.freeze(["all", "students", "groups"]);
 const EMPTY_STUDENT = Object.freeze({
@@ -33,6 +43,8 @@ const EMPTY_STUDENT = Object.freeze({
   groupIds: [],
   isIndividual: false,
   customHourlyRate: null,
+  studentEmail: "",
+  guardianPhone: "",
   phone: "",
   guardianContact: "",
   notes: "",
@@ -68,6 +80,8 @@ function cloneStudent(student = EMPTY_STUDENT) {
     ...EMPTY_STUDENT,
     ...student,
     code: student.code ?? student.studentCode ?? "",
+    studentEmail: student.studentEmail ?? student.email ?? "",
+    guardianPhone: student.guardianPhone ?? student.parentPhone ?? "",
     phone: student.phone ?? student.studentPhone ?? "",
     notes: student.notes ?? student.importantNotes ?? "",
     groupIds: [...(student.groupIds || (student.groupId ? [student.groupId] : []))],
@@ -143,19 +157,21 @@ function RowMenu({ label, onEdit, onDelete, onArchive }) {
 function StudentRows({ students, selectedId, onSelect, onEdit, onArchive, onDelete, groupsById }) {
   return (
     <div className="community-table community-student-table" role="table" aria-label="Students">
-      <div className="community-table-head" role="row"><span>Student</span><span>Phone</span><span>Group(s)</span><span>Status</span><span>Actions</span></div>
-      {students.map((student) => (
+      <div className="community-table-head" role="row"><span>Student</span><span>Primary contact</span><span>Group(s)</span><span>Status</span><span>Actions</span></div>
+      {students.map((student) => {
+        const contact = primaryContactForStudent(student);
+        return (
         <div className={selectedId === student.id ? "community-table-row selected" : "community-table-row"} role="row" key={student.id}>
           <button type="button" className="community-row-primary" onClick={() => onSelect(student.id)} aria-label={`Open ${student.fullName}`}>
             <StudentAvatar avatarId={student.avatarId} name={student.fullName} size="small" decorative />
             <span><strong>{student.fullName}</strong><small>{student.code}</small></span>
           </button>
-          <span className="community-phone">{student.phone || "No phone"}</span>
+          <span className="community-primary-contact"><strong>{contact.value || "No contact"}</strong><small>{contact.label}</small></span>
           <EnrollmentTags student={student} groupsById={groupsById} />
           <span className={student.status === "Active" ? "record-status active" : "record-status"}>{student.status}</span>
           <span className="community-row-actions"><Button icon={Pencil} onClick={() => onEdit(student)}>Edit</Button><RowMenu label={student.fullName} onEdit={() => onEdit(student)} onArchive={student.status === "Active" ? () => onArchive(student) : null} onDelete={() => onDelete(student)} /></span>
         </div>
-      ))}
+      );})}
     </div>
   );
 }
@@ -163,7 +179,7 @@ function StudentRows({ students, selectedId, onSelect, onEdit, onArchive, onDele
 function GroupRows({ groups, summaries, selectedId, onSelect, onEdit, onDelete }) {
   return (
     <div className="community-table community-group-table" role="table" aria-label="Groups">
-      <div className="community-table-head" role="row"><span>Group</span><span>Schedule</span><span>Students</span><span>Attendance</span><span>Actions</span></div>
+      <div className="community-table-head" role="row"><span>Group</span><span>Members</span><span>Actions</span></div>
       {groups.map((group) => {
         const summary = summaries.find((item) => item.id === group.id) || {};
         return (
@@ -172,9 +188,7 @@ function GroupRows({ groups, summaries, selectedId, onSelect, onEdit, onDelete }
               <span className="community-group-emblem"><UsersRound size={20} /></span>
               <span><strong>{group.name}</strong><small>{group.subject || group.grade || "Group"}</small></span>
             </button>
-            <span className="community-phone">{formatWeeklySchedule(group.weeklySchedule) || group.schedule || "Not scheduled"}</span>
             <strong>{summary.activeStudents || 0}</strong>
-            <strong>{pct(summary.attendance)}</strong>
             <span className="community-row-actions"><Button icon={Pencil} onClick={() => onEdit(group)}>Edit</Button><RowMenu label={group.name} onEdit={() => onEdit(group)} onDelete={() => onDelete(group)} /></span>
           </div>
         );
@@ -212,7 +226,9 @@ function StudentDetail({ student, draft, setDraft, groupsById, state, onEdit, on
         <div className="community-profile"><button type="button" className="community-avatar-button" onClick={onEdit} aria-label="Change student avatar"><StudentAvatar avatarId={student.avatarId} name={student.fullName} size="large" /></button><span><strong>{student.fullName}</strong><small>{student.code}</small><em className={student.status === "Active" ? "record-status active" : "record-status"}>{student.status}</em></span></div>
         <div className="community-detail-form">
           <Field label="Full name"><Input value={draft.fullName} onChange={(event) => setDraft({ ...draft, fullName: event.target.value })} /></Field>
-          <Field label="Phone"><Input type="tel" value={draft.phone} onChange={(event) => setDraft({ ...draft, phone: event.target.value })} /></Field>
+          <Field label="Student email"><Input type="email" inputMode="email" autoComplete="email" value={draft.studentEmail} onChange={(event) => setDraft({ ...draft, studentEmail: event.target.value })} /></Field>
+          <Field label="Guardian phone"><Input type="tel" inputMode="tel" autoComplete="tel" value={draft.guardianPhone} onChange={(event) => setDraft({ ...draft, guardianPhone: event.target.value })} /></Field>
+          <Field label="Student phone"><Input type="tel" inputMode="tel" autoComplete="tel" value={draft.phone} onChange={(event) => setDraft({ ...draft, phone: event.target.value })} /></Field>
           <Field label="Status"><Select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value })}><option>Active</option><option>Inactive</option></Select></Field>
           <Field label="Brief notes"><TextArea rows="3" maxLength="250" value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} /><small className="community-character-count">{draft.notes.length}/250</small></Field>
         </div>
@@ -223,7 +239,7 @@ function StudentDetail({ student, draft, setDraft, groupsById, state, onEdit, on
   );
 }
 
-function GroupDetail({ group, draft, setDraft, summary, members, onEdit, onManage, onSave, onDelete, saving }) {
+function LegacyGroupDetail({ group, draft, setDraft, summary, members, onEdit, onManage, onSave, onDelete, saving }) {
   return (
     <section className="community-detail-panel" aria-labelledby="community-group-detail-title">
       <header className="community-detail-heading"><span className="community-heading-icon"><UsersRound size={22} /></span><h2 id="community-group-detail-title">Group details</h2><ChevronDown size={19} aria-hidden="true" /></header>
@@ -238,6 +254,103 @@ function GroupDetail({ group, draft, setDraft, summary, members, onEdit, onManag
         <section className="community-assignment"><h3>Students</h3><div>{members.slice(0, 6).map((student) => <article key={student.id}><StudentAvatar avatarId={student.avatarId} name={student.fullName} size="tiny" decorative /><span><strong>{student.fullName}</strong><small>{student.isIndividual ? "Individual + group" : "Group student"}</small></span></article>)}</div>{!members.length ? <p>No students assigned yet.</p> : null}<button type="button" onClick={onManage}><Plus size={16} />Manage students</button><button type="button" className="community-edit-all" onClick={onEdit}><Pencil size={15} />Edit schedule and pricing</button></section>
       </div>
       <footer className="community-detail-footer"><Button variant="danger" className="community-danger-action" icon={Trash2} onClick={onDelete}>Delete group</Button><Button variant="primary" icon={Save} onClick={onSave} disabled={saving}>{saving ? "Saving…" : "Save changes"}</Button></footer>
+    </section>
+  );
+}
+
+async function copyContactText(value) {
+  if (!value) return false;
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return true;
+  }
+  const field = document.createElement("textarea");
+  field.value = value;
+  field.setAttribute("readonly", "");
+  field.style.position = "fixed";
+  field.style.opacity = "0";
+  document.body.appendChild(field);
+  field.select();
+  const copied = document.execCommand("copy");
+  field.remove();
+  return copied;
+}
+
+function GroupContactDirectory({ members }) {
+  const [contactView, setContactView] = useState(CONTACT_VIEWS.STUDENT_EMAIL);
+  const [missingOnly, setMissingOnly] = useState(false);
+  const [copyMessage, setCopyMessage] = useState("");
+  const allRows = useMemo(() => groupContactRows(members, contactView), [contactView, members]);
+  const rows = useMemo(() => groupContactRows(members, contactView, { missingOnly }), [contactView, members, missingOnly]);
+  const contacts = useMemo(() => uniqueAvailableContacts(allRows), [allRows]);
+
+  useEffect(() => {
+    if (!copyMessage) return undefined;
+    const timer = window.setTimeout(() => setCopyMessage(""), 2200);
+    return () => window.clearTimeout(timer);
+  }, [copyMessage]);
+
+  const copyOne = async (value) => {
+    try {
+      if (await copyContactText(value)) setCopyMessage("Contact copied");
+    } catch {
+      setCopyMessage("Copy failed");
+    }
+  };
+  const copyAll = async () => {
+    try {
+      const separator = contactView === CONTACT_VIEWS.STUDENT_EMAIL ? ", " : "\n";
+      if (await copyContactText(contacts.join(separator))) {
+        setCopyMessage(contactView === CONTACT_VIEWS.STUDENT_EMAIL ? "Emails copied" : "Phone numbers copied");
+      }
+    } catch {
+      setCopyMessage("Copy failed");
+    }
+  };
+  const composeWithBcc = () => {
+    if (!contacts.length) return;
+    window.location.href = `mailto:?bcc=${encodeURIComponent(contacts.join(","))}`;
+  };
+
+  return (
+    <section className="group-directory" aria-labelledby="group-directory-title">
+      <div className="group-directory-title-row"><h3 id="group-directory-title">Group directory</h3><span>{`${contacts.length} of ${members.length} contacts available`}</span></div>
+      <div className="group-directory-toolbar">
+        <div className="contact-view-tabs" role="tablist" aria-label="Contact information to show">
+          {[
+            [CONTACT_VIEWS.STUDENT_EMAIL, "Student email"],
+            [CONTACT_VIEWS.GUARDIAN_PHONE, "Guardian phone"],
+            [CONTACT_VIEWS.STUDENT_PHONE, "Student phone"],
+          ].map(([id, label]) => <button type="button" role="tab" aria-selected={contactView === id} className={contactView === id ? "active" : ""} key={id} onClick={() => setContactView(id)}>{label}</button>)}
+        </div>
+        <label className="directory-missing-toggle"><input type="checkbox" checked={missingOnly} onChange={(event) => setMissingOnly(event.target.checked)} /><span>Show missing only</span></label>
+        <div className="directory-actions">
+          <Button icon={Copy} onClick={copyAll} disabled={!contacts.length}>{contactView === CONTACT_VIEWS.STUDENT_EMAIL ? "Copy all emails" : "Copy all numbers"}</Button>
+          {contactView === CONTACT_VIEWS.STUDENT_EMAIL ? <Button variant="primary" icon={Mail} onClick={composeWithBcc} disabled={!contacts.length}>Compose with BCC</Button> : null}
+        </div>
+      </div>
+      {contactView === CONTACT_VIEWS.STUDENT_EMAIL ? <p className="directory-privacy"><ShieldCheck size={14} aria-hidden="true" />Recipients are added using BCC.</p> : null}
+      <div className="directory-table" role="table" aria-label="Group contacts">
+        <div className="directory-table-head" role="row"><span>Student</span><span>Contact</span><span>Availability</span><span>Action</span></div>
+        {rows.map((row) => <div className="directory-table-row" role="row" key={row.student.id}>
+          <span className="directory-student"><StudentAvatar avatarId={row.student.avatarId} name={row.student.fullName} size="tiny" decorative /><span><strong>{row.student.fullName}</strong><small>{row.student.code}</small></span></span>
+          <span className="directory-contact" title={row.inferred ? "Read from existing parent/tutor details" : undefined}>{row.value || "—"}</span>
+          <span><em className={row.available ? "directory-availability available" : "directory-availability missing"}>{row.available ? "Available" : "Missing"}</em></span>
+          <span>{row.available ? <button type="button" className="directory-copy" onClick={() => copyOne(row.value)}><Copy size={14} aria-hidden="true" />Copy</button> : <span className="directory-no-action">—</span>}</span>
+        </div>)}
+        {!rows.length ? <div className="directory-empty"><Check size={21} aria-hidden="true" /><strong>{missingOnly ? "No missing contacts" : "No students in this group"}</strong><span>{missingOnly ? "Every student has this contact saved." : "Manage students to build this directory."}</span></div> : null}
+      </div>
+      <span className="sr-only" role="status" aria-live="polite">{copyMessage}</span>
+    </section>
+  );
+}
+
+function GroupDetail({ group, members, onEdit, onManage }) {
+  return (
+    <section className="community-detail-panel" aria-labelledby="community-group-detail-title">
+      <header className="community-group-directory-heading"><span className="community-group-emblem"><UsersRound size={22} /></span><span><h2 id="community-group-detail-title">{group.name}</h2><small>{members.length} {members.length === 1 ? "student" : "students"}{group.grade || group.subject ? ` · ${group.grade || group.subject}` : ""}</small></span><em className="record-status active">Active</em><ChevronDown size={19} aria-hidden="true" /></header>
+      <div className="community-detail-body community-directory-body"><GroupContactDirectory members={members} /></div>
+      <footer className="community-directory-footer"><Button icon={UsersRound} onClick={onManage}>Manage students</Button><Button icon={Pencil} onClick={onEdit}>Edit group</Button></footer>
     </section>
   );
 }
@@ -282,7 +395,7 @@ export default function Community({ state, derived, actions, intent, clearIntent
     if (status !== "all" && student.status !== status) return false;
     if (!studentMatchesFilters(student, filters)) return false;
     const groupNames = (student.groupIds || []).map((id) => groupsById.get(id)?.name || "");
-    return normalizeSearchText([student.fullName, student.code, student.phone, student.guardianContact, ...groupNames].join(" ")).includes(needle);
+    return normalizeSearchText([student.fullName, student.code, student.studentEmail, student.guardianPhone, student.phone, student.guardianContact, ...groupNames].join(" ")).includes(needle);
   }), [filters, groupsById, needle, state.students, status]);
   const visibleGroups = useMemo(() => state.groups.filter((group) => normalizeSearchText([group.name, group.subject, group.grade, group.schedule, formatWeeklySchedule(group.weeklySchedule)].join(" ")).includes(needle)), [needle, state.groups]);
 
@@ -420,10 +533,10 @@ export default function Community({ state, derived, actions, intent, clearIntent
     <div className="page community-page">
       <header className="community-page-heading"><div><h1>Community</h1><p>Manage students and groups in one place, quickly and simply.</p></div><div><Button variant="primary" icon={Plus} onClick={() => openStudentEditor()}>Add student</Button><Button icon={UsersRound} onClick={() => openGroupEditor()}>Create group</Button></div></header>
       <div className="community-toolbar"><label className="community-search"><Search size={19} aria-hidden="true" /><span className="sr-only">Search students or groups</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search students or groups" /></label><CommunityTabs value={view} onChange={changeView} /></div>
-      <div className="community-layout">
+      <div className={selectedGroup ? "community-layout community-group-directory-layout" : "community-layout"}>
         <ListPanel view={view} students={visibleStudents} groups={visibleGroups} derived={derived} selected={selected} onSelectStudent={(id) => selectRecord("student", id)} onSelectGroup={(id) => selectRecord("group", id)} onEditStudent={openStudentEditor} onEditGroup={openGroupEditor} onArchiveStudent={(item) => setConfirmTarget({ action: "archive-student", item })} onDeleteStudent={(item) => setConfirmTarget({ action: "delete-student", item })} onDeleteGroup={(item) => setConfirmTarget({ action: "delete-group", item })} groupsById={groupsById} state={state} status={status} setStatus={setStatus} filters={filters} setFilters={setFilters} />
         {selectedStudent && studentDraft ? <StudentDetail student={selectedStudent} draft={studentDraft} setDraft={setStudentDraft} groupsById={groupsById} state={state} onEdit={() => openStudentEditor(selectedStudent)} onSave={saveStudentDetail} onArchive={() => setConfirmTarget({ action: "archive-student", item: selectedStudent })} saving={saving} /> : null}
-        {selectedGroup && groupDraft ? <GroupDetail group={selectedGroup} draft={groupDraft} setDraft={setGroupDraft} summary={groupSummary} members={groupMembers} onEdit={() => openGroupEditor(selectedGroup)} onManage={() => setMembersGroupId(selectedGroup.id)} onSave={saveGroupDetail} onDelete={() => setConfirmTarget({ action: "delete-group", item: selectedGroup })} saving={saving} /> : null}
+        {selectedGroup && groupDraft ? <GroupDetail group={selectedGroup} members={groupMembers} onEdit={() => openGroupEditor(selectedGroup)} onManage={() => setMembersGroupId(selectedGroup.id)} /> : null}
         {!selectedStudent && !selectedGroup ? <section className="community-detail-panel community-detail-empty"><span className="community-heading-icon"><UsersRound size={24} /></span><h2>Select a student or group</h2><p>Details and editing tools will appear here.</p></section> : null}
       </div>
 

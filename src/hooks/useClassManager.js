@@ -95,6 +95,8 @@ export function canonicalStudent(draft) {
     groupIds: Array.isArray(draft.groupIds) ? [...new Set(draft.groupIds.filter(Boolean))] : draft.groupId ? [draft.groupId] : [],
     isIndividual: Boolean(draft.isIndividual),
     customHourlyRate: draft.customHourlyRate === "" || draft.customHourlyRate == null ? null : Number(draft.customHourlyRate),
+    studentEmail: draft.studentEmail ?? draft.email ?? "",
+    guardianPhone: draft.guardianPhone ?? draft.parentPhone ?? "",
     phone: draft.phone ?? draft.studentPhone ?? "",
     guardianContact: draft.guardianContact ?? "",
     notes: draft.notes ?? draft.importantNotes ?? "",

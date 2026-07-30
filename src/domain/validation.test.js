@@ -59,6 +59,11 @@ describe("state and entity validation", () => {
     });
     expect(validateStudent(duplicateStudent, state).errors[0].code).toBe("duplicate");
 
+    const invalidEmail = createStudent({ code: "EMAIL-01", fullName: "Email check", studentEmail: "not-an-email" });
+    expect(validateStudent(invalidEmail, state).errors).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: "invalid_email", path: "studentEmail" })]),
+    );
+
     const blankGrade = createGrade({ studentId: state.students[0].id, date: "2026-07-10", assessment: "Quiz" });
     expect(validateGrade(blankGrade, state).errors.some((error) => error.path === "maxScore")).toBe(true);
 

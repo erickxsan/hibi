@@ -63,6 +63,13 @@ function timeOnly(errors, value, path, label, { optional = false } = {}) {
   }
 }
 
+function emailAddress(errors, value, path, label, { optional = false } = {}) {
+  if (optional && (value === null || value === "" || value === undefined)) return;
+  if (typeof value !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())) {
+    errors.push(issue(path, "invalid_email", `${label} must be a valid email address.`, value));
+  }
+}
+
 function duplicateIn(items, field, value, exceptId) {
   if (!value || !Array.isArray(items)) return false;
   const normalized = typeof value === "string" ? value.trim().toLocaleLowerCase() : value;
@@ -115,6 +122,7 @@ export function validateStudent(student, state = null) {
   requiredText(errors, student.fullName, "fullName", "Student name");
   enumValue(errors, student.status, STUDENT_STATUSES, "status", "Student status");
   if (student.avatarId) enumValue(errors, student.avatarId, STUDENT_AVATAR_IDS, "avatarId", "Student avatar");
+  emailAddress(errors, student.studentEmail, "studentEmail", "Student email", { optional: true });
   if (state && duplicateIn(state.students, "code", student.code, student.id)) {
     errors.push(issue("code", "duplicate", "Student code must be unique.", student.code));
   }
@@ -265,6 +273,8 @@ export function normalizeState(input) {
     groupIds: normalizeGroupIds(student),
     isIndividual: Boolean(student?.isIndividual),
     customHourlyRate: normalizeOptionalNumber(student?.customHourlyRate),
+    studentEmail: normalizeText(student?.studentEmail ?? student?.email),
+    guardianPhone: normalizeText(student?.guardianPhone ?? student?.parentPhone),
     phone: normalizeText(student?.phone),
     guardianContact: normalizeText(student?.guardianContact),
     notes: normalizeText(student?.notes),

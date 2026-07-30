@@ -30,6 +30,8 @@ const EMPTY = Object.freeze({
   groupIds: [],
   isIndividual: false,
   customHourlyRate: null,
+  studentEmail: "",
+  guardianPhone: "",
   phone: "",
   guardianContact: "",
   notes: "",
@@ -91,8 +93,13 @@ export function StudentEditor({ draft, setDraft, groups, defaultRate }) {
           {Number.isFinite(draft.customHourlyRate) ? <Field label="Custom hourly rate"><Input type="number" min="0" step="1" value={draft.customHourlyRate} onChange={(event) => setDraft({ ...draft, customHourlyRate: Number(event.target.value) })} /><small>MXN / hour</small></Field> : <p>{selectedGroups.length > 1 ? "This student uses the relevant group rate for each class, then the account default when a group has no rate." : `Inherited rate: ${money(inheritedRate)} per hour.`}</p>}
         </div>
       </details>
-      <Field label="Student phone"><Input type="tel" value={draft.phone} onChange={(event) => setDraft({ ...draft, phone: event.target.value })} /></Field>
-      <Field label="Parent / tutor"><TextArea rows="2" value={draft.guardianContact} onChange={(event) => setDraft({ ...draft, guardianContact: event.target.value })} /></Field>
+      <section className="student-contact-fields" aria-labelledby="student-contact-heading">
+        <div className="student-contact-heading"><strong id="student-contact-heading">Contact information</strong><span>Email is shown first in Community.</span></div>
+        <Field label="Student email"><Input type="email" inputMode="email" autoComplete="email" value={draft.studentEmail} onChange={(event) => setDraft({ ...draft, studentEmail: event.target.value })} /></Field>
+        <Field label="Guardian phone"><Input type="tel" inputMode="tel" autoComplete="tel" value={draft.guardianPhone} onChange={(event) => setDraft({ ...draft, guardianPhone: event.target.value })} /></Field>
+        <Field label="Student phone"><Input type="tel" inputMode="tel" autoComplete="tel" value={draft.phone} onChange={(event) => setDraft({ ...draft, phone: event.target.value })} /></Field>
+        <Field label="Parent / tutor details" hint="Name or other useful contact details"><TextArea rows="2" value={draft.guardianContact} onChange={(event) => setDraft({ ...draft, guardianContact: event.target.value })} /></Field>
+      </section>
       <Field label="Notes"><TextArea rows="3" value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} /></Field>
     </form>
   );

@@ -24,6 +24,8 @@ describe("class manager draft canonicalization", () => {
       fullName: "Sample Student",
       phone: "555 010 2026",
       studentPhone: "555 000 0000",
+      studentEmail: "student@example.com",
+      guardianPhone: "555 111 2222",
       notes: "Current notes",
       importantNotes: "Legacy notes",
       status: "Active",
@@ -32,6 +34,8 @@ describe("class manager draft canonicalization", () => {
 
     expect(result.code).toBe("NEW-01");
     expect(result.phone).toBe("555 010 2026");
+    expect(result.studentEmail).toBe("student@example.com");
+    expect(result.guardianPhone).toBe("555 111 2222");
     expect(result.notes).toBe("Current notes");
   });
 

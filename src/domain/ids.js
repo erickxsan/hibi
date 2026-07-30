@@ -40,6 +40,8 @@ export function createStudent(overrides = {}) {
     groupIds: [],
     isIndividual: false,
     customHourlyRate: null,
+    studentEmail: "",
+    guardianPhone: "",
     phone: "",
     guardianContact: "",
     notes: "",

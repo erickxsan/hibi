@@ -19,7 +19,7 @@ describe("additive record imports", () => {
     const imported = createStarterState();
     imported.settings.hourlyRate = 999;
     imported.groups.push(createGroup({ id: "group-new", name: "Reading" }));
-    imported.students.push(createStudent({ id: "student-new", code: "STU-002", fullName: "Luis", groupIds: ["group-new"] }));
+    imported.students.push(createStudent({ id: "student-new", code: "STU-002", fullName: "Luis", groupIds: ["group-new"], studentEmail: "luis@example.com", guardianPhone: "272 555 0102" }));
 
     const plan = buildImportPlan(current, imported);
 
@@ -27,6 +27,7 @@ describe("additive record imports", () => {
     expect(plan.candidate.settings.hourlyRate).toBe(75);
     expect(plan.candidate.groups.map((item) => item.id)).toEqual(["group-current", "group-new"]);
     expect(plan.candidate.students.map((item) => item.id)).toEqual(["student-current", "student-new"]);
+    expect(plan.candidate.students[1]).toMatchObject({ studentEmail: "luis@example.com", guardianPhone: "272 555 0102" });
   });
 
   it("skips exact duplicates and is idempotent", () => {

@@ -35,7 +35,7 @@ function legacyClass(overrides = {}) {
 describe("legacy workspace compatibility", () => {
   it("keeps an existing account with students but no groups usable", () => {
     const state = normalizeState({ version: 1, settings: settings(), groups: [], students: [legacyStudent()], grades: [], classLog: [legacyClass()] });
-    expect(state.students[0]).toMatchObject({ id: "student_legacy", avatarId: "", groupIds: [], isIndividual: false });
+    expect(state.students[0]).toMatchObject({ id: "student_legacy", avatarId: "", groupIds: [], isIndividual: false, studentEmail: "", guardianPhone: "" });
     expect(state.classLog[0]).toMatchObject({ id: "class_legacy", groupId: "" });
     expect(state).toMatchObject({ scheduleExceptions: [], scheduleChanges: [] });
     expect(state.classLog[0]).toMatchObject({ appliedHourlyRate: 50, appliedCharge: 100 });
@@ -70,7 +70,7 @@ describe("legacy workspace compatibility", () => {
       version: 1,
       settings: settings(),
       groups,
-      students: [{ ...legacyStudent(), groupId: undefined, groupIds: groups.map((item) => item.id), isIndividual: true }],
+      students: [{ ...legacyStudent(), groupId: undefined, groupIds: groups.map((item) => item.id), isIndividual: true, studentEmail: "legacy@example.com", guardianPhone: "272 123 4567" }],
       grades: [],
       classLog: [
         { ...legacyClass({ id: "class_group", groupId: "group_two", startTime: "16:00", classTitle: "Group lesson" }) },
@@ -78,7 +78,7 @@ describe("legacy workspace compatibility", () => {
       ],
     });
     const restored = deserializeState(serializeState(state));
-    expect(restored.students[0]).toMatchObject({ id: "student_legacy", groupIds: ["group_one", "group_two"], isIndividual: true });
+    expect(restored.students[0]).toMatchObject({ id: "student_legacy", groupIds: ["group_one", "group_two"], isIndividual: true, studentEmail: "legacy@example.com", guardianPhone: "272 123 4567" });
     expect(restored.classLog.map((row) => [row.id, row.groupId, row.startTime])).toEqual([
       ["class_group", "group_two", "16:00"],
       ["class_individual", "", "18:00"],
@@ -94,7 +94,7 @@ describe("legacy workspace compatibility", () => {
       grades: [],
       classLog: [],
     });
-    expect(state.students[0]).toMatchObject({ phone: "", guardianContact: "", notes: "" });
+    expect(state.students[0]).toMatchObject({ phone: "", guardianContact: "", studentEmail: "", guardianPhone: "", notes: "" });
     expect(validateState(state).valid).toBe(true);
   });
 });
