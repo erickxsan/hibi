@@ -17,14 +17,12 @@ function scheduledStatus(session, asOfDate) {
   return session.classDate < asOfDate ? "Pending" : "Scheduled";
 }
 
-export function buildClassWorkspaceSessions(state = {}, asOfDate = todayDateOnly()) {
+function assembleSessions(state, occurrences, classLog, asOfDate) {
   const students = Array.isArray(state.students) ? state.students : [];
   const groups = Array.isArray(state.groups) ? state.groups : [];
-  const classLog = Array.isArray(state.classLog) ? state.classLog : [];
   const studentsById = new Map(students.map((student) => [student.id, student]));
   const groupsById = new Map(groups.map((group) => [group.id, group]));
   const sessions = new Map();
-  const occurrences = generateScheduledOccurrences(state, addDays(asOfDate, -180), addDays(asOfDate, 60));
 
   for (const occurrence of occurrences) {
     const format = occurrence.format || (occurrence.studentId ? "individual" : "group");
@@ -68,6 +66,19 @@ export function buildClassWorkspaceSessions(state = {}, asOfDate = todayDateOnly
   return [...sessions.values()]
     .map((session) => ({ ...session, statusLabel: scheduledStatus(session, asOfDate) }))
     .sort((left, right) => left.classDate.localeCompare(right.classDate) || (left.startTime || "").localeCompare(right.startTime || "") || left.title.localeCompare(right.title));
+}
+
+export function buildClassWorkspaceSessions(state = {}, asOfDate = todayDateOnly()) {
+  const classLog = Array.isArray(state.classLog) ? state.classLog : [];
+  const occurrences = generateScheduledOccurrences(state, addDays(asOfDate, -180), addDays(asOfDate, 60));
+  return assembleSessions(state, occurrences, classLog, asOfDate);
+}
+
+export function buildClassWorkspaceSessionsForRange(state = {}, startDate, endDate, asOfDate = todayDateOnly()) {
+  const occurrences = generateScheduledOccurrences(state, startDate, endDate);
+  const classLog = (Array.isArray(state.classLog) ? state.classLog : [])
+    .filter((row) => row?.classDate >= startDate && row?.classDate <= endDate);
+  return assembleSessions(state, occurrences, classLog, asOfDate);
 }
 
 export function selectPrimaryClassSession(sessions = [], asOfDate = todayDateOnly(), nowTime = "23:59") {

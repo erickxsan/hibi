@@ -16,6 +16,7 @@ import {
   Trash2,
   UserRound,
   UsersRound,
+  X,
 } from "lucide-react";
 import { Button, ConfirmDialog, Drawer, Field, Input, Select, TextArea } from "../components/ui";
 import { StudentAvatar } from "../components/StudentAvatar";
@@ -35,6 +36,11 @@ import {
 } from "./communityContacts";
 
 const COMMUNITY_VIEWS = Object.freeze(["all", "students", "groups"]);
+const MEMBER_FILTERS = Object.freeze([
+  ["all", "All"],
+  ["assigned", "In group"],
+  ["unassigned", "Not in group"],
+]);
 const EMPTY_STUDENT = Object.freeze({
   id: "",
   code: "",
@@ -138,6 +144,49 @@ function StudentFilters({ state, status, setStatus, filters, setFilters }) {
         <fieldset><legend>Groups</legend><div className="filter-group-list">{state.groups.map((group) => <label key={group.id}><input type="checkbox" checked={filters.groupIds.includes(group.id)} onChange={() => setFilters((current) => ({ ...current, groupIds: current.groupIds.includes(group.id) ? current.groupIds.filter((id) => id !== group.id) : [...current.groupIds, group.id] }))} />{group.name}</label>)}</div>{filters.groupIds.length > 1 ? <div className="filter-match"><span>Match</span><button type="button" className={filters.groupMatch === "any" ? "active" : ""} onClick={() => setFilters((current) => ({ ...current, groupMatch: "any" }))}>Any</button><button type="button" className={filters.groupMatch === "all" ? "active" : ""} onClick={() => setFilters((current) => ({ ...current, groupMatch: "all" }))}>All</button></div> : null}</fieldset>
       </div>
     </details>
+  );
+}
+
+function GroupMemberPicker({ students, group, onToggle }) {
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState("all");
+  const needle = normalizeSearchText(query);
+  const selectedCount = students.reduce(
+    (count, student) => count + ((student.groupIds || []).includes(group.id) ? 1 : 0),
+    0,
+  );
+  const visibleStudents = useMemo(() => students.filter((student) => {
+    const assigned = (student.groupIds || []).includes(group.id);
+    if (filter === "assigned" && !assigned) return false;
+    if (filter === "unassigned" && assigned) return false;
+    return normalizeSearchText(`${student.fullName} ${student.code}`).includes(needle);
+  }), [filter, group.id, needle, students]);
+
+  return (
+    <section className="member-picker-workspace" aria-label="Manage group students">
+      <div className="member-picker-tools">
+        <label className="member-search">
+          <Search size={18} aria-hidden="true" />
+          <span className="sr-only">Search students by name or ID</span>
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search students by name or ID" autoComplete="off" />
+          {query ? <button type="button" aria-label="Clear search" onClick={() => setQuery("")}><X size={17} aria-hidden="true" /></button> : null}
+        </label>
+        <div className="member-filter-tabs" role="group" aria-label="Filter students by group membership">
+          {MEMBER_FILTERS.map(([id, label]) => <button type="button" key={id} className={filter === id ? "active" : ""} aria-pressed={filter === id} onClick={() => setFilter(id)}>{label}</button>)}
+        </div>
+        <div className="member-picker-summary" aria-live="polite">
+          <span>{`${visibleStudents.length} ${visibleStudents.length === 1 ? "result" : "results"} · ${selectedCount} selected`}</span>
+          <small>Selections stay saved while you search.</small>
+        </div>
+      </div>
+      <div className="member-picker">
+        {visibleStudents.map((student) => {
+          const assigned = (student.groupIds || []).includes(group.id);
+          return <label key={student.id} className={assigned ? "selected" : ""}><input type="checkbox" checked={assigned} onChange={() => onToggle(student)} /><StudentAvatar avatarId={student.avatarId} name={student.fullName} size="tiny" decorative /><span><strong>{student.fullName}</strong><small>{student.code}</small><small>{student.isIndividual ? "Also takes individual classes" : "Group enrollment"}</small></span></label>;
+        })}
+        {!visibleStudents.length ? <div className="member-picker-empty"><Search size={22} aria-hidden="true" /><strong>No students found</strong><span>Try another name or filter.</span></div> : null}
+      </div>
+    </section>
   );
 }
 
@@ -373,6 +422,10 @@ export default function Community({ state, derived, actions, intent, clearIntent
   const studentEditorBaseline = useRef(null);
   const groupEditorBaseline = useRef(null);
   const groupsById = derived.groupsById || new Map(state.groups.map((group) => [group.id, group]));
+  const activeStudentCount = state.students.reduce(
+    (count, student) => count + (student.status === "Active" ? 1 : 0),
+    0,
+  );
 
   const studentDirty = Boolean(studentDraft) && draftChanged(studentDraft, studentBaseline.current);
   const groupDirty = Boolean(groupDraft) && draftChanged(groupDraft, groupBaseline.current);
@@ -531,7 +584,7 @@ export default function Community({ state, derived, actions, intent, clearIntent
 
   return (
     <div className="page community-page">
-      <header className="community-page-heading"><div><h1>Community</h1><p>Manage students and groups in one place, quickly and simply.</p></div><div><Button variant="primary" icon={Plus} onClick={() => openStudentEditor()}>Add student</Button><Button icon={UsersRound} onClick={() => openGroupEditor()}>Create group</Button></div></header>
+      <header className="community-page-heading"><div><div className="community-title-line"><h1>Community</h1><span className="community-active-count"><UserRound size={15} aria-hidden="true" /><strong>{activeStudentCount}</strong><span>Active students</span></span></div><p>Manage students and groups in one place, quickly and simply.</p></div><div><Button variant="primary" icon={Plus} onClick={() => openStudentEditor()}>Add student</Button><Button icon={UsersRound} onClick={() => openGroupEditor()}>Create group</Button></div></header>
       <div className="community-toolbar"><label className="community-search"><Search size={19} aria-hidden="true" /><span className="sr-only">Search students or groups</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search students or groups" /></label><CommunityTabs value={view} onChange={changeView} /></div>
       <div className={selectedGroup ? "community-layout community-group-directory-layout" : "community-layout"}>
         <ListPanel view={view} students={visibleStudents} groups={visibleGroups} derived={derived} selected={selected} onSelectStudent={(id) => selectRecord("student", id)} onSelectGroup={(id) => selectRecord("group", id)} onEditStudent={openStudentEditor} onEditGroup={openGroupEditor} onArchiveStudent={(item) => setConfirmTarget({ action: "archive-student", item })} onDeleteStudent={(item) => setConfirmTarget({ action: "delete-student", item })} onDeleteGroup={(item) => setConfirmTarget({ action: "delete-group", item })} groupsById={groupsById} state={state} status={status} setStatus={setStatus} filters={filters} setFilters={setFilters} />
@@ -546,8 +599,8 @@ export default function Community({ state, derived, actions, intent, clearIntent
       <Drawer open={Boolean(groupEditorDraft)} onClose={closeGroupEditor} title={groupEditorDraft?.id ? "Edit group" : "Create group"} footer={<><Button onClick={closeGroupEditor}>Cancel</Button><Button variant="primary" onClick={saveGroupEditor} disabled={saving}>{saving ? "Saving…" : "Save group"}</Button></>}>
         {groupEditorDraft ? <GroupEditor draft={groupEditorDraft} setDraft={setGroupEditorDraft} defaultHours={state.settings.defaultClassHours} defaultRate={state.settings.hourlyRate} /> : null}
       </Drawer>
-      <Drawer open={Boolean(membersGroup)} onClose={() => setMembersGroupId("")} title={membersGroup ? `Manage ${membersGroup.name}` : "Manage group"} description="Students can belong to more than one group.">
-        <div className="member-picker">{state.students.map((student) => <label key={student.id}><input type="checkbox" checked={(student.groupIds || []).includes(membersGroup?.id)} onChange={() => toggleMember(student)} /><StudentAvatar avatarId={student.avatarId} name={student.fullName} size="tiny" decorative /><span><strong>{student.fullName}</strong><small>{student.isIndividual ? "Also takes individual classes" : "Group enrollment"}</small></span></label>)}</div>
+      <Drawer open={Boolean(membersGroup)} onClose={() => setMembersGroupId("")} title={membersGroup ? `Manage ${membersGroup.name}` : "Manage group"} description="Students can belong to more than one group." size="wide">
+        {membersGroup ? <GroupMemberPicker key={membersGroup.id} students={state.students} group={membersGroup} onToggle={toggleMember} /> : null}
       </Drawer>
       <ConfirmDialog open={Boolean(confirmTarget)} title={confirmTarget?.action === "archive-student" ? `Deactivate ${confirmTarget.item.fullName}?` : `Delete ${confirmTarget?.item?.fullName || confirmTarget?.item?.name}?`} description={confirmTarget?.action === "archive-student" ? "The student becomes inactive while grades, attendance, and payment history stay available." : confirmTarget?.action === "delete-student" ? "Students with grades or class history cannot be deleted; deactivate them instead." : "Groups with assigned students cannot be deleted. Existing class history remains protected."} confirmLabel={confirmTarget?.action === "archive-student" ? "Deactivate student" : confirmTarget?.action === "delete-group" ? "Delete group" : "Delete student"} tone={confirmTarget?.action === "archive-student" ? "primary" : "danger"} onClose={() => setConfirmTarget(null)} onConfirm={confirmAction} />
     </div>

@@ -11,6 +11,7 @@ import {
   Filter,
   Hourglass,
   Minus,
+  MoreHorizontal,
   Plus,
   Save,
   Search,
@@ -22,19 +23,30 @@ import {
 import { Button, Drawer, EmptyState, Field, Input, Select, StatusBadge } from "../components/ui";
 import { StudentAvatar } from "../components/StudentAvatar";
 import { dayOfWeekForDate, resolveHourlyRate } from "../domain";
-import { todayDateOnly } from "../domain/dates";
+import { addDays, addMonths, parseDateOnly, startOfMonth, todayDateOnly } from "../domain/dates";
 import { useHistoryBackedState } from "../hooks/useHistoryNavigation";
 import { confirmDiscard, draftChanged, useUnsavedChanges } from "../hooks/useUnsavedChanges";
 import { getUiLocale } from "../i18n";
 import { playHibiSound } from "../utils/hibiSounds";
 import {
   buildClassWorkspaceSessions,
+  buildClassWorkspaceSessionsForRange,
   classWorkspaceSessionKey,
   filterClassHistory,
   paymentRecordState,
   rosterForClassSession,
   selectPrimaryClassSession,
 } from "./classesWorkspaceModel";
+import {
+  calendarMonthDays,
+  calendarMonthRange,
+  calendarSessionTone,
+  calendarWeekDays,
+  calendarWeekRange,
+  filterCalendarSessions,
+  groupCalendarSessionsByDate,
+  minutesFromTime,
+} from "./classesCalendarModel";
 
 const DAY_OPTIONS = [
   [1, "Mon"], [2, "Tue"], [3, "Wed"], [4, "Thu"], [5, "Fri"], [6, "Sat"], [7, "Sun"],
@@ -226,6 +238,108 @@ function UpcomingClasses({ sessions, onSelect }) {
   return <section className="classes-next-list" aria-labelledby="classes-next-title"><h2 id="classes-next-title">Upcoming classes</h2><div>{sessions.slice(0, 3).map((session) => <button type="button" key={session.key} onClick={() => onSelect(session)}><span><CalendarDays size={20} aria-hidden="true" /></span><span><small>{session.classDate === todayDateOnly() ? `Today, ${formatTime(session.startTime)}` : `${formatDate(session.classDate, { weekday: "short", month: "short", day: "numeric" })}, ${formatTime(session.startTime)}`}</small><strong>{session.title}</strong><em>{session.durationHours} h · {session.format === "group" ? "Group" : "Individual"} · {session.format === "group" ? `${session.studentCount || 0} students` : "1 student"}</em></span></button>)}</div></section>;
 }
 
+function CalendarSessionCard({ session, onOpen, compact = false, selected = false, onSelect }) {
+  const tone = calendarSessionTone(session);
+  const studentCount = session.studentCount || (session.format === "individual" ? 1 : 0);
+  return <article className={`calendar-session-card tone-${tone} ${compact ? "compact" : ""} ${selected ? "selected" : ""}`.trim()} onClick={() => onSelect?.(session)}>
+    <span className="calendar-session-icon"><CalendarDays size={compact ? 16 : 19} aria-hidden="true" /></span>
+    <div className="calendar-session-copy"><small>{formatTime(session.startTime)}</small><strong>{session.title}</strong><span>{session.format === "group" ? "Group" : "Individual"} · {session.durationHours || 0} h · {studentCount} {studentCount === 1 ? "student" : "students"}</span></div>
+    {!compact ? <div className="calendar-session-actions"><StatusBadge tone={statusTone(session.statusLabel)}>{session.statusLabel}</StatusBadge><Button variant={selected ? "primary" : undefined} onClick={(event) => { event.stopPropagation(); onOpen(session); }}>Open class</Button><button type="button" className="calendar-more-button" aria-label={`More options for ${session.title}`} title="Open class" onClick={(event) => { event.stopPropagation(); onOpen(session); }}><MoreHorizontal size={18} aria-hidden="true" /></button></div> : null}
+  </article>;
+}
+
+function CalendarNavigator({ view, setView, anchorDate, setAnchorDate, setSelectedDate, currentDate, search, setSearch, ownerId, setOwnerId, ownerOptions, showFilters, setShowFilters }) {
+  const monthLabel = formatDate(anchorDate, { month: "long", year: "numeric" });
+  const week = calendarWeekRange(anchorDate);
+  const weekLabel = `${formatDate(week.startDate, { month: "short", day: "numeric" })} – ${formatDate(week.endDate, { month: "short", day: "numeric", year: "numeric" })}`;
+  const move = (amount) => {
+    const next = view === "month" ? addMonths(anchorDate, amount) : addDays(anchorDate, amount * 7);
+    setAnchorDate(next);
+    setSelectedDate(view === "month" ? startOfMonth(next) : next);
+  };
+  const goToday = () => { setAnchorDate(currentDate); setSelectedDate(currentDate); };
+  return <div className="classes-calendar-toolbar">
+    <div className="calendar-period-controls"><button type="button" aria-label={view === "month" ? "Previous month" : "Previous week"} onClick={() => move(-1)}><ChevronLeft size={18} /></button><strong>{view === "month" ? monthLabel : weekLabel}</strong><button type="button" aria-label={view === "month" ? "Next month" : "Next week"} onClick={() => move(1)}><ChevronRight size={18} /></button><button type="button" className="calendar-today-button" onClick={goToday}>Today</button></div>
+    <div className="calendar-view-toggle" role="group" aria-label="Calendar view"><button type="button" className={view === "month" ? "active" : ""} aria-pressed={view === "month"} onClick={() => setView("month")}>Month</button><button type="button" className={view === "week" ? "active" : ""} aria-pressed={view === "week"} onClick={() => setView("week")}>Week</button></div>
+    <label className="calendar-search"><Search size={18} aria-hidden="true" /><span className="sr-only">Search student or group</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search student or group" /></label>
+    <label className="calendar-owner-filter"><UsersRound size={18} aria-hidden="true" /><Select aria-label="Filter calendar by student or group" value={ownerId} onChange={(event) => setOwnerId(event.target.value)}><option value="">All classes</option>{ownerOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</Select></label>
+    <div className="calendar-mobile-tools"><button type="button" aria-label="Search calendar" aria-expanded={showFilters} onClick={() => setShowFilters((open) => !open)}><Search size={18} /></button><button type="button" aria-label="Filter calendar" aria-expanded={showFilters} onClick={() => setShowFilters((open) => !open)}><Filter size={18} /></button></div>
+    {showFilters ? <div className="calendar-mobile-filter-panel"><label><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search student or group" /></label><Select aria-label="Filter calendar by student or group" value={ownerId} onChange={(event) => setOwnerId(event.target.value)}><option value="">All classes</option>{ownerOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</Select></div> : null}
+  </div>;
+}
+
+function MonthCalendar({ anchorDate, days, sessionsByDate, selectedDate, setSelectedDate, currentDate }) {
+  const currentMonth = startOfMonth(anchorDate).slice(0, 7);
+  return <section className="calendar-month-card" aria-label={formatDate(anchorDate, { month: "long", year: "numeric" })}>
+    <div className="calendar-month-weekdays" aria-hidden="true">{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => <span key={day}>{day}</span>)}</div>
+    <div className="calendar-month-grid">{days.map((date) => {
+      const dateSessions = sessionsByDate.get(date) || [];
+      const outside = date.slice(0, 7) !== currentMonth;
+      return <button type="button" key={date} className={`${outside ? "outside" : ""} ${date === selectedDate ? "selected" : ""} ${date === currentDate ? "today" : ""}`.trim()} aria-label={`${formatDate(date, { weekday: "long", month: "long", day: "numeric" })}, ${dateSessions.length} classes`} aria-pressed={date === selectedDate} onClick={() => setSelectedDate(date)}>
+        <span className="calendar-day-number">{parseDateOnly(date).getUTCDate()}</span>
+        <span className="calendar-day-dots" aria-hidden="true">{dateSessions.slice(0, 3).map((session) => <i className={`tone-${calendarSessionTone(session)}`} key={session.key} />)}{dateSessions.length ? <em>{dateSessions.length} {dateSessions.length === 1 ? "class" : "classes"}</em> : null}</span>
+      </button>;
+    })}</div>
+  </section>;
+}
+
+function DayAgenda({ date, sessions, selectedKey, setSelectedKey, onOpen, onAdd, layout = "side" }) {
+  return <aside className={`calendar-day-agenda ${layout}`} aria-label={`Classes on ${formatDate(date, { month: "long", day: "numeric" })}`}>
+    <header><div><span>{formatDate(date, { weekday: "long" })}</span><h2>{formatDate(date, { month: "long", day: "numeric" })}</h2></div><strong>{sessions.length} {sessions.length === 1 ? "class" : "classes"}</strong></header>
+    <div className="calendar-day-agenda-list">{sessions.map((session, index) => <CalendarSessionCard key={session.key} session={session} selected={selectedKey ? selectedKey === session.key : index === 0} onSelect={(item) => setSelectedKey(item.key)} onOpen={onOpen} />)}{!sessions.length ? <EmptyState icon={CalendarDays} title="No classes this day" description="Choose another day or add a new class." /> : null}</div>
+    <Button icon={Plus} onClick={onAdd}>Add class</Button>
+  </aside>;
+}
+
+function WeekCalendar({ days, sessionsByDate, selectedDate, setSelectedDate, selectedKey, setSelectedKey, onOpen, onAdd, showWeekends, setShowWeekends }) {
+  const visibleDays = showWeekends ? days : days.slice(0, 5);
+  const selectedSessions = sessionsByDate.get(selectedDate) || [];
+  const hours = Array.from({ length: 13 }, (_, index) => index + 8);
+  return <>
+    <div className="calendar-week-options"><label><input type="checkbox" checked={showWeekends} onChange={(event) => setShowWeekends(event.target.checked)} /><span aria-hidden="true" />Show weekends</label></div>
+    <section className="calendar-week-card">
+      <div className="calendar-week-head"><span />{visibleDays.map((date) => <button type="button" key={date} className={date === selectedDate ? "selected" : ""} onClick={() => setSelectedDate(date)}><small>{formatDate(date, { weekday: "short" })}</small><strong>{parseDateOnly(date).getUTCDate()}</strong></button>)}</div>
+      <div className="calendar-week-body">
+        <div className="calendar-time-axis">{hours.map((hour) => <span key={hour}>{formatTime(`${String(hour).padStart(2, "0")}:00`)}</span>)}</div>
+        {visibleDays.map((date) => <div className="calendar-week-column" key={date}>{(sessionsByDate.get(date) || []).map((session) => {
+          const start = Math.max(0, minutesFromTime(session.startTime) - 480);
+          const duration = Math.max(45, Number(session.durationHours || 1) * 60);
+          return <button type="button" key={session.key} className={`calendar-week-event tone-${calendarSessionTone(session)} ${selectedKey === session.key ? "selected" : ""}`.trim()} style={{ "--event-top": `${start / 720 * 100}%`, "--event-height": `${Math.min(duration, 720 - start) / 720 * 100}%` }} onClick={() => { setSelectedDate(date); setSelectedKey(session.key); }}><small>{formatTime(session.startTime)}</small><strong>{session.title}</strong><span>{session.durationHours} h</span></button>;
+        })}</div>)}
+      </div>
+    </section>
+    <div className="calendar-mobile-week-agenda"><DayAgenda date={selectedDate} sessions={selectedSessions} selectedKey={selectedKey} setSelectedKey={setSelectedKey} onOpen={onOpen} onAdd={onAdd} layout="timeline" /></div>
+    {selectedKey ? <div className="calendar-week-selection"><span>Selected class</span><strong>{[...sessionsByDate.values()].flat().find((session) => session.key === selectedKey)?.title}</strong><Button variant="primary" onClick={() => onOpen([...sessionsByDate.values()].flat().find((session) => session.key === selectedKey))}>Open class</Button></div> : null}
+  </>;
+}
+
+function CalendarWorkspace({ state, currentDate, onOpen, onAdd }) {
+  const [view, setView] = useState("month");
+  const [anchorDate, setAnchorDate] = useState(currentDate);
+  const [selectedDate, setSelectedDate] = useState(currentDate);
+  const [selectedKey, setSelectedKey] = useState("");
+  const [search, setSearch] = useState("");
+  const [ownerId, setOwnerId] = useState("");
+  const [showWeekends, setShowWeekends] = useState(true);
+  const [showFilters, setShowFilters] = useState(false);
+  const range = useMemo(() => view === "month" ? calendarMonthRange(anchorDate) : calendarWeekRange(anchorDate), [anchorDate, view]);
+  const sessions = useMemo(() => buildClassWorkspaceSessionsForRange(state, range.startDate, range.endDate, currentDate).map((session) => ({ ...session, studentCount: rosterForClassSession(state, session).length })), [currentDate, range.endDate, range.startDate, state]);
+  const filtered = useMemo(() => filterCalendarSessions(sessions, { search, ownerId }), [ownerId, search, sessions]);
+  const sessionsByDate = useMemo(() => groupCalendarSessionsByDate(filtered), [filtered]);
+  const monthDays = useMemo(() => calendarMonthDays(anchorDate), [anchorDate]);
+  const weekDays = useMemo(() => calendarWeekDays(anchorDate), [anchorDate]);
+  const selectedSessions = sessionsByDate.get(selectedDate) || [];
+  const ownerOptions = useMemo(() => [
+    ...(state.groups || []).map((group) => ({ id: group.id, label: group.name })),
+    ...(state.students || []).filter((student) => student.status !== "Inactive").map((student) => ({ id: student.id, label: student.fullName })),
+  ], [state.groups, state.students]);
+  return <div className={`classes-calendar-view view-${view}`} role="tabpanel">
+    <CalendarNavigator view={view} setView={setView} anchorDate={anchorDate} setAnchorDate={setAnchorDate} setSelectedDate={setSelectedDate} currentDate={currentDate} search={search} setSearch={setSearch} ownerId={ownerId} setOwnerId={setOwnerId} ownerOptions={ownerOptions} showFilters={showFilters} setShowFilters={setShowFilters} />
+    {view === "month" ? <div className="calendar-month-layout"><MonthCalendar anchorDate={anchorDate} days={monthDays} sessionsByDate={sessionsByDate} selectedDate={selectedDate} setSelectedDate={(date) => { setSelectedDate(date); setSelectedKey(""); }} currentDate={currentDate} /><DayAgenda date={selectedDate} sessions={selectedSessions} selectedKey={selectedKey} setSelectedKey={setSelectedKey} onOpen={onOpen} onAdd={onAdd} /></div>
+      : <WeekCalendar days={weekDays} sessionsByDate={sessionsByDate} selectedDate={selectedDate} setSelectedDate={(date) => { setSelectedDate(date); setSelectedKey(""); }} selectedKey={selectedKey} setSelectedKey={setSelectedKey} onOpen={onOpen} onAdd={onAdd} showWeekends={showWeekends} setShowWeekends={setShowWeekends} />}
+  </div>;
+}
+
 function HistoryList({ sessions, selectedKey, onSelect, filters, setFilters }) {
   const [page, setPage] = useState(1);
   useEffect(() => setPage(1), [filters]);
@@ -281,7 +395,7 @@ export default function Classes({ state = {}, derived = {}, actions = {}, asOfDa
     value: tab,
     onChange: setTab,
     defaultValue: "next",
-    allowedValues: ["next", "history"],
+    allowedValues: ["next", "calendar", "history"],
     canChange: () => !dirty || confirmDiscard(true, "Discard your unsaved class changes?"),
   });
 
@@ -387,6 +501,12 @@ export default function Classes({ state = {}, derived = {}, actions = {}, asOfDa
     if (dirty && !confirmDiscard(true, "Discard your unsaved class changes?")) return;
     setSelectedUpcomingKey(session.key);
   }, [activeSession?.key, dirty]);
+  const openCalendarSession = useCallback((session) => {
+    if (!session) return;
+    if (dirty && !confirmDiscard(true, "Discard your unsaved class changes?")) return;
+    setSelectedUpcomingKey(session.key);
+    changeTab("next");
+  }, [changeTab, dirty]);
 
   const upcomingAfter = useMemo(() => {
     const reference = tab === "next" ? activeSession : primary;
@@ -396,10 +516,10 @@ export default function Classes({ state = {}, derived = {}, actions = {}, asOfDa
 
   return <div className="page classes-workspace-page">
     <header className="classes-workspace-heading"><div><h1>Classes</h1><p>Record the current class quickly and simply.</p></div><Button icon={Plus} onClick={() => setNewClassOpen(true)}>New class</Button></header>
-    <div className="classes-workspace-tabs" role="tablist" aria-label="Class views"><button type="button" role="tab" aria-selected={tab === "next"} className={tab === "next" ? "active" : ""} onClick={() => changeTab("next")}>Next class</button><button type="button" role="tab" aria-selected={tab === "history"} className={tab === "history" ? "active" : ""} onClick={() => changeTab("history")}>History</button></div>
+    <div className="classes-workspace-tabs" role="tablist" aria-label="Class views"><button type="button" role="tab" aria-selected={tab === "next"} className={tab === "next" ? "active" : ""} onClick={() => changeTab("next")}>Next class</button><button type="button" role="tab" aria-selected={tab === "calendar"} className={tab === "calendar" ? "active" : ""} onClick={() => changeTab("calendar")}>Calendar</button><button type="button" role="tab" aria-selected={tab === "history"} className={tab === "history" ? "active" : ""} onClick={() => changeTab("history")}>History</button></div>
     {tab === "next" ? <div className="classes-upcoming-view" role="tabpanel">
       {activeSession ? <><div className="classes-upcoming-layout"><main><SessionEditor session={activeSession} state={state} entries={entries} setEntry={setEntry} roster={roster} assessmentOn={assessmentOn} setAssessmentOn={setAssessmentOn} assessment={assessment} setAssessment={setAssessment} maximum={maximum} setMaximum={setMaximum} saving={saving} dirty={dirty} onSave={() => saveSession("Completed")} onDiscard={() => hydrate(activeSession)} onCancel={cancelSession} /></main><ClassSummary entries={entries} roster={roster} maximum={maximum} /></div><UpcomingClasses sessions={upcomingAfter} onSelect={selectUpcomingSession} /></> : <EmptyState icon={CalendarDays} title="No upcoming classes" description="Create a one-time or recurring class to start the daily workflow." action={<Button icon={Plus} variant="primary" onClick={() => setNewClassOpen(true)}>New class</Button>} />}
-    </div> : <div className="classes-history-view" role="tabpanel"><HistoryList sessions={history} selectedKey={selectedKey} onSelect={(session) => setSelectedKey(session.key)} filters={filters} setFilters={setFilters} /><div className="classes-history-detail"><SessionEditor variant="history" session={selectedHistory} state={state} entries={entries} setEntry={setEntry} roster={roster} assessmentOn={assessmentOn} setAssessmentOn={setAssessmentOn} assessment={assessment} setAssessment={setAssessment} maximum={maximum} setMaximum={setMaximum} saving={saving} dirty={dirty} onSave={() => saveSession("Completed")} onDiscard={() => hydrate(activeSession)} onCancel={cancelSession} /></div></div>}
+    </div> : tab === "calendar" ? <CalendarWorkspace state={state} currentDate={currentDate} onOpen={openCalendarSession} onAdd={() => setNewClassOpen(true)} /> : <div className="classes-history-view" role="tabpanel"><HistoryList sessions={history} selectedKey={selectedKey} onSelect={(session) => setSelectedKey(session.key)} filters={filters} setFilters={setFilters} /><div className="classes-history-detail"><SessionEditor variant="history" session={selectedHistory} state={state} entries={entries} setEntry={setEntry} roster={roster} assessmentOn={assessmentOn} setAssessmentOn={setAssessmentOn} assessment={assessment} setAssessment={setAssessment} maximum={maximum} setMaximum={setMaximum} saving={saving} dirty={dirty} onSave={() => saveSession("Completed")} onDiscard={() => hydrate(activeSession)} onCancel={cancelSession} /></div></div>}
     <NewClassDrawer open={newClassOpen} onClose={() => setNewClassOpen(false)} state={state} asOfDate={currentDate} actions={actions} />
   </div>;
 }

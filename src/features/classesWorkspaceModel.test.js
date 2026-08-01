@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildClassWorkspaceSessions, filterClassHistory, paymentRecordState, rosterForClassSession, selectPrimaryClassSession } from "./classesWorkspaceModel";
+import { buildClassWorkspaceSessions, buildClassWorkspaceSessionsForRange, filterClassHistory, paymentRecordState, rosterForClassSession, selectPrimaryClassSession } from "./classesWorkspaceModel";
 
 const state = {
   settings: { defaultClassHours: 2 },
@@ -30,5 +30,10 @@ describe("classes workspace model", () => {
     expect(paymentRecordState({ paymentState: "Unpaid", amountPaid: 0 }, 100)).toBe("Unpaid");
     const rows = [{ title: "Math", statusLabel: "Registered", classDate: "2026-07-10", startTime: "10:00", groupId: "g1" }];
     expect(filterClassHistory(rows, { search: "math", status: "Registered" })).toHaveLength(1);
+  });
+
+  it("builds an exact calendar range without dropping scheduled classes", () => {
+    const sessions = buildClassWorkspaceSessionsForRange(state, "2026-07-01", "2026-07-31", "2026-07-15");
+    expect(sessions.map((session) => session.classDate)).toEqual(["2026-07-01", "2026-07-08", "2026-07-15", "2026-07-22", "2026-07-29"]);
   });
 });
