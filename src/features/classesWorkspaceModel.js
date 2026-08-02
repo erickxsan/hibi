@@ -83,14 +83,32 @@ export function buildClassWorkspaceSessionsForRange(state = {}, startDate, endDa
 
 export function selectPrimaryClassSession(sessions = [], asOfDate = todayDateOnly(), nowTime = "23:59") {
   const available = sessions.filter((session) => !["Registered", "Cancelled"].includes(session.statusLabel));
-  const due = available.filter((session) => session.classDate < asOfDate || (session.classDate === asOfDate && (session.startTime || "00:00") <= nowTime));
-  if (due.length) return due.at(-1);
-  return available.find((session) => session.classDate >= asOfDate) || null;
+  const today = available.filter((session) => session.classDate === asOfDate);
+  const nextToday = today.find((session) => (session.startTime || "00:00") > nowTime);
+  if (nextToday) return nextToday;
+
+  const pendingToday = today.filter((session) => (session.startTime || "00:00") <= nowTime).at(-1);
+  if (pendingToday) return pendingToday;
+
+  return available.find((session) => session.classDate > asOfDate) || null;
 }
 
 export function rosterForClassSession(state = {}, session) {
   if (!session) return [];
   const students = Array.isArray(state.students) ? state.students : [];
+  const savedStudentIds = [...new Set((session.rows || []).map((row) => row.studentId).filter(Boolean))];
+  if (savedStudentIds.length) {
+    const savedOrder = new Map(savedStudentIds.map((id, index) => [id, index]));
+    return students
+      .filter((student) => savedOrder.has(student.id))
+      .sort((left, right) => savedOrder.get(left.id) - savedOrder.get(right.id));
+  }
+  if (session.participantMode === "custom") {
+    const participantIds = new Set(session.participantIds || []);
+    return students
+      .filter((student) => participantIds.has(student.id))
+      .sort((left, right) => String(left.fullName).localeCompare(String(right.fullName)));
+  }
   if (session.format === "individual") {
     const student = students.find((item) => item.id === session.studentId);
     return student ? [student] : [];
@@ -109,6 +127,9 @@ export function filterClassHistory(sessions = [], filters = {}) {
   const needle = String(filters.search || "").trim().toLocaleLowerCase();
   return sessions.filter((session) => {
     if (session.statusLabel === "Scheduled") return false;
+    const hasSavedRows = Array.isArray(session.rows) && session.rows.length > 0;
+    const isExplicitScheduleEvent = ["Cancelled", "Rescheduled"].includes(session.statusLabel);
+    if (!hasSavedRows && !isExplicitScheduleEvent) return false;
     if (needle && !`${session.title} ${session.groupName || ""} ${session.studentName || ""}`.toLocaleLowerCase().includes(needle)) return false;
     if (filters.dateFrom && session.classDate < filters.dateFrom) return false;
     if (filters.dateTo && session.classDate > filters.dateTo) return false;

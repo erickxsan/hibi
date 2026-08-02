@@ -21,6 +21,19 @@ describe("classes workspace model", () => {
     expect(selectPrimaryClassSession(sessions, "2026-07-15", "11:00")?.classDate).toBe("2026-07-15");
   });
 
+  it("never promotes a phantom past occurrence when there is no class today", () => {
+    const sessions = buildClassWorkspaceSessions(state, "2026-07-16");
+    expect(selectPrimaryClassSession(sessions, "2026-07-16", "11:00")?.classDate).toBe("2026-07-22");
+  });
+
+  it("prefers the next class today before an earlier unregistered class today", () => {
+    const sessions = [
+      { key: "earlier", classDate: "2026-07-15", startTime: "09:00", statusLabel: "Pending" },
+      { key: "next", classDate: "2026-07-15", startTime: "13:00", statusLabel: "Scheduled" },
+    ];
+    expect(selectPrimaryClassSession(sessions, "2026-07-15", "11:00")?.key).toBe("next");
+  });
+
   it("loads only active group students", () => {
     const session = buildClassWorkspaceSessions(state, "2026-07-15").find((item) => item.classDate === "2026-07-15");
     expect(rosterForClassSession(state, session).map((item) => item.id)).toEqual(["s1"]);
@@ -28,8 +41,17 @@ describe("classes workspace model", () => {
 
   it("preserves explicit payment states and filters history", () => {
     expect(paymentRecordState({ paymentState: "Unpaid", amountPaid: 0 }, 100)).toBe("Unpaid");
-    const rows = [{ title: "Math", statusLabel: "Registered", classDate: "2026-07-10", startTime: "10:00", groupId: "g1" }];
+    const rows = [{ title: "Math", statusLabel: "Registered", classDate: "2026-07-10", startTime: "10:00", groupId: "g1", rows: [{ id: "saved" }] }];
     expect(filterClassHistory(rows, { search: "math", status: "Registered" })).toHaveLength(1);
+  });
+
+  it("keeps virtual past occurrences out of history without hiding saved or cancelled classes", () => {
+    const rows = [
+      { key: "phantom", title: "Math", statusLabel: "Pending", classDate: "2026-07-01", rows: [] },
+      { key: "saved", title: "Math", statusLabel: "Registered", classDate: "2026-07-02", rows: [{ id: "log" }] },
+      { key: "cancelled", title: "Math", statusLabel: "Cancelled", classDate: "2026-07-03", rows: [] },
+    ];
+    expect(filterClassHistory(rows).map((session) => session.key)).toEqual(["cancelled", "saved"]);
   });
 
   it("builds an exact calendar range without dropping scheduled classes", () => {

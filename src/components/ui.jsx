@@ -122,7 +122,7 @@ export function EmptyState({ icon: Icon = AlertCircle, title, description, actio
   );
 }
 
-export function Drawer({ open, onClose, title, description, children, footer, size = "normal" }) {
+export function Drawer({ open, onClose, title, description, children, footer, size = "normal", className = "" }) {
   const titleId = useId();
   const descriptionId = useId();
   const historyId = useId();
@@ -206,7 +206,7 @@ export function Drawer({ open, onClose, title, description, children, footer, si
     <div className="overlay" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && requestClose()}>
       <section
         ref={panelRef}
-        className={`drawer drawer-${size}`}
+        className={`drawer drawer-${size} ${className}`.trim()}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

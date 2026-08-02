@@ -11,9 +11,11 @@ import {
   createStudent,
   buildImportPlan,
   deriveAll,
+  editScheduledClassState,
   exportState,
   importState,
   resolveHourlyRate,
+  removeScheduledClassState,
   REAL_ROSTER_BACKUP_KEY,
   REAL_ROSTER_MIGRATION_KEY,
   safeLoadStateWithMigrations,
@@ -159,22 +161,32 @@ function canonicalClassSchedule(draft) {
     groupId: draft.format === "individual" ? "" : draft.groupId ?? "",
     studentId: draft.format === "individual" ? draft.studentId ?? "" : "",
     startDate: draft.startDate ?? "",
+    endDate: draft.endDate ?? "",
     startTime: draft.startTime ?? "",
     durationHours: Number(draft.durationHours),
     intervalWeeks: Number(draft.intervalWeeks || 1),
     daysOfWeek: Array.isArray(draft.daysOfWeek) ? [...new Set(draft.daysOfWeek.map(Number))] : [],
+    participantMode: draft.participantMode === "custom" ? "custom" : "default",
+    participantIds: Array.isArray(draft.participantIds) ? [...new Set(draft.participantIds.filter(Boolean))] : [],
   };
 }
 
 function canonicalScheduleException(draft) {
   return {
     id: draft.id,
+    classScheduleId: draft.classScheduleId ?? "",
+    sourceGroupId: draft.sourceGroupId ?? draft.groupId ?? "",
+    sourceScheduleSlotId: draft.sourceScheduleSlotId ?? draft.scheduleSlotId ?? "",
     groupId: draft.groupId ?? "",
+    studentId: draft.studentId ?? "",
+    format: draft.format === "individual" ? "individual" : "group",
     scheduleSlotId: draft.scheduleSlotId ?? "",
     occurrenceDate: draft.occurrenceDate ?? draft.classDate ?? "",
     classDate: draft.classDate ?? "",
     startTime: draft.startTime ?? "",
     durationHours: Number(draft.durationHours),
+    participantMode: draft.participantMode === "custom" ? "custom" : "default",
+    participantIds: Array.isArray(draft.participantIds) ? [...new Set(draft.participantIds.filter(Boolean))] : [],
     status: draft.status ?? "Scheduled",
     kind: draft.kind === "added" ? "added" : "override",
   };
@@ -189,6 +201,7 @@ function canonicalScheduleChange(draft) {
     dayOfWeek: Number(draft.dayOfWeek),
     startTime: draft.startTime ?? "",
     durationHours: Number(draft.durationHours),
+    status: draft.status === "Cancelled" ? "Cancelled" : "Scheduled",
   };
 }
 
@@ -644,6 +657,16 @@ export function useClassManager({ persistence } = {}) {
     return commit((current) => ({ ...current, scheduleChanges: [...current.scheduleChanges, item] }), "Future schedule updated");
   }, [commit]);
 
+  const editScheduledClass = useCallback(({ session, draft, scope, asOfDate }) => commit(
+    (current) => editScheduledClassState(current, { session, draft, scope, asOfDate }),
+    scope === "future" ? "This and future classes were updated" : "Class updated",
+  ), [commit]);
+
+  const removeScheduledClass = useCallback(({ session, scope, asOfDate }) => commit(
+    (current) => removeScheduledClassState(current, { session, scope, asOfDate }),
+    scope === "future" ? "This and future classes were removed" : "Class removed",
+  ), [commit]);
+
   const exportJson = useCallback(() => {
     const current = stateRef.current;
     downloadText(createExportFilename(operationalDate), exportState(current));
@@ -780,6 +803,8 @@ export function useClassManager({ persistence } = {}) {
     deleteClassLog,
     saveProgress,
     upsertClassSchedule,
+    editScheduledClass,
+    removeScheduledClass,
     upsertScheduleException,
     upsertScheduleChange,
     exportJson,
@@ -791,7 +816,7 @@ export function useClassManager({ persistence } = {}) {
     exportRecoveryPoint,
     restoreRecoveryPoint,
     notify,
-  }), [addClassLogs, addGrades, archiveStudent, clearLegacyLocalData, deleteClassLog, deleteGrade, deleteGroup, deleteStudent, exportJson, exportRecoveryPoint, importJson, importRecords, listRecoveryPoints, notify, previewImportRecords, restoreRecoveryPoint, saveProgress, updatePreferences, updateSettings, upsertClassLog, upsertClassSchedule, upsertGrade, upsertGroup, upsertScheduleChange, upsertScheduleException, upsertStudent]);
+  }), [addClassLogs, addGrades, archiveStudent, clearLegacyLocalData, deleteClassLog, deleteGrade, deleteGroup, deleteStudent, editScheduledClass, exportJson, exportRecoveryPoint, importJson, importRecords, listRecoveryPoints, notify, previewImportRecords, removeScheduledClass, restoreRecoveryPoint, saveProgress, updatePreferences, updateSettings, upsertClassLog, upsertClassSchedule, upsertGrade, upsertGroup, upsertScheduleChange, upsertScheduleException, upsertStudent]);
 
   return useMemo(() => ({
     state: viewState,

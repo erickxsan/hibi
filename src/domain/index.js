@@ -51,6 +51,11 @@ export {
   generateScheduledOccurrences,
   resolveHourlyRate,
 } from "./schedule.js";
+export {
+  editScheduledClassState,
+  removeScheduledClassState,
+  scheduledClassSupportsFutureScope,
+} from "./scheduledClassMutations.js";
 export { studentMatchesFilters } from "./studentFilters.js";
 export { buildImportPlan, IMPORT_COLLECTIONS } from "./importRecords.js";
 

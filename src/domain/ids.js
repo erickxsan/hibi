@@ -99,10 +99,13 @@ export function createClassSchedule(overrides = {}) {
     groupId: "",
     studentId: "",
     startDate: "",
+    endDate: "",
     startTime: "",
     durationHours: 2,
     intervalWeeks: 1,
     daysOfWeek: [],
+    participantMode: "default",
+    participantIds: [],
     ...overrides,
   };
 }
@@ -110,12 +113,19 @@ export function createClassSchedule(overrides = {}) {
 export function createScheduleException(overrides = {}) {
   return {
     id: createStableId("schedule-exception"),
+    classScheduleId: "",
+    sourceGroupId: "",
+    sourceScheduleSlotId: "",
     groupId: "",
+    studentId: "",
+    format: "group",
     scheduleSlotId: "",
     occurrenceDate: "",
     classDate: "",
     startTime: "",
     durationHours: null,
+    participantMode: "default",
+    participantIds: [],
     status: "Scheduled",
     kind: "override",
     ...overrides,
@@ -131,6 +141,7 @@ export function createScheduleChange(overrides = {}) {
     dayOfWeek: 1,
     startTime: "",
     durationHours: null,
+    status: "Scheduled",
     ...overrides,
   };
 }

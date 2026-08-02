@@ -56,9 +56,43 @@ function daysBetween(left, right) {
 
 function classScheduleOccursOn(schedule, date) {
   if (date < schedule.startDate) return false;
+  if (schedule.endDate && date > schedule.endDate) return false;
   if (schedule.recurrence === "once") return date === schedule.startDate;
   if (!(schedule.daysOfWeek || []).includes(dayOfWeekForDate(date))) return false;
   return Math.floor(daysBetween(schedule.startDate, date) / 7) % Math.max(1, Number(schedule.intervalWeeks) || 1) === 0;
+}
+
+function exceptionSourceKey(item) {
+  if (item.classScheduleId) return `class:${item.classScheduleId}:${item.occurrenceDate}`;
+  const groupId = item.sourceGroupId || item.groupId;
+  const scheduleSlotId = item.sourceScheduleSlotId || item.scheduleSlotId;
+  return `group:${groupId}:${scheduleSlotId}:${item.occurrenceDate}`;
+}
+
+function targetOwner(state, source, exception = null) {
+  const format = exception?.format || source.format || (source.studentId ? "individual" : "group");
+  const groupId = format === "group" ? (exception?.groupId || source.groupId || "") : "";
+  const studentId = format === "individual" ? (exception?.studentId || source.studentId || "") : "";
+  const group = format === "group" ? (state.groups || []).find((item) => item.id === groupId) : null;
+  const student = format === "individual" ? (state.students || []).find((item) => item.id === studentId) : null;
+  if ((format === "group" && !group) || (format === "individual" && !student)) return null;
+  return {
+    format,
+    groupId,
+    studentId,
+    groupName: group?.name || student?.fullName || "",
+    studentName: student?.fullName || "",
+    participantMode: exception?.participantMode || source.participantMode || "default",
+    participantIds: exception?.participantMode === "custom"
+      ? [...(exception.participantIds || [])]
+      : source.participantMode === "custom" ? [...(source.participantIds || [])] : [],
+  };
+}
+
+function hasRecordedRows(classLog, occurrence) {
+  return classLog.some((row) => row.classDate === occurrence.classDate
+    && (row.startTime || "") === (occurrence.startTime || "")
+    && (occurrence.format === "group" ? row.groupId === occurrence.groupId : row.studentId === occurrence.studentId));
 }
 
 export function generateScheduledOccurrences(state, startDate, endDate) {
@@ -69,7 +103,7 @@ export function generateScheduledOccurrences(state, startDate, endDate) {
   const classSchedules = Array.isArray(state?.classSchedules) ? state.classSchedules : [];
   const exceptionByKey = new Map(exceptions
     .filter((item) => item.kind !== "added")
-    .map((item) => [`${item.groupId}:${item.scheduleSlotId}:${item.occurrenceDate}`, item]));
+    .map((item) => [exceptionSourceKey(item), item]));
   const result = [];
   const scanStart = addDays(startDate, -7);
   const scanEnd = addDays(endDate, 7);
@@ -78,12 +112,16 @@ export function generateScheduledOccurrences(state, startDate, endDate) {
     for (const slot of group.weeklySchedule || []) {
       for (let date = scanStart; date <= scanEnd; date = addDays(date, 1)) {
         const rule = resolvedSlot(state, group, slot, date);
+        if (rule.status === "Cancelled") continue;
         if (dayOfWeekForDate(date) !== Number(rule.dayOfWeek)) continue;
-        const exception = exceptionByKey.get(`${group.id}:${slot.id}:${date}`);
+        const exception = exceptionByKey.get(`group:${group.id}:${slot.id}:${date}`);
+        const owner = targetOwner(state, { format: "group", groupId: group.id }, exception);
+        if (!owner) continue;
         const occurrence = {
           id: occurrenceId(group.id, slot.id, date),
-          groupId: group.id,
-          groupName: group.name,
+          ...owner,
+          sourceGroupId: group.id,
+          sourceScheduleSlotId: slot.id,
           scheduleSlotId: slot.id,
           occurrenceDate: date,
           classDate: exception?.classDate || date,
@@ -94,9 +132,7 @@ export function generateScheduledOccurrences(state, startDate, endDate) {
           exceptionId: exception?.id || "",
         };
         if (!isDateInRange(occurrence.classDate, startDate, endDate)) continue;
-        occurrence.recorded = classLog.some((row) => row.groupId === group.id
-          && row.classDate === occurrence.classDate
-          && (row.startTime || "") === (occurrence.startTime || ""));
+        occurrence.recorded = hasRecordedRows(classLog, occurrence);
         result.push(occurrence);
       }
     }
@@ -104,12 +140,14 @@ export function generateScheduledOccurrences(state, startDate, endDate) {
 
   for (const exception of exceptions.filter((item) => item.kind === "added")) {
     if (!isDateInRange(exception.classDate, startDate, endDate)) continue;
-    const group = groups.find((item) => item.id === exception.groupId);
-    if (!group) continue;
-    result.push({
+    const owner = targetOwner(state, exception, exception);
+    if (!owner) continue;
+    const occurrence = {
+      ...owner,
       id: exception.id,
-      groupId: group.id,
-      groupName: group.name,
+      classScheduleId: "",
+      sourceGroupId: exception.sourceGroupId || exception.groupId || "",
+      sourceScheduleSlotId: exception.sourceScheduleSlotId || "",
       scheduleSlotId: "",
       occurrenceDate: exception.occurrenceDate || exception.classDate,
       classDate: exception.classDate,
@@ -118,42 +156,79 @@ export function generateScheduledOccurrences(state, startDate, endDate) {
       status: exception.status || "Scheduled",
       kind: "added",
       exceptionId: exception.id,
-      recorded: classLog.some((row) => row.groupId === group.id
-        && row.classDate === exception.classDate
-        && (row.startTime || "") === (exception.startTime || "")),
+    };
+    occurrence.recorded = hasRecordedRows(classLog, occurrence);
+    result.push({
+      ...occurrence,
     });
   }
 
   for (const schedule of classSchedules) {
-    const group = schedule.format === "group" ? groups.find((item) => item.id === schedule.groupId) : null;
-    const student = schedule.format === "individual"
-      ? (state.students || []).find((item) => item.id === schedule.studentId)
-      : null;
-    if ((schedule.format === "group" && !group) || (schedule.format === "individual" && !student)) continue;
-    const from = schedule.startDate > startDate ? schedule.startDate : startDate;
-    for (let date = from; date <= endDate; date = addDays(date, 1)) {
+    const baseOwner = targetOwner(state, schedule);
+    if (!baseOwner) continue;
+    const from = schedule.startDate > scanStart ? schedule.startDate : scanStart;
+    for (let date = from; date <= scanEnd; date = addDays(date, 1)) {
       if (!classScheduleOccursOn(schedule, date)) continue;
-      const recorded = classLog.some((row) => row.classDate === date
-        && (row.startTime || "") === (schedule.startTime || "")
-        && (schedule.format === "group" ? row.groupId === schedule.groupId : row.studentId === schedule.studentId));
-      result.push({
+      const exception = exceptionByKey.get(`class:${schedule.id}:${date}`);
+      const owner = targetOwner(state, schedule, exception);
+      if (!owner) continue;
+      const occurrence = {
         id: `${schedule.id}:${date}`,
         classScheduleId: schedule.id,
-        groupId: schedule.groupId || "",
-        groupName: group?.name || student?.fullName || "",
-        studentId: schedule.studentId || "",
-        studentName: student?.fullName || "",
-        format: schedule.format,
+        ...owner,
         scheduleSlotId: schedule.id,
         occurrenceDate: date,
-        classDate: date,
-        startTime: schedule.startTime,
-        durationHours: schedule.durationHours,
-        status: "Scheduled",
-        kind: schedule.recurrence === "weekly" ? "recurring" : "added",
-        recorded,
-      });
+        classDate: exception?.classDate || date,
+        startTime: exception?.startTime || schedule.startTime,
+        durationHours: finiteNumber(exception?.durationHours) ? exception.durationHours : schedule.durationHours,
+        status: exception?.status || "Scheduled",
+        kind: exception ? "override" : schedule.recurrence === "weekly" ? "recurring" : "added",
+        exceptionId: exception?.id || "",
+      };
+      if (!isDateInRange(occurrence.classDate, startDate, endDate)) continue;
+      occurrence.recorded = hasRecordedRows(classLog, occurrence);
+      result.push(occurrence);
     }
+  }
+
+  // A one-off occurrence can be moved farther than the normal scan padding.
+  // Materialize it from its source rule so it remains visible in the target month.
+  for (const exception of exceptions.filter((item) => item.kind !== "added" && isDateInRange(item.classDate, startDate, endDate))) {
+    let source = null;
+    let id = "";
+    if (exception.classScheduleId) {
+      source = classSchedules.find((item) => item.id === exception.classScheduleId) || null;
+      if (!source || !classScheduleOccursOn(source, exception.occurrenceDate)) continue;
+      id = `${source.id}:${exception.occurrenceDate}`;
+    } else {
+      const sourceGroupId = exception.sourceGroupId || exception.groupId;
+      const sourceSlotId = exception.sourceScheduleSlotId || exception.scheduleSlotId;
+      const sourceGroup = groups.find((item) => item.id === sourceGroupId);
+      const sourceSlot = sourceGroup?.weeklySchedule?.find((item) => item.id === sourceSlotId);
+      if (!sourceGroup || !sourceSlot) continue;
+      source = { ...sourceSlot, format: "group", groupId: sourceGroup.id };
+      id = occurrenceId(sourceGroup.id, sourceSlot.id, exception.occurrenceDate);
+    }
+    if (result.some((item) => item.id === id)) continue;
+    const owner = targetOwner(state, source, exception);
+    if (!owner) continue;
+    const occurrence = {
+      id,
+      ...owner,
+      classScheduleId: exception.classScheduleId || "",
+      sourceGroupId: exception.sourceGroupId || source.groupId || "",
+      sourceScheduleSlotId: exception.sourceScheduleSlotId || source.id || "",
+      scheduleSlotId: exception.classScheduleId || exception.sourceScheduleSlotId || exception.scheduleSlotId || "",
+      occurrenceDate: exception.occurrenceDate,
+      classDate: exception.classDate,
+      startTime: exception.startTime,
+      durationHours: exception.durationHours,
+      status: exception.status || "Scheduled",
+      kind: "override",
+      exceptionId: exception.id,
+    };
+    occurrence.recorded = hasRecordedRows(classLog, occurrence);
+    result.push(occurrence);
   }
 
   return result

@@ -12,17 +12,19 @@ import {
   Hourglass,
   Minus,
   MoreHorizontal,
+  Pencil,
   Plus,
   Save,
   Search,
   Star,
+  Trash2,
   UserRound,
   UsersRound,
   X,
 } from "lucide-react";
 import { Button, Drawer, EmptyState, Field, Input, Select, StatusBadge } from "../components/ui";
 import { StudentAvatar } from "../components/StudentAvatar";
-import { dayOfWeekForDate, resolveHourlyRate } from "../domain";
+import { dayOfWeekForDate, resolveHourlyRate, scheduledClassSupportsFutureScope } from "../domain";
 import { addDays, addMonths, parseDateOnly, startOfMonth, todayDateOnly } from "../domain/dates";
 import { useHistoryBackedState } from "../hooks/useHistoryNavigation";
 import { confirmDiscard, draftChanged, useUnsavedChanges } from "../hooks/useUnsavedChanges";
@@ -90,6 +92,135 @@ function initialScheduleDraft(asOfDate, state) {
     intervalWeeks: 1,
     daysOfWeek: [dayOfWeekForDate(asOfDate)],
   };
+}
+
+function groupIdsForStudent(student) {
+  return Array.isArray(student?.groupIds) ? student.groupIds : student?.groupId ? [student.groupId] : [];
+}
+
+function initialEditDraft(session) {
+  return {
+    classDate: session?.classDate || "",
+    startTime: session?.startTime || "",
+    durationHours: Number(session?.durationHours || 2),
+    format: session?.format === "individual" ? "individual" : "group",
+    groupId: session?.groupId || "",
+    studentId: session?.studentId || "",
+    participantMode: session?.participantMode === "custom" ? "custom" : "default",
+    participantIds: [...(session?.participantIds || [])],
+  };
+}
+
+function EditClassModal({ open, session, state, actions, asOfDate, onClose }) {
+  const [draft, setDraft] = useState(() => initialEditDraft(session));
+  const [scope, setScope] = useState("occurrence");
+  const [participantsOpen, setParticipantsOpen] = useState(false);
+  const [participantSearch, setParticipantSearch] = useState("");
+  const [saving, setSaving] = useState(false);
+  const baselineRef = useRef(null);
+  const spanish = getUiLocale().toLowerCase().startsWith("es");
+  const futureSupported = scheduledClassSupportsFutureScope(state, session);
+
+  useEffect(() => {
+    if (!open || !session) return;
+    const next = initialEditDraft(session);
+    setDraft(next);
+    setScope("occurrence");
+    setParticipantsOpen(false);
+    setParticipantSearch("");
+    baselineRef.current = { draft: next, scope: "occurrence" };
+  }, [open, session]);
+
+  const activeStudents = useMemo(() => (state.students || [])
+    .filter((student) => student.status !== "Inactive")
+    .sort((left, right) => String(left.fullName).localeCompare(String(right.fullName))), [state.students]);
+  const defaultParticipantIds = useMemo(() => {
+    if (draft.format === "individual") return draft.studentId ? [draft.studentId] : [];
+    return activeStudents.filter((student) => groupIdsForStudent(student).includes(draft.groupId)).map((student) => student.id);
+  }, [activeStudents, draft.format, draft.groupId, draft.studentId]);
+  const effectiveParticipantIds = draft.participantMode === "custom" ? draft.participantIds : defaultParticipantIds;
+  const visibleStudents = useMemo(() => {
+    const needle = participantSearch.trim().toLocaleLowerCase();
+    return needle ? activeStudents.filter((student) => student.fullName.toLocaleLowerCase().includes(needle)) : activeStudents;
+  }, [activeStudents, participantSearch]);
+  const currentSnapshot = useMemo(() => ({ draft, scope }), [draft, scope]);
+  const dirty = Boolean(baselineRef.current) && draftChanged(currentSnapshot, baselineRef.current);
+  const update = (patch) => setDraft((current) => ({ ...current, ...patch }));
+  const requestClose = () => {
+    if (dirty && !confirmDiscard(true, spanish ? "¿Descartar los cambios del horario de la clase?" : "Discard the class schedule changes?")) return false;
+    onClose();
+    return true;
+  };
+  const save = async () => {
+    if (!session || !actions.editScheduledClass) return;
+    setSaving(true);
+    try {
+      const saved = await actions.editScheduledClass({ session, draft, scope, asOfDate });
+      if (saved) onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+  const remove = async () => {
+    if (!session || !actions.removeScheduledClass) return;
+    const future = scope === "future" && futureSupported;
+    const message = spanish
+      ? `¿Eliminar ${future ? "esta clase y todas las clases futuras de la serie" : "solo esta clase"}? Las clases pasadas y los registros guardados no cambiarán.`
+      : `Remove ${future ? "this class and every future class in the series" : "only this class"}? Past classes and saved records will not change.`;
+    if (!globalThis.confirm?.(message)) return;
+    setSaving(true);
+    try {
+      const removed = await actions.removeScheduledClass({ session, scope, asOfDate });
+      if (removed) onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+  const toggleParticipant = (studentId) => {
+    const selected = new Set(effectiveParticipantIds);
+    if (selected.has(studentId)) selected.delete(studentId); else selected.add(studentId);
+    update({ participantMode: "custom", participantIds: [...selected] });
+  };
+  const minimumDate = scope === "future" ? session?.occurrenceDate || session?.classDate : asOfDate;
+
+  return <Drawer
+    open={open}
+    onClose={requestClose}
+    title="Edit class"
+    description="Update the information for this class."
+    size="modal"
+    className="class-edit-modal"
+    footer={<><Button className="class-edit-delete" icon={Trash2} onClick={remove} disabled={saving}>Delete class</Button><span className="class-edit-footer-spacer" /><Button onClick={requestClose} disabled={saving}>Cancel</Button><Button variant="primary" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save changes"}</Button></>}
+  >
+    {session ? <div className="class-edit-form">
+      <div className="class-edit-identity"><span><CalendarDays size={18} aria-hidden="true" /></span><strong>{session.title}</strong><i>·</i><span>{formatDate(session.classDate, { day: "numeric", month: "short", year: "numeric" })}</span><i>·</i><span>{formatTime(session.startTime)}</span>{futureSupported ? <StatusBadge tone="success">Recurring</StatusBadge> : null}</div>
+      <Field label="Apply changes to">
+        <div className="class-edit-scope" role="group" aria-label="Apply changes to">
+          <button type="button" className={scope === "occurrence" ? "active" : ""} aria-pressed={scope === "occurrence"} onClick={() => setScope("occurrence")}>Only this class</button>
+          <button type="button" disabled={!futureSupported} className={scope === "future" ? "active" : ""} aria-pressed={scope === "future"} onClick={() => futureSupported && setScope("future")}>This and future classes</button>
+        </div>
+      </Field>
+      <p className="class-edit-scope-note"><CircleAlert size={15} aria-hidden="true" />{scope === "future" ? "Past classes and saved records will remain unchanged." : `The other classes in this series will keep their information.`}</p>
+      <div className="class-edit-grid">
+        <Field label="Date" required><Input type="date" min={minimumDate} value={draft.classDate} onChange={(event) => update({ classDate: event.target.value })} /></Field>
+        <Field label="Time" required><Input type="time" value={draft.startTime} onChange={(event) => update({ startTime: event.target.value })} /></Field>
+        <Field label="Duration" required><Select value={draft.durationHours} onChange={(event) => update({ durationHours: Number(event.target.value) })}>{[0.5, 1, 1.5, 2, 2.5, 3, 4].map((hours) => <option value={hours} key={hours}>{hours} h</option>)}</Select></Field>
+        <Field label="Format"><div className="classes-choice" role="group" aria-label="Class format"><button type="button" className={draft.format === "group" ? "active" : ""} aria-pressed={draft.format === "group"} onClick={() => update({ format: "group", groupId: draft.groupId || state.groups?.[0]?.id || "", studentId: "", participantMode: "default", participantIds: [] })}>Group</button><button type="button" className={draft.format === "individual" ? "active" : ""} aria-pressed={draft.format === "individual"} onClick={() => update({ format: "individual", studentId: draft.studentId || activeStudents[0]?.id || "", groupId: "", participantMode: "default", participantIds: [] })}>Individual</button></div></Field>
+      </div>
+      {draft.format === "group" ? <Field label="Group or student" required><Select value={draft.groupId} onChange={(event) => update({ groupId: event.target.value, participantMode: "default", participantIds: [] })}><option value="">Choose a group</option>{(state.groups || []).map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</Select></Field>
+        : <Field label="Group or student" required><Select value={draft.studentId} onChange={(event) => update({ studentId: event.target.value })}><option value="">Choose a student</option>{activeStudents.map((student) => <option key={student.id} value={student.id}>{student.fullName}</option>)}</Select></Field>}
+      <section className="class-edit-participants">
+        <div><strong>Participants</strong><span>{effectiveParticipantIds.length} {effectiveParticipantIds.length === 1 ? "student" : "students"}{draft.participantMode === "custom" ? " · custom list" : ""}</span></div>
+        {draft.format === "group" ? <Button onClick={() => setParticipantsOpen((value) => !value)}>{participantsOpen ? "Hide" : "Manage"}</Button> : null}
+      </section>
+      {participantsOpen && draft.format === "group" ? <div className="class-edit-participant-picker">
+        <label><Search size={17} aria-hidden="true" /><span className="sr-only">Search students</span><input value={participantSearch} onChange={(event) => setParticipantSearch(event.target.value)} placeholder="Search students" /></label>
+        <div>{visibleStudents.map((student) => <label key={student.id}><input type="checkbox" checked={effectiveParticipantIds.includes(student.id)} onChange={() => toggleParticipant(student.id)} /><StudentAvatar avatarId={student.avatarId} name={student.fullName} size="tiny" decorative /><span><strong>{student.fullName}</strong><small>{groupIdsForStudent(student).includes(draft.groupId) ? "Group member" : "Not in this group"}</small></span></label>)}</div>
+        {draft.participantMode === "custom" ? <Button variant="ghost" onClick={() => update({ participantMode: "default", participantIds: [] })}>Use the group roster</Button> : null}
+      </div> : null}
+      <details className="class-edit-more"><summary>More options</summary><p>{futureSupported ? "This is a recurring class. Choose the scope above before saving." : "This is a one-time class."}</p></details>
+    </div> : null}
+  </Drawer>;
 }
 
 function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
@@ -197,14 +328,14 @@ function ClassSummary({ entries, roster, maximum }) {
   </aside>;
 }
 
-function SessionEditor({ session, state, entries, setEntry, roster, assessmentOn, setAssessmentOn, assessment, setAssessment, maximum, setMaximum, saving, dirty, onSave, onDiscard, onCancel, variant = "upcoming" }) {
+function SessionEditor({ session, state, entries, setEntry, roster, assessmentOn, setAssessmentOn, assessment, setAssessment, maximum, setMaximum, saving, dirty, onSave, onDiscard, onCancel, onEdit, variant = "upcoming" }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   if (!session) return <EmptyState icon={CalendarDays} title="No class selected" description="Choose a class from History or create a new class." />;
   const heading = variant === "history" ? "Edit class record" : session.statusLabel === "Pending" ? "Class pending registration" : "Next class";
   return <>
     <section className={`class-session-card class-session-${variant}`}>
       <header className="class-session-header">
-        <div className="class-session-title-row"><h2>{heading}</h2><StatusBadge tone={statusTone(session.statusLabel)}>{session.statusLabel === "Pending" ? "Pending registration" : session.statusLabel}</StatusBadge></div>
+        <div className="class-session-title-row"><h2>{heading}</h2><div className="class-session-heading-actions">{onEdit ? <Button className="class-edit-trigger" icon={Pencil} onClick={onEdit}>Edit class</Button> : null}<StatusBadge tone={statusTone(session.statusLabel)}>{session.statusLabel === "Pending" ? "Pending registration" : session.statusLabel}</StatusBadge></div></div>
         <div className="class-session-overview">
           <div className="class-session-identity"><span><UsersRound size={24} aria-hidden="true" /></span><div><small>{session.format === "group" ? "Group" : "Student"}</small><strong>{session.title}</strong></div></div>
           <button className="class-overview-toggle" type="button" aria-expanded={detailsOpen} onClick={() => setDetailsOpen((open) => !open)}>{detailsOpen ? "Hide details" : "View details"}</button>
@@ -369,6 +500,7 @@ export default function Classes({ state = {}, derived = {}, actions = {}, asOfDa
   const [selectedKey, setSelectedKey] = useState("");
   const [selectedUpcomingKey, setSelectedUpcomingKey] = useState("");
   const [newClassOpen, setNewClassOpen] = useState(false);
+  const [editingSession, setEditingSession] = useState(null);
   const [filters, setFilters] = useState({ search: "", dateFrom: "", dateTo: "", ownerId: "", status: "" });
   const [entries, setEntries] = useState({});
   const [assessmentOn, setAssessmentOn] = useState(false);
@@ -385,6 +517,9 @@ export default function Classes({ state = {}, derived = {}, actions = {}, asOfDa
   const selectedHistory = history.find((session) => session.key === selectedKey) || history[0] || null;
   const selectedUpcoming = sessions.find((session) => session.key === selectedUpcomingKey) || null;
   const activeSession = tab === "history" ? selectedHistory : selectedUpcoming || primary;
+  const canEditActiveSession = tab === "next" && activeSession && !(activeSession.rows || []).length
+    && (activeSession.occurrenceDate || activeSession.classDate) >= currentDate
+    && Boolean(activeSession.classScheduleId || activeSession.scheduleSlotId || activeSession.exceptionId);
   const roster = useMemo(() => rosterForClassSession(state, activeSession), [activeSession, state]);
   const snapshot = useMemo(() => ({ entries, assessmentOn, assessment, maximum }), [assessment, assessmentOn, entries, maximum]);
   const dirty = Boolean(baselineRef.current) && draftChanged(snapshot, baselineRef.current);
@@ -518,8 +653,9 @@ export default function Classes({ state = {}, derived = {}, actions = {}, asOfDa
     <header className="classes-workspace-heading"><div><h1>Classes</h1><p>Record the current class quickly and simply.</p></div><Button icon={Plus} onClick={() => setNewClassOpen(true)}>New class</Button></header>
     <div className="classes-workspace-tabs" role="tablist" aria-label="Class views"><button type="button" role="tab" aria-selected={tab === "next"} className={tab === "next" ? "active" : ""} onClick={() => changeTab("next")}>Next class</button><button type="button" role="tab" aria-selected={tab === "calendar"} className={tab === "calendar" ? "active" : ""} onClick={() => changeTab("calendar")}>Calendar</button><button type="button" role="tab" aria-selected={tab === "history"} className={tab === "history" ? "active" : ""} onClick={() => changeTab("history")}>History</button></div>
     {tab === "next" ? <div className="classes-upcoming-view" role="tabpanel">
-      {activeSession ? <><div className="classes-upcoming-layout"><main><SessionEditor session={activeSession} state={state} entries={entries} setEntry={setEntry} roster={roster} assessmentOn={assessmentOn} setAssessmentOn={setAssessmentOn} assessment={assessment} setAssessment={setAssessment} maximum={maximum} setMaximum={setMaximum} saving={saving} dirty={dirty} onSave={() => saveSession("Completed")} onDiscard={() => hydrate(activeSession)} onCancel={cancelSession} /></main><ClassSummary entries={entries} roster={roster} maximum={maximum} /></div><UpcomingClasses sessions={upcomingAfter} onSelect={selectUpcomingSession} /></> : <EmptyState icon={CalendarDays} title="No upcoming classes" description="Create a one-time or recurring class to start the daily workflow." action={<Button icon={Plus} variant="primary" onClick={() => setNewClassOpen(true)}>New class</Button>} />}
+      {activeSession ? <><div className="classes-upcoming-layout"><main><SessionEditor session={activeSession} state={state} entries={entries} setEntry={setEntry} roster={roster} assessmentOn={assessmentOn} setAssessmentOn={setAssessmentOn} assessment={assessment} setAssessment={setAssessment} maximum={maximum} setMaximum={setMaximum} saving={saving} dirty={dirty} onSave={() => saveSession("Completed")} onDiscard={() => hydrate(activeSession)} onCancel={cancelSession} onEdit={canEditActiveSession ? () => setEditingSession(activeSession) : null} /></main><ClassSummary entries={entries} roster={roster} maximum={maximum} /></div><UpcomingClasses sessions={upcomingAfter} onSelect={selectUpcomingSession} /></> : <EmptyState icon={CalendarDays} title="No upcoming classes" description="Create a one-time or recurring class to start the daily workflow." action={<Button icon={Plus} variant="primary" onClick={() => setNewClassOpen(true)}>New class</Button>} />}
     </div> : tab === "calendar" ? <CalendarWorkspace state={state} currentDate={currentDate} onOpen={openCalendarSession} onAdd={() => setNewClassOpen(true)} /> : <div className="classes-history-view" role="tabpanel"><HistoryList sessions={history} selectedKey={selectedKey} onSelect={(session) => setSelectedKey(session.key)} filters={filters} setFilters={setFilters} /><div className="classes-history-detail"><SessionEditor variant="history" session={selectedHistory} state={state} entries={entries} setEntry={setEntry} roster={roster} assessmentOn={assessmentOn} setAssessmentOn={setAssessmentOn} assessment={assessment} setAssessment={setAssessment} maximum={maximum} setMaximum={setMaximum} saving={saving} dirty={dirty} onSave={() => saveSession("Completed")} onDiscard={() => hydrate(activeSession)} onCancel={cancelSession} /></div></div>}
     <NewClassDrawer open={newClassOpen} onClose={() => setNewClassOpen(false)} state={state} asOfDate={currentDate} actions={actions} />
+    <EditClassModal open={Boolean(editingSession)} session={editingSession} state={state} actions={actions} asOfDate={currentDate} onClose={() => { setEditingSession(null); setSelectedUpcomingKey(""); }} />
   </div>;
 }

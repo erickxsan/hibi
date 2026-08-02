@@ -172,10 +172,13 @@ export function validateClassSchedule(item, state = null) {
   enumValue(errors, item.recurrence, ["once", "weekly"], "recurrence", "Class frequency");
   enumValue(errors, item.format, ["group", "individual"], "format", "Class format");
   dateOnly(errors, item.startDate, "startDate", "Start date");
+  dateOnly(errors, item.endDate, "endDate", "End date", { optional: true });
   timeOnly(errors, item.startTime, "startTime", "Start time");
   finiteNumber(errors, item.durationHours, "durationHours", "Class duration", { min: 0.25 });
   finiteNumber(errors, item.intervalWeeks, "intervalWeeks", "Repeat interval", { min: 1, integer: true });
   if (!Array.isArray(item.daysOfWeek)) errors.push(issue("daysOfWeek", "invalid_type", "Class days must be an array."));
+  if (!Array.isArray(item.participantIds)) errors.push(issue("participantIds", "invalid_type", "Class participants must be an array."));
+  enumValue(errors, item.participantMode, ["default", "custom"], "participantMode", "Participant mode");
   (item.daysOfWeek || []).forEach((day, index) => finiteNumber(errors, day, `daysOfWeek[${index}]`, "Class day", { min: 1, max: 7, integer: true }));
   if (item.recurrence === "weekly" && !(item.daysOfWeek || []).length) errors.push(issue("daysOfWeek", "required", "Choose at least one class day."));
   if (item.format === "group") requiredText(errors, item.groupId, "groupId", "Class group");
@@ -354,19 +357,29 @@ export function normalizeState(input) {
       groupId: normalizeText(item?.groupId),
       studentId: normalizeText(item?.studentId),
       startDate: normalizeText(item?.startDate),
+      endDate: normalizeOptionalText(item?.endDate) || "",
       startTime: normalizeText(item?.startTime),
       durationHours: normalizeNumber(item?.durationHours, sourceSettings.defaultClassHours ?? DEFAULT_SETTINGS.defaultClassHours),
       intervalWeeks: normalizeNumber(item?.intervalWeeks, 1),
       daysOfWeek: [...new Set((Array.isArray(item?.daysOfWeek) ? item.daysOfWeek : []).map((day) => normalizeNumber(day, 1)))],
+      participantMode: item?.participantMode === "custom" ? "custom" : "default",
+      participantIds: [...new Set((Array.isArray(item?.participantIds) ? item.participantIds : []).map(normalizeText).filter(Boolean))],
     })),
     scheduleExceptions: (Array.isArray(source.scheduleExceptions) ? source.scheduleExceptions : []).map((item, index) => ({
       id: normalizeText(item?.id) || `schedule_exception_${index + 1}`,
+      classScheduleId: normalizeText(item?.classScheduleId),
+      sourceGroupId: normalizeText(item?.sourceGroupId) || normalizeText(item?.groupId),
+      sourceScheduleSlotId: normalizeText(item?.sourceScheduleSlotId) || normalizeText(item?.scheduleSlotId),
       groupId: normalizeText(item?.groupId),
+      studentId: normalizeText(item?.studentId),
+      format: item?.format === "individual" ? "individual" : "group",
       scheduleSlotId: normalizeText(item?.scheduleSlotId),
       occurrenceDate: normalizeText(item?.occurrenceDate),
       classDate: normalizeText(item?.classDate),
       startTime: normalizeText(item?.startTime),
       durationHours: normalizeOptionalNumber(item?.durationHours),
+      participantMode: item?.participantMode === "custom" ? "custom" : "default",
+      participantIds: [...new Set((Array.isArray(item?.participantIds) ? item.participantIds : []).map(normalizeText).filter(Boolean))],
       status: normalizeText(item?.status) || "Scheduled",
       kind: item?.kind === "added" ? "added" : "override",
     })),
@@ -378,6 +391,7 @@ export function normalizeState(input) {
       dayOfWeek: normalizeNumber(item?.dayOfWeek, 1),
       startTime: normalizeText(item?.startTime),
       durationHours: normalizeOptionalNumber(item?.durationHours),
+      status: item?.status === "Cancelled" ? "Cancelled" : "Scheduled",
     })),
   };
 
@@ -399,14 +413,19 @@ export function normalizeState(input) {
 function validateScheduleException(item, state) {
   const errors = [];
   requiredText(errors, item?.id, "id", "Schedule exception ID");
-  requiredText(errors, item?.groupId, "groupId", "Schedule exception group");
+  enumValue(errors, item?.format, ["group", "individual"], "format", "Exception format");
+  if (item?.format === "group") requiredText(errors, item?.groupId, "groupId", "Schedule exception group");
+  if (item?.format === "individual") requiredText(errors, item?.studentId, "studentId", "Schedule exception student");
   dateOnly(errors, item?.occurrenceDate, "occurrenceDate", "Original occurrence date");
   dateOnly(errors, item?.classDate, "classDate", "Exception class date");
   timeOnly(errors, item?.startTime, "startTime", "Exception time");
   finiteNumber(errors, item?.durationHours, "durationHours", "Exception duration", { min: 0 });
+  if (!Array.isArray(item?.participantIds)) errors.push(issue("participantIds", "invalid_type", "Exception participants must be an array."));
+  enumValue(errors, item?.participantMode, ["default", "custom"], "participantMode", "Exception participant mode");
   enumValue(errors, item?.status, CLASS_STATUSES, "status", "Exception status");
   if (!['override', 'added'].includes(item?.kind)) errors.push(issue("kind", "invalid_enum", "Exception kind must be override or added."));
-  if (state && !state.groups.some((group) => group.id === item.groupId)) errors.push(issue("groupId", "unknown_reference", "Schedule exception references a missing group."));
+  if (state && item?.groupId && !state.groups.some((group) => group.id === item.groupId)) errors.push(issue("groupId", "unknown_reference", "Schedule exception references a missing group."));
+  if (state && item?.studentId && !state.students.some((student) => student.id === item.studentId)) errors.push(issue("studentId", "unknown_reference", "Schedule exception references a missing student."));
   return result(errors, []);
 }
 
@@ -419,6 +438,7 @@ function validateScheduleChange(item, state) {
   finiteNumber(errors, item?.dayOfWeek, "dayOfWeek", "Schedule day", { min: 1, max: 7, integer: true });
   timeOnly(errors, item?.startTime, "startTime", "Schedule time");
   finiteNumber(errors, item?.durationHours, "durationHours", "Schedule duration", { min: 0 });
+  enumValue(errors, item?.status, ["Scheduled", "Cancelled"], "status", "Schedule change status");
   if (state && !state.groups.some((group) => group.id === item.groupId)) errors.push(issue("groupId", "unknown_reference", "Schedule change references a missing group."));
   return result(errors, []);
 }
