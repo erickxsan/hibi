@@ -51,6 +51,19 @@ const PERIOD_ITEMS = [
   { value: "thirty", label: "Last 30 days" },
   { value: "all", label: "All records" },
 ];
+const PAYMENT_SCOPE_ITEMS = [
+  { value: "overview", label: "Overview" },
+  { value: "breakdown", label: "Breakdown" },
+];
+const PAYMENT_MODE_ITEMS = [
+  { value: "group", label: "Group" },
+  { value: "student", label: "Student" },
+  { value: "class", label: "Class" },
+];
+const PAYMENT_CHART_ITEMS = [
+  { value: "evolution", label: "Payment evolution" },
+  { value: "projection", label: "Collected vs. projection" },
+];
 
 function formatDate(
   value,
@@ -131,11 +144,11 @@ function TrackingTabs({ value, onChange }) {
   );
 }
 
-function ModeSwitch({ value, onChange, items }) {
+function ModeSwitch({ value, onChange, items, label = "View by" }) {
   return (
     <div className="tracking-mode">
-      <strong>View by</strong>
-      <div role="group" aria-label="View tracking by">
+      <strong>{label}</strong>
+      <div role="group" aria-label={label}>
         {items.map((item) => (
           <button
             key={item.value}
@@ -712,7 +725,86 @@ function PaymentBar({ data }) {
   );
 }
 
-function PaymentView({ data, mode, onOpenClass }) {
+function dateTime(value) {
+  return new Date(`${value}T12:00:00Z`).getTime();
+}
+
+function chartPath(points) {
+  return points.map((point, index) => `${index ? "L" : "M"}${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(" ");
+}
+
+function PaymentProjectionChart({ data }) {
+  const width = 760;
+  const height = 190;
+  const padding = { left: 48, right: 22, top: 18, bottom: 34 };
+  const startTime = dateTime(data.projectionStart);
+  const endTime = Math.max(startTime + 1, dateTime(data.projectionEnd));
+  const x = (date) => padding.left
+    + ((dateTime(date) - startTime) / (endTime - startTime)) * (width - padding.left - padding.right);
+  const maximum = Math.max(data.projection, data.collected, 1);
+  const y = (value) => padding.top
+    + (1 - value / maximum) * (height - padding.top - padding.bottom);
+  const actualSeries = [{ label: data.projectionStart, value: 0 }, ...data.cumulativeSeries];
+  if (actualSeries.at(-1)?.label !== data.actualEnd) {
+    actualSeries.push({ label: data.actualEnd, value: data.collected });
+  }
+  const actualPoints = actualSeries.map((item) => ({ ...item, x: x(item.label), y: y(item.value) }));
+  const projectionPoints = [
+    { label: data.projectionStart, value: 0, x: x(data.projectionStart), y: y(0) },
+    { label: data.projectionEnd, value: data.projection, x: x(data.projectionEnd), y: y(data.projection) },
+  ];
+  const actualPath = chartPath(actualPoints);
+  const projectionPath = chartPath(projectionPoints);
+  const areaPath = `${actualPath} L${actualPoints.at(-1).x.toFixed(1)} ${height - padding.bottom} L${actualPoints[0].x.toFixed(1)} ${height - padding.bottom} Z`;
+  return (
+    <div className="payment-projection-chart">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Collected ${money(data.collected)} versus projected ${money(data.projection)}`}>
+        <g className="tracking-grid">
+          {[0, .25, .5, .75, 1].map((ratio) => (
+            <line key={ratio} x1={padding.left} x2={width - padding.right} y1={padding.top + ratio * (height - padding.top - padding.bottom)} y2={padding.top + ratio * (height - padding.top - padding.bottom)} />
+          ))}
+        </g>
+        <path className="payment-projection-area" d={areaPath} />
+        <path className="payment-projection-line" d={projectionPath} />
+        <path className="tracking-line" d={actualPath} />
+        {actualPoints.slice(1).map((point) => <circle key={`${point.label}-${point.value}`} cx={point.x} cy={point.y} r="3.5" />)}
+        <circle className="projection-end" cx={projectionPoints[1].x} cy={projectionPoints[1].y} r="4" />
+        <text className="tracking-axis-label" x={padding.left} y={height - 9} textAnchor="start">{formatDate(data.projectionStart, { month: "short", day: "numeric" })}</text>
+        <text className="tracking-axis-label" x={x(data.actualEnd)} y={height - 9} textAnchor="middle">Today</text>
+        <text className="tracking-axis-label" x={width - padding.right} y={height - 9} textAnchor="end">{formatDate(data.projectionEnd, { month: "short", day: "numeric" })}</text>
+      </svg>
+    </div>
+  );
+}
+
+function PaymentAnalytics({ data, value, onChange }) {
+  return (
+    <section className="payment-analytics" aria-label="Payment analytics">
+      <header>
+        <div className="payment-chart-toggle" role="tablist" aria-label="Payment chart">
+          {PAYMENT_CHART_ITEMS.map((item) => (
+            <button key={item.value} type="button" role="tab" aria-selected={value === item.value} className={value === item.value ? "active" : ""} onClick={() => onChange(item.value)}>{item.label}</button>
+          ))}
+        </div>
+        {value === "projection" ? (
+          <div className="payment-forecast-values">
+            <span className="actual"><small>Actual</small><strong>{money(data.collected)}</strong></span>
+            <span className="projection"><small>Projection</small><strong>{money(data.projection)}</strong></span>
+            <span><small>Gap</small><strong>{money(data.projectionGap)}</strong></span>
+            <span className="overdue"><small>Overdue</small><strong>{money(data.overdue)}</strong></span>
+          </div>
+        ) : null}
+      </header>
+      {value === "projection" ? (
+        <PaymentProjectionChart data={data} />
+      ) : (
+        <TrendChart title="Payment evolution" series={data.series} valueFormatter={money} />
+      )}
+    </section>
+  );
+}
+
+function PaymentView({ data, mode, scope, chartView, onChartViewChange, onOpenClass }) {
   const pendingRows = data.tableRows.filter(
     (row) =>
       row.pending > 0 ||
@@ -726,14 +818,24 @@ function PaymentView({ data, mode, onOpenClass }) {
     },
     {
       icon: CheckCircle2,
-      text: `${data.paidStudents} ${data.paidStudents === 1 ? "student has" : "students have"} paid.`,
+      text: scope === "overview"
+        ? `${data.paidClasses} paid class ${data.paidClasses === 1 ? "record" : "records"}.`
+        : `${data.paidStudents} ${data.paidStudents === 1 ? "student has" : "students have"} paid.`,
     },
     {
       icon: Clock3,
       tone: pendingRows.length ? "orange" : "green",
-      text: `${data.pendingStudents} ${data.pendingStudents === 1 ? "student still has" : "students still have"} a pending balance.`,
+      text: scope === "overview"
+        ? `${data.unpaidClasses} pending class ${data.unpaidClasses === 1 ? "record" : "records"}.`
+        : `${data.pendingStudents} ${data.pendingStudents === 1 ? "student still has" : "students still have"} a pending balance.`,
+    },
+    {
+      icon: CircleAlert,
+      tone: data.overdueClasses ? "red" : "green",
+      text: `${data.overdueClasses} overdue ${data.overdueClasses === 1 ? "record" : "records"}.`,
     },
   ];
+  const aggregateByStudent = mode === "group" || mode === "overview";
   return (
     <div className="tracking-content-grid">
       <main>
@@ -793,20 +895,14 @@ function PaymentView({ data, mode, onOpenClass }) {
           )}
         </MetricStrip>
         <PaymentBar data={data} />
-        {mode === "class" ? null : (
-          <TrendChart
-            title="Payment evolution"
-            series={data.series}
-            valueFormatter={money}
-          />
-        )}
+        {mode === "class" ? null : <PaymentAnalytics data={data} value={chartView} onChange={onChartViewChange} />}
         <section className="tracking-table-shell" aria-label="Payment details">
           <table>
             <thead>
               <tr>
                 {mode === "student" ? <th>Class</th> : <th>Student</th>}
-                <th>{mode === "group" ? "Paid" : "Amount"}</th>
-                {mode === "group" ? <th>Pending</th> : null}
+                <th>{aggregateByStudent ? "Paid" : "Amount"}</th>
+                {aggregateByStudent ? <th>Pending</th> : null}
                 <th>Payment status</th>
                 <th>Payment date</th>
                 <th>
@@ -827,8 +923,8 @@ function PaymentView({ data, mode, onOpenClass }) {
                       <StudentCell student={row.student} />
                     </td>
                   )}
-                  <td>{money(mode === "group" ? row.paid : row.charged)}</td>
-                  {mode === "group" ? (
+                  <td>{money(aggregateByStudent ? row.paid : row.charged)}</td>
+                  {aggregateByStudent ? (
                     <td className={row.pending ? "warning-value" : ""}>
                       {money(row.pending)}
                     </td>
@@ -861,7 +957,7 @@ function PaymentView({ data, mode, onOpenClass }) {
       <aside className="tracking-sidebar">
         <InsightPanel title="Collection summary" insights={insights} />
         <RecentPanel
-          title="Pending in this view"
+          title={scope === "overview" ? "Pending overall" : "Pending in this view"}
           rows={pendingRows.slice(0, 4)}
           renderRow={(row) => (
             <div className="tracking-recent-row" key={`pending-${row.id}`}>
@@ -882,6 +978,8 @@ export default function Tracking({
   derived = {},
   actions = {},
   openPage,
+  intent,
+  clearIntent,
 }) {
   const groups = (state.groups || []).filter(
     (group) => group.status !== "Inactive",
@@ -904,6 +1002,8 @@ export default function Tracking({
   const [paymentMode, setPaymentMode] = useState(() =>
     groups.length ? "group" : "student",
   );
+  const [paymentScope, setPaymentScope] = useState("overview");
+  const [paymentChart, setPaymentChart] = useState("projection");
   const [groupId, setGroupId] = useState(groups[0]?.id || "");
   const [studentId, setStudentId] = useState(students[0]?.id || "");
   const [assessmentKey, setAssessmentKey] = useState("");
@@ -933,6 +1033,33 @@ export default function Tracking({
     defaultValue: "grades",
     allowedValues: TAB_ITEMS.map((item) => item.value),
   });
+  const changePaymentScope = useHistoryBackedState({
+    key: "tracking-payment-scope",
+    value: paymentScope,
+    onChange: setPaymentScope,
+    defaultValue: "overview",
+    allowedValues: PAYMENT_SCOPE_ITEMS.map((item) => item.value),
+  });
+  const changePaymentChart = useHistoryBackedState({
+    key: "tracking-payment-chart",
+    value: paymentChart,
+    onChange: setPaymentChart,
+    defaultValue: "projection",
+    allowedValues: PAYMENT_CHART_ITEMS.map((item) => item.value),
+  });
+  useEffect(() => {
+    if (intent?.type !== "open-tracking") return;
+    if (intent.tab && TAB_ITEMS.some((item) => item.value === intent.tab)) {
+      changeTab(intent.tab, { replace: true });
+    }
+    if (PAYMENT_SCOPE_ITEMS.some((item) => item.value === intent.paymentScope)) {
+      changePaymentScope(intent.paymentScope, { replace: true });
+    }
+    if (PAYMENT_CHART_ITEMS.some((item) => item.value === intent.paymentChart)) {
+      changePaymentChart(intent.paymentChart, { replace: true });
+    }
+    clearIntent?.();
+  }, [changePaymentChart, changePaymentScope, changeTab, clearIntent, intent]);
   const range = useMemo(
     () => trackingRange(reportDate, period, [...gradeRows, ...classRows]),
     [classRows, gradeRows, period, reportDate],
@@ -979,17 +1106,20 @@ export default function Tracking({
       }),
     [attendanceMode, classRows, groupId, range, reportState, search, studentId],
   );
+  const activePaymentMode = paymentScope === "overview" ? "overview" : paymentMode;
+  const overviewProjection = period === "month" ? derived.dashboard?.recentProjection : undefined;
   const paymentBase = useMemo(
     () =>
       buildPaymentTracking(reportState, classRows, {
-        mode: paymentMode,
+        mode: activePaymentMode,
         groupId,
         studentId,
         sessionKey: "",
         range,
         search,
+        projectionTotal: activePaymentMode === "overview" ? overviewProjection : undefined,
       }),
-    [classRows, groupId, paymentMode, range, reportState, search, studentId],
+    [activePaymentMode, classRows, groupId, overviewProjection, range, reportState, search, studentId],
   );
   useEffect(() => {
     if (!paymentBase.sessions.some((item) => item.key === sessionKey))
@@ -998,17 +1128,19 @@ export default function Tracking({
   const paymentData = useMemo(
     () =>
       buildPaymentTracking(reportState, classRows, {
-        mode: paymentMode,
+        mode: activePaymentMode,
         groupId,
         studentId,
         sessionKey,
         range,
         search,
+        projectionTotal: activePaymentMode === "overview" ? overviewProjection : undefined,
       }),
     [
+      activePaymentMode,
       classRows,
       groupId,
-      paymentMode,
+      overviewProjection,
       range,
       search,
       sessionKey,
@@ -1022,18 +1154,13 @@ export default function Tracking({
       ? gradeMode
       : tab === "attendance"
         ? attendanceMode
-        : paymentMode;
-  const modeItems =
-    tab === "payments"
-      ? [
-          { value: "group", label: "Group", disabled: !groups.length },
-          { value: "student", label: "Student" },
-          { value: "class", label: "Class" },
-        ]
-      : [
-          { value: "group", label: "Group", disabled: !groups.length },
-          { value: "student", label: "Student" },
-        ];
+        : activePaymentMode;
+  const modeItems = tab === "payments"
+    ? PAYMENT_MODE_ITEMS.map((item) => ({ ...item, disabled: item.value === "group" && !groups.length }))
+    : [
+        { value: "group", label: "Group", disabled: !groups.length },
+        { value: "student", label: "Student" },
+      ];
   const setMode =
     tab === "grades"
       ? setGradeMode
@@ -1159,6 +1286,35 @@ export default function Tracking({
           </div>
         ) : null}
         <div className="tracking-context">
+          {tab === "payments" ? (
+            <>
+              <ModeSwitch label="Scope" value={paymentScope} onChange={changePaymentScope} items={PAYMENT_SCOPE_ITEMS} />
+              {paymentScope === "overview" ? (
+                <span className="tracking-scope-summary">All groups, students, and classes</span>
+              ) : (
+                <>
+                  <ModeSwitch value={paymentMode} onChange={setPaymentMode} items={modeItems} />
+                  {useStudentOwner ? (
+                    <TrackingSelect label="Student" value={studentId} onChange={(event) => setStudentId(event.target.value)} searchable>
+                      {students.map((student) => <option key={student.id} value={student.id}>{student.fullName}</option>)}
+                    </TrackingSelect>
+                  ) : (
+                    <TrackingSelect label="Group" value={groupId} onChange={(event) => setGroupId(event.target.value)} searchable>
+                      {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+                    </TrackingSelect>
+                  )}
+                  {paymentMode === "class" ? (
+                    <TrackingSelect label="Class" value={sessionKey} onChange={(event) => setSessionKey(event.target.value)} searchable>
+                      {paymentBase.sessions.length ? paymentBase.sessions.map((item) => (
+                        <option key={item.key} value={item.key}>{formatDate(item.classDate)} · {formatTime(item.startTime)} · {item.title}</option>
+                      )) : <option value="">No classes</option>}
+                    </TrackingSelect>
+                  ) : null}
+                </>
+              )}
+            </>
+          ) : (
+            <>
           <ModeSwitch value={activeMode} onChange={setMode} items={modeItems} />
           {useStudentOwner ? (
             <TrackingSelect
@@ -1224,6 +1380,8 @@ export default function Tracking({
               )}
             </TrackingSelect>
           ) : null}
+            </>
+          )}
         </div>
         <section role="tabpanel">
           {tab === "grades" ? (
@@ -1243,7 +1401,10 @@ export default function Tracking({
           {tab === "payments" ? (
             <PaymentView
               data={paymentData}
-              mode={paymentMode}
+              mode={activePaymentMode}
+              scope={paymentScope}
+              chartView={paymentChart}
+              onChartViewChange={changePaymentChart}
               onOpenClass={openRelatedClass}
             />
           ) : null}

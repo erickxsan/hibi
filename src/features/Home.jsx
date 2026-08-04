@@ -217,6 +217,12 @@ export default function Home({ state, derived, openPage, navigate }) {
     type: "open-class",
     sessionKey: session.workspaceKey,
   });
+  const openPaymentOverview = () => openPage("grades", {
+    type: "open-tracking",
+    tab: "payments",
+    paymentScope: "overview",
+    paymentChart: "projection",
+  });
 
   return (
     <div className="page hibi-home home-dashboard">
@@ -249,9 +255,9 @@ export default function Home({ state, derived, openPage, navigate }) {
           <RevenueChart series={dashboard.revenueSeries} period={period} locale={locale} />
         </article>
         <aside className="home-finance-side" aria-label="Financial summary">
-          <FinanceSummary icon={Wallet} title="Income this month" value={money(dashboard.monthlyCollected)} delta={dashboard.monthlyCollectedDelta} note="Compared with last month" tone="green" progress={dashboard.monthlyProjection ? dashboard.monthlyCollected / dashboard.monthlyProjection : 0} onClick={() => navigate("payments")} />
-          <FinanceSummary icon={TrendingUp} title="Monthly projection" value={money(dashboard.monthlyProjection)} delta={dashboard.monthlyProjectionDelta} note="Based on your recent collections" tone="purple" progress={dashboard.idealRevenue ? dashboard.monthlyProjection / dashboard.idealRevenue : 0} onClick={() => navigate("payments")} />
-          <FinanceSummary icon={CreditCard} title="Pending payments" value={money(dashboard.outstanding)} note={`${dashboard.outstandingRecords} records`} tone="purple" onClick={() => navigate("payments")} />
+          <FinanceSummary icon={Wallet} title="Income this month" value={money(dashboard.monthlyCollected)} delta={dashboard.monthlyCollectedDelta} note="Compared with last month" tone="green" progress={dashboard.monthlyProjection ? dashboard.monthlyCollected / dashboard.monthlyProjection : 0} onClick={openPaymentOverview} />
+          <FinanceSummary icon={TrendingUp} title="Monthly projection" value={money(dashboard.monthlyProjection)} delta={dashboard.monthlyProjectionDelta} note="Based on your recent collections" tone="purple" progress={dashboard.idealRevenue ? dashboard.monthlyProjection / dashboard.idealRevenue : 0} onClick={openPaymentOverview} />
+          <FinanceSummary icon={CreditCard} title="Pending payments" value={money(dashboard.outstanding)} note={`${dashboard.outstandingRecords} records`} tone="purple" onClick={openPaymentOverview} />
         </aside>
       </section>
 
