@@ -1,4 +1,4 @@
-import { addDays, startOfMonth, startOfWeek } from "../domain/dates";
+import { addDays, endOfMonth, parseDateOnly, startOfMonth, startOfWeek } from "../domain/dates";
 import { classWorkspaceSessionKey } from "./classesWorkspaceModel";
 
 export const TRACKING_TABS = Object.freeze(["grades", "attendance", "payments"]);
@@ -10,6 +10,10 @@ function finite(value) {
 
 function sum(rows, selector) {
   return rows.reduce((total, row) => total + (finite(selector(row)) ? selector(row) : 0), 0);
+}
+
+function inclusiveDayCount(start, end) {
+  return Math.max(1, Math.round((parseDateOnly(end) - parseDateOnly(start)) / 86_400_000) + 1);
 }
 
 function studentGroupIds(student) {
@@ -182,12 +186,23 @@ function paymentStatus(row, asOfDate) {
   return { label: "Pending", tone: "warning" };
 }
 
-export function buildPaymentTracking(state, classRows, { mode, groupId, studentId, sessionKey, range, search = "" }) {
+export function buildPaymentTracking(state, classRows, {
+  mode,
+  groupId,
+  studentId,
+  sessionKey,
+  range,
+  search = "",
+  projectionTotal,
+}) {
   const asOfDate = state.settings?.asOfDate || range.end;
   const useStudentOwner = mode === "student" || (mode === "class" && !groupId);
-  const roster = useStudentOwner
-    ? (state.students || []).filter((student) => student.id === studentId)
-    : studentsForGroup(state, groupId);
+  const activeStudents = (state.students || []).filter((student) => student.status !== "Inactive");
+  const roster = mode === "overview"
+    ? activeStudents
+    : useStudentOwner
+      ? activeStudents.filter((student) => student.id === studentId)
+      : studentsForGroup(state, groupId);
   const rosterIds = new Set(roster.map((student) => student.id));
   let relevant = classRows.filter((row) => row.classStatus !== "Cancelled" && rosterIds.has(row.studentId) && inTrackingRange(row.classDate, range));
   if (mode === "class" && sessionKey) relevant = relevant.filter((row) => classWorkspaceSessionKey({ ...row, studentId: row.groupId ? "" : row.studentId }) === sessionKey);
@@ -200,7 +215,8 @@ export function buildPaymentTracking(state, classRows, { mode, groupId, studentI
     if (!sessions.has(key)) sessions.set(key, { key, classDate: row.classDate, startTime: row.startTime || "", title: row.classTitle || row.groupName || row.studentName || "Class" });
   }
   const studentsById = new Map((state.students || []).map((student) => [student.id, student]));
-  const tableRows = mode === "group"
+  const aggregateByStudent = mode === "group" || mode === "overview";
+  const tableRows = aggregateByStudent
     ? roster.filter((student) => matchesSearch([student.fullName, student.code], search)).map((student) => {
       const rows = relevant.filter((row) => row.studentId === student.id);
       const charged = sum(rows, (row) => row.charge);
@@ -230,8 +246,49 @@ export function buildPaymentTracking(state, classRows, { mode, groupId, studentI
   const pendingStudents = new Set(relevant.filter((row) => paymentStatus(row, asOfDate).label !== "Paid").map((row) => row.studentId)).size;
   const paidClasses = relevant.filter((row) => paymentStatus(row, asOfDate).label === "Paid").length;
   const unpaidClasses = relevant.length - paidClasses;
+  const overdueRows = relevant.filter((row) => paymentStatus(row, asOfDate).label === "Overdue");
+  const overdue = sum(overdueRows, (row) => finite(row.outstanding)
+    ? row.outstanding
+    : Math.max((row.charge || 0) - (row.recognizedPaid || row.amountPaid || 0), 0));
   const daily = new Map();
   for (const row of relevant) daily.set(row.classDate, (daily.get(row.classDate) || 0) + (finite(row.recognizedPaid) ? row.recognizedPaid : 0));
   const series = [...daily.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([label, value]) => ({ label, value }));
-  return { tableRows, sessions: [...sessions.values()].sort((a, b) => b.classDate.localeCompare(a.classDate) || b.startTime.localeCompare(a.startTime)), generated, collected, pending, paidStudents, pendingStudents, paidClasses, unpaidClasses, series, totalStudents: new Set(relevant.map((row) => row.studentId)).size };
+  let runningCollected = 0;
+  const cumulativeSeries = series.map((item) => {
+    runningCollected += item.value;
+    return { ...item, value: runningCollected };
+  });
+  const projectionEnd = range.period === "month"
+    ? endOfMonth(asOfDate)
+    : range.period === "week"
+      ? addDays(range.start, 6)
+      : range.end;
+  const elapsedDays = inclusiveDayCount(range.start, asOfDate > projectionEnd ? projectionEnd : asOfDate);
+  const totalDays = inclusiveDayCount(range.start, projectionEnd);
+  const paceProjection = collected > 0 ? (collected / elapsedDays) * totalDays : 0;
+  const projection = Math.max(
+    collected,
+    finite(projectionTotal) && projectionTotal >= 0 ? projectionTotal : paceProjection,
+  );
+  return {
+    tableRows,
+    sessions: [...sessions.values()].sort((a, b) => b.classDate.localeCompare(a.classDate) || b.startTime.localeCompare(a.startTime)),
+    generated,
+    collected,
+    pending,
+    overdue,
+    overdueClasses: overdueRows.length,
+    paidStudents,
+    pendingStudents,
+    paidClasses,
+    unpaidClasses,
+    series,
+    cumulativeSeries,
+    projection,
+    projectionGap: Math.max(projection - collected, 0),
+    projectionStart: range.start,
+    projectionEnd,
+    actualEnd: asOfDate,
+    totalStudents: new Set(relevant.map((row) => row.studentId)).size,
+  };
 }

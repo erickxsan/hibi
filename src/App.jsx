@@ -23,11 +23,14 @@ const Home = lazy(() => import("./features/Home"));
 const Community = lazy(() => import("./features/Community"));
 const Classes = lazy(() => import("./features/Classes"));
 const Tracking = lazy(() => import("./features/Tracking"));
-// Keep the legacy route and payment workflows available without advertising a
-// separate navigation destination. Classes, Tracking, and Home still use the
-// same underlying payment records.
-const Payments = lazy(() => import("./features/Payments"));
 const Settings = lazy(() => import("./features/Settings"));
+
+const PAYMENT_OVERVIEW_INTENT = Object.freeze({
+  type: "open-tracking",
+  tab: "payments",
+  paymentScope: "overview",
+  paymentChart: "projection",
+});
 
 function PageFallback() {
   return <div className="route-loading" role="status" aria-live="polite">Loading…</div>;
@@ -77,12 +80,18 @@ export function ClassManagerApplication({ persistence, user, cloudError, onSignO
     setIntent(nextIntent);
     return true;
   }, [navigate]);
+  const clearIntent = useCallback(() => setIntent(null), []);
+
+  useEffect(() => {
+    if (page !== "payments") return;
+    if (navigate("grades", { replace: true })) setIntent(PAYMENT_OVERVIEW_INTENT);
+  }, [navigate, page]);
 
   const pageContent = useMemo(() => {
     const common = {
       ...manager,
-      intent,
-      clearIntent: () => setIntent(null),
+      intent: page === "payments" && !intent ? PAYMENT_OVERVIEW_INTENT : intent,
+      clearIntent,
       navigate,
       openPage,
       registerNavigationBlocker,
@@ -91,11 +100,10 @@ export function ClassManagerApplication({ persistence, user, cloudError, onSignO
       return <Community {...common} initialView={page === "students" ? "students" : page === "groups" ? "groups" : undefined} />;
     }
     if (page === "classes") return <Classes {...common} />;
-    if (page === "grades") return <Tracking {...common} />;
-    if (page === "payments") return <Payments {...common} />;
+    if (page === "grades" || page === "payments") return <Tracking {...common} />;
     if (page === "settings") return <Settings {...common} />;
     return <Home {...common} />;
-  }, [intent, manager, navigate, openPage, page, registerNavigationBlocker]);
+  }, [clearIntent, intent, manager, navigate, openPage, page, registerNavigationBlocker]);
 
   const handleSignOut = async () => {
     if (!onSignOut || signingOut) return;
@@ -111,7 +119,7 @@ export function ClassManagerApplication({ persistence, user, cloudError, onSignO
     <>
       <AppShell
         navItems={NAV_ITEMS}
-        activePage={page === "students" || page === "groups" ? "community" : page}
+        activePage={page === "students" || page === "groups" ? "community" : page === "payments" ? "grades" : page}
         navigationReason={navigationReason}
         onNavigate={(nextPage) => {
           if (navigate(nextPage)) setIntent(null);

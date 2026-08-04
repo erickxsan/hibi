@@ -2798,6 +2798,7 @@ tbody .gradebook-student-column,tbody .attendance-student-column { display:flex;
 .tracking-mode button.active { background:linear-gradient(180deg,#16805c,#0d6d4d); color:#fff; box-shadow:0 2px 8px rgba(12,96,67,.18); }
 .tracking-mode button:disabled { cursor:not-allowed; color:#aaa49d; background:#f3efe8; }
 .tracking-context>.tracking-select { width:min(330px,29vw); }
+.tracking-scope-summary { min-height:36px; display:inline-flex; align-items:center; padding:0 16px; border:1px solid #ded5c8; border-radius:19px; background:#fffdf9; color:#68726e; font-size:10px; font-weight:750; white-space:nowrap; }
 .tracking-content-grid { min-width:0; max-width:100%; display:grid; grid-template-columns:minmax(0,1fr) 248px; align-items:start; gap:18px; padding-bottom:44px; }
 .tracking-content-grid>main { min-width:0; display:grid; gap:0; }
 .tracking-summary { overflow:hidden; border:1px solid var(--hibi-border); border-radius:15px 15px 0 0; background:#fff; box-shadow:var(--hibi-shadow); }
@@ -2832,6 +2833,31 @@ tbody .gradebook-student-column,tbody .attendance-student-column { display:flex;
 .payment-chart-track { height:18px; display:flex; overflow:hidden; margin:10px 0; border-radius:5px; background:#f0ece4; }
 .payment-chart-track span { background:linear-gradient(90deg,#4aa96f,#38a866); }.payment-chart-track i { background:linear-gradient(90deg,#f0b64c,#f8c85f); }
 .payment-chart-values>span { text-align:center; }.payment-chart-values>b { color:#26332f; }
+.payment-analytics { border:1px solid var(--hibi-border); border-top:0; background:#fff; }
+.payment-analytics>header { min-height:58px; display:flex; align-items:center; justify-content:space-between; gap:18px; padding:10px 16px 6px; }
+.payment-chart-toggle { display:flex; overflow:hidden; flex:0 0 auto; border:1px solid #dcd4c8; border-radius:9px; background:#fff; }
+.payment-chart-toggle button { min-height:34px; padding:0 16px; border:0; border-left:1px solid #e8e0d5; background:transparent; color:#66706d; font:800 10px/1 inherit; cursor:pointer; }
+.payment-chart-toggle button:first-child { border-left:0; }
+.payment-chart-toggle button.active { background:linear-gradient(180deg,#16805c,#0d6d4d); color:#fff; }
+.payment-chart-toggle button:focus-visible { outline:3px solid rgba(19,112,81,.18); outline-offset:-3px; }
+.payment-forecast-values { min-width:0; display:flex; align-items:center; justify-content:flex-end; gap:22px; }
+.payment-forecast-values>span { position:relative; min-width:82px; display:grid; gap:2px; padding-left:16px; }
+.payment-forecast-values>span::before { content:""; position:absolute; top:6px; left:0; width:11px; height:2px; border-radius:2px; background:#65706c; }
+.payment-forecast-values>span.actual::before { background:#168052; }
+.payment-forecast-values>span.projection::before { height:0; border-top:2px dashed #7250df; background:transparent; }
+.payment-forecast-values small { color:#727b77; font-size:9px; }
+.payment-forecast-values strong { color:#26322e; font-size:12px; white-space:nowrap; }
+.payment-forecast-values .actual strong { color:#087448; }.payment-forecast-values .projection strong { color:#6541cb; }
+.payment-forecast-values>span.overdue { min-width:auto; padding:7px 10px; border-radius:14px; background:#fde8ec; }
+.payment-forecast-values>span.overdue::before { display:none; }
+.payment-forecast-values .overdue small { display:none; }.payment-forecast-values .overdue strong { color:#a83d55; font-size:10px; }
+.payment-projection-chart { min-height:190px; padding:0 16px 8px; }
+.payment-projection-chart svg { width:100%; height:190px; display:block; overflow:visible; }
+.payment-projection-area { fill:#dff1e3; opacity:.6; }
+.payment-projection-line { fill:none; stroke:#7350df; stroke-width:2.2; stroke-linecap:round; stroke-dasharray:7 6; }
+.payment-projection-chart circle { fill:#fff; stroke:#148054; stroke-width:2; }
+.payment-projection-chart circle.projection-end { fill:#7350df; stroke:#7350df; }
+.payment-analytics>.tracking-chart { min-height:190px; padding-top:0; border:0; }
 .tracking-table-shell { overflow:auto; border:1px solid var(--hibi-border); border-top:0; border-radius:0 0 15px 15px; background:#fff; box-shadow:var(--hibi-shadow); scrollbar-gutter:stable; }
 .tracking-table-shell table { width:100%; min-width:720px; border-collapse:collapse; }
 .tracking-table-shell th,.tracking-table-shell td { height:47px; padding:7px 14px; border-bottom:1px solid #eee7dd; color:#38433f; font-size:10px; text-align:left; }
@@ -2851,7 +2877,7 @@ tbody .gradebook-student-column,tbody .attendance-student-column { display:flex;
 .tracking-side-card ul { display:grid; gap:8px; margin:0; padding:0; list-style:none; }
 .tracking-side-card li { display:grid; grid-template-columns:auto 1fr; align-items:start; gap:9px; }
 .tracking-side-card li>span { width:23px; height:23px; display:grid; place-items:center; border-radius:6px; background:#eaf4e7; color:#1a985a; }
-.tracking-side-card li.orange>span { background:#fff0db; color:#f09a15; }.tracking-side-card li.blue>span { background:#e7f1fc; color:#167ce1; }
+.tracking-side-card li.orange>span { background:#fff0db; color:#f09a15; }.tracking-side-card li.blue>span { background:#e7f1fc; color:#167ce1; }.tracking-side-card li.red>span { background:#fde8ec; color:#d9475f; }
 .tracking-side-card li p { margin:3px 0 0; color:#414b47; font-size:10px; line-height:1.5; }
 .tracking-recent>div { display:grid; gap:0; }
 .tracking-recent-row { min-height:55px; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 0; border-bottom:1px solid #eee7dd; }
@@ -2887,6 +2913,9 @@ tbody .gradebook-student-column,tbody .attendance-student-column { display:flex;
   .tracking-context { align-items:stretch; flex-wrap:wrap; gap:12px; }
   .tracking-context>.tracking-select { width:calc(50% - 6px); }
   .tracking-mode { width:100%; }.tracking-mode>div { flex:1; }.tracking-mode button { flex:1; }
+  .tracking-scope-summary { width:100%; justify-content:center; }
+  .payment-analytics>header { align-items:stretch; flex-direction:column; }
+  .payment-forecast-values { justify-content:space-between; }
 }
 
 @media (max-width:720px) {
@@ -2904,6 +2933,8 @@ tbody .gradebook-student-column,tbody .attendance-student-column { display:flex;
   .tracking-metric:last-child:nth-child(odd) { grid-column:1/-1; }
   .tracking-metric { padding-inline:10px; }.tracking-metric>span { width:39px; height:39px; }
   .tracking-chart { min-height:190px; padding-inline:8px; }.tracking-chart svg { min-width:610px; }.tracking-chart:not(.tracking-distribution) { overflow:auto; }
+  .payment-analytics { overflow:auto; }.payment-analytics>header { min-width:610px; }.payment-projection-chart { min-width:610px; padding-inline:8px; }
+  .payment-chart-toggle { width:100%; }.payment-chart-toggle button { flex:1; }
   .tracking-sidebar { grid-template-columns:1fr; }
   .tracking-chart,.tracking-payment-chart,.tracking-table-shell,.tracking-sidebar { min-width:0; max-width:100%; }
   .tracking-table-shell { margin-right:0; border-radius:0 0 15px 15px; }
