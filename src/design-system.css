@@ -1,0 +1,530 @@
+/*
+ * Hibi shared visual system.
+ *
+ * This layer intentionally normalizes presentation only. Feature layouts,
+ * content, state, navigation, and interaction behavior remain unchanged.
+ */
+:root {
+  --hibi-canvas: #f7f3ea;
+  --hibi-surface: #fffdf8;
+  --hibi-forest: #175c43;
+  --hibi-forest-dark: #114b37;
+  --hibi-text: #23312d;
+  --hibi-muted: #6f756f;
+  --hibi-border: #e3d9c7;
+  --hibi-sage: #eaf2e4;
+  --hibi-shadow: 0 2px 10px rgba(57, 48, 35, 0.04);
+  --hibi-card-radius: 16px;
+  --hibi-control-radius: 12px;
+}
+
+html,
+body,
+#root {
+  background: var(--hibi-canvas);
+  color: var(--hibi-text);
+}
+
+.hibi-shell {
+  grid-template-columns: 224px minmax(0, 1fr);
+  color: var(--hibi-text);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.hibi-sidebar {
+  width: 224px;
+  background: rgba(255, 253, 248, 0.98);
+}
+
+.hibi-workspace {
+  grid-column: 2;
+}
+
+.hibi-topbar,
+.page-community .hibi-topbar {
+  height: 64px;
+  min-height: 64px;
+  padding: 0 48px;
+  border-bottom: 1px solid var(--hibi-border);
+  background: rgba(255, 253, 248, 0.92);
+}
+
+.hibi-shell .hibi-main,
+.page-community .hibi-main,
+.page-classes .hibi-main,
+.page-grades .hibi-main {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 40px 48px 56px;
+}
+
+.hibi-main h2,
+.hibi-main h3,
+.hibi-main button,
+.hibi-main input,
+.hibi-main select,
+.hibi-main textarea {
+  font-family: "Nunito Sans", Nunito, Aptos, "Segoe UI", sans-serif;
+}
+
+.hibi-main small {
+  font-size: 12px;
+  line-height: 16px;
+}
+
+/* One page-heading pattern across all primary menu surfaces. */
+.home-dashboard-header,
+.community-page-heading,
+.classes-workspace-heading,
+.tracking-heading,
+.progress-heading,
+.page-heading {
+  min-height: 0;
+  align-items: flex-start;
+  gap: 24px;
+  margin: 0 0 32px;
+  padding: 0;
+}
+
+.home-dashboard-header h1,
+.community-page-heading h1,
+.classes-workspace-heading h1,
+.tracking-heading h1,
+.progress-heading h1,
+.page-heading h1 {
+  margin: 0;
+  color: var(--hibi-forest-dark);
+  font: 700 40px/44px Georgia, "Times New Roman", serif;
+  letter-spacing: -0.035em;
+}
+
+.home-dashboard-header p,
+.community-page-heading p,
+.classes-workspace-heading p,
+.tracking-heading p,
+.progress-heading p,
+.page-heading p {
+  max-width: 640px;
+  margin: 6px 0 0;
+  color: var(--hibi-muted);
+  font: 400 14px/20px "Nunito Sans", Nunito, Aptos, "Segoe UI", sans-serif;
+}
+
+.home-dashboard-header {
+  padding-right: 0;
+}
+
+.community-title-line {
+  gap: 12px;
+}
+
+/* Shared control geometry and type. */
+.button {
+  min-height: 44px;
+  padding-inline: 17px;
+  border-radius: var(--hibi-control-radius);
+  font-size: 14px;
+  line-height: 20px;
+  box-shadow: none;
+}
+
+.control,
+.select-control,
+.select-trigger,
+.page-search,
+.progress-search,
+.tracking-search,
+.community-search,
+.member-search {
+  min-height: 44px;
+  border-color: var(--hibi-border);
+  border-radius: var(--hibi-control-radius);
+  background: var(--hibi-surface);
+  font-size: 14px;
+  line-height: 20px;
+  box-shadow: none;
+}
+
+.community-page-heading .button,
+.community-search,
+.classes-workspace-heading .button {
+  min-height: 44px;
+  border-radius: var(--hibi-control-radius);
+}
+
+.field-label,
+.community-detail-form .field-label {
+  color: var(--hibi-muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+/* Primary tabs share the same 48px underline treatment. */
+.progress-tabs,
+.classes-workspace-tabs,
+.tracking-tabs,
+.community-tabs {
+  min-height: 48px;
+  display: flex;
+  align-items: flex-end;
+  gap: 24px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--hibi-border);
+  border-radius: 0;
+  background: transparent;
+}
+
+.progress-tabs button,
+.classes-workspace-tabs button,
+.tracking-tabs button,
+.community-tabs button {
+  position: relative;
+  min-width: 116px;
+  min-height: 48px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--hibi-muted);
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 20px;
+  box-shadow: none;
+}
+
+.progress-tabs button::after,
+.classes-workspace-tabs button::after,
+.tracking-tabs button::after,
+.community-tabs button::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: transparent;
+}
+
+.progress-tabs button.active,
+.classes-workspace-tabs button.active,
+.tracking-tabs button.active,
+.community-tabs button.active {
+  background: transparent;
+  color: var(--hibi-forest);
+}
+
+.progress-tabs button.active::after,
+.classes-workspace-tabs button.active::after,
+.tracking-tabs button.active::after,
+.community-tabs button.active::after {
+  background: var(--hibi-forest);
+}
+
+/* Compact segmented choices use the same 40px frame. */
+.home-period-tabs,
+.segmented,
+.classes-choice,
+.tracking-mode {
+  min-height: 40px;
+  border-color: var(--hibi-border);
+  border-radius: var(--hibi-control-radius);
+  background: var(--hibi-surface);
+  box-shadow: none;
+}
+
+.home-period-tabs {
+  height: 40px;
+}
+
+.home-period-tabs button,
+.segmented button,
+.classes-choice button,
+.tracking-mode button {
+  border-radius: 9px;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.home-period-tabs button.active,
+.segmented button.active,
+.classes-choice button.active,
+.tracking-mode button.active {
+  background: var(--hibi-sage);
+  color: var(--hibi-forest-dark);
+  box-shadow: none;
+}
+
+.tracking-heading > div:first-child {
+  min-width: 300px;
+}
+
+.tracking-top-actions {
+  width: min(100%, 740px);
+  grid-template-columns: minmax(150px, 180px) minmax(180px, 1fr) auto auto;
+}
+
+.tracking-mode > div {
+  min-height: 40px;
+  border-color: var(--hibi-border);
+  border-radius: var(--hibi-control-radius);
+}
+
+.tracking-mode button {
+  min-height: 38px;
+  font-size: 13px;
+}
+
+/* One restrained surface treatment for the principal cards and panels. */
+.home-today-panel,
+.home-metric-panel,
+.home-revenue-panel,
+.home-finance-summary,
+.home-list-card,
+.community-list-panel,
+.community-detail-panel,
+.class-session-card,
+.class-live-summary,
+.classes-history-list,
+.progress-roster,
+.progress-summary,
+.tracking-summary,
+.tracking-table-shell,
+.tracking-side-card,
+.settings-card {
+  border-color: var(--hibi-border);
+  border-radius: var(--hibi-card-radius);
+  background: var(--hibi-surface);
+  box-shadow: var(--hibi-shadow);
+}
+
+.home-today-panel,
+.home-metric-panel,
+.home-revenue-panel,
+.home-list-card {
+  padding: 24px;
+}
+
+.home-finance-summary {
+  padding: 16px;
+}
+
+.home-finance-summary strong,
+.home-finance-summary small,
+.home-list-card header button,
+.home-person-list strong,
+.home-person-list small,
+.home-group-list strong,
+.home-group-list em,
+.home-session-status,
+.home-view-classes,
+.home-metric-caption,
+.home-metric-copy em {
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.community-table-head,
+.progress-roster-head,
+.classes-history-head,
+.tracking-table-shell th,
+.tracking-table-shell td,
+.tracking-table-shell td > strong,
+.tracking-side-card li p,
+.tracking-recent-row strong,
+.tracking-recent-row small,
+.tracking-metric em,
+.tracking-person strong,
+.tracking-person small,
+.tracking-side-link,
+.tracking-empty-copy {
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.community-detail-form .control {
+  min-height: 44px;
+  border-radius: var(--hibi-control-radius);
+  font-size: 14px;
+}
+
+.community-character-count,
+.community-assignment article small,
+.community-group-metrics small {
+  font-size: 12px;
+}
+
+/* Settings uses the same full-width rhythm and non-display heading type. */
+.settings-stack {
+  max-width: none;
+  gap: 16px;
+}
+
+.settings-card {
+  gap: 16px;
+  padding: 24px;
+}
+
+.settings-content h2,
+.class-live-summary-title h2 {
+  color: var(--hibi-text);
+  font: 700 18px/24px "Nunito Sans", Nunito, Aptos, "Segoe UI", sans-serif;
+}
+
+.settings-content > p {
+  margin-top: 4px;
+  margin-bottom: 16px;
+  color: var(--hibi-muted);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.settings-controls {
+  gap: 16px;
+}
+
+.settings-controls .field > small {
+  right: 12px;
+  bottom: 14px;
+  color: var(--hibi-muted);
+  font-size: 12px;
+}
+
+@media (max-width: 1180px) and (min-width: 781px) {
+  .hibi-shell {
+    grid-template-columns: 200px minmax(0, 1fr);
+  }
+
+  .hibi-sidebar {
+    width: 200px;
+  }
+
+  .hibi-topbar,
+  .page-community .hibi-topbar {
+    padding-inline: 32px;
+  }
+
+  .hibi-shell .hibi-main,
+  .page-community .hibi-main,
+  .page-classes .hibi-main,
+  .page-grades .hibi-main {
+    padding: 32px 32px 48px;
+  }
+
+  .home-dashboard-header h1,
+  .community-page-heading h1,
+  .classes-workspace-heading h1,
+  .tracking-heading h1,
+  .progress-heading h1,
+  .page-heading h1 {
+    font-size: 36px;
+    line-height: 40px;
+  }
+
+  .tracking-heading {
+    display: grid;
+  }
+
+  .tracking-top-actions {
+    width: 100%;
+    grid-template-columns: minmax(150px, 180px) minmax(200px, 1fr) auto auto;
+  }
+}
+
+@media (max-width: 780px) {
+  .hibi-shell {
+    display: block;
+  }
+
+  .hibi-workspace {
+    min-height: 100dvh;
+  }
+
+  .hibi-topbar,
+  .page-community .hibi-topbar {
+    height: 64px;
+    padding: 10px 18px;
+  }
+
+  .hibi-shell .hibi-main,
+  .page-community .hibi-main,
+  .page-classes .hibi-main,
+  .page-grades .hibi-main {
+    padding: 24px 16px 36px;
+  }
+
+  .home-dashboard-header,
+  .community-page-heading,
+  .classes-workspace-heading,
+  .tracking-heading,
+  .progress-heading,
+  .page-heading {
+    margin-bottom: 24px;
+  }
+
+  .tracking-heading {
+    display: grid;
+  }
+
+  .tracking-heading > div:first-child {
+    min-width: 0;
+  }
+
+  .tracking-top-actions {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tracking-top-actions > .tracking-select {
+    grid-row: 1;
+    grid-column: 1 / -1;
+  }
+
+  .tracking-search {
+    grid-row: 3;
+    grid-column: 1 / -1;
+  }
+
+  .tracking-top-actions > .button {
+    width: 100%;
+    padding-inline: 10px;
+  }
+
+  .home-dashboard-header h1,
+  .community-page-heading h1,
+  .classes-workspace-heading h1,
+  .tracking-heading h1,
+  .progress-heading h1,
+  .page-heading h1 {
+    font-size: 30px;
+    line-height: 34px;
+  }
+
+  .progress-tabs,
+  .classes-workspace-tabs,
+  .tracking-tabs,
+  .community-tabs {
+    gap: 0;
+    overflow-x: auto;
+  }
+
+  .progress-tabs button,
+  .classes-workspace-tabs button,
+  .tracking-tabs button,
+  .community-tabs button {
+    min-width: max-content;
+    flex: 1 0 auto;
+    padding-inline: 16px;
+  }
+
+  .home-today-panel,
+  .home-metric-panel,
+  .home-revenue-panel,
+  .home-list-card,
+  .settings-card {
+    padding: 16px;
+  }
+}
