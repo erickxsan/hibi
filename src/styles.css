@@ -425,7 +425,7 @@ html, body, #root { min-height: 100%; overflow-x:hidden; background: var(--hibi-
   .home-metric-value { font-size: 30px; }
   .home-revenue-panel { min-height: 270px; padding-inline: 14px; }
   .home-revenue-chart { overflow-x: auto; }
-  .home-revenue-chart svg { min-width: 560px; }
+  .home-revenue-chart svg { min-width: 0; }
   .home-finance-side { grid-template-columns: 1fr; }
   .home-finance-summary { min-height: 82px; grid-template-columns: 34px minmax(0,1fr) auto; }
   .home-finance-summary > svg { display: block; }
@@ -519,8 +519,12 @@ body {
   line-height: 1.45;
 }
 
-body.drawer-open {
+html.drawer-open,
+body.drawer-open,
+html.mobile-more-open,
+body.mobile-more-open {
   overflow: hidden;
+  overscroll-behavior: none;
 }
 
 button,
@@ -2457,6 +2461,12 @@ a {
 .sound-toggle b { min-width: 20px; font-size: 11px; }
 .sound-toggle:focus-visible { outline: 3px solid rgba(36, 95, 74, .2); outline-offset: 2px; }
 
+@media (max-width:430px) {
+  .interface-setting { gap:8px; }
+  .sound-setting-copy { min-width:0; }
+  .sound-toggle { width:92px; min-width:92px; flex:0 0 92px; padding-inline:6px; }
+}
+
 .redesigned-classes-page .class-log-page { gap: 16px; }
 .redesigned-classes-page > .page-heading { margin-bottom: 0; }
 .redesigned-classes-page .page-toolbar { margin-top: 0; }
@@ -2814,7 +2824,7 @@ tbody .gradebook-student-column,tbody .attendance-student-column { display:flex;
 .tracking-metric em { color:#7d8582; font-size:9px; font-style:normal; }
 .tracking-chart,.tracking-payment-chart { min-height:205px; padding:14px 16px 8px; border:1px solid var(--hibi-border); border-top:0; background:#fff; }
 .tracking-chart h3,.tracking-payment-chart h3 { margin:0 0 7px; font-size:13px; }
-.tracking-chart svg { width:100%; height:170px; display:block; overflow:visible; }
+.tracking-chart>svg { width:100%; height:170px; display:block; overflow:visible; }
 .tracking-grid line { stroke:#e8e2d9; stroke-dasharray:4 4; }
 .tracking-line { fill:none; stroke:#178356; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round; }
 .tracking-area { fill:#dff1e3; opacity:.72; }
@@ -2858,7 +2868,7 @@ tbody .gradebook-student-column,tbody .attendance-student-column { display:flex;
 .payment-projection-chart circle { fill:#fff; stroke:#148054; stroke-width:2; }
 .payment-projection-chart circle.projection-end { fill:#7350df; stroke:#7350df; }
 .payment-analytics>.tracking-chart { min-height:190px; padding-top:0; border:0; }
-.tracking-table-shell { overflow:auto; border:1px solid var(--hibi-border); border-top:0; border-radius:0 0 15px 15px; background:#fff; box-shadow:var(--hibi-shadow); scrollbar-gutter:stable; }
+.tracking-table-shell { max-width:100%; overflow-x:auto; overflow-y:hidden; overscroll-behavior-inline:contain; border:1px solid var(--hibi-border); border-top:0; border-radius:0 0 15px 15px; background:#fff; box-shadow:var(--hibi-shadow); scrollbar-gutter:auto; -webkit-overflow-scrolling:touch; }
 .tracking-table-shell table { width:100%; min-width:720px; border-collapse:collapse; }
 .tracking-table-shell th,.tracking-table-shell td { height:47px; padding:7px 14px; border-bottom:1px solid #eee7dd; color:#38433f; font-size:10px; text-align:left; }
 .tracking-table-shell th { height:39px; background:#fcfaf6; color:#5d6763; font-weight:850; }
@@ -2932,9 +2942,19 @@ tbody .gradebook-student-column,tbody .attendance-student-column { display:flex;
   .tracking-metric:first-child,.tracking-metric:nth-child(2) { border-top:0; }
   .tracking-metric:last-child:nth-child(odd) { grid-column:1/-1; }
   .tracking-metric { padding-inline:10px; }.tracking-metric>span { width:39px; height:39px; }
-  .tracking-chart { min-height:190px; padding-inline:8px; }.tracking-chart svg { min-width:610px; }.tracking-chart:not(.tracking-distribution) { overflow:auto; }
-  .payment-analytics { overflow:auto; }.payment-analytics>header { min-width:610px; }.payment-projection-chart { min-width:610px; padding-inline:8px; }
-  .payment-chart-toggle { width:100%; }.payment-chart-toggle button { flex:1; }
+  .tracking-chart { min-height:190px; padding-inline:8px; }.tracking-chart>svg { min-width:0; }.tracking-chart:not(.tracking-distribution) { overflow:hidden; }
+  .payment-analytics { overflow:hidden; }.payment-analytics>header { min-width:0; }.payment-projection-chart { min-width:0; padding-inline:8px; }
+  .payment-chart-toggle { width:100%; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }.payment-chart-toggle button { min-width:0; padding-inline:8px; white-space:normal; line-height:1.2; }
+  .payment-forecast-values { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+  .payment-forecast-values>span { min-width:0; }
+  .tracking-table-shell:has(tbody:empty) table { display:none; }
+  .tracking-table-shell table { min-width:100%; table-layout:fixed; }
+  .tracking-table-shell th,.tracking-table-shell td { height:auto; padding:8px 6px; overflow-wrap:anywhere; vertical-align:middle; }
+  .tracking-table-shell th:first-child,.tracking-table-shell td:first-child { width:32%; }
+  .tracking-table-shell th:last-child,.tracking-table-shell td:last-child { width:40px; }
+  .tracking-table-shell .tracking-person { min-width:0; }
+  .tracking-table-shell .status-badge { min-width:0; max-width:100%; padding-inline:5px; white-space:normal; }
+  .tracking-table-shell .tracking-col-date,.tracking-table-shell .tracking-col-secondary { display:none; }
   .tracking-sidebar { grid-template-columns:1fr; }
   .tracking-chart,.tracking-payment-chart,.tracking-table-shell,.tracking-sidebar { min-width:0; max-width:100%; }
   .tracking-table-shell { margin-right:0; border-radius:0 0 15px 15px; }
@@ -3997,13 +4017,21 @@ tbody .gradebook-student-column,tbody .attendance-student-column { display:flex;
 }
 
 @media (max-width:430px) {
-  .calendar-period-controls { gap:4px; }
+  .calendar-period-controls { gap:3px; }
   .calendar-period-controls>strong { font-size:14px; }
+  .calendar-period-controls>button { width:34px; height:34px; }
+  .calendar-period-controls>.calendar-today-button { min-width:50px; padding-inline:6px; }
   .calendar-mobile-tools { gap:4px; }
+  .calendar-mobile-tools>button { width:34px; height:34px; }
   .calendar-mobile-filter-panel { grid-template-columns:1fr; }
   .calendar-month-grid>button { min-height:53px; }
   .calendar-month-grid>button.outside { color:#b7bbb8; }
   .calendar-session-actions .status-badge { display:none; }
+}
+
+@media (max-width:360px) {
+  .calendar-period-controls { grid-column:1/-1; }
+  .calendar-mobile-tools { grid-column:1/-1; grid-row:3; justify-content:flex-end; }
 }
 
 /* Community contact directory */

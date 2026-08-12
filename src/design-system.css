@@ -509,15 +509,26 @@ body,
   .community-tabs {
     gap: 0;
     overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+  }
+
+  .progress-tabs::-webkit-scrollbar,
+  .classes-workspace-tabs::-webkit-scrollbar,
+  .tracking-tabs::-webkit-scrollbar,
+  .community-tabs::-webkit-scrollbar {
+    display: none;
   }
 
   .progress-tabs button,
   .classes-workspace-tabs button,
   .tracking-tabs button,
   .community-tabs button {
-    min-width: max-content;
-    flex: 1 0 auto;
-    padding-inline: 16px;
+    min-width: 0;
+    flex: 1 1 0;
+    padding-inline: 8px;
+    white-space: nowrap;
   }
 
   .home-today-panel,
@@ -526,5 +537,19 @@ body,
   .home-list-card,
   .settings-card {
     padding: 16px;
+  }
+}
+
+@media (max-width: 360px) {
+  .home-dashboard-header h1 {
+    font-size: 25px;
+    line-height: 29px;
+  }
+
+  .progress-tabs button,
+  .classes-workspace-tabs button,
+  .tracking-tabs button,
+  .community-tabs button {
+    font-size: 12px;
   }
 }

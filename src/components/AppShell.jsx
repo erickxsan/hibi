@@ -47,7 +47,22 @@ export function AppShell({ navItems, activePage, navigationReason, onNavigate, t
       },
     });
     const handleKeyDown = (event) => {
-      if (event.key === "Escape") closeMore();
+      if (event.key === "Escape") {
+        closeMore();
+        return;
+      }
+      if (event.key !== "Tab" || !moreRef.current) return;
+      const focusable = [...moreRef.current.querySelectorAll("a[href], button:not([disabled]), [tabindex]:not([tabindex='-1'])")];
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     const handlePointerDown = (event) => {
       if (moreRef.current?.contains(event.target) || moreButtonRef.current?.contains(event.target)) return;
@@ -55,12 +70,16 @@ export function AppShell({ navItems, activePage, navigationReason, onNavigate, t
     };
     document.addEventListener("keydown", handleKeyDown);
     document.addEventListener("pointerdown", handlePointerDown);
+    document.documentElement.classList.add("mobile-more-open");
+    document.body.classList.add("mobile-more-open");
     moreRef.current?.querySelector("a, button")?.focus();
     return () => {
       window.clearTimeout(historyTimer);
       unsubscribe();
       document.removeEventListener("keydown", handleKeyDown);
       document.removeEventListener("pointerdown", handlePointerDown);
+      document.documentElement.classList.remove("mobile-more-open");
+      document.body.classList.remove("mobile-more-open");
       if (ownsMoreHistory.current) closeOverlayHistory(moreHistoryId);
       ownsMoreHistory.current = false;
       moreButtonRef.current?.focus?.({ preventScroll: true });
