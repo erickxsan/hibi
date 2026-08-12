@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(48);
+select plan(55);
 
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data)
 values
@@ -24,8 +24,9 @@ select throws_ok($$update public.workspace_settings set revision = 99$$, '42501'
 select throws_ok($$select * from public.save_workspace_state('11111111-1111-4111-8111-111111111111', 0, '{}'::jsonb)$$, '42501', 'permission denied for function save_workspace_state', 'old full-document writers fail closed');
 
 select lives_ok($$
-  select * from public.apply_workspace_patch(
+  select * from public.apply_workspace_patch_idempotent(
     '11111111-1111-4111-8111-111111111111',
+    '10000000-0000-4000-8000-000000000001',
     jsonb_build_object('settings', (select data from public.workspace_settings) || '{"hourlyRate":60}'::jsonb),
     '{"settings":{"__settings__":1}}'::jsonb
   )
@@ -34,8 +35,9 @@ select is((select revision from public.workspace_settings), 2::bigint, 'settings
 select is((select revision from public.workspace_sync_cursors), 2::bigint, 'the small sync cursor advances without becoming a write token');
 
 select lives_ok($$
-  select * from public.apply_workspace_patch(
+  select * from public.apply_workspace_patch_idempotent(
     '11111111-1111-4111-8111-111111111111',
+    '10000000-0000-4000-8000-000000000002',
     '{
       "groups":{"upserts":[{"position":0,"data":{"id":"g1","name":"Math","grade":"","subject":"","schedule":"","hourlyRate":null,"weeklySchedule":[],"plannedSessionsPerMonth":8,"assistantContact":"","notes":""}}],"deletes":[]},
       "students":{"upserts":[{"position":0,"data":{"id":"s1","code":"A-1","fullName":"Ana","avatarId":"cat","groupIds":["g1"],"isIndividual":false,"customHourlyRate":null,"status":"Active"}}],"deletes":[]}
@@ -49,8 +51,9 @@ select is((select count(*) from public.student_groups), 1::bigint, 'membership i
 select is((select revision from public.groups where id = 'g1'), 1::bigint, 'new group starts at entity revision one');
 
 select lives_ok($$
-  select * from public.apply_workspace_patch(
+  select * from public.apply_workspace_patch_idempotent(
     '11111111-1111-4111-8111-111111111111',
+    '10000000-0000-4000-8000-000000000003',
     '{"groups":{"upserts":[{"position":0,"data":{"id":"g1","name":"Advanced Math","grade":"","subject":"","schedule":"","hourlyRate":null,"weeklySchedule":[],"plannedSessionsPerMonth":8,"assistantContact":"","notes":""}}],"deletes":[]}}'::jsonb,
     '{"groups":{"g1":1}}'::jsonb
   )
@@ -58,8 +61,9 @@ $$, 'one entity can advance without checking unrelated revisions');
 select is((select revision from public.groups where id = 'g1'), 2::bigint, 'only the changed group revision advances');
 select is((select revision from public.students where id = 's1'), 1::bigint, 'the unrelated student revision does not advance');
 select throws_ok($$
-  select * from public.apply_workspace_patch(
+  select * from public.apply_workspace_patch_idempotent(
     '11111111-1111-4111-8111-111111111111',
+    '10000000-0000-4000-8000-000000000004',
     '{"groups":{"upserts":[{"position":0,"data":{"id":"g1","name":"Stale","grade":"","subject":"","schedule":"","hourlyRate":null,"weeklySchedule":[],"plannedSessionsPerMonth":8,"assistantContact":"","notes":""}}],"deletes":[]}}'::jsonb,
     '{"groups":{"g1":1}}'::jsonb
   )
@@ -84,9 +88,68 @@ $$, 'retrying the same outbox operation is accepted');
 select is((select revision from public.students where id = 's1'), 2::bigint, 'an idempotent retry does not advance the entity twice');
 select is((select revision from public.workspace_sync_cursors), 5::bigint, 'an idempotent retry does not create a second event');
 
-select lives_ok($$
-  select * from public.apply_workspace_patch(
+select throws_ok($$
+  select * from public.apply_workspace_patch_idempotent(
     '11111111-1111-4111-8111-111111111111',
+    '10000000-0000-4000-8000-000000000005',
+    '{"unexpected":{"upserts":[],"deletes":[]}}'::jsonb,
+    '{}'::jsonb
+  )
+$$, '22023', 'invalid_workspace_patch', 'the public writer rejects unknown patch collections');
+
+select throws_ok($$
+  select * from public.apply_workspace_patch_idempotent(
+    '11111111-1111-4111-8111-111111111111',
+    '10000000-0000-4000-8000-000000000006',
+    jsonb_build_object(
+      'settings', jsonb_set((select data from public.workspace_settings), '{asOfDate}', '"2026-02-31"'::jsonb)
+    ),
+    '{"settings":{"__settings__":2}}'::jsonb
+  )
+$$, '23514', 'new row for relation "workspace_settings" violates check constraint "workspace_settings_strict_domain_check"', 'invalid nested settings are rejected on the server');
+
+select throws_ok($$
+  select * from public.apply_workspace_patch_idempotent(
+    '11111111-1111-4111-8111-111111111111',
+    '10000000-0000-4000-8000-000000000007',
+    '{"classSchedules":{"upserts":[{"position":0,"data":{"id":"bad-schedule","recurrence":"once","format":"group","groupId":"g1","studentId":"","startDate":"2026-08-12","endDate":"","startTime":"10:00","durationHours":1,"intervalWeeks":1,"daysOfWeek":[],"participantMode":"custom","participantIds":["missing-student"]}}],"deletes":[]}}'::jsonb,
+    '{"classSchedules":{"bad-schedule":0}}'::jsonb
+  )
+$$, '23503', 'invalid_workspace_reference', 'missing class participants are rejected inside the RPC transaction');
+
+select throws_ok($$
+  select * from public.apply_workspace_patch_idempotent(
+    '11111111-1111-4111-8111-111111111111',
+    '10000000-0000-4000-8000-000000000008',
+    '{"scheduleExceptions":{"upserts":[{"position":0,"data":{"id":"bad-exception","classScheduleId":"","sourceGroupId":"g1","sourceScheduleSlotId":"missing-slot","groupId":"g1","studentId":"","format":"group","scheduleSlotId":"missing-slot","occurrenceDate":"2026-08-12","classDate":"2026-08-12","startTime":"10:00","durationHours":1,"participantMode":"default","participantIds":[],"status":"Scheduled","kind":"override"}}],"deletes":[]}}'::jsonb,
+    '{"scheduleExceptions":{"bad-exception":0}}'::jsonb
+  )
+$$, '23503', 'invalid_workspace_reference', 'missing exception schedule slots are rejected inside the RPC transaction');
+
+select throws_ok($$
+  select * from public.apply_workspace_patch_idempotent(
+    '11111111-1111-4111-8111-111111111111',
+    '10000000-0000-4000-8000-000000000013',
+    '{"scheduleChanges":{"upserts":[{"position":0,"data":{"id":"bad-change","groupId":"g1","scheduleSlotId":"missing-slot","effectiveFrom":"2026-08-12","dayOfWeek":2,"startTime":"10:00","durationHours":1,"status":"Scheduled"}}],"deletes":[]}}'::jsonb,
+    '{"scheduleChanges":{"bad-change":0}}'::jsonb
+  )
+$$, '23503', 'invalid_workspace_reference', 'missing schedule-change slots are rejected inside the RPC transaction');
+
+select throws_ok($$
+  select * from public.apply_workspace_patch_idempotent(
+    '11111111-1111-4111-8111-111111111111',
+    '10000000-0000-4000-8000-000000000009',
+    '{"groups":{"upserts":[{"position":0,"data":{"id":"g1","name":"Advanced Math","grade":"","subject":"","schedule":"","hourlyRate":null,"weeklySchedule":[{"id":"slot-1","dayOfWeek":2,"startTime":"10:00","durationHours":1},{"id":"slot-1","dayOfWeek":3,"startTime":"11:00","durationHours":1}],"plannedSessionsPerMonth":8,"assistantContact":"","notes":""}}],"deletes":[]}}'::jsonb,
+    '{"groups":{"g1":2}}'::jsonb
+  )
+$$, '23514', 'new row for relation "groups" violates check constraint "groups_domain_data_check"', 'duplicate nested schedule-slot IDs are rejected');
+
+select is((select revision from public.workspace_sync_cursors), 5::bigint, 'rejected malicious writes do not advance the workspace cursor');
+
+select lives_ok($$
+  select * from public.apply_workspace_patch_idempotent(
+    '11111111-1111-4111-8111-111111111111',
+    '10000000-0000-4000-8000-000000000010',
     '{
       "grades":{"upserts":[{"position":0,"data":{"id":"gr1","studentId":"s1","date":"2026-08-10","assessment":"Quiz","category":"Quiz","score":8,"maxScore":10,"workStatus":"On time","classSessionKey":""}}],"deletes":[]},
       "classLog":{"upserts":[{"position":0,"data":{"id":"c1","studentId":"s1","groupId":"g1","classDate":"2026-08-10","classStatus":"Completed","amountPaid":120,"paymentDate":"2026-08-10","paymentState":"Paid","paymentMethod":"Transfer","paymentReference":"R1"}}],"deletes":[]}
@@ -124,7 +187,7 @@ select throws_ok($$select * from public.workspace_settings$$, '42501', 'permissi
 select throws_ok($$select * from public.apply_workspace_patch('11111111-1111-4111-8111-111111111111', '{}'::jsonb, '{}'::jsonb)$$, '42501', 'permission denied for function apply_workspace_patch', 'anonymous clients cannot write patches');
 
 reset role;
-select ok(has_function_privilege('authenticated', 'public.apply_workspace_patch(uuid,jsonb,jsonb)', 'EXECUTE'), 'authenticated clients can execute the patch RPC');
+select ok(not has_function_privilege('authenticated', 'public.apply_workspace_patch(uuid,jsonb,jsonb)', 'EXECUTE'), 'authenticated clients cannot bypass the validated patch RPC');
 select ok(has_function_privilege('authenticated', 'public.apply_workspace_patch_idempotent(uuid,uuid,jsonb,jsonb)', 'EXECUTE'), 'authenticated clients can execute the idempotent patch RPC');
 select ok(not has_function_privilege('anon', 'public.apply_workspace_patch(uuid,jsonb,jsonb)', 'EXECUTE'), 'anonymous clients cannot execute the patch RPC');
 select ok(not has_function_privilege('anon', 'public.apply_workspace_patch_idempotent(uuid,uuid,jsonb,jsonb)', 'EXECUTE'), 'anonymous clients cannot execute the idempotent patch RPC');
