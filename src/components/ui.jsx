@@ -14,6 +14,7 @@ let openDrawerCount = 0;
 
 function lockDrawerBackground() {
   openDrawerCount += 1;
+  document.documentElement.classList.add("drawer-open");
   document.body.classList.add("drawer-open");
   document.querySelector(".hibi-shell, .app-shell")?.setAttribute("inert", "");
 }
@@ -21,6 +22,7 @@ function lockDrawerBackground() {
 function unlockDrawerBackground() {
   openDrawerCount = Math.max(0, openDrawerCount - 1);
   if (openDrawerCount) return;
+  document.documentElement.classList.remove("drawer-open");
   document.body.classList.remove("drawer-open");
   document.querySelector(".hibi-shell, .app-shell")?.removeAttribute("inert");
 }

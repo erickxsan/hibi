@@ -457,14 +457,14 @@ function GradeView({ data, mode, onOpenClass }) {
         ) : (
           <DistributionChart items={data.distribution} />
         )}
-        <section className="tracking-table-shell" aria-label="Grade details">
+        <section className="tracking-table-shell tracking-table-grades" aria-label="Grade details">
           <table>
             <thead>
               <tr>
                 {mode === "group" ? <th>Student</th> : <th>Assignment</th>}
-                <th>Date</th>
+                <th className="tracking-col-date">Date</th>
                 <th>Grade</th>
-                <th>Percentage</th>
+                <th className="tracking-col-secondary">Percentage</th>
                 <th>Status</th>
                 <th>
                   <span className="sr-only">Actions</span>
@@ -483,7 +483,7 @@ function GradeView({ data, mode, onOpenClass }) {
                       <strong>{row.assessment}</strong>
                     </td>
                   )}
-                  <td>{formatDate(row.date)}</td>
+                  <td className="tracking-col-date">{formatDate(row.date)}</td>
                   <td
                     className={
                       row.percentage != null && row.percentage < 0.6
@@ -493,7 +493,7 @@ function GradeView({ data, mode, onOpenClass }) {
                   >
                     {gradeValue(row.score, row.maximum)}
                   </td>
-                  <td>{percent(row.percentage)}</td>
+                  <td className="tracking-col-secondary">{percent(row.percentage)}</td>
                   <td>
                     <StatusBadge tone={row.status.tone}>
                       {row.status.label}
@@ -605,7 +605,7 @@ function AttendanceView({ data, mode, onOpenClass }) {
         </MetricStrip>
         <TrendChart title="Attendance evolution by week" series={data.series} />
         <section
-          className="tracking-table-shell"
+          className="tracking-table-shell tracking-table-attendance"
           aria-label="Attendance details"
         >
           <table>
@@ -613,9 +613,9 @@ function AttendanceView({ data, mode, onOpenClass }) {
               <tr>
                 {mode === "group" ? <th>Student</th> : <th>Class</th>}
                 <th>Attendance</th>
-                <th>Present</th>
-                <th>Absences</th>
-                <th>{mode === "group" ? "Last class" : "Date"}</th>
+                <th className="tracking-col-secondary">Present</th>
+                <th className="tracking-col-secondary">Absences</th>
+                <th className="tracking-col-date">{mode === "group" ? "Last class" : "Date"}</th>
                 <th>Status</th>
                 <th>
                   <span className="sr-only">Actions</span>
@@ -643,11 +643,11 @@ function AttendanceView({ data, mode, onOpenClass }) {
                   >
                     {percent(row.rate)}
                   </td>
-                  <td>{row.present}</td>
-                  <td className={row.absent ? "danger-value" : ""}>
+                  <td className="tracking-col-secondary">{row.present}</td>
+                  <td className={`tracking-col-secondary ${row.absent ? "danger-value" : ""}`.trim()}>
                     {row.absent}
                   </td>
-                  <td>{formatDate(row.lastClass || row.classDate)}</td>
+                  <td className="tracking-col-date">{formatDate(row.lastClass || row.classDate)}</td>
                   <td>
                     <StatusBadge tone={row.status.tone}>
                       {row.status.label}
@@ -896,7 +896,7 @@ function PaymentView({ data, mode, scope, chartView, onChartViewChange, onOpenCl
         </MetricStrip>
         <PaymentBar data={data} />
         {mode === "class" ? null : <PaymentAnalytics data={data} value={chartView} onChange={onChartViewChange} />}
-        <section className="tracking-table-shell" aria-label="Payment details">
+        <section className="tracking-table-shell tracking-table-payments" aria-label="Payment details">
           <table>
             <thead>
               <tr>
@@ -904,7 +904,7 @@ function PaymentView({ data, mode, scope, chartView, onChartViewChange, onOpenCl
                 <th>{aggregateByStudent ? "Paid" : "Amount"}</th>
                 {aggregateByStudent ? <th>Pending</th> : null}
                 <th>Payment status</th>
-                <th>Payment date</th>
+                <th className="tracking-col-date">Payment date</th>
                 <th>
                   <span className="sr-only">Actions</span>
                 </th>
@@ -934,7 +934,7 @@ function PaymentView({ data, mode, scope, chartView, onChartViewChange, onOpenCl
                       {row.status.label}
                     </StatusBadge>
                   </td>
-                  <td>{formatDate(row.lastPayment || row.paymentDate)}</td>
+                  <td className="tracking-col-date">{formatDate(row.lastPayment || row.paymentDate)}</td>
                   <td>
                     <RelatedClassButton
                       sessionKey={row.sessionKey}
