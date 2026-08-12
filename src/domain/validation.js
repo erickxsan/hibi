@@ -156,6 +156,13 @@ export function validateGrade(grade, state = null) {
   if (state && grade.studentId && !state.students?.some((student) => student?.id === grade.studentId)) {
     errors.push(issue("studentId", "unknown_reference", "Grade references a student that does not exist.", grade.studentId));
   }
+  if (state && grade.classSessionKey) {
+    const [, owner] = grade.classSessionKey.split("|");
+    const groupId = owner?.startsWith("g:") ? owner.slice(2) : owner && !owner.startsWith("s:") && owner !== "__individual__" ? owner : "";
+    const studentId = owner?.startsWith("s:") ? owner.slice(2) : "";
+    if (groupId && !state.groups?.some((group) => group.id === groupId)) errors.push(issue("classSessionKey", "unknown_reference", "Grade references a missing class group.", groupId));
+    if (studentId && !state.students?.some((student) => student.id === studentId)) errors.push(issue("classSessionKey", "unknown_reference", "Grade references a missing class student.", studentId));
+  }
   if (typeof grade.score === "number" && typeof grade.maxScore === "number" && grade.score > grade.maxScore) {
     warnings.push(issue("score", "over_maximum", "Score is above the maximum; confirm that this is intentional.", grade.score));
   }
@@ -185,6 +192,11 @@ export function validateClassSchedule(item, state = null) {
   if (item.format === "individual") requiredText(errors, item.studentId, "studentId", "Class student");
   if (state && item.groupId && !state.groups?.some((group) => group.id === item.groupId)) errors.push(issue("groupId", "unknown_reference", "Class schedule references a missing group."));
   if (state && item.studentId && !state.students?.some((student) => student.id === item.studentId)) errors.push(issue("studentId", "unknown_reference", "Class schedule references a missing student."));
+  (item.participantIds || []).forEach((studentId, index) => {
+    if (state && !state.students?.some((student) => student.id === studentId)) {
+      errors.push(issue(`participantIds[${index}]`, "unknown_reference", "Class schedule references a missing participant.", studentId));
+    }
+  });
   return result(errors, []);
 }
 
@@ -211,6 +223,11 @@ export function validateClassLogRow(row, state = null) {
   }
   if (state && row.groupId && !state.groups?.some((group) => group?.id === row.groupId)) {
     errors.push(issue("groupId", "unknown_reference", "Class row references a group that does not exist.", row.groupId));
+  }
+  if (state && row.scheduleSlotId) {
+    const groupSlotExists = state.groups?.find((group) => group.id === row.groupId)?.weeklySchedule?.some((slot) => slot.id === row.scheduleSlotId);
+    const classScheduleExists = state.classSchedules?.some((schedule) => schedule.id === row.scheduleSlotId);
+    if (!groupSlotExists && !classScheduleExists) errors.push(issue("scheduleSlotId", "unknown_reference", "Class row references a schedule slot that does not exist.", row.scheduleSlotId));
   }
   if (row.classStatus === "Completed" && !row.attendance) {
     warnings.push(issue("attendance", "attendance_missing", "Completed class has no attendance mark."));
@@ -426,6 +443,20 @@ function validateScheduleException(item, state) {
   if (!['override', 'added'].includes(item?.kind)) errors.push(issue("kind", "invalid_enum", "Exception kind must be override or added."));
   if (state && item?.groupId && !state.groups.some((group) => group.id === item.groupId)) errors.push(issue("groupId", "unknown_reference", "Schedule exception references a missing group."));
   if (state && item?.studentId && !state.students.some((student) => student.id === item.studentId)) errors.push(issue("studentId", "unknown_reference", "Schedule exception references a missing student."));
+  if (state && item?.sourceGroupId && !state.groups.some((group) => group.id === item.sourceGroupId)) errors.push(issue("sourceGroupId", "unknown_reference", "Schedule exception references a missing source group."));
+  if (state && item?.classScheduleId && !state.classSchedules.some((schedule) => schedule.id === item.classScheduleId)) errors.push(issue("classScheduleId", "unknown_reference", "Schedule exception references a missing class schedule."));
+  (item?.participantIds || []).forEach((studentId, index) => {
+    if (state && !state.students.some((student) => student.id === studentId)) {
+      errors.push(issue(`participantIds[${index}]`, "unknown_reference", "Schedule exception references a missing participant.", studentId));
+    }
+  });
+  const sourceGroupId = item?.sourceGroupId || item?.groupId;
+  const sourceSlots = state?.groups.find((group) => group.id === sourceGroupId)?.weeklySchedule || [];
+  const scheduleReferenceExists = (id) => item?.classScheduleId
+    ? id === item.classScheduleId && state.classSchedules.some((schedule) => schedule.id === id)
+    : sourceSlots.some((slot) => slot.id === id);
+  if (state && item?.sourceScheduleSlotId && !scheduleReferenceExists(item.sourceScheduleSlotId)) errors.push(issue("sourceScheduleSlotId", "unknown_reference", "Schedule exception references a missing source schedule slot.", item.sourceScheduleSlotId));
+  if (state && item?.scheduleSlotId && !scheduleReferenceExists(item.scheduleSlotId)) errors.push(issue("scheduleSlotId", "unknown_reference", "Schedule exception references a missing schedule slot.", item.scheduleSlotId));
   return result(errors, []);
 }
 
@@ -440,6 +471,9 @@ function validateScheduleChange(item, state) {
   finiteNumber(errors, item?.durationHours, "durationHours", "Schedule duration", { min: 0 });
   enumValue(errors, item?.status, ["Scheduled", "Cancelled"], "status", "Schedule change status");
   if (state && !state.groups.some((group) => group.id === item.groupId)) errors.push(issue("groupId", "unknown_reference", "Schedule change references a missing group."));
+  if (state && item?.scheduleSlotId && !state.groups.find((group) => group.id === item.groupId)?.weeklySchedule?.some((slot) => slot.id === item.scheduleSlotId)) {
+    errors.push(issue("scheduleSlotId", "unknown_reference", "Schedule change references a missing schedule slot.", item.scheduleSlotId));
+  }
   return result(errors, []);
 }
 

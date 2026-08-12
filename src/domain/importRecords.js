@@ -74,15 +74,94 @@ function recordLabel(collection, record, context) {
   return `Schedule change · ${record.effectiveFrom}`;
 }
 
-function remapRecord(collection, source, groupIdMap, studentIdMap) {
-  const record = { ...source };
-  if (record.groupId) record.groupId = groupIdMap.get(record.groupId) || record.groupId;
-  if (record.studentId) record.studentId = studentIdMap.get(record.studentId) || record.studentId;
-  if (Array.isArray(record.groupIds)) {
-    record.groupIds = [...new Set(record.groupIds.map((id) => groupIdMap.get(id) || id))];
+function slotKey(groupId, slotId) {
+  return `${groupId}\u0000${slotId}`;
+}
+
+function slotBusinessKey(slot) {
+  return [slot?.dayOfWeek, slot?.startTime, slot?.durationHours].join("\u0000");
+}
+
+function buildFinalIdMap(collection, currentItems, importedItems, remap = (item) => item) {
+  const result = new Map();
+  const byId = new Map(currentItems.map((item) => [item.id, item]));
+  const byBusinessKey = new Map();
+  for (const item of currentItems) {
+    const key = businessKey(collection, item);
+    if (key && !byBusinessKey.has(key)) byBusinessKey.set(key, item);
   }
+
+  for (const source of importedItems) {
+    const record = remap(source);
+    const key = businessKey(collection, record);
+    const existing = byId.get(record.id) || (key ? byBusinessKey.get(key) : null);
+    const finalId = existing?.id || record.id;
+    result.set(source.id, finalId);
+    if (!existing) {
+      const planned = { ...record, id: finalId };
+      byId.set(finalId, planned);
+      if (key && !byBusinessKey.has(key)) byBusinessKey.set(key, planned);
+    }
+  }
+  return result;
+}
+
+function buildSlotIdMap(current, imported, groupIdMap) {
+  const result = new Map();
+  const currentGroups = new Map(current.groups.map((group) => [group.id, group]));
+  for (const sourceGroup of imported.groups) {
+    const finalGroup = currentGroups.get(groupIdMap.get(sourceGroup.id));
+    const targetSlots = finalGroup?.weeklySchedule || sourceGroup.weeklySchedule || [];
+    const byId = new Map(targetSlots.map((slot) => [slot.id, slot]));
+    const byBusinessKey = new Map(targetSlots.map((slot) => [slotBusinessKey(slot), slot]));
+    for (const slot of sourceGroup.weeklySchedule || []) {
+      const existing = byId.get(slot.id) || byBusinessKey.get(slotBusinessKey(slot));
+      result.set(slotKey(sourceGroup.id, slot.id), existing?.id || slot.id);
+    }
+  }
+  return result;
+}
+
+function remapClassSessionKey(value, groupIds, studentIds) {
+  const parts = String(value || "").split("|");
+  if (parts.length !== 3) return value;
+  const owner = parts[1];
+  if (owner.startsWith("g:")) parts[1] = `g:${groupIds.get(owner.slice(2)) || owner.slice(2)}`;
+  else if (owner.startsWith("s:")) parts[1] = `s:${studentIds.get(owner.slice(2)) || owner.slice(2)}`;
+  else if (groupIds.has(owner)) parts[1] = groupIds.get(owner);
+  return parts.join("|");
+}
+
+function remapRecord(collection, source, maps) {
+  const { groupIds, studentIds, classScheduleIds, scheduleSlotIds } = maps;
+  const record = { ...source };
+  const sourceGroupId = source.sourceGroupId || source.groupId;
+  const remapSlot = (id) => {
+    if (!id) return id;
+    if (collection === "scheduleExceptions" && source.classScheduleId) return classScheduleIds.get(id) || id;
+    const groupSlot = scheduleSlotIds.get(slotKey(sourceGroupId, id));
+    if (groupSlot) return groupSlot;
+    return classScheduleIds.get(id) || id;
+  };
+
+  if (record.groupId) record.groupId = groupIds.get(record.groupId) || record.groupId;
+  if (record.sourceGroupId) record.sourceGroupId = groupIds.get(record.sourceGroupId) || record.sourceGroupId;
+  if (record.studentId) record.studentId = studentIds.get(record.studentId) || record.studentId;
+  if (record.classScheduleId) record.classScheduleId = classScheduleIds.get(record.classScheduleId) || record.classScheduleId;
+  if (record.classSessionKey) record.classSessionKey = remapClassSessionKey(record.classSessionKey, groupIds, studentIds);
+  if (Array.isArray(record.groupIds)) {
+    record.groupIds = [...new Set(record.groupIds.map((id) => groupIds.get(id) || id))];
+  }
+  if (Array.isArray(record.participantIds)) {
+    record.participantIds = [...new Set(record.participantIds.map((id) => studentIds.get(id) || id))];
+  }
+  if (record.sourceScheduleSlotId) record.sourceScheduleSlotId = remapSlot(record.sourceScheduleSlotId);
+  if (record.scheduleSlotId) record.scheduleSlotId = remapSlot(record.scheduleSlotId);
   if (collection === "groups" && Array.isArray(record.weeklySchedule)) {
-    record.weeklySchedule = record.weeklySchedule.map((slot) => ({ ...slot }));
+    record.weeklySchedule = record.weeklySchedule.map((slot) => ({
+      ...slot,
+      id: scheduleSlotIds.get(slotKey(source.id, slot.id)) || slot.id,
+    }));
   }
   if (Array.isArray(record.daysOfWeek)) record.daysOfWeek = [...record.daysOfWeek];
   return record;
@@ -104,8 +183,24 @@ export function buildImportPlan(currentInput, importedInput, decisions = {}) {
   for (const collection of IMPORT_COLLECTIONS) candidate[collection] = [...current[collection]];
 
   const entries = [];
-  const groupIdMap = new Map();
-  const studentIdMap = new Map();
+  const groupIds = buildFinalIdMap("groups", current.groups, imported.groups);
+  const studentIds = buildFinalIdMap("students", current.students, imported.students, (record) => ({
+    ...record,
+    groupIds: record.groupIds.map((id) => groupIds.get(id) || id),
+  }));
+  const partialMaps = { groupIds, studentIds, classScheduleIds: new Map(), scheduleSlotIds: new Map() };
+  const classScheduleIds = buildFinalIdMap(
+    "classSchedules",
+    current.classSchedules,
+    imported.classSchedules,
+    (record) => remapRecord("classSchedules", record, partialMaps),
+  );
+  const maps = {
+    groupIds,
+    studentIds,
+    classScheduleIds,
+    scheduleSlotIds: buildSlotIdMap(current, imported, groupIds),
+  };
   const context = {
     groupsById: new Map(current.groups.map((item) => [item.id, item])),
     studentsById: new Map(current.students.map((item) => [item.id, item])),
@@ -122,7 +217,7 @@ export function buildImportPlan(currentInput, importedInput, decisions = {}) {
 
     imported[collection].forEach((source, index) => {
       const importedId = source.id;
-      const remapped = remapRecord(collection, source, groupIdMap, studentIdMap);
+      const remapped = remapRecord(collection, source, maps);
       const key = businessKey(collection, remapped);
       const existing = byId.get(remapped.id) || (key ? byBusinessKey.get(key) : null);
       const entryKey = `${collection}:${importedId || index}:${existing?.id || "new"}`;
@@ -144,9 +239,6 @@ export function buildImportPlan(currentInput, importedInput, decisions = {}) {
       }
 
       const finalId = existing?.id || remapped.id;
-      if (collection === "groups") groupIdMap.set(importedId, finalId);
-      if (collection === "students") studentIdMap.set(importedId, finalId);
-
       const entry = {
         key: entryKey,
         collection,
@@ -203,4 +295,3 @@ export function buildImportPlan(currentInput, importedInput, decisions = {}) {
   const signature = JSON.stringify(entries.map(({ key, status, existingId }) => [key, status, existingId]));
   return { candidate: canonicalCandidate, entries, summary, signature };
 }
-

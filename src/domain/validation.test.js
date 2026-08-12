@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   createClassLogRow,
+  createClassSchedule,
   createGrade,
+  createGroup,
+  createScheduleChange,
+  createScheduleException,
   createSeedState,
   createStarterState,
   createStudent,
@@ -130,5 +134,79 @@ describe("state and entity validation", () => {
     expect(validateState(state).errors).toEqual(
       expect.arrayContaining([expect.objectContaining({ code: "invalid_enum", path: "settings.currency" })]),
     );
+  });
+
+  it("rejects broken references anywhere in the schedule graph", () => {
+    const state = createStarterState();
+    state.groups.push(createGroup({
+      id: "group-valid",
+      name: "Math",
+      weeklySchedule: [{ id: "slot-valid", dayOfWeek: 1, startTime: "10:00", durationHours: 1 }],
+    }));
+    state.students.push(createStudent({ id: "student-valid", code: "STU-001", fullName: "Ana", groupIds: ["group-valid"] }));
+    state.grades.push(createGrade({
+      id: "grade",
+      date: "2026-08-10",
+      studentId: "student-valid",
+      assessment: "Quiz",
+      score: 8,
+      maxScore: 10,
+      classSessionKey: "2026-08-10|g:missing-session-group|10:00",
+    }));
+    state.classSchedules.push(createClassSchedule({
+      id: "schedule-valid",
+      recurrence: "weekly",
+      groupId: "group-valid",
+      startDate: "2026-08-10",
+      startTime: "11:00",
+      daysOfWeek: [1],
+      participantMode: "custom",
+      participantIds: ["missing-schedule-participant"],
+    }));
+    state.classLog.push(createClassLogRow({
+      id: "class-log",
+      classDate: "2026-08-10",
+      studentId: "student-valid",
+      groupId: "group-valid",
+      scheduleSlotId: "missing-log-slot",
+      hours: 1,
+      appliedHourlyRate: 50,
+      appliedCharge: 50,
+      amountPaid: 0,
+    }));
+    state.scheduleExceptions.push(createScheduleException({
+      id: "exception",
+      classScheduleId: "missing-class-schedule",
+      sourceGroupId: "missing-source-group",
+      sourceScheduleSlotId: "missing-source-slot",
+      groupId: "group-valid",
+      scheduleSlotId: "missing-exception-slot",
+      occurrenceDate: "2026-08-10",
+      classDate: "2026-08-10",
+      startTime: "10:00",
+      durationHours: 1,
+      participantMode: "custom",
+      participantIds: ["missing-exception-participant"],
+    }));
+    state.scheduleChanges.push(createScheduleChange({
+      id: "change",
+      groupId: "group-valid",
+      scheduleSlotId: "missing-change-slot",
+      effectiveFrom: "2026-08-10",
+      startTime: "10:00",
+      durationHours: 1,
+    }));
+
+    expect(validateState(state).errors.map((error) => error.path)).toEqual(expect.arrayContaining([
+      "classSchedules[0].participantIds[0]",
+      "grades[0].classSessionKey",
+      "classLog[0].scheduleSlotId",
+      "scheduleExceptions[0].classScheduleId",
+      "scheduleExceptions[0].sourceGroupId",
+      "scheduleExceptions[0].sourceScheduleSlotId",
+      "scheduleExceptions[0].scheduleSlotId",
+      "scheduleExceptions[0].participantIds[0]",
+      "scheduleChanges[0].scheduleSlotId",
+    ]));
   });
 });
