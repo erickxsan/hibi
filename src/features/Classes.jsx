@@ -27,17 +27,17 @@ import { StudentAvatar } from "../components/StudentAvatar";
 import { dayOfWeekForDate, resolveHourlyRate, scheduledClassSupportsFutureScope } from "../domain";
 import { addDays, addMonths, parseDateOnly, startOfMonth, todayDateOnly } from "../domain/dates";
 import { useHistoryBackedState } from "../hooks/useHistoryNavigation";
-import { confirmDiscard, draftChanged, useUnsavedChanges } from "../hooks/useUnsavedChanges";
+import { confirmDiscard, draftChanged, draftSignature, useUnsavedChanges } from "../hooks/useUnsavedChanges";
 import { getUiLocale } from "../i18n";
 import { playHibiSound } from "../utils/hibiSounds";
 import {
   buildClassWorkspaceSessions,
   buildClassWorkspaceSessionsForRange,
   filterClassHistory,
-  paymentRecordState,
   rosterForClassSession,
   selectPrimaryClassSession,
 } from "./classesWorkspaceModel";
+import { buildClassDraft, rebaseClassDraft } from "./classesDraftModel";
 import {
   calendarMonthDays,
   calendarMonthRange,
@@ -766,6 +766,25 @@ function ClassSummary({ entries, roster, maximum }) {
   );
 }
 
+function RemoteDraftNotice({ onKeep, onReload, onRebase }) {
+  return (
+    <section className="class-remote-update" role="alert" aria-live="assertive">
+      <CircleAlert size={22} aria-hidden="true" />
+      <div>
+        <strong>Newer class data is available</strong>
+        <p>Your unsaved attendance, payments, and grades are safe. Choose how to continue.</p>
+      </div>
+      <div className="class-remote-update-actions">
+        <Button onClick={onKeep}>Keep my draft</Button>
+        <Button onClick={onReload}>Reload remote version</Button>
+        <Button variant="primary" onClick={onRebase}>
+          Rebase my draft
+        </Button>
+      </div>
+    </section>
+  );
+}
+
 function SessionEditor({
   session,
   state: _state,
@@ -779,6 +798,7 @@ function SessionEditor({
   maximum,
   setMaximum,
   saving,
+  saveBlocked,
   dirty,
   onSave,
   onDiscard,
@@ -957,7 +977,7 @@ function SessionEditor({
             Mark cancelled
           </Button>
         )}
-        <Button variant="primary" icon={Save} onClick={onSave} disabled={!roster.length || saving}>
+        <Button variant="primary" icon={Save} onClick={onSave} disabled={!roster.length || saving || saveBlocked}>
           {saving ? "Saving…" : variant === "history" ? "Save changes" : "Save class"}
         </Button>
       </footer>
@@ -1622,7 +1642,16 @@ export default function Classes({
   const [assessment, setAssessment] = useState("");
   const [maximum, setMaximum] = useState(20);
   const [saving, setSaving] = useState(false);
+  const [remoteUpdate, setRemoteUpdate] = useState(null);
   const baselineRef = useRef(null);
+  const hydratedSessionKeyRef = useRef("");
+  const hydratedSessionRef = useRef(null);
+  const observedRemoteSignatureRef = useRef("");
+  const snapshot = useMemo(
+    () => ({ entries, assessmentOn, assessment, maximum }),
+    [assessment, assessmentOn, entries, maximum],
+  );
+  const dirty = Boolean(baselineRef.current) && draftChanged(snapshot, baselineRef.current);
 
   const history = useMemo(
     () =>
@@ -1639,7 +1668,12 @@ export default function Classes({
   }, [history, selectedKey]);
   const selectedHistory = history.find((session) => session.key === selectedKey) || history[0] || null;
   const selectedUpcoming = sessions.find((session) => session.key === selectedUpcomingKey) || null;
-  const activeSession = tab === "history" ? selectedHistory : selectedUpcoming || primary;
+  const retainedSession =
+    dirty && hydratedSessionRef.current
+      ? sessions.find((session) => session.key === hydratedSessionKeyRef.current) || hydratedSessionRef.current
+      : null;
+  const activeSession =
+    tab === "history" ? retainedSession || selectedHistory : selectedUpcoming || retainedSession || primary;
   const canEditActiveSession =
     tab === "next" &&
     activeSession &&
@@ -1647,11 +1681,16 @@ export default function Classes({
     (activeSession.occurrenceDate || activeSession.classDate) >= currentDate &&
     Boolean(activeSession.classScheduleId || activeSession.scheduleSlotId || activeSession.exceptionId);
   const roster = useMemo(() => rosterForClassSession(state, activeSession), [activeSession, state]);
-  const snapshot = useMemo(
-    () => ({ entries, assessmentOn, assessment, maximum }),
-    [assessment, assessmentOn, entries, maximum],
-  );
-  const dirty = Boolean(baselineRef.current) && draftChanged(snapshot, baselineRef.current);
+
+  const remoteDraft = useMemo(() => buildClassDraft(state, activeSession), [activeSession, state]);
+  const remoteSignature = useMemo(() => draftSignature(remoteDraft), [remoteDraft]);
+  const latestRemoteRef = useRef(null);
+  latestRemoteRef.current = {
+    session: activeSession,
+    sessionKey: activeSession?.key || "",
+    snapshot: remoteDraft,
+    signature: remoteSignature,
+  };
 
   useUnsavedChanges(registerNavigationBlocker, dirty, "Discard your unsaved class changes?");
   const changeTab = useHistoryBackedState({
@@ -1660,7 +1699,13 @@ export default function Classes({
     onChange: setTab,
     defaultValue: "next",
     allowedValues: ["next", "calendar", "history"],
-    canChange: () => !dirty || confirmDiscard(true, "Discard your unsaved class changes?"),
+    canChange: () => {
+      if (!dirty) return true;
+      if (!confirmDiscard(true, "Discard your unsaved class changes?")) return false;
+      hydratedSessionKeyRef.current = "";
+      hydratedSessionRef.current = null;
+      return true;
+    },
   });
 
   useEffect(() => {
@@ -1675,71 +1720,63 @@ export default function Classes({
     if (intent) clearIntent?.();
   }, [changeTab, clearIntent, intent]);
 
-  const hydrate = useCallback(
-    (session) => {
-      if (!session) {
-        setEntries({});
-        setAssessmentOn(false);
-        setAssessment("");
-        setMaximum(20);
-        baselineRef.current = { entries: {}, assessmentOn: false, assessment: "", maximum: 20 };
-        return;
-      }
-      const sessionRoster = rosterForClassSession(state, session);
-      const rosterIds = new Set(sessionRoster.map((student) => student.id));
-      const exactGrades = (state.grades || []).filter((grade) => grade.classSessionKey === session.key);
-      const legacyGrades = exactGrades.length
-        ? []
-        : (state.grades || []).filter(
-            (grade) => !grade.classSessionKey && grade.date === session.classDate && rosterIds.has(grade.studentId),
-          );
-      const candidateGrades = exactGrades.length ? exactGrades : legacyGrades;
-      const selectedAssessment = candidateGrades[0]?.assessment || "";
-      const sessionGrades = selectedAssessment
-        ? candidateGrades.filter((grade) => grade.assessment === selectedAssessment)
-        : [];
-      const nextEntries = Object.fromEntries(
-        sessionRoster.map((student) => {
-          const row = (session.rows || []).find((item) => item.studentId === student.id);
-          const grade = sessionGrades.find((item) => item.studentId === student.id);
-          const hours = row?.hours ?? session.durationHours ?? state.settings?.defaultClassHours ?? 2;
-          const charge = hours * (resolveHourlyRate(state, student, session.groupId) || 0);
-          return [
-            student.id,
-            {
-              attendance: row?.attendance === "A" || row?.attendance === "E" ? "A" : "P",
-              paymentState: paymentRecordState(row, charge),
-              paymentTouched: false,
-              score: grade?.score == null ? "" : String(grade.score),
-              classId: row?.id || "",
-              gradeId: grade?.id || "",
-            },
-          ];
-        }),
-      );
-      const next = {
-        entries: nextEntries,
-        assessmentOn: Boolean(selectedAssessment),
-        assessment: selectedAssessment,
-        maximum: sessionGrades[0]?.maxScore ?? 20,
-      };
-      setEntries(next.entries);
-      setAssessmentOn(next.assessmentOn);
-      setAssessment(next.assessment);
-      setMaximum(next.maximum);
-      baselineRef.current = next;
-    },
-    [state],
-  );
+  const applyDraft = useCallback((next, baseline = next) => {
+    setEntries(next.entries);
+    setAssessmentOn(next.assessmentOn);
+    setAssessment(next.assessment);
+    setMaximum(next.maximum);
+    baselineRef.current = baseline;
+  }, []);
 
   useEffect(() => {
-    hydrate(activeSession);
-  }, [activeSession?.key, hydrate]);
+    const remote = latestRemoteRef.current;
+    if (hydratedSessionKeyRef.current !== remote.sessionKey) {
+      applyDraft(remote.snapshot);
+      hydratedSessionKeyRef.current = remote.sessionKey;
+      hydratedSessionRef.current = remote.session;
+      observedRemoteSignatureRef.current = remote.signature;
+      setRemoteUpdate(null);
+      return;
+    }
+    if (observedRemoteSignatureRef.current === remote.signature) return;
+    if (dirty) {
+      setRemoteUpdate((current) => (current?.signature === remote.signature ? current : remote));
+      return;
+    }
+    applyDraft(remote.snapshot);
+    hydratedSessionRef.current = remote.session;
+    observedRemoteSignatureRef.current = remote.signature;
+    setRemoteUpdate(null);
+  }, [activeSession?.key, applyDraft, dirty, remoteSignature]);
+
+  const acceptRemoteDraft = useCallback(
+    (remote) => {
+      applyDraft(remote.snapshot);
+      hydratedSessionRef.current = remote.session;
+      observedRemoteSignatureRef.current = remote.signature;
+      setRemoteUpdate(null);
+    },
+    [applyDraft],
+  );
+  const keepDraft = () => {
+    hydratedSessionRef.current = remoteUpdate.session;
+    observedRemoteSignatureRef.current = remoteUpdate.signature;
+    setRemoteUpdate(null);
+  };
+  const reloadRemoteDraft = () => acceptRemoteDraft(remoteUpdate || latestRemoteRef.current);
+  const rebaseDraft = () => {
+    const remote = remoteUpdate || latestRemoteRef.current;
+    applyDraft(rebaseClassDraft(snapshot, baselineRef.current, remote.snapshot), remote.snapshot);
+    hydratedSessionRef.current = remote.session;
+    observedRemoteSignatureRef.current = remote.signature;
+    setRemoteUpdate(null);
+  };
 
   const setEntry = (studentId, patch) =>
     setEntries((current) => ({ ...current, [studentId]: { ...current[studentId], ...patch } }));
   const saveSession = async (classStatus = "Completed") => {
     if (!activeSession || !roster.length || !actions.saveProgress) return;
+    if (remoteUpdate) return actions.notify?.("Choose how to handle the newer class data before saving.", "error");
     const trimmedAssessment = assessment.trim();
     const max = Number(maximum);
     if (assessmentOn && !trimmedAssessment)
@@ -1785,7 +1822,14 @@ export default function Classes({
       ? roster.flatMap((student) => {
           const entry = entries[student.id] || {};
           if (entry.score === "" && !entry.gradeId) return [];
-          const existing = (state.grades || []).find((grade) => grade.id === entry.gradeId);
+          const existing =
+            (state.grades || []).find((grade) => grade.id === entry.gradeId) ||
+            (state.grades || []).find(
+              (grade) =>
+                grade.classSessionKey === activeSession.key &&
+                grade.studentId === student.id &&
+                grade.assessment === trimmedAssessment,
+            );
           return [
             {
               ...existing,
@@ -1822,7 +1866,23 @@ export default function Classes({
     (session) => {
       if (!session || session.key === activeSession?.key) return;
       if (dirty && !confirmDiscard(true, "Discard your unsaved class changes?")) return;
+      if (dirty) {
+        hydratedSessionKeyRef.current = "";
+        hydratedSessionRef.current = null;
+      }
       setSelectedUpcomingKey(session.key);
+    },
+    [activeSession?.key, dirty],
+  );
+  const selectHistorySession = useCallback(
+    (session) => {
+      if (!session || session.key === activeSession?.key) return;
+      if (dirty && !confirmDiscard(true, "Discard your unsaved class changes?")) return;
+      if (dirty) {
+        hydratedSessionKeyRef.current = "";
+        hydratedSessionRef.current = null;
+      }
+      setSelectedKey(session.key);
     },
     [activeSession?.key, dirty],
   );
@@ -1830,6 +1890,10 @@ export default function Classes({
     (session) => {
       if (!session) return;
       if (dirty && !confirmDiscard(true, "Discard your unsaved class changes?")) return;
+      if (dirty) {
+        hydratedSessionKeyRef.current = "";
+        hydratedSessionRef.current = null;
+      }
       setSelectedUpcomingKey(session.key);
       changeTab("next");
     },
@@ -1891,6 +1955,9 @@ export default function Classes({
           History
         </button>
       </div>
+      {remoteUpdate ? (
+        <RemoteDraftNotice onKeep={keepDraft} onReload={reloadRemoteDraft} onRebase={rebaseDraft} />
+      ) : null}
       {tab === "next" ? (
         <div className="classes-upcoming-view" role="tabpanel">
           {activeSession ? (
@@ -1910,9 +1977,10 @@ export default function Classes({
                     maximum={maximum}
                     setMaximum={setMaximum}
                     saving={saving}
+                    saveBlocked={Boolean(remoteUpdate)}
                     dirty={dirty}
                     onSave={() => saveSession("Completed")}
-                    onDiscard={() => hydrate(activeSession)}
+                    onDiscard={reloadRemoteDraft}
                     onCancel={cancelSession}
                     onEdit={canEditActiveSession ? () => setEditingSession(activeSession) : null}
                   />
@@ -1946,7 +2014,7 @@ export default function Classes({
           <HistoryList
             sessions={history}
             selectedKey={selectedKey}
-            onSelect={(session) => setSelectedKey(session.key)}
+            onSelect={selectHistorySession}
             filters={filters}
             setFilters={setFilters}
           />
@@ -1965,9 +2033,10 @@ export default function Classes({
               maximum={maximum}
               setMaximum={setMaximum}
               saving={saving}
+              saveBlocked={Boolean(remoteUpdate)}
               dirty={dirty}
               onSave={() => saveSession("Completed")}
-              onDiscard={() => hydrate(activeSession)}
+              onDiscard={reloadRemoteDraft}
               onCancel={cancelSession}
             />
           </div>

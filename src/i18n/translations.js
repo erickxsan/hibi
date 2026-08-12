@@ -1103,6 +1103,14 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "Create class": "Crear clase",
   "Class created": "Clase creada",
   "Class schedule updated": "Horario de clase actualizado",
+  "Newer class data is available": "Hay una versión más reciente de esta clase",
+  "Your unsaved attendance, payments, and grades are safe. Choose how to continue.":
+    "Tu asistencia, pagos y calificaciones sin guardar están a salvo. Elige cómo continuar.",
+  "Keep my draft": "Mantener mi borrador",
+  "Reload remote version": "Recargar versión remota",
+  "Rebase my draft": "Rebasar mi borrador",
+  "Choose how to handle the newer class data before saving.":
+    "Elige cómo gestionar la versión más reciente de la clase antes de guardar.",
   "Class pending registration": "Clase pendiente de registrar",
   "Pending registration": "Pendiente de registrar",
   Registered: "Registrada",

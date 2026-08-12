@@ -8689,6 +8689,41 @@ tbody .attendance-student-column {
   outline-offset: -4px;
   border-radius: 9px;
 }
+.class-remote-update {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  margin-top: 14px;
+  padding: 14px 16px;
+  border: 1px solid #e1bf73;
+  border-radius: 12px;
+  background: #fff8e6;
+  color: #5f4515;
+}
+.class-remote-update > svg {
+  color: #b97800;
+}
+.class-remote-update strong {
+  display: block;
+  font-size: 13px;
+}
+.class-remote-update p {
+  margin: 3px 0 0;
+  color: #725b2d;
+  font-size: 11px;
+}
+.class-remote-update-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.class-remote-update-actions .button {
+  min-height: 36px;
+  padding-inline: 12px;
+  font-size: 10px;
+}
 .classes-upcoming-view,
 .classes-history-view {
   padding-top: 18px;
@@ -9864,6 +9899,18 @@ tbody .attendance-student-column {
   .classes-workspace-tabs button {
     flex: 1;
     min-width: 0;
+  }
+  .class-remote-update {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+  }
+  .class-remote-update-actions {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .class-remote-update-actions .button {
+    width: 100%;
   }
   .classes-upcoming-view,
   .classes-history-view {
