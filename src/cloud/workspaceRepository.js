@@ -7,6 +7,7 @@ import {
 } from "./client.js";
 
 export const WORKSPACES_TABLE = "workspaces";
+export const WORKSPACE_SYNC_SIGNALS_TABLE = "workspace_sync_signals";
 export const SAVE_WORKSPACE_RPC = "save_workspace_state";
 export const REPLACE_WORKSPACE_RPC = "replace_workspace_state";
 export const RESTORE_WORKSPACE_RPC = "restore_workspace_snapshot";
@@ -96,6 +97,19 @@ function persistenceFailure(message, error) {
     return new CloudPersistenceError("Hibi blocked an import that could remove existing records. Reopen the preview and try again.", { cause: error });
   }
   return new CloudPersistenceError(error?.message || message, { cause: error });
+}
+
+function workspaceSignalFromRow(row, expectedOwnerId) {
+  if (!row || typeof row !== "object") {
+    throw new CloudPersistenceError("The cloud live-update signal was empty.");
+  }
+  if (row.owner_id !== expectedOwnerId) {
+    throw new CloudAuthenticationError("The cloud live-update signal did not belong to the expected account.");
+  }
+  return {
+    revision: normalizeRevision(row.revision),
+    updatedAt: row.updated_at ?? null,
+  };
 }
 
 /**
@@ -334,38 +348,88 @@ export function createWorkspaceRepository(client = supabase, { allowWrites = tru
   }
 
   /**
-   * Subscribe to updates from other tabs or devices. The callback receives the
-   * same { state, revision, updatedAt } shape as load/save.
+   * Subscribe to small revision signals from other tabs or devices, then load
+   * the complete document over the Data API. Realtime never carries `state`, so
+   * this path remains valid for every workspace accepted by the 5 MB limit.
    */
   async function subscribeToWorkspace(onChange, { userId, onStatus, onError } = {}) {
     if (typeof onChange !== "function") {
       throw new TypeError("subscribeToWorkspace requires an update callback.");
     }
     const ownerId = (await requireUser(userId)).id;
+    let active = true;
+    let pendingRevision = null;
+    let refreshTask = null;
+
+    const reportLiveError = (error) => {
+      if (!active) return;
+      onError?.(
+        error instanceof CloudPersistenceError || error instanceof CloudAuthenticationError
+          ? error
+          : persistenceFailure("Cloud live updates could not be loaded.", error),
+      );
+    };
+
+    const drainRefreshQueue = async () => {
+      try {
+        while (active && pendingRevision !== null) {
+          const requestedRevision = pendingRevision;
+          pendingRevision = null;
+          const latest = await fetchWorkspace(ownerId);
+          if (!active) return;
+          if (!latest) {
+            throw new CloudPersistenceError("The updated cloud workspace could not be reloaded.");
+          }
+          if (latest.revision < requestedRevision) {
+            throw new CloudPersistenceError("The cloud workspace was older than its live-update signal.");
+          }
+
+          onChange(latest);
+
+          // A fetch can already include changes announced while it was in
+          // flight. Avoid downloading the same large document a second time.
+          if (pendingRevision !== null && pendingRevision <= latest.revision) {
+            pendingRevision = null;
+          }
+        }
+      } catch (error) {
+        reportLiveError(error);
+      } finally {
+        refreshTask = null;
+        if (active && pendingRevision !== null) {
+          refreshTask = drainRefreshQueue();
+        }
+      }
+    };
+
+    const queueRefresh = (payload) => {
+      try {
+        const signal = workspaceSignalFromRow(payload?.new, ownerId);
+        pendingRevision = Math.max(pendingRevision ?? -1, signal.revision);
+        if (!refreshTask) refreshTask = drainRefreshQueue();
+      } catch (error) {
+        reportLiveError(error);
+      }
+    };
+
     const channel = cloud()
-      .channel(`workspace:${ownerId}`)
+      .channel(`workspace-sync:${ownerId}`)
       .on(
         "postgres_changes",
         {
           event: "UPDATE",
           schema: "public",
-          table: WORKSPACES_TABLE,
+          table: WORKSPACE_SYNC_SIGNALS_TABLE,
           filter: `owner_id=eq.${ownerId}`,
         },
-        (payload) => {
-          try {
-            onChange(workspaceFromRow(payload.new));
-          } catch (error) {
-            onError?.(error);
-          }
-        },
+        queueRefresh,
       )
       .subscribe((status, error) => {
+        if (!active) return;
         onStatus?.(status);
         if (error) onError?.(persistenceFailure("Cloud live updates disconnected.", error));
       });
 
-    let active = true;
     return async () => {
       if (!active) return;
       active = false;

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createStarterState } from "../domain/index.js";
 import {
   createWorkspaceRepository,
+  WORKSPACE_SYNC_SIGNALS_TABLE,
   WorkspaceConflictError,
 } from "./workspaceRepository.js";
 
@@ -267,8 +268,108 @@ describe("workspace repository", () => {
     expect(restored.revision).toBe(9);
   });
 
-  it("delivers canonical realtime updates and removes its channel", async () => {
+  it("reloads a workspace larger than the Realtime payload limit from a small invalidation signal", async () => {
     const state = createStarterState();
+    state.groups.push({
+      id: "group-large",
+      name: "Large workspace",
+      grade: "",
+      subject: "",
+      schedule: "",
+      hourlyRate: null,
+      weeklySchedule: [],
+      plannedSessionsPerMonth: 0,
+      assistantContact: "",
+      notes: "x".repeat(1_100_000),
+    });
+    expect(new TextEncoder().encode(JSON.stringify(state)).byteLength).toBeGreaterThan(1_024 * 1_024);
+    let updateHandler;
+    let subscribedFilter;
+    const channel = {
+      on: vi.fn((_kind, filter, callback) => {
+        subscribedFilter = filter;
+        updateHandler = callback;
+        return channel;
+      }),
+      subscribe: vi.fn(() => channel),
+    };
+    const selection = selectResult({
+      data: { owner_id: "user-1", state, revision: 2, updated_at: "2026-08-11T12:00:00Z" },
+      error: null,
+    });
+    const client = authenticatedClient({
+      from: vi.fn(() => selection),
+      channel: vi.fn(() => channel),
+      removeChannel: vi.fn(async () => "ok"),
+    });
+    const onChange = vi.fn();
+
+    const unsubscribe = await createWorkspaceRepository(client)
+      .subscribeToWorkspace(onChange, { userId: "user-1" });
+    updateHandler({
+      new: { owner_id: "user-1", revision: 2, updated_at: "2026-08-11T12:00:00Z" },
+    });
+
+    await vi.waitFor(() => {
+      expect(onChange).toHaveBeenCalledWith({
+        state,
+        revision: 2,
+        updatedAt: "2026-08-11T12:00:00Z",
+      });
+    });
+    expect(subscribedFilter).toEqual({
+      event: "UPDATE",
+      schema: "public",
+      table: WORKSPACE_SYNC_SIGNALS_TABLE,
+      filter: "owner_id=eq.user-1",
+    });
+    expect(selection.select).toHaveBeenCalledWith("owner_id, state, revision, updated_at");
+    await unsubscribe();
+    await unsubscribe();
+    expect(client.removeChannel).toHaveBeenCalledTimes(1);
+  });
+
+  it("coalesces live signals covered by the same workspace reload", async () => {
+    const state = createStarterState();
+    let updateHandler;
+    let resolveFetch;
+    const query = {
+      select: vi.fn(() => query),
+      eq: vi.fn(() => query),
+      maybeSingle: vi.fn(() => new Promise((resolve) => {
+        resolveFetch = resolve;
+      })),
+    };
+    const channel = {
+      on: vi.fn((_kind, _filter, callback) => {
+        updateHandler = callback;
+        return channel;
+      }),
+      subscribe: vi.fn(() => channel),
+    };
+    const client = authenticatedClient({
+      from: vi.fn(() => query),
+      channel: vi.fn(() => channel),
+      removeChannel: vi.fn(async () => "ok"),
+    });
+    const onChange = vi.fn();
+    const unsubscribe = await createWorkspaceRepository(client)
+      .subscribeToWorkspace(onChange, { userId: "user-1" });
+
+    updateHandler({ new: { owner_id: "user-1", revision: 2, updated_at: null } });
+    updateHandler({ new: { owner_id: "user-1", revision: 3, updated_at: null } });
+    await vi.waitFor(() => expect(query.maybeSingle).toHaveBeenCalledTimes(1));
+    resolveFetch({
+      data: { owner_id: "user-1", state, revision: 3, updated_at: null },
+      error: null,
+    });
+
+    await vi.waitFor(() => expect(onChange).toHaveBeenCalledWith({ state, revision: 3, updatedAt: null }));
+    expect(query.maybeSingle).toHaveBeenCalledTimes(1);
+    await unsubscribe();
+  });
+
+  it("rejects a live signal for a different account without loading state", async () => {
     let updateHandler;
     const channel = {
       on: vi.fn((_kind, _filter, callback) => {
@@ -278,18 +379,20 @@ describe("workspace repository", () => {
       subscribe: vi.fn(() => channel),
     };
     const client = authenticatedClient({
+      from: vi.fn(),
       channel: vi.fn(() => channel),
       removeChannel: vi.fn(async () => "ok"),
     });
-    const onChange = vi.fn();
-
+    const onError = vi.fn();
     const unsubscribe = await createWorkspaceRepository(client)
-      .subscribeToWorkspace(onChange, { userId: "user-1" });
-    updateHandler({ new: { state, revision: 2, updated_at: null } });
+      .subscribeToWorkspace(vi.fn(), { userId: "user-1", onError });
 
-    expect(onChange).toHaveBeenCalledWith({ state, revision: 2, updatedAt: null });
+    updateHandler({ new: { owner_id: "user-2", revision: 2, updated_at: null } });
+
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({
+      name: "CloudAuthenticationError",
+    }));
+    expect(client.from).not.toHaveBeenCalled();
     await unsubscribe();
-    await unsubscribe();
-    expect(client.removeChannel).toHaveBeenCalledTimes(1);
   });
 });

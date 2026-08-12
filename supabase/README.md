@@ -2,6 +2,10 @@
 
 This schema stores one revisioned JSON state per authenticated user. Signup creates the workspace automatically. Browser clients can read their own row and can write only through revision-aware RPCs, so they cannot bypass optimistic concurrency. Ordinary saves reject suspicious collection loss, intentional backup replacement is a separate archived operation, and additive imports verify that every existing stable ID remains present. Imports are audited by SHA-256 hash, are idempotent, and archive a recovery snapshot before changing state. Recent pre-write states are retained in an owner-isolated recovery table. The legacy reset RPC is not executable by browser accounts. Auth-user deletion is restricted while workspace data exists, preventing an accidental dashboard deletion from cascading through the canonical row and its recovery history. The `anon` role has no table or RPC access.
 
+## Realtime synchronization
+
+The `workspaces.state` document is never published through Realtime. A transactional trigger mirrors only `owner_id`, `revision`, and `updated_at` into the RLS-protected `workspace_sync_signals` table. Clients subscribe to their small signal row and fetch the full canonical document through the Data API when the revision advances. This keeps synchronization compatible with the 5 MB workspace limit despite the smaller Postgres Changes payload limit. Reconnects always perform a fresh read because Realtime delivery is not guaranteed.
+
 ## Apply it
 
 CLI (recommended):

@@ -1,6 +1,6 @@
 begin;
 
-select plan(25);
+select plan(34);
 
 insert into auth.users (
   id,
@@ -51,12 +51,26 @@ select is(
   2::bigint,
   'signup trigger creates one workspace per account'
 );
+select is(
+  (select count(*) from public.workspace_sync_signals where owner_id in (
+    '11111111-1111-4111-8111-111111111111',
+    '22222222-2222-4222-8222-222222222222'
+  )),
+  2::bigint,
+  'signup creates one lightweight sync signal per workspace'
+);
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '11111111-1111-4111-8111-111111111111', true);
 
 select is((select count(*) from public.workspaces), 1::bigint, 'account A sees exactly one workspace');
 select is((select owner_id::text from public.workspaces), '11111111-1111-4111-8111-111111111111', 'account A sees only its own workspace');
+select is((select count(*) from public.workspace_sync_signals), 1::bigint, 'account A sees exactly one sync signal');
+select is(
+  (select owner_id::text from public.workspace_sync_signals),
+  '11111111-1111-4111-8111-111111111111',
+  'account A sees only its own sync signal'
+);
 select throws_ok(
   $$update public.workspaces set revision = 99$$,
   '42501',
@@ -75,6 +89,12 @@ select throws_ok(
   null,
   'authenticated clients cannot delete from the table directly'
 );
+select throws_ok(
+  $$update public.workspace_sync_signals set revision = 99$$,
+  '42501',
+  null,
+  'authenticated clients cannot forge sync signals'
+);
 select lives_ok(
   $$select * from public.save_workspace_state(
     '11111111-1111-4111-8111-111111111111',
@@ -84,6 +104,11 @@ select lives_ok(
   'account A can save through the revision RPC'
 );
 select is((select revision from public.workspaces), 1::bigint, 'successful save advances the revision');
+select is(
+  (select revision from public.workspace_sync_signals),
+  1::bigint,
+  'successful save transactionally advances the sync signal'
+);
 select throws_ok(
   $$select * from public.save_workspace_state(
     '11111111-1111-4111-8111-111111111111',
@@ -174,6 +199,7 @@ select set_config('request.jwt.claim.sub', '22222222-2222-4222-8222-222222222222
 
 select is((select count(*) from public.workspaces), 1::bigint, 'account B sees exactly one workspace');
 select is((select owner_id::text from public.workspaces), '22222222-2222-4222-8222-222222222222', 'account B sees only its own workspace');
+select is((select count(*) from public.workspace_sync_signals), 1::bigint, 'account B sees exactly one sync signal');
 select throws_ok(
   $$select * from public.save_workspace_state(
     '11111111-1111-4111-8111-111111111111',
@@ -192,6 +218,12 @@ select throws_ok(
   '42501',
   null,
   'anonymous clients cannot read workspaces'
+);
+select throws_ok(
+  $$select * from public.workspace_sync_signals$$,
+  '42501',
+  null,
+  'anonymous clients cannot read sync signals'
 );
 select throws_ok(
   $$select * from public.save_workspace_state(
@@ -213,6 +245,26 @@ select throws_ok(
 );
 
 reset role;
+select ok(
+  not exists (
+    select 1
+    from pg_catalog.pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'workspaces'
+  ),
+  'Realtime does not publish the large workspace row'
+);
+select ok(
+  exists (
+    select 1
+    from pg_catalog.pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'workspace_sync_signals'
+  ),
+  'Realtime publishes only lightweight workspace sync signals'
+);
 select throws_ok(
   $$update public.workspaces
     set revision = revision + 1

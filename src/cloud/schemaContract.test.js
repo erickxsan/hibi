@@ -1,6 +1,10 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { SAVE_WORKSPACE_RPC, WORKSPACES_TABLE } from "./workspaceRepository.js";
+import {
+  SAVE_WORKSPACE_RPC,
+  WORKSPACES_TABLE,
+  WORKSPACE_SYNC_SIGNALS_TABLE,
+} from "./workspaceRepository.js";
 
 const migration = readFileSync(
   new URL("../../supabase/migrations/202607110001_initial_multi_account_workspaces.sql", import.meta.url),
@@ -8,6 +12,10 @@ const migration = readFileSync(
 ).toLowerCase();
 const scheduleDefaultsMigration = readFileSync(
   new URL("../../supabase/migrations/202607140001_schedule_defaults.sql", import.meta.url),
+  "utf8",
+).toLowerCase();
+const realtimeSignalsMigration = readFileSync(
+  new URL("../../supabase/migrations/202608110001_workspace_realtime_signals.sql", import.meta.url),
   "utf8",
 ).toLowerCase();
 
@@ -55,5 +63,25 @@ describe("Supabase schema contract", () => {
     expect(scheduleDefaultsMigration).toContain("'scheduleexceptions', '[]'::jsonb");
     expect(scheduleDefaultsMigration).toContain("'schedulechanges', '[]'::jsonb");
     expect(scheduleDefaultsMigration).not.toContain("update public.workspaces");
+  });
+
+  it("publishes only owner-scoped revision signals instead of workspace JSONB", () => {
+    const signalTableDefinition = realtimeSignalsMigration.match(
+      /create table public\.workspace_sync_signals \([\s\S]*?\n\);/,
+    )?.[0];
+    expect(WORKSPACE_SYNC_SIGNALS_TABLE).toBe("workspace_sync_signals");
+    expect(signalTableDefinition).toBeTruthy();
+    expect(signalTableDefinition).not.toContain("state");
+    expect(realtimeSignalsMigration).toContain("after insert or update of state, revision, updated_at on public.workspaces");
+    expect(realtimeSignalsMigration).toContain("alter publication supabase_realtime drop table public.workspaces");
+    expect(realtimeSignalsMigration).toContain("alter publication supabase_realtime add table public.workspace_sync_signals");
+  });
+
+  it("protects live-update signals with owner RLS and read-only browser access", () => {
+    expect(realtimeSignalsMigration).toContain("alter table public.workspace_sync_signals enable row level security");
+    expect(realtimeSignalsMigration).toContain("alter table public.workspace_sync_signals force row level security");
+    expect(realtimeSignalsMigration).toContain("owner_id = (select auth.uid())");
+    expect(realtimeSignalsMigration).toContain("revoke all on table public.workspace_sync_signals from public, anon, authenticated");
+    expect(realtimeSignalsMigration).toContain("grant select on table public.workspace_sync_signals to authenticated");
   });
 });
