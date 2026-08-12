@@ -533,7 +533,9 @@
 }
 
 .account-sync-inline.is-syncing > span { background: var(--mustard, #c9932d); }
-.account-sync-inline.is-offline > span { background: var(--muted, #706865); }
+.account-sync-inline.is-offline > span,
+.account-sync-inline.is-offline-cached > span { background: var(--muted, #706865); }
+.account-sync-inline.is-conflict > span,
 .account-sync-inline.is-error > span { background: var(--danger, #b54945); }
 
 .account-menu-panel {
@@ -599,11 +601,13 @@
   color: #7b590f;
 }
 
-.account-sync-detail.is-offline {
+.account-sync-detail.is-offline,
+.account-sync-detail.is-offline-cached {
   background: #efede8;
   color: #625b58;
 }
 
+.account-sync-detail.is-conflict,
 .account-sync-detail.is-error {
   background: var(--danger-soft, #f9e4e2);
   color: var(--danger, #b54945);

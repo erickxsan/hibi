@@ -62,10 +62,12 @@ describe("normalized workspace repository", () => {
     const repository = createWorkspaceRepository(authenticatedClient({ rpc }));
     await repository.loadWorkspace("user-1");
 
-    const result = await repository.saveWorkspace(after, 8, "user-1", before);
+    const operationId = "33333333-3333-4333-8333-333333333333";
+    const result = await repository.saveWorkspace(after, 8, "user-1", before, operationId);
 
     expect(rpc).toHaveBeenLastCalledWith(SAVE_WORKSPACE_RPC, {
       p_expected_owner_id: "user-1",
+      p_operation_id: operationId,
       p_patch: {
         students: { upserts: [{ data: after.students[0], position: 0 }], deletes: [] },
       },

@@ -14,7 +14,7 @@ import {
 } from "./client.js";
 
 export const LOAD_WORKSPACE_RPC = "load_normalized_workspace";
-export const SAVE_WORKSPACE_RPC = "apply_workspace_patch";
+export const SAVE_WORKSPACE_RPC = "apply_workspace_patch_idempotent";
 export const REPLACE_WORKSPACE_RPC = "replace_normalized_workspace_state";
 export const RESTORE_WORKSPACE_RPC = "restore_normalized_workspace_snapshot";
 export const APPLY_IMPORT_RPC = "apply_normalized_workspace_import";
@@ -23,6 +23,7 @@ export const RECOVERY_SNAPSHOTS_TABLE = "workspace_recovery_snapshots";
 export const IMPORT_JOBS_TABLE = "workspace_import_jobs";
 
 const SHA256_RE = /^[0-9a-f]{64}$/;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_PATCH_BYTES = 1024 * 1024;
 
 export class CloudPersistenceError extends Error {
@@ -60,6 +61,17 @@ function assertPatchSize(patch) {
   if (byteLength(patch) > MAX_PATCH_BYTES) {
     throw new CloudPersistenceError("This single change is too large to synchronize. Save it in smaller batches.");
   }
+}
+
+export function createOperationId(cryptoApi = globalThis.crypto) {
+  if (typeof cryptoApi?.randomUUID === "function") return cryptoApi.randomUUID();
+  const bytes = new Uint8Array(16);
+  cryptoApi?.getRandomValues?.(bytes);
+  if (!bytes.some(Boolean)) throw new CloudPersistenceError("Secure local operation IDs are unavailable in this browser.");
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = [...bytes].map((value) => value.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 function normalizeRevision(value) {
@@ -182,13 +194,47 @@ export function createWorkspaceRepository(client = supabase, { allowWrites = tru
     });
   }
 
-  async function saveWorkspace(state, _expectedRevision, expectedOwnerId, previousState) {
+  function prepareWorkspaceMutation(state, previousState, versions, operationId = createOperationId()) {
+    const base = canonicalState(previousState);
+    const nextState = canonicalState(state);
+    const { patch, expectedVersions, empty } = buildWorkspacePatch(base, nextState, versions);
+    if (!empty) assertPatchSize(patch);
+    if (!UUID_RE.test(operationId)) throw new TypeError("A valid operation UUID is required.");
+    return { operationId, patch, expectedVersions, empty, state: nextState, previousState: base };
+  }
+
+  async function applyWorkspaceMutation(mutation, expectedOwnerId) {
+    requireWritesEnabled();
+    const user = await requireUser(expectedOwnerId);
+    const ownerId = expectedOwnerId || user.id;
+    if (!mutation || mutation.empty) return { eventId: cache?.revision ?? 0, updatedAt: cache?.updatedAt ?? null };
+    if (!UUID_RE.test(String(mutation.operationId || ""))) throw new TypeError("A valid operation UUID is required.");
+    assertPatchSize(mutation.patch);
+    const { data, error } = await cloud().rpc(SAVE_WORKSPACE_RPC, {
+      p_expected_owner_id: ownerId,
+      p_operation_id: mutation.operationId,
+      p_patch: mutation.patch,
+      p_expected_versions: mutation.expectedVersions,
+    });
+    if (error && isEntityConflict(error)) throw await conflictFrom(error, ownerId);
+    if (error) throw persistenceFailure("Cloud records could not be saved.", error);
+    const row = firstRow(data);
+    if (!row) throw new CloudPersistenceError("The saved cloud change response was empty.");
+    return {
+      eventId: normalizeRevision(row.event_id),
+      updatedAt: row.updated_at ?? null,
+      alreadyApplied: Boolean(row.already_applied),
+    };
+  }
+
+  async function saveWorkspace(state, _expectedRevision, expectedOwnerId, previousState, operationId = createOperationId()) {
     requireWritesEnabled();
     const user = await requireUser(expectedOwnerId);
     const ownerId = expectedOwnerId || user.id;
     if (!cache) await fetchWorkspace(ownerId);
     const base = previousState || cache.state;
-    const { patch, expectedVersions, empty } = buildWorkspacePatch(base, state, cache.versions);
+    const mutation = prepareWorkspaceMutation(state, base, cache.versions, operationId);
+    const { patch, expectedVersions, empty } = mutation;
     if (empty) return cache;
     const remotePatch = buildWorkspacePatch(base, cache.state, cache.versions).patch;
     if (workspacePatchesOverlap(patch, remotePatch)) {
@@ -198,22 +244,12 @@ export function createWorkspaceRepository(client = supabase, { allowWrites = tru
         latestUpdatedAt: cache.updatedAt,
       });
     }
-    assertPatchSize(patch);
-
-    const { data, error } = await cloud().rpc(SAVE_WORKSPACE_RPC, {
-      p_expected_owner_id: ownerId,
-      p_patch: patch,
-      p_expected_versions: expectedVersions,
-    });
-    if (error && isEntityConflict(error)) throw await conflictFrom(error, ownerId);
-    if (error) throw persistenceFailure("Cloud records could not be saved.", error);
-    const row = firstRow(data);
-    if (!row) throw new CloudPersistenceError("The saved cloud change response was empty.");
+    const result = await applyWorkspaceMutation({ ...mutation, expectedVersions }, ownerId);
     return adopt({
       state: applyWorkspacePatch(cache.state, patch),
       versions: advanceWorkspaceVersions(cache.versions, patch),
-      revision: normalizeRevision(row.event_id),
-      updatedAt: row.updated_at ?? null,
+      revision: result.eventId,
+      updatedAt: result.updatedAt,
     });
   }
 
@@ -428,6 +464,8 @@ export function createWorkspaceRepository(client = supabase, { allowWrites = tru
   return {
     loadWorkspace,
     loadOrCreateWorkspace,
+    prepareWorkspaceMutation,
+    applyWorkspaceMutation,
     saveWorkspace,
     replaceWorkspace,
     findImportJob,

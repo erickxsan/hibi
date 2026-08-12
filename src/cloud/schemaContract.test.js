@@ -10,14 +10,20 @@ const migration = readFileSync(
   new URL("../../supabase/migrations/202608120001_normalized_workspace_entities.sql", import.meta.url),
   "utf8",
 ).toLowerCase();
+const outboxMigration = readFileSync(
+  new URL("../../supabase/migrations/202608120002_offline_outbox_integrity.sql", import.meta.url),
+  "utf8",
+).toLowerCase();
 
 describe("normalized Supabase schema contract", () => {
   it("matches the RPCs and event table used by the browser client", () => {
     expect(LOAD_WORKSPACE_RPC).toBe("load_normalized_workspace");
-    expect(SAVE_WORKSPACE_RPC).toBe("apply_workspace_patch");
+    expect(SAVE_WORKSPACE_RPC).toBe("apply_workspace_patch_idempotent");
     expect(WORKSPACE_CHANGE_EVENTS_TABLE).toBe("workspace_change_events");
     expect(migration).toContain("function public.load_normalized_workspace");
     expect(migration).toContain("function public.apply_workspace_patch");
+    expect(outboxMigration).toContain("function public.apply_workspace_patch_idempotent");
+    expect(outboxMigration).toContain("p_operation_id uuid");
     expect(migration).toContain("p_expected_versions jsonb");
   });
 

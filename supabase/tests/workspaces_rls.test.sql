@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(42);
+select plan(48);
 
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data)
 values
@@ -37,8 +37,8 @@ select lives_ok($$
   select * from public.apply_workspace_patch(
     '11111111-1111-4111-8111-111111111111',
     '{
-      "groups":{"upserts":[{"position":0,"data":{"id":"g1","name":"Math"}}],"deletes":[]},
-      "students":{"upserts":[{"position":0,"data":{"id":"s1","code":"A-1","fullName":"Ana","groupIds":["g1"]}}],"deletes":[]}
+      "groups":{"upserts":[{"position":0,"data":{"id":"g1","name":"Math","grade":"","subject":"","schedule":"","hourlyRate":null,"weeklySchedule":[],"plannedSessionsPerMonth":8,"assistantContact":"","notes":""}}],"deletes":[]},
+      "students":{"upserts":[{"position":0,"data":{"id":"s1","code":"A-1","fullName":"Ana","avatarId":"cat","groupIds":["g1"],"isIndividual":false,"customHourlyRate":null,"status":"Active"}}],"deletes":[]}
     }'::jsonb,
     '{"groups":{"g1":0},"students":{"s1":0}}'::jsonb
   )
@@ -51,7 +51,7 @@ select is((select revision from public.groups where id = 'g1'), 1::bigint, 'new 
 select lives_ok($$
   select * from public.apply_workspace_patch(
     '11111111-1111-4111-8111-111111111111',
-    '{"groups":{"upserts":[{"position":0,"data":{"id":"g1","name":"Advanced Math"}}],"deletes":[]}}'::jsonb,
+    '{"groups":{"upserts":[{"position":0,"data":{"id":"g1","name":"Advanced Math","grade":"","subject":"","schedule":"","hourlyRate":null,"weeklySchedule":[],"plannedSessionsPerMonth":8,"assistantContact":"","notes":""}}],"deletes":[]}}'::jsonb,
     '{"groups":{"g1":1}}'::jsonb
   )
 $$, 'one entity can advance without checking unrelated revisions');
@@ -60,16 +60,35 @@ select is((select revision from public.students where id = 's1'), 1::bigint, 'th
 select throws_ok($$
   select * from public.apply_workspace_patch(
     '11111111-1111-4111-8111-111111111111',
-    '{"groups":{"upserts":[{"position":0,"data":{"id":"g1","name":"Stale"}}],"deletes":[]}}'::jsonb,
+    '{"groups":{"upserts":[{"position":0,"data":{"id":"g1","name":"Stale","grade":"","subject":"","schedule":"","hourlyRate":null,"weeklySchedule":[],"plannedSessionsPerMonth":8,"assistantContact":"","notes":""}}],"deletes":[]}}'::jsonb,
     '{"groups":{"g1":1}}'::jsonb
   )
 $$, '40001', 'workspace_entity_conflict', 'a stale write conflicts only on the same entity');
 
 select lives_ok($$
+  select * from public.apply_workspace_patch_idempotent(
+    '11111111-1111-4111-8111-111111111111',
+    '33333333-3333-4333-8333-333333333333',
+    '{"students":{"upserts":[{"position":0,"data":{"id":"s1","code":"A-1","fullName":"Ana Updated","avatarId":"cat","groupIds":["g1"],"isIndividual":false,"customHourlyRate":null,"status":"Active"}}],"deletes":[]}}'::jsonb,
+    '{"students":{"s1":1}}'::jsonb
+  )
+$$, 'an outbox operation applies once');
+select lives_ok($$
+  select * from public.apply_workspace_patch_idempotent(
+    '11111111-1111-4111-8111-111111111111',
+    '33333333-3333-4333-8333-333333333333',
+    '{"students":{"upserts":[{"position":0,"data":{"id":"s1","code":"A-1","fullName":"Ana Updated","avatarId":"cat","groupIds":["g1"],"isIndividual":false,"customHourlyRate":null,"status":"Active"}}],"deletes":[]}}'::jsonb,
+    '{"students":{"s1":1}}'::jsonb
+  )
+$$, 'retrying the same outbox operation is accepted');
+select is((select revision from public.students where id = 's1'), 2::bigint, 'an idempotent retry does not advance the entity twice');
+select is((select revision from public.workspace_sync_cursors), 5::bigint, 'an idempotent retry does not create a second event');
+
+select lives_ok($$
   select * from public.apply_workspace_patch(
     '11111111-1111-4111-8111-111111111111',
     '{
-      "grades":{"upserts":[{"position":0,"data":{"id":"gr1","studentId":"s1","date":"2026-08-10","score":8,"maxScore":10}}],"deletes":[]},
+      "grades":{"upserts":[{"position":0,"data":{"id":"gr1","studentId":"s1","date":"2026-08-10","assessment":"Quiz","category":"Quiz","score":8,"maxScore":10,"workStatus":"On time","classSessionKey":""}}],"deletes":[]},
       "classLog":{"upserts":[{"position":0,"data":{"id":"c1","studentId":"s1","groupId":"g1","classDate":"2026-08-10","classStatus":"Completed","amountPaid":120,"paymentDate":"2026-08-10","paymentState":"Paid","paymentMethod":"Transfer","paymentReference":"R1"}}],"deletes":[]}
     }'::jsonb,
     '{"grades":{"gr1":0},"classLog":{"c1":0}}'::jsonb
@@ -85,13 +104,13 @@ select is((select count(*) from public.workspace_recovery_snapshots), 0::bigint,
 select lives_ok($$
   select * from public.replace_normalized_workspace_state(
     '11111111-1111-4111-8111-111111111111',
-    5,
+    6,
     (select state from public.load_normalized_workspace('11111111-1111-4111-8111-111111111111')),
-    'replace:5'
+    'replace:6'
   )
 $$, 'explicit full replacement remains available');
 select is((select count(*) from public.workspace_recovery_snapshots), 1::bigint, 'full replacement archives exactly one recovery snapshot');
-select is((select count(*) from public.workspace_change_events), 6::bigint, 'small ordered events are retained for replay');
+select is((select count(*) from public.workspace_change_events), 7::bigint, 'small ordered events are retained for replay');
 
 set local request.jwt.claim.sub = '22222222-2222-4222-8222-222222222222';
 select is((select count(*) from public.workspace_settings), 1::bigint, 'account B sees exactly its settings');
@@ -106,7 +125,9 @@ select throws_ok($$select * from public.apply_workspace_patch('11111111-1111-411
 
 reset role;
 select ok(has_function_privilege('authenticated', 'public.apply_workspace_patch(uuid,jsonb,jsonb)', 'EXECUTE'), 'authenticated clients can execute the patch RPC');
+select ok(has_function_privilege('authenticated', 'public.apply_workspace_patch_idempotent(uuid,uuid,jsonb,jsonb)', 'EXECUTE'), 'authenticated clients can execute the idempotent patch RPC');
 select ok(not has_function_privilege('anon', 'public.apply_workspace_patch(uuid,jsonb,jsonb)', 'EXECUTE'), 'anonymous clients cannot execute the patch RPC');
+select ok(not has_function_privilege('anon', 'public.apply_workspace_patch_idempotent(uuid,uuid,jsonb,jsonb)', 'EXECUTE'), 'anonymous clients cannot execute the idempotent patch RPC');
 select ok(not has_table_privilege('authenticated', 'public.groups', 'UPDATE'), 'authenticated clients have no direct group update privilege');
 select ok(exists(select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'workspace_change_events'), 'Realtime publishes small change events');
 select ok(not exists(select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'workspace_sync_signals'), 'Realtime no longer publishes legacy sync signals');

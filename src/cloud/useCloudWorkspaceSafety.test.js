@@ -4,9 +4,11 @@ import { describe, expect, it } from "vitest";
 const source = readFileSync(new URL("./useCloudWorkspace.js", import.meta.url), "utf8");
 
 describe("cloud workspace device recovery", () => {
-  it("reserves full device copies for explicit recovery boundaries", () => {
-    expect(source).not.toContain('captureDeviceCopy(previous.state, previous.revision, "before-save"');
-    expect(source).not.toContain('captureDeviceCopy(saved.state, saved.revision, "cloud-save"');
+  it("stages ordinary edits durably before applying their optimistic state", () => {
+    const staged = source.indexOf("await deviceRecoveryStore.stageMutation");
+    const applied = source.indexOf("applyWorkspace(optimistic)");
+    expect(staged).toBeGreaterThan(0);
+    expect(applied).toBeGreaterThan(staged);
     expect(source).toContain('captureDeviceCopy(previous.state, previous.revision, "before-replace"');
   });
 });

@@ -229,14 +229,18 @@ export async function persistRecipe({ baseState, recipe, adapter, replace = fals
         ? await adapter.save(state, baseState)
         : saveState(state);
     const saved = result?.state ?? result ?? state;
-    return adapter?.mode === "cloud" && !replace && !importMetadata ? saved : canonicalize(saved);
+    return {
+      state: adapter?.mode === "cloud" && !replace && !importMetadata ? saved : canonicalize(saved),
+      pending: Boolean(result?.pending),
+    };
   };
 
   const next = adapter?.mode === "cloud" && !replace && !importMetadata
     ? recipe(baseState)
     : canonicalize(recipe(baseState));
   try {
-    return { state: await persist(next), mergedConflict: false };
+    const result = await persist(next);
+    return { ...result, mergedConflict: false };
   } catch (error) {
     // A regular edit is a deterministic mutation and can be applied once to
     // the newest revision, preserving unrelated changes from another device.
@@ -245,7 +249,7 @@ export async function persistRecipe({ baseState, recipe, adapter, replace = fals
     const latest = canonicalize(error.latestState);
     const rebased = recipe(latest);
     const retried = await adapter.save(rebased, latest);
-    return { state: retried?.state ?? retried ?? rebased, mergedConflict: true };
+    return { state: retried?.state ?? retried ?? rebased, pending: Boolean(retried?.pending), mergedConflict: true };
   }
 }
 
@@ -270,8 +274,12 @@ export function useClassManager({ persistence } = {}) {
   const persistedSnapshot = useRef(serializeState(initial.state));
   const operationQueue = useRef(Promise.resolve());
   const pendingWrites = useRef(0);
-  const [syncStatus, setSyncStatus] = useState(persistence?.mode === "cloud" ? "saved" : "local");
+  const [syncStatus, setSyncStatus] = useState(persistence?.mode === "cloud" ? persistence.syncStatus || "saved" : "local");
   persistenceRef.current = persistence;
+
+  useEffect(() => {
+    if (persistence?.mode === "cloud" && persistence.syncStatus) setSyncStatus(persistence.syncStatus);
+  }, [persistence?.mode, persistence?.syncStatus]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -324,7 +332,7 @@ export function useClassManager({ persistence } = {}) {
     if (persistenceRef.current?.mode === "cloud") setSyncStatus("saving");
 
     const operation = async () => {
-      let synchronized = false;
+      let finalStatus = "error";
       try {
         if (!mountedRef.current) return false;
         const adapter = persistenceRef.current;
@@ -344,7 +352,7 @@ export function useClassManager({ persistence } = {}) {
         setCanonicalState(saved);
         if (result.mergedConflict) notify("Your edit was safely combined with a newer cloud change.");
         if (successMessage) notify(successMessage);
-        synchronized = true;
+        finalStatus = result.pending ? "pending" : "saved";
         return true;
       } catch (error) {
         if (!mountedRef.current) return false;
@@ -355,7 +363,7 @@ export function useClassManager({ persistence } = {}) {
             persistedSnapshot.current = serializeState(latest);
             setCanonicalState(latest);
             notify("A newer change from another device was loaded. Please retry your edit.", "error");
-            synchronized = true;
+            finalStatus = "saved";
             return false;
           } catch {
             // Fall through to the original persistence error.
@@ -366,7 +374,7 @@ export function useClassManager({ persistence } = {}) {
       } finally {
         pendingWrites.current = Math.max(0, pendingWrites.current - 1);
         if (mountedRef.current && persistenceRef.current?.mode === "cloud" && pendingWrites.current === 0) {
-          setSyncStatus(synchronized ? "saved" : "error");
+          setSyncStatus(finalStatus);
         }
       }
     };
@@ -835,9 +843,10 @@ export function useClassManager({ persistence } = {}) {
     derived,
     asOfDate: operationalDate,
     syncStatus,
+    syncMessage: persistence?.syncMessage || "",
     persistenceMode: persistence?.mode || "local",
     actions,
     toasts,
     dismissToast,
-  }), [actions, derived, dismissToast, operationalDate, persistence?.mode, syncStatus, toasts, viewState]);
+  }), [actions, derived, dismissToast, operationalDate, persistence?.mode, persistence?.syncMessage, syncStatus, toasts, viewState]);
 }
