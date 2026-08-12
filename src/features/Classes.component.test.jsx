@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import Classes from "./Classes";
@@ -65,13 +65,18 @@ function renderClasses(state = classState()) {
   });
   const props = {
     state,
-    actions: { saveProgress: vi.fn().mockResolvedValue(true), notify: vi.fn() },
+    actions: {
+      saveProgress: vi.fn().mockResolvedValue(true),
+      upsertClassSchedule: vi.fn().mockResolvedValue(true),
+      notify: vi.fn(),
+    },
     asOfDate: AS_OF_DATE,
     registerNavigationBlocker,
   };
   const view = render(<Classes {...props} />);
   return {
     ...view,
+    actions: props.actions,
     rerenderState(nextState) {
       props.state = nextState;
       view.rerender(<Classes {...props} />);
@@ -179,5 +184,93 @@ describe("Classes remote draft safety", () => {
     expect(screen.getByRole("spinbutton", { name: /Grade for Ana/ })).toHaveValue(12);
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(view.navigationWarning()).toMatch(/Discard your unsaved class changes/);
+  });
+
+  it("saves the merged remote data without losing local attendance or payment", async () => {
+    const user = userEvent.setup();
+    const state = classState();
+    const view = renderClasses(state);
+    await markAnaAbsent(user);
+    await user.click(
+      within(screen.getByRole("group", { name: "Payment for Ana" })).getByRole("button", { name: "Paid" }),
+    );
+
+    view.rerenderState(withRemoteGrade(state));
+    await user.click(await screen.findByRole("button", { name: "Rebase my draft" }));
+    await user.click(screen.getByRole("button", { name: "Save class" }));
+
+    await waitFor(() => expect(view.actions.saveProgress).toHaveBeenCalledOnce());
+    expect(view.actions.saveProgress).toHaveBeenCalledWith({
+      classRecords: [
+        expect.objectContaining({ studentId: "s1", attendance: "A", paymentState: "Paid", amountPaid: 200 }),
+      ],
+      gradeRecords: [
+        expect.objectContaining({
+          id: "grade-remote",
+          studentId: "s1",
+          assessment: "Remote quiz",
+          score: 12,
+          maxScore: 20,
+        }),
+      ],
+    });
+    expect(view.navigationWarning()).toBe("");
+  });
+
+  it("keeps a dirty draft when navigation is rejected and discards it only after confirmation", async () => {
+    const user = userEvent.setup();
+    const confirm = vi.spyOn(globalThis, "confirm").mockReturnValueOnce(false).mockReturnValue(true);
+    const view = renderClasses();
+    await markAnaAbsent(user);
+
+    await user.click(screen.getByRole("tab", { name: "Calendar" }));
+    expect(screen.getByRole("tab", { name: "Next class" })).toHaveAttribute("aria-selected", "true");
+    expect(within(screen.getByRole("group", { name: "Attendance for Ana" })).getByTitle("Absent")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    await user.click(screen.getByRole("tab", { name: "Calendar" }));
+    expect(screen.getByRole("tab", { name: "Calendar" })).toHaveAttribute("aria-selected", "true");
+
+    await user.click(screen.getByRole("button", { name: /Wednesday, July 15, 1 class/ }));
+    const calendarView = screen.getByRole("group", { name: "Calendar view" });
+    await user.click(within(calendarView).getByRole("button", { name: "Week" }));
+    await user.click(screen.getByRole("checkbox", { name: "Show weekends" }));
+    await user.click(screen.getByRole("button", { name: "Previous week" }));
+    await user.click(screen.getByRole("button", { name: "Next week" }));
+    await user.click(screen.getByRole("button", { name: "Today" }));
+    const ownerFilter = screen.getByRole("combobox", { name: "Filter calendar by student or group" });
+    await user.click(ownerFilter);
+    await user.click(screen.getByRole("option", { name: "Math" }));
+    await user.click(ownerFilter);
+    await user.click(screen.getByRole("option", { name: "All classes" }));
+    await user.click(screen.getByRole("button", { name: "Search calendar" }));
+
+    const agenda = screen.getByRole("complementary", { name: /Classes on/ });
+    await user.click(within(agenda).getByText("Math"));
+    await user.click(within(agenda).getByRole("button", { name: "Open class" }));
+
+    expect(screen.getByRole("tab", { name: "Next class" })).toHaveAttribute("aria-selected", "true");
+    expect(within(screen.getByRole("group", { name: "Attendance for Ana" })).getByTitle("Present")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(view.navigationWarning()).toBe("");
+    confirm.mockRestore();
+  });
+
+  it("creates a class through the same workspace after draft-safe navigation", async () => {
+    const user = userEvent.setup();
+    const view = renderClasses();
+
+    await user.click(screen.getByRole("button", { name: "New class" }));
+    await user.click(within(screen.getByRole("group", { name: "Class frequency" })).getAllByRole("button")[0]);
+    await user.click(screen.getByRole("button", { name: "Create class" }));
+
+    await waitFor(() => expect(view.actions.upsertClassSchedule).toHaveBeenCalledOnce());
+    expect(view.actions.upsertClassSchedule).toHaveBeenCalledWith(
+      expect.objectContaining({ recurrence: "once", format: "group", groupId: "g1", startDate: AS_OF_DATE }),
+    );
   });
 });

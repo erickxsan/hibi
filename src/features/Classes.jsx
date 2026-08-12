@@ -1692,6 +1692,24 @@ export default function Classes({
     signature: remoteSignature,
   };
 
+  const applyDraft = useCallback((next, baseline = next) => {
+    setEntries(next.entries);
+    setAssessmentOn(next.assessmentOn);
+    setAssessment(next.assessment);
+    setMaximum(next.maximum);
+    baselineRef.current = baseline;
+  }, []);
+  const acceptRemoteDraft = useCallback(
+    (remote) => {
+      applyDraft(remote.snapshot);
+      hydratedSessionKeyRef.current = remote.sessionKey;
+      hydratedSessionRef.current = remote.session;
+      observedRemoteSignatureRef.current = remote.signature;
+      setRemoteUpdate(null);
+    },
+    [applyDraft],
+  );
+
   useUnsavedChanges(registerNavigationBlocker, dirty, "Discard your unsaved class changes?");
   const changeTab = useHistoryBackedState({
     key: "classes-workspace-tab",
@@ -1702,8 +1720,7 @@ export default function Classes({
     canChange: () => {
       if (!dirty) return true;
       if (!confirmDiscard(true, "Discard your unsaved class changes?")) return false;
-      hydratedSessionKeyRef.current = "";
-      hydratedSessionRef.current = null;
+      acceptRemoteDraft(latestRemoteRef.current);
       return true;
     },
   });
@@ -1719,14 +1736,6 @@ export default function Classes({
     if (intent === "new-class") setNewClassOpen(true);
     if (intent) clearIntent?.();
   }, [changeTab, clearIntent, intent]);
-
-  const applyDraft = useCallback((next, baseline = next) => {
-    setEntries(next.entries);
-    setAssessmentOn(next.assessmentOn);
-    setAssessment(next.assessment);
-    setMaximum(next.maximum);
-    baselineRef.current = baseline;
-  }, []);
 
   useEffect(() => {
     const remote = latestRemoteRef.current;
@@ -1749,15 +1758,6 @@ export default function Classes({
     setRemoteUpdate(null);
   }, [activeSession?.key, applyDraft, dirty, remoteSignature]);
 
-  const acceptRemoteDraft = useCallback(
-    (remote) => {
-      applyDraft(remote.snapshot);
-      hydratedSessionRef.current = remote.session;
-      observedRemoteSignatureRef.current = remote.signature;
-      setRemoteUpdate(null);
-    },
-    [applyDraft],
-  );
   const keepDraft = () => {
     hydratedSessionRef.current = remoteUpdate.session;
     observedRemoteSignatureRef.current = remoteUpdate.signature;
