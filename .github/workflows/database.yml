@@ -1,0 +1,37 @@
+name: Database gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: database-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  migrations:
+    name: Migrations, lint, pgTAP
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: supabase/setup-cli@v2
+        with:
+          version: 2.113.0
+          github-token: ${{ github.token }}
+      - name: Start local Supabase stack
+        run: supabase start
+      - name: Apply every migration from scratch
+        run: supabase db reset --local
+      - name: Lint the resulting schema
+        run: supabase db lint --local --level warning --fail-on warning
+      - name: Run pgTAP database tests
+        run: supabase test db
+      - name: Stop local stack
+        if: always()
+        run: supabase stop --no-backup

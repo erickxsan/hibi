@@ -31,15 +31,15 @@ Hibi es un compañero de trabajo sereno para quienes dan clases por su cuenta. R
 
 ## Funciones
 
-| Área | Qué puedes hacer | Beneficio |
-| --- | --- | --- |
-| **Inicio** | Consultar clases del día, asistencia, promedio académico, valor generado, ingresos, proyección y alumnos destacados. | Empieza la jornada sabiendo qué ocurrió y qué requiere atención. |
-| **Comunidad** | Gestionar alumnos y grupos, múltiples inscripciones, horarios recurrentes y un directorio de contactos con copia o redacción por CCO. | Mantén perfiles, organización y comunicación en un solo lugar. |
-| **Clases** | Crear sesiones únicas o recurrentes, grupales o individuales; registrar asistencia, tarea, calificaciones y pago por alumno. | Convierte cada sesión en un registro académico y financiero completo. |
-| **Calendario e historial** | Consultar próximas clases, calendario semanal y registros anteriores. | Reduce la preparación repetitiva y encuentra cualquier sesión con rapidez. |
-| **Seguimiento** | Analizar calificaciones, asistencia y pagos por periodo, grupo o alumno, con distribuciones, tendencias, insights y exportación a Excel. | Detecta avances, riesgos y pendientes sin cruzar varias herramientas. |
-| **Pagos y proyecciones** | Comparar valor generado, monto cobrado, saldo pendiente, estado por alumno y proyección de cobro. | Planea el mes y evita perder clases pendientes de pago. |
-| **Respaldo y acceso** | Trabajar con cuenta en la nube o en modo local, importar registros, restaurar o exportar respaldos JSON, y usar Hibi en español o inglés. | Mantén continuidad entre dispositivos y conserva una copia portátil de tus datos. |
+| Área                       | Qué puedes hacer                                                                                                                          | Beneficio                                                                         |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| **Inicio**                 | Consultar clases del día, asistencia, promedio académico, valor generado, ingresos, proyección y alumnos destacados.                      | Empieza la jornada sabiendo qué ocurrió y qué requiere atención.                  |
+| **Comunidad**              | Gestionar alumnos y grupos, múltiples inscripciones, horarios recurrentes y un directorio de contactos con copia o redacción por CCO.     | Mantén perfiles, organización y comunicación en un solo lugar.                    |
+| **Clases**                 | Crear sesiones únicas o recurrentes, grupales o individuales; registrar asistencia, tarea, calificaciones y pago por alumno.              | Convierte cada sesión en un registro académico y financiero completo.             |
+| **Calendario e historial** | Consultar próximas clases, calendario semanal y registros anteriores.                                                                     | Reduce la preparación repetitiva y encuentra cualquier sesión con rapidez.        |
+| **Seguimiento**            | Analizar calificaciones, asistencia y pagos por periodo, grupo o alumno, con distribuciones, tendencias, insights y exportación a Excel.  | Detecta avances, riesgos y pendientes sin cruzar varias herramientas.             |
+| **Pagos y proyecciones**   | Comparar valor generado, monto cobrado, saldo pendiente, estado por alumno y proyección de cobro.                                         | Planea el mes y evita perder clases pendientes de pago.                           |
+| **Respaldo y acceso**      | Trabajar con cuenta en la nube o en modo local, importar registros, restaurar o exportar respaldos JSON, y usar Hibi en español o inglés. | Mantén continuidad entre dispositivos y conserva una copia portátil de tus datos. |
 
 ## Capturas
 
@@ -98,11 +98,13 @@ Sin un archivo `.env` local, el servidor de desarrollo abre en modo local. Para 
 ## Verificar el proyecto
 
 ```powershell
-pnpm test
-pnpm build
+pnpm quality
+pnpm test:e2e
 ```
 
-La base de datos se define en [`supabase/migrations`](./supabase/migrations) y su procedimiento de seguridad está documentado en [`supabase/README.md`](./supabase/README.md).
+`pnpm quality` ejecuta lint, comprobación de formato, revisión incremental de tipos, pruebas unitarias y de componentes renderizados con umbrales de cobertura, además del build de producción. Antes de ejecutar las pruebas E2E localmente, instala Chromium una vez con `pnpm exec playwright install chromium`.
+
+La base de datos se define en [`supabase/migrations`](./supabase/migrations). Con Docker Desktop activo, `pnpm test:db` reconstruye la base de datos aplicando todas las migraciones, revisa el esquema y ejecuta pgTAP. El procedimiento completo está documentado en [`supabase/README.md`](./supabase/README.md) y la configuración de CI y checks requeridos, en [`QUALITY.md`](./QUALITY.md).
 
 ## Migrar información existente
 

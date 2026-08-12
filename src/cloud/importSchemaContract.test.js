@@ -23,7 +23,9 @@ describe("additive workspace import schema", () => {
     expect(migration).toContain("workspace_revision_conflict");
     expect(migration).toContain("workspace_import_not_confirmed");
     expect(migration).toContain("workspace_import_would_remove_records");
-    expect(migration).toContain("private.archive_workspace_snapshot(v_owner_id, v_current_state, v_current_revision, 'import')");
+    expect(migration).toContain(
+      "private.archive_workspace_snapshot(v_owner_id, v_current_state, v_current_revision, 'import')",
+    );
     expect(migration).toContain("for update");
     expect(migration).toContain("set statement_timeout = '5s'");
   });

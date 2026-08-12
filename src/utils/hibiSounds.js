@@ -55,9 +55,7 @@ function scheduleCue(context, kind) {
       [0, 880, 0.09, 0.022, "triangle"],
       [0.055, 1318.51, 0.17, 0.018, "sine"],
     ],
-    selection: [
-      [0, 523.25, 0.1, 0.018, "sine"],
-    ],
+    selection: [[0, 523.25, 0.1, 0.018, "sine"]],
     success: [
       [0, 523.25, 0.12, 0.022, "sine"],
       [0.085, 659.25, 0.14, 0.022, "sine"],
@@ -89,10 +87,12 @@ export function playHibiSound(kind = "success") {
     }
   };
   if (context.state === "suspended") {
-    context.resume().then(play).catch(() => {});
+    context
+      .resume()
+      .then(play)
+      .catch(() => {});
   } else {
     play();
   }
   return true;
 }
-

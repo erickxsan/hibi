@@ -96,7 +96,10 @@ body,
 .page-heading h1 {
   margin: 0;
   color: var(--hibi-forest-dark);
-  font: 700 40px/44px Georgia, "Times New Roman", serif;
+  font:
+    700 40px/44px Georgia,
+    "Times New Roman",
+    serif;
   letter-spacing: -0.035em;
 }
 
@@ -109,7 +112,12 @@ body,
   max-width: 640px;
   margin: 6px 0 0;
   color: var(--hibi-muted);
-  font: 400 14px/20px "Nunito Sans", Nunito, Aptos, "Segoe UI", sans-serif;
+  font:
+    400 14px/20px "Nunito Sans",
+    Nunito,
+    Aptos,
+    "Segoe UI",
+    sans-serif;
 }
 
 .home-dashboard-header {
@@ -371,7 +379,12 @@ body,
 .settings-content h2,
 .class-live-summary-title h2 {
   color: var(--hibi-text);
-  font: 700 18px/24px "Nunito Sans", Nunito, Aptos, "Segoe UI", sans-serif;
+  font:
+    700 18px/24px "Nunito Sans",
+    Nunito,
+    Aptos,
+    "Segoe UI",
+    sans-serif;
 }
 
 .settings-content > p {

@@ -41,7 +41,9 @@ export function resolveHourlyRate(state, studentOrId, groupOrId = "") {
 
 function resolvedSlot(state, group, slot, date) {
   const changes = (state.scheduleChanges || [])
-    .filter((change) => change.groupId === group.id && change.scheduleSlotId === slot.id && change.effectiveFrom <= date)
+    .filter(
+      (change) => change.groupId === group.id && change.scheduleSlotId === slot.id && change.effectiveFrom <= date,
+    )
     .sort((left, right) => left.effectiveFrom.localeCompare(right.effectiveFrom));
   return changes.length ? { ...slot, ...changes.at(-1) } : slot;
 }
@@ -71,8 +73,8 @@ function exceptionSourceKey(item) {
 
 function targetOwner(state, source, exception = null) {
   const format = exception?.format || source.format || (source.studentId ? "individual" : "group");
-  const groupId = format === "group" ? (exception?.groupId || source.groupId || "") : "";
-  const studentId = format === "individual" ? (exception?.studentId || source.studentId || "") : "";
+  const groupId = format === "group" ? exception?.groupId || source.groupId || "" : "";
+  const studentId = format === "individual" ? exception?.studentId || source.studentId || "" : "";
   const group = format === "group" ? (state.groups || []).find((item) => item.id === groupId) : null;
   const student = format === "individual" ? (state.students || []).find((item) => item.id === studentId) : null;
   if ((format === "group" && !group) || (format === "individual" && !student)) return null;
@@ -83,16 +85,22 @@ function targetOwner(state, source, exception = null) {
     groupName: group?.name || student?.fullName || "",
     studentName: student?.fullName || "",
     participantMode: exception?.participantMode || source.participantMode || "default",
-    participantIds: exception?.participantMode === "custom"
-      ? [...(exception.participantIds || [])]
-      : source.participantMode === "custom" ? [...(source.participantIds || [])] : [],
+    participantIds:
+      exception?.participantMode === "custom"
+        ? [...(exception.participantIds || [])]
+        : source.participantMode === "custom"
+          ? [...(source.participantIds || [])]
+          : [],
   };
 }
 
 function hasRecordedRows(classLog, occurrence) {
-  return classLog.some((row) => row.classDate === occurrence.classDate
-    && (row.startTime || "") === (occurrence.startTime || "")
-    && (occurrence.format === "group" ? row.groupId === occurrence.groupId : row.studentId === occurrence.studentId));
+  return classLog.some(
+    (row) =>
+      row.classDate === occurrence.classDate &&
+      (row.startTime || "") === (occurrence.startTime || "") &&
+      (occurrence.format === "group" ? row.groupId === occurrence.groupId : row.studentId === occurrence.studentId),
+  );
 }
 
 export function generateScheduledOccurrences(state, startDate, endDate) {
@@ -101,9 +109,9 @@ export function generateScheduledOccurrences(state, startDate, endDate) {
   const exceptions = Array.isArray(state?.scheduleExceptions) ? state.scheduleExceptions : [];
   const classLog = Array.isArray(state?.classLog) ? state.classLog : [];
   const classSchedules = Array.isArray(state?.classSchedules) ? state.classSchedules : [];
-  const exceptionByKey = new Map(exceptions
-    .filter((item) => item.kind !== "added")
-    .map((item) => [exceptionSourceKey(item), item]));
+  const exceptionByKey = new Map(
+    exceptions.filter((item) => item.kind !== "added").map((item) => [exceptionSourceKey(item), item]),
+  );
   const result = [];
   const scanStart = addDays(startDate, -7);
   const scanEnd = addDays(endDate, 7);
@@ -130,6 +138,7 @@ export function generateScheduledOccurrences(state, startDate, endDate) {
           status: exception?.status || "Scheduled",
           kind: exception ? "override" : "recurring",
           exceptionId: exception?.id || "",
+          recorded: false,
         };
         if (!isDateInRange(occurrence.classDate, startDate, endDate)) continue;
         occurrence.recorded = hasRecordedRows(classLog, occurrence);
@@ -156,6 +165,7 @@ export function generateScheduledOccurrences(state, startDate, endDate) {
       status: exception.status || "Scheduled",
       kind: "added",
       exceptionId: exception.id,
+      recorded: false,
     };
     occurrence.recorded = hasRecordedRows(classLog, occurrence);
     result.push({
@@ -184,6 +194,7 @@ export function generateScheduledOccurrences(state, startDate, endDate) {
         status: exception?.status || "Scheduled",
         kind: exception ? "override" : schedule.recurrence === "weekly" ? "recurring" : "added",
         exceptionId: exception?.id || "",
+        recorded: false,
       };
       if (!isDateInRange(occurrence.classDate, startDate, endDate)) continue;
       occurrence.recorded = hasRecordedRows(classLog, occurrence);
@@ -193,7 +204,9 @@ export function generateScheduledOccurrences(state, startDate, endDate) {
 
   // A one-off occurrence can be moved farther than the normal scan padding.
   // Materialize it from its source rule so it remains visible in the target month.
-  for (const exception of exceptions.filter((item) => item.kind !== "added" && isDateInRange(item.classDate, startDate, endDate))) {
+  for (const exception of exceptions.filter(
+    (item) => item.kind !== "added" && isDateInRange(item.classDate, startDate, endDate),
+  )) {
     let source = null;
     let id = "";
     if (exception.classScheduleId) {
@@ -226,6 +239,7 @@ export function generateScheduledOccurrences(state, startDate, endDate) {
       status: exception.status || "Scheduled",
       kind: "override",
       exceptionId: exception.id,
+      recorded: false,
     };
     occurrence.recorded = hasRecordedRows(classLog, occurrence);
     result.push(occurrence);
@@ -233,5 +247,7 @@ export function generateScheduledOccurrences(state, startDate, endDate) {
 
   return result
     .filter((item, index, all) => all.findIndex((candidate) => candidate.id === item.id) === index)
-    .sort((left, right) => left.classDate.localeCompare(right.classDate) || left.startTime.localeCompare(right.startTime));
+    .sort(
+      (left, right) => left.classDate.localeCompare(right.classDate) || left.startTime.localeCompare(right.startTime),
+    );
 }

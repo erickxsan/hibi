@@ -20,9 +20,13 @@ describe("hibi translations", () => {
     expect(translateToSpanish("Payments & Revenue")).toBe("Pagos e ingresos");
     expect(translateToSpanish("Individual + group")).toBe("Individual y grupal");
     expect(translateToSpanish("3 paid class records")).toBe("3 registros de clases pagados");
-    expect(translateToSpanish("You have a wonderful day ahead. Balances are calculated through July 14, 2026.")).toBe("Te espera un gran día. Los saldos se calculan hasta July 14, 2026.");
+    expect(translateToSpanish("You have a wonderful day ahead. Balances are calculated through July 14, 2026.")).toBe(
+      "Te espera un gran día. Los saldos se calculan hasta July 14, 2026.",
+    );
     expect(translateToSpanish("Today’s Classes")).toBe("Clases de hoy");
-    expect(translateToSpanish("Record a group or individual class when you’re ready.")).toBe("Registra una clase grupal o individual cuando quieras.");
+    expect(translateToSpanish("Record a group or individual class when you’re ready.")).toBe(
+      "Registra una clase grupal o individual cuando quieras.",
+    );
   });
 
   it("keeps English unchanged when English is selected", () => {

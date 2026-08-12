@@ -1,12 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import {
-  AlertCircle,
-  CheckCircle2,
-  ChevronDown,
-  Cloud,
-  CloudOff,
-  LogOut,
-} from "lucide-react";
+import { AlertCircle, CheckCircle2, ChevronDown, Cloud, CloudOff, LogOut } from "lucide-react";
 import "./auth.css";
 
 const STATUS_DETAILS = {
@@ -22,13 +15,7 @@ function initialFromEmail(email) {
   return email?.trim().charAt(0).toUpperCase() || "A";
 }
 
-export function AccountMenu({
-  email,
-  syncStatus = "synced",
-  syncMessage,
-  signingOut = false,
-  onSignOut,
-}) {
+export function AccountMenu({ email, syncStatus = "synced", syncMessage, signingOut = false, onSignOut }) {
   const [open, setOpen] = useState(false);
   const [signOutError, setSignOutError] = useState("");
   const [localSigningOut, setLocalSigningOut] = useState(false);
@@ -84,7 +71,9 @@ export function AccountMenu({
         aria-expanded={open}
         aria-controls={panelId}
       >
-        <span className="account-avatar" aria-hidden="true">{initialFromEmail(email)}</span>
+        <span className="account-avatar" aria-hidden="true">
+          {initialFromEmail(email)}
+        </span>
         <span className="account-trigger-copy">
           <span className="account-email">{email || "Account"}</span>
           <span className={`account-sync-inline is-${syncStatus}`}>
@@ -98,7 +87,9 @@ export function AccountMenu({
       {open ? (
         <section id={panelId} className="account-menu-panel" aria-label="Account options">
           <div className="account-menu-heading">
-            <span className="account-avatar account-avatar-large" aria-hidden="true">{initialFromEmail(email)}</span>
+            <span className="account-avatar account-avatar-large" aria-hidden="true">
+              {initialFromEmail(email)}
+            </span>
             <div>
               <span>Signed in as</span>
               <strong>{email || "Your account"}</strong>
@@ -113,7 +104,11 @@ export function AccountMenu({
             </span>
           </div>
 
-          {signOutError ? <p className="account-menu-error" role="alert">{signOutError}</p> : null}
+          {signOutError ? (
+            <p className="account-menu-error" role="alert">
+              {signOutError}
+            </p>
+          ) : null}
 
           <button
             className="account-signout-button"

@@ -20,14 +20,7 @@ export const STUDENT_STATUSES = Object.freeze(["Active", "Inactive"]);
 export const STUDENT_AVATAR_IDS = Object.freeze(["cat", "dog", "penguin", "fox", "rabbit", "bear", "frog", "owl"]);
 export const CLASS_STATUSES = Object.freeze(["Scheduled", "Completed", "Cancelled"]);
 export const ATTENDANCE_CODES = Object.freeze(["P", "A", "L", "E"]);
-export const GRADE_CATEGORIES = Object.freeze([
-  "Quiz",
-  "Exam",
-  "Project",
-  "Homework",
-  "Participation",
-  "Other",
-]);
+export const GRADE_CATEGORIES = Object.freeze(["Quiz", "Exam", "Project", "Homework", "Participation", "Other"]);
 export const WORK_STATUSES = Object.freeze(["On time", "Late", "Missing", "Excused"]);
 export const PAYMENT_METHODS = Object.freeze(["Cash", "Transfer", "Card", "Other"]);
 export const PAYMENT_RECORD_STATES = Object.freeze(["Paid", "Pending", "Unpaid"]);

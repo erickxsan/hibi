@@ -1,11 +1,7 @@
 import { cloneElement, isValidElement, useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import { AlertCircle, Search, X } from "lucide-react";
-import {
-  closeOverlayHistory,
-  pushOverlayHistory,
-  subscribeToAppHistory,
-} from "../navigation/appHistory";
+import { closeOverlayHistory, pushOverlayHistory, subscribeToAppHistory } from "../navigation/appHistory";
 import { BrandMark } from "./BrandMark";
 import { playHibiSound, primeHibiAudio } from "../utils/hibiSounds";
 export { GroupSelect, MultiSelect, Select, StudentSelect } from "./SelectControl";
@@ -30,7 +26,12 @@ function unlockDrawerBackground() {
 export function Button({ children, variant = "secondary", icon: Icon, className = "", ...props }) {
   const accessibleName = props["aria-label"] || (typeof children === "string" ? children : undefined);
   return (
-    <button className={`button button-${variant} ${className}`.trim()} type="button" aria-label={accessibleName} {...props}>
+    <button
+      className={`button button-${variant} ${className}`.trim()}
+      type="button"
+      aria-label={accessibleName}
+      {...props}
+    >
       {Icon ? <Icon aria-hidden="true" size={18} strokeWidth={1.8} /> : null}
       <span>{children}</span>
     </button>
@@ -47,14 +48,25 @@ export function IconButton({ label, icon: Icon, className = "", ...props }) {
 
 export function Field({ label, hint, error, required, children, className = "" }) {
   const labelId = useId();
-  const labelledChild = isValidElement(children) && !children.props["aria-label"] && !children.props["aria-labelledby"]
-    ? cloneElement(children, { "aria-labelledby": labelId, "aria-invalid": error ? "true" : children.props["aria-invalid"] })
-    : children;
+  const labelledChild =
+    isValidElement(children) && !children.props["aria-label"] && !children.props["aria-labelledby"]
+      ? cloneElement(children, {
+          "aria-labelledby": labelId,
+          "aria-invalid": error ? "true" : children.props["aria-invalid"],
+        })
+      : children;
   return (
     <label className={`field ${className}`.trim()}>
-      <span className="field-label" id={labelId}>{label}{required ? <span aria-hidden="true"> *</span> : null}</span>
+      <span className="field-label" id={labelId}>
+        {label}
+        {required ? <span aria-hidden="true"> *</span> : null}
+      </span>
       {labelledChild}
-      {error ? <span className="field-error" role="alert">{error}</span> : null}
+      {error ? (
+        <span className="field-error" role="alert">
+          {error}
+        </span>
+      ) : null}
       {!error && hint ? <span className="field-hint">{hint}</span> : null}
     </label>
   );
@@ -116,7 +128,9 @@ export function TableShell({ children, className = "", label }) {
 export function EmptyState({ icon: Icon = AlertCircle, title, description, action }) {
   return (
     <div className="empty-state">
-      <span className="empty-icon"><Icon aria-hidden="true" size={23} strokeWidth={1.7} /></span>
+      <span className="empty-icon">
+        <Icon aria-hidden="true" size={23} strokeWidth={1.7} />
+      </span>
       <strong>{title}</strong>
       <p>{description}</p>
       {action}
@@ -177,7 +191,11 @@ export function Drawer({ open, onClose, title, description, children, footer, si
         requestClose();
       }
       if (event.key !== "Tab" || !panel) return;
-      const focusable = [...panel.querySelectorAll("button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])")];
+      const focusable = [
+        ...panel.querySelectorAll(
+          "button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
+        ),
+      ];
       if (!focusable.length) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
@@ -205,7 +223,11 @@ export function Drawer({ open, onClose, title, description, children, footer, si
 
   if (!open || typeof document === "undefined") return null;
   return createPortal(
-    <div className="overlay" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && requestClose()}>
+    <div
+      className="overlay"
+      role="presentation"
+      onMouseDown={(event) => event.target === event.currentTarget && requestClose()}
+    >
       <section
         ref={panelRef}
         className={`drawer drawer-${size} ${className}`.trim()}
@@ -229,7 +251,16 @@ export function Drawer({ open, onClose, title, description, children, footer, si
   );
 }
 
-export function ConfirmDialog({ open, title, description, confirmLabel = "Delete", onConfirm, onClose, tone = "danger", busy = false }) {
+export function ConfirmDialog({
+  open,
+  title,
+  description,
+  confirmLabel = "Delete",
+  onConfirm,
+  onClose,
+  tone = "danger",
+  busy = false,
+}) {
   if (!open) return null;
   return (
     <Drawer
@@ -240,12 +271,19 @@ export function ConfirmDialog({ open, title, description, confirmLabel = "Delete
       size="compact"
       footer={
         <>
-          <Button onClick={onClose} disabled={busy}>Cancel</Button>
-          <Button variant={tone} onClick={onConfirm} disabled={busy}>{busy ? "Saving…" : confirmLabel}</Button>
+          <Button onClick={onClose} disabled={busy}>
+            Cancel
+          </Button>
+          <Button variant={tone} onClick={onConfirm} disabled={busy}>
+            {busy ? "Saving…" : confirmLabel}
+          </Button>
         </>
       }
     >
-      <div className="dialog-message"><AlertCircle aria-hidden="true" /><p>This action changes saved data immediately.</p></div>
+      <div className="dialog-message">
+        <AlertCircle aria-hidden="true" />
+        <p>This action changes saved data immediately.</p>
+      </div>
     </Drawer>
   );
 }
@@ -275,7 +313,13 @@ export function ToastRegion({ toasts, onDismiss }) {
     <div className="toast-region" aria-live="polite" aria-label="Notifications">
       {toasts.map((toast) => (
         <div className={`toast toast-${toast.tone || "success"}`} key={toast.id}>
-          {toast.tone === "error" ? <AlertCircle aria-hidden="true" /> : <span className="toast-cat" aria-hidden="true"><BrandMark /></span>}
+          {toast.tone === "error" ? (
+            <AlertCircle aria-hidden="true" />
+          ) : (
+            <span className="toast-cat" aria-hidden="true">
+              <BrandMark />
+            </span>
+          )}
           <span>{toast.message}</span>
           <IconButton label="Dismiss notification" icon={X} onClick={() => onDismiss(toast.id)} />
         </div>
@@ -287,7 +331,10 @@ export function ToastRegion({ toasts, onDismiss }) {
 export function SectionHeading({ title, description, actions }) {
   return (
     <div className="section-heading">
-      <div><h1>{title}</h1>{description ? <p>{description}</p> : null}</div>
+      <div>
+        <h1>{title}</h1>
+        {description ? <p>{description}</p> : null}
+      </div>
       {actions ? <div className="section-actions">{actions}</div> : null}
     </div>
   );

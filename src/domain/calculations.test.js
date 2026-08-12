@@ -160,36 +160,58 @@ describe("minimal class-manager calculations", () => {
     expect(dashboard.overallGrade).toBeNull();
     expect(dashboard.overallAttendance).toBeNull();
     expect(dashboard.groupSummaries).toHaveLength(1);
-    expect(dashboard.groupSummaries[0]).toEqual(expect.objectContaining({
-      id: "__unassigned__",
-      name: "Unassigned",
-      activeStudents: 3,
-      idealRevenue: 0,
-      projectionExcluded: true,
-    }));
+    expect(dashboard.groupSummaries[0]).toEqual(
+      expect.objectContaining({
+        id: "__unassigned__",
+        name: "Unassigned",
+        activeStudents: 3,
+        idealRevenue: 0,
+        projectionExcluded: true,
+      }),
+    );
     expect(dashboard.idealRevenue).toBe(0);
   });
 
   it("uses student, group, then account pricing and preserves historical snapshots", () => {
     const state = createStarterState(AS_OF);
     const group = createGroup({ id: "priced_group", name: "Priced group", hourlyRate: 80 });
-    const groupRateStudent = createStudent({ id: "group_rate", code: "RATE-1", fullName: "Group rate", groupIds: [group.id] });
-    const customRateStudent = createStudent({ id: "custom_rate", code: "RATE-2", fullName: "Custom rate", groupIds: [group.id], customHourlyRate: 120 });
+    const groupRateStudent = createStudent({
+      id: "group_rate",
+      code: "RATE-1",
+      fullName: "Group rate",
+      groupIds: [group.id],
+    });
+    const customRateStudent = createStudent({
+      id: "custom_rate",
+      code: "RATE-2",
+      fullName: "Custom rate",
+      groupIds: [group.id],
+      customHourlyRate: 120,
+    });
     state.groups = [group];
     state.students = [groupRateStudent, customRateStudent];
     const base = { classDate: AS_OF, groupId: group.id, classStatus: "Completed", hours: 2 };
     expect(calculateCharge(state, { ...base, studentId: groupRateStudent.id })).toBe(160);
     expect(calculateCharge(state, { ...base, studentId: customRateStudent.id })).toBe(240);
-    expect(calculateCharge(state, { ...base, studentId: customRateStudent.id, appliedHourlyRate: 70, appliedCharge: 140 })).toBe(140);
+    expect(
+      calculateCharge(state, { ...base, studentId: customRateStudent.id, appliedHourlyRate: 70, appliedCharge: 140 }),
+    ).toBe(140);
     state.groups[0].hourlyRate = 200;
     state.students[1].customHourlyRate = 300;
-    expect(calculateCharge(state, { ...base, studentId: customRateStudent.id, appliedHourlyRate: 70, appliedCharge: 140 })).toBe(140);
+    expect(
+      calculateCharge(state, { ...base, studentId: customRateStudent.id, appliedHourlyRate: 70, appliedCharge: 140 }),
+    ).toBe(140);
   });
 
   it("projects ideal group revenue from every recurring occurrence and effective student rate", () => {
     const state = createStarterState("2026-07-31");
     state.settings.selectedMonth = "2026-07-01";
-    const group = createGroup({ id: "weekly", name: "Weekly", hourlyRate: 100, weeklySchedule: [{ id: "wed", dayOfWeek: 3, startTime: "16:00", durationHours: 1 }] });
+    const group = createGroup({
+      id: "weekly",
+      name: "Weekly",
+      hourlyRate: 100,
+      weeklySchedule: [{ id: "wed", dayOfWeek: 3, startTime: "16:00", durationHours: 1 }],
+    });
     state.groups = [group];
     state.students = [
       createStudent({ id: "one", code: "ONE", fullName: "One", groupIds: [group.id], customHourlyRate: 80 }),

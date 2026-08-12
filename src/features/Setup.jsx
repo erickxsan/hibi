@@ -43,9 +43,18 @@ const EMPTY_GROUP = {
 };
 
 const formatPercent = (value) => (value == null ? "—" : `${(value * 100).toFixed(1)}%`);
-const formatMxn = (value) => new Intl.NumberFormat(getUiLocale(), { style: "currency", currency: "MXN" }).format(value || 0);
+const formatMxn = (value) =>
+  new Intl.NumberFormat(getUiLocale(), { style: "currency", currency: "MXN" }).format(value || 0);
 
-export default function Setup({ state, derived, actions, persistenceMode, intent, clearIntent, registerNavigationBlocker }) {
+export default function Setup({
+  state,
+  derived,
+  actions,
+  persistenceMode,
+  intent,
+  clearIntent,
+  registerNavigationBlocker,
+}) {
   const { language } = useI18n();
   const [tab, setTab] = useState("students");
   const [search, setSearch] = useState("");
@@ -63,7 +72,10 @@ export default function Setup({ state, derived, actions, persistenceMode, intent
   const groups = state.groups || [];
   const students = state.students || [];
   const studentSummaries = derived.studentSummaries || derived.dashboard?.studentSummaries || [];
-  const summaryById = useMemo(() => new Map(studentSummaries.map((student) => [student.id || student.studentId, student])), [studentSummaries]);
+  const summaryById = useMemo(
+    () => new Map(studentSummaries.map((student) => [student.id || student.studentId, student])),
+    [studentSummaries],
+  );
   const groupById = useMemo(() => new Map(groups.map((group) => [group.id, group])), [groups]);
   const studentDirty = Boolean(studentDraft) && draftChanged(studentDraft, studentBaselineRef.current);
   const groupDirty = Boolean(groupDraft) && draftChanged(groupDraft, groupBaselineRef.current);
@@ -81,7 +93,10 @@ export default function Setup({ state, derived, actions, persistenceMode, intent
     },
     defaultValue: "students",
     allowedValues: ["students", "groups", "preferences"],
-    canChange: ({ from, to }) => from !== "preferences" || from === to || confirmDiscard(settingsDirty, "Discard your unsaved preference changes?"),
+    canChange: ({ from, to }) =>
+      from !== "preferences" ||
+      from === to ||
+      confirmDiscard(settingsDirty, "Discard your unsaved preference changes?"),
   });
 
   const openStudent = useCallback((student) => {
@@ -123,15 +138,24 @@ export default function Setup({ state, derived, actions, persistenceMode, intent
     return students.filter((student) => {
       if (statusFilter !== "all" && student.status !== statusFilter) return false;
       const groupName = groupById.get(student.groupId)?.name || "Unassigned";
-      return !needle || [student.studentCode, student.fullName, groupName, student.guardianContact]
-        .some((value) => normalizeSearchText(value).includes(needle));
+      return (
+        !needle ||
+        [student.studentCode, student.fullName, groupName, student.guardianContact].some((value) =>
+          normalizeSearchText(value).includes(needle),
+        )
+      );
     });
   }, [groupById, search, statusFilter, students]);
 
   const visibleGroups = useMemo(() => {
     const needle = normalizeSearchText(search);
-    return groups.filter((group) => !needle || [group.name, group.grade, group.subject, group.scheduleRoom]
-      .some((value) => normalizeSearchText(value).includes(needle)));
+    return groups.filter(
+      (group) =>
+        !needle ||
+        [group.name, group.grade, group.subject, group.scheduleRoom].some((value) =>
+          normalizeSearchText(value).includes(needle),
+        ),
+    );
   }, [groups, search]);
 
   const saveStudent = async (event) => {
@@ -226,9 +250,13 @@ export default function Setup({ state, derived, actions, persistenceMode, intent
         description="Keep groups, students, and pricing in one dependable place."
         actions={
           tab === "students" ? (
-            <Button variant="primary" icon={Plus} onClick={() => openStudent(EMPTY_STUDENT)}>Add student</Button>
+            <Button variant="primary" icon={Plus} onClick={() => openStudent(EMPTY_STUDENT)}>
+              Add student
+            </Button>
           ) : tab === "groups" ? (
-            <Button variant="primary" icon={Plus} onClick={() => openGroup(EMPTY_GROUP)}>Add group</Button>
+            <Button variant="primary" icon={Plus} onClick={() => openGroup(EMPTY_GROUP)}>
+              Add group
+            </Button>
           ) : null
         }
       />
@@ -246,22 +274,30 @@ export default function Setup({ state, derived, actions, persistenceMode, intent
 
       {tab !== "preferences" ? (
         <div className="toolbar-row">
-          <SearchInput value={search} onChange={(event) => setSearch(event.target.value)} placeholder={`Search ${tab}`} />
+          <SearchInput
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder={`Search ${tab}`}
+          />
           {tab === "students" ? (
-            <Select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Filter students by status">
+            <Select
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value)}
+              aria-label="Filter students by status"
+            >
               <option value="all">All statuses</option>
               <option value="Active">Active</option>
               <option value="Inactive">Inactive</option>
             </Select>
           ) : null}
-          <span className="toolbar-count">{(() => {
-            const count = tab === "students" ? visibleStudents.length : visibleGroups.length;
-            if (language !== "es") return `${count} ${tab}`;
-            const noun = tab === "students"
-              ? (count === 1 ? "alumno" : "alumnos")
-              : (count === 1 ? "grupo" : "grupos");
-            return `${count} ${noun}`;
-          })()}</span>
+          <span className="toolbar-count">
+            {(() => {
+              const count = tab === "students" ? visibleStudents.length : visibleGroups.length;
+              if (language !== "es") return `${count} ${tab}`;
+              const noun = tab === "students" ? (count === 1 ? "alumno" : "alumnos") : count === 1 ? "grupo" : "grupos";
+              return `${count} ${noun}`;
+            })()}
+          </span>
         </div>
       ) : null}
 
@@ -269,61 +305,244 @@ export default function Setup({ state, derived, actions, persistenceMode, intent
         visibleStudents.length ? (
           <TableShell label="Students">
             <table className="data-table">
-              <thead><tr><th scope="col" className="sticky-cell">Student</th><th scope="col">Group</th><th scope="col">Guardian / contact</th><th scope="col">Status</th><th scope="col" className="numeric">Grade</th><th scope="col" className="numeric">Attendance</th><th scope="col" className="numeric">Missing</th><th scope="col" className="numeric">Outstanding</th><th scope="col" aria-label="Actions" /></tr></thead>
+              <thead>
+                <tr>
+                  <th scope="col" className="sticky-cell">
+                    Student
+                  </th>
+                  <th scope="col">Group</th>
+                  <th scope="col">Guardian / contact</th>
+                  <th scope="col">Status</th>
+                  <th scope="col" className="numeric">
+                    Grade
+                  </th>
+                  <th scope="col" className="numeric">
+                    Attendance
+                  </th>
+                  <th scope="col" className="numeric">
+                    Missing
+                  </th>
+                  <th scope="col" className="numeric">
+                    Outstanding
+                  </th>
+                  <th scope="col" aria-label="Actions" />
+                </tr>
+              </thead>
               <tbody>
                 {visibleStudents.map((student) => {
                   const summary = summaryById.get(student.id) || {};
                   return (
                     <tr key={student.id}>
-                      <th scope="row" className="sticky-cell"><div className="person-cell"><span className="avatar avatar-lilac">{student.fullName?.split(/\s+/).map((part) => part[0]).slice(0, 2).join("")}</span><div><strong>{student.fullName}</strong><span>{student.studentCode}</span></div></div></th>
+                      <th scope="row" className="sticky-cell">
+                        <div className="person-cell">
+                          <span className="avatar avatar-lilac">
+                            {student.fullName
+                              ?.split(/\s+/)
+                              .map((part) => part[0])
+                              .slice(0, 2)
+                              .join("")}
+                          </span>
+                          <div>
+                            <strong>{student.fullName}</strong>
+                            <span>{student.studentCode}</span>
+                          </div>
+                        </div>
+                      </th>
                       <td>{groupById.get(student.groupId)?.name || "Unassigned"}</td>
                       <td className="wrap-cell">{student.guardianContact || "—"}</td>
-                      <td><StatusBadge tone={student.status === "Active" ? "success" : "neutral"}>{student.status}</StatusBadge></td>
+                      <td>
+                        <StatusBadge tone={student.status === "Active" ? "success" : "neutral"}>
+                          {student.status}
+                        </StatusBadge>
+                      </td>
                       <td className="numeric">{formatPercent(summary.gradeAverage)}</td>
                       <td className="numeric">{formatPercent(summary.attendanceRate)}</td>
                       <td className="numeric">{summary.missingCount ?? 0}</td>
                       <td className="numeric">{formatMxn(summary.outstanding)}</td>
-                      <td><div className="row-actions"><IconButton label={`Edit ${student.fullName}`} icon={Pencil} onClick={() => openStudent(student)} /><IconButton label={`Archive ${student.fullName}`} icon={Archive} onClick={() => setDeleteTarget({ type: "archive-student", item: student })} /><IconButton label={`Delete ${student.fullName}`} icon={Trash2} onClick={() => setDeleteTarget({ type: "student", item: student })} /></div></td>
+                      <td>
+                        <div className="row-actions">
+                          <IconButton
+                            label={`Edit ${student.fullName}`}
+                            icon={Pencil}
+                            onClick={() => openStudent(student)}
+                          />
+                          <IconButton
+                            label={`Archive ${student.fullName}`}
+                            icon={Archive}
+                            onClick={() => setDeleteTarget({ type: "archive-student", item: student })}
+                          />
+                          <IconButton
+                            label={`Delete ${student.fullName}`}
+                            icon={Trash2}
+                            onClick={() => setDeleteTarget({ type: "student", item: student })}
+                          />
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
           </TableShell>
-        ) : <EmptyState icon={UsersRound} title="No students found" description="Try another filter or add your first student." action={<Button icon={Plus} onClick={() => openStudent(EMPTY_STUDENT)}>Add student</Button>} />
+        ) : (
+          <EmptyState
+            icon={UsersRound}
+            title="No students found"
+            description="Try another filter or add your first student."
+            action={
+              <Button icon={Plus} onClick={() => openStudent(EMPTY_STUDENT)}>
+                Add student
+              </Button>
+            }
+          />
+        )
       ) : null}
 
       {tab === "groups" ? (
         visibleGroups.length ? (
           <TableShell label="Groups">
             <table className="data-table">
-              <thead><tr><th scope="col" className="sticky-cell">Group</th><th scope="col">Grade</th><th scope="col">Subject</th><th scope="col">Schedule / room</th><th scope="col" className="numeric">Sessions / month</th><th scope="col">Assistant / contact</th><th scope="col" className="numeric">Active students</th><th scope="col" className="numeric">Ideal revenue</th><th scope="col" aria-label="Actions" /></tr></thead>
-              <tbody>{visibleGroups.map((group) => {
-                const summary = derived.groupSummaries?.find((item) => (item.id || item.groupId) === group.id) || {};
-                return (
-                  <tr key={group.id}>
-                    <th scope="row" className="sticky-cell"><strong>{group.name}</strong></th><td>{group.grade || "—"}</td><td>{group.subject || "—"}</td><td>{group.scheduleRoom || "—"}</td><td className="numeric">{group.plannedSessionsPerMonth ?? 0}</td><td>{group.assistantContact || "—"}</td><td className="numeric">{summary.activeStudentCount ?? 0}</td><td className="numeric">{formatMxn(summary.idealRevenue)}</td>
-                    <td><div className="row-actions"><IconButton label={`Edit ${group.name}`} icon={Pencil} onClick={() => openGroup(group)} /><IconButton label={`Delete ${group.name}`} icon={Trash2} onClick={() => setDeleteTarget({ type: "group", item: group })} /></div></td>
-                  </tr>
-                );
-              })}</tbody>
+              <thead>
+                <tr>
+                  <th scope="col" className="sticky-cell">
+                    Group
+                  </th>
+                  <th scope="col">Grade</th>
+                  <th scope="col">Subject</th>
+                  <th scope="col">Schedule / room</th>
+                  <th scope="col" className="numeric">
+                    Sessions / month
+                  </th>
+                  <th scope="col">Assistant / contact</th>
+                  <th scope="col" className="numeric">
+                    Active students
+                  </th>
+                  <th scope="col" className="numeric">
+                    Ideal revenue
+                  </th>
+                  <th scope="col" aria-label="Actions" />
+                </tr>
+              </thead>
+              <tbody>
+                {visibleGroups.map((group) => {
+                  const summary = derived.groupSummaries?.find((item) => (item.id || item.groupId) === group.id) || {};
+                  return (
+                    <tr key={group.id}>
+                      <th scope="row" className="sticky-cell">
+                        <strong>{group.name}</strong>
+                      </th>
+                      <td>{group.grade || "—"}</td>
+                      <td>{group.subject || "—"}</td>
+                      <td>{group.scheduleRoom || "—"}</td>
+                      <td className="numeric">{group.plannedSessionsPerMonth ?? 0}</td>
+                      <td>{group.assistantContact || "—"}</td>
+                      <td className="numeric">{summary.activeStudentCount ?? 0}</td>
+                      <td className="numeric">{formatMxn(summary.idealRevenue)}</td>
+                      <td>
+                        <div className="row-actions">
+                          <IconButton label={`Edit ${group.name}`} icon={Pencil} onClick={() => openGroup(group)} />
+                          <IconButton
+                            label={`Delete ${group.name}`}
+                            icon={Trash2}
+                            onClick={() => setDeleteTarget({ type: "group", item: group })}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
             </table>
           </TableShell>
-        ) : <EmptyState title="No groups found" description="Try another search or add a group." action={<Button icon={Plus} onClick={() => openGroup(EMPTY_GROUP)}>Add group</Button>} />
+        ) : (
+          <EmptyState
+            title="No groups found"
+            description="Try another search or add a group."
+            action={
+              <Button icon={Plus} onClick={() => openGroup(EMPTY_GROUP)}>
+                Add group
+              </Button>
+            }
+          />
+        )
       ) : null}
 
       {tab === "preferences" ? (
         <div className="preferences-layout">
           <form className="preferences-form" onSubmit={saveSettings}>
-            <div className="panel-heading"><h2>Class and alert defaults</h2><p>Changes recalculate charges, balances, and projections immediately.</p></div>
-            <div className="form-grid two-columns">
-              <Field label="Hourly rate (MXN)" required><Input type="number" inputMode="decimal" min="0" step="0.01" value={settingsDraft.hourlyRateMxn} onChange={(event) => setSettingsDraft({ ...settingsDraft, hourlyRateMxn: Number(event.target.value) })} /></Field>
-              <Field label="Default class hours" required><Input type="number" inputMode="decimal" min="0" step="0.25" value={settingsDraft.defaultClassHours} onChange={(event) => setSettingsDraft({ ...settingsDraft, defaultClassHours: Number(event.target.value) })} /></Field>
-              <Field label="Recent projection window" hint="Number of recent weeks"><Input type="number" inputMode="numeric" min="1" step="1" value={settingsDraft.recentProjectionWeeks} onChange={(event) => setSettingsDraft({ ...settingsDraft, recentProjectionWeeks: Number(event.target.value) })} /></Field>
-              <Field label="Low grade threshold"><Input type="number" inputMode="numeric" min="0" max="100" step="1" value={Math.round(settingsDraft.lowGradeThreshold * 100)} onChange={(event) => setSettingsDraft({ ...settingsDraft, lowGradeThreshold: Number(event.target.value) / 100 })} /></Field>
-              <Field label="Low attendance threshold"><Input type="number" inputMode="numeric" min="0" max="100" step="1" value={Math.round(settingsDraft.lowAttendanceThreshold * 100)} onChange={(event) => setSettingsDraft({ ...settingsDraft, lowAttendanceThreshold: Number(event.target.value) / 100 })} /></Field>
+            <div className="panel-heading">
+              <h2>Class and alert defaults</h2>
+              <p>Changes recalculate charges, balances, and projections immediately.</p>
             </div>
-            <div className="form-actions"><Button variant="primary" type="submit" disabled={saving}>{saving ? "Saving…" : "Save preferences"}</Button></div>
+            <div className="form-grid two-columns">
+              <Field label="Hourly rate (MXN)" required>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.01"
+                  value={settingsDraft.hourlyRateMxn}
+                  onChange={(event) =>
+                    setSettingsDraft({ ...settingsDraft, hourlyRateMxn: Number(event.target.value) })
+                  }
+                />
+              </Field>
+              <Field label="Default class hours" required>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.25"
+                  value={settingsDraft.defaultClassHours}
+                  onChange={(event) =>
+                    setSettingsDraft({ ...settingsDraft, defaultClassHours: Number(event.target.value) })
+                  }
+                />
+              </Field>
+              <Field label="Recent projection window" hint="Number of recent weeks">
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min="1"
+                  step="1"
+                  value={settingsDraft.recentProjectionWeeks}
+                  onChange={(event) =>
+                    setSettingsDraft({ ...settingsDraft, recentProjectionWeeks: Number(event.target.value) })
+                  }
+                />
+              </Field>
+              <Field label="Low grade threshold">
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={Math.round(settingsDraft.lowGradeThreshold * 100)}
+                  onChange={(event) =>
+                    setSettingsDraft({ ...settingsDraft, lowGradeThreshold: Number(event.target.value) / 100 })
+                  }
+                />
+              </Field>
+              <Field label="Low attendance threshold">
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={Math.round(settingsDraft.lowAttendanceThreshold * 100)}
+                  onChange={(event) =>
+                    setSettingsDraft({ ...settingsDraft, lowAttendanceThreshold: Number(event.target.value) / 100 })
+                  }
+                />
+              </Field>
+            </div>
+            <div className="form-actions">
+              <Button variant="primary" type="submit" disabled={saving}>
+                {saving ? "Saving…" : "Save preferences"}
+              </Button>
+            </div>
           </form>
 
           <section className="data-tools" aria-labelledby="data-tools-title">
@@ -335,12 +554,23 @@ export default function Setup({ state, derived, actions, persistenceMode, intent
                   : "Your records stay in this browser unless you export a backup."}
               </p>
             </div>
-            <p className="privacy-note">JSON backups contain personal, grade, attendance, and payment information in readable text. Keep them in a private, protected location.</p>
+            <p className="privacy-note">
+              JSON backups contain personal, grade, attendance, and payment information in readable text. Keep them in a
+              private, protected location.
+            </p>
             <div className="stacked-actions">
-              <Button icon={Download} onClick={actions.exportJson}>Download JSON backup</Button>
-              <Button icon={Upload} onClick={() => importRef.current?.click()}>Restore JSON backup</Button>
+              <Button icon={Download} onClick={actions.exportJson}>
+                Download JSON backup
+              </Button>
+              <Button icon={Upload} onClick={() => importRef.current?.click()}>
+                Restore JSON backup
+              </Button>
               <input ref={importRef} type="file" accept="application/json,.json" onChange={handleImport} hidden />
-              {persistenceMode === "cloud" ? <Button icon={Trash2} onClick={() => setDeleteTarget({ type: "clear-local" })}>Remove old local browser copy</Button> : null}
+              {persistenceMode === "cloud" ? (
+                <Button icon={Trash2} onClick={() => setDeleteTarget({ type: "clear-local" })}>
+                  Remove old local browser copy
+                </Button>
+              ) : null}
             </div>
           </section>
         </div>
@@ -351,16 +581,80 @@ export default function Setup({ state, derived, actions, persistenceMode, intent
         onClose={closeStudent}
         title={studentDraft?.id ? "Edit student" : "Add student"}
         description="Student indicators are calculated automatically."
-        footer={<><Button onClick={closeStudent} disabled={saving}>Cancel</Button><Button variant="primary" type="submit" form="student-form" disabled={saving}>{saving ? "Saving…" : "Save student"}</Button></>}
+        footer={
+          <>
+            <Button onClick={closeStudent} disabled={saving}>
+              Cancel
+            </Button>
+            <Button variant="primary" type="submit" form="student-form" disabled={saving}>
+              {saving ? "Saving…" : "Save student"}
+            </Button>
+          </>
+        }
       >
-        {studentDraft ? <form id="student-form" className="drawer-form" onSubmit={saveStudent}>
-          <div className="form-grid two-columns"><Field label="Student ID" required><Input value={studentDraft.studentCode} onChange={(event) => setStudentDraft({ ...studentDraft, studentCode: event.target.value })} /></Field><Field label="Status"><Select value={studentDraft.status} onChange={(event) => setStudentDraft({ ...studentDraft, status: event.target.value })}><option>Active</option><option>Inactive</option></Select></Field></div>
-          <Field label="Full name" required><Input value={studentDraft.fullName} onChange={(event) => setStudentDraft({ ...studentDraft, fullName: event.target.value })} /></Field>
-          <Field label="Group" hint="Optional — you can assign this later"><Select value={studentDraft.groupId} onChange={(event) => setStudentDraft({ ...studentDraft, groupId: event.target.value })}><option value="">Unassigned / no group</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</Select></Field>
-          <Field label="Student phone"><Input type="tel" inputMode="tel" autoComplete="tel" value={studentDraft.studentPhone} onChange={(event) => setStudentDraft({ ...studentDraft, studentPhone: event.target.value })} /></Field>
-          <Field label="Guardian / contact"><TextArea rows="3" value={studentDraft.guardianContact} onChange={(event) => setStudentDraft({ ...studentDraft, guardianContact: event.target.value })} /></Field>
-          <Field label="Important notes"><TextArea rows="4" value={studentDraft.importantNotes} onChange={(event) => setStudentDraft({ ...studentDraft, importantNotes: event.target.value })} /></Field>
-        </form> : null}
+        {studentDraft ? (
+          <form id="student-form" className="drawer-form" onSubmit={saveStudent}>
+            <div className="form-grid two-columns">
+              <Field label="Student ID" required>
+                <Input
+                  value={studentDraft.studentCode}
+                  onChange={(event) => setStudentDraft({ ...studentDraft, studentCode: event.target.value })}
+                />
+              </Field>
+              <Field label="Status">
+                <Select
+                  value={studentDraft.status}
+                  onChange={(event) => setStudentDraft({ ...studentDraft, status: event.target.value })}
+                >
+                  <option>Active</option>
+                  <option>Inactive</option>
+                </Select>
+              </Field>
+            </div>
+            <Field label="Full name" required>
+              <Input
+                value={studentDraft.fullName}
+                onChange={(event) => setStudentDraft({ ...studentDraft, fullName: event.target.value })}
+              />
+            </Field>
+            <Field label="Group" hint="Optional — you can assign this later">
+              <Select
+                value={studentDraft.groupId}
+                onChange={(event) => setStudentDraft({ ...studentDraft, groupId: event.target.value })}
+              >
+                <option value="">Unassigned / no group</option>
+                {groups.map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Student phone">
+              <Input
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                value={studentDraft.studentPhone}
+                onChange={(event) => setStudentDraft({ ...studentDraft, studentPhone: event.target.value })}
+              />
+            </Field>
+            <Field label="Guardian / contact">
+              <TextArea
+                rows="3"
+                value={studentDraft.guardianContact}
+                onChange={(event) => setStudentDraft({ ...studentDraft, guardianContact: event.target.value })}
+              />
+            </Field>
+            <Field label="Important notes">
+              <TextArea
+                rows="4"
+                value={studentDraft.importantNotes}
+                onChange={(event) => setStudentDraft({ ...studentDraft, importantNotes: event.target.value })}
+              />
+            </Field>
+          </form>
+        ) : null}
       </Drawer>
 
       <Drawer
@@ -368,23 +662,100 @@ export default function Setup({ state, derived, actions, persistenceMode, intent
         onClose={closeGroup}
         title={groupDraft?.id ? "Edit group" : "Add group"}
         description="Planned monthly sessions drive the ideal revenue projection."
-        footer={<><Button onClick={closeGroup} disabled={saving}>Cancel</Button><Button variant="primary" type="submit" form="group-form" disabled={saving}>{saving ? "Saving…" : "Save group"}</Button></>}
+        footer={
+          <>
+            <Button onClick={closeGroup} disabled={saving}>
+              Cancel
+            </Button>
+            <Button variant="primary" type="submit" form="group-form" disabled={saving}>
+              {saving ? "Saving…" : "Save group"}
+            </Button>
+          </>
+        }
       >
-        {groupDraft ? <form id="group-form" className="drawer-form" onSubmit={saveGroup}>
-          <Field label="Group name" required><Input value={groupDraft.name} onChange={(event) => setGroupDraft({ ...groupDraft, name: event.target.value })} /></Field>
-          <div className="form-grid two-columns"><Field label="Grade"><Input value={groupDraft.grade} onChange={(event) => setGroupDraft({ ...groupDraft, grade: event.target.value })} /></Field><Field label="Subject"><Input value={groupDraft.subject} onChange={(event) => setGroupDraft({ ...groupDraft, subject: event.target.value })} /></Field></div>
-          <Field label="Schedule / room"><Input value={groupDraft.scheduleRoom} onChange={(event) => setGroupDraft({ ...groupDraft, scheduleRoom: event.target.value })} /></Field>
-          <Field label="Planned sessions / month"><Input type="number" inputMode="numeric" min="0" step="1" value={groupDraft.plannedSessionsPerMonth} onChange={(event) => setGroupDraft({ ...groupDraft, plannedSessionsPerMonth: Number(event.target.value) })} /></Field>
-          <Field label="Assistant / contact"><TextArea rows="3" value={groupDraft.assistantContact} onChange={(event) => setGroupDraft({ ...groupDraft, assistantContact: event.target.value })} /></Field>
-          <Field label="Notes"><TextArea rows="4" value={groupDraft.notes} onChange={(event) => setGroupDraft({ ...groupDraft, notes: event.target.value })} /></Field>
-        </form> : null}
+        {groupDraft ? (
+          <form id="group-form" className="drawer-form" onSubmit={saveGroup}>
+            <Field label="Group name" required>
+              <Input
+                value={groupDraft.name}
+                onChange={(event) => setGroupDraft({ ...groupDraft, name: event.target.value })}
+              />
+            </Field>
+            <div className="form-grid two-columns">
+              <Field label="Grade">
+                <Input
+                  value={groupDraft.grade}
+                  onChange={(event) => setGroupDraft({ ...groupDraft, grade: event.target.value })}
+                />
+              </Field>
+              <Field label="Subject">
+                <Input
+                  value={groupDraft.subject}
+                  onChange={(event) => setGroupDraft({ ...groupDraft, subject: event.target.value })}
+                />
+              </Field>
+            </div>
+            <Field label="Schedule / room">
+              <Input
+                value={groupDraft.scheduleRoom}
+                onChange={(event) => setGroupDraft({ ...groupDraft, scheduleRoom: event.target.value })}
+              />
+            </Field>
+            <Field label="Planned sessions / month">
+              <Input
+                type="number"
+                inputMode="numeric"
+                min="0"
+                step="1"
+                value={groupDraft.plannedSessionsPerMonth}
+                onChange={(event) =>
+                  setGroupDraft({ ...groupDraft, plannedSessionsPerMonth: Number(event.target.value) })
+                }
+              />
+            </Field>
+            <Field label="Assistant / contact">
+              <TextArea
+                rows="3"
+                value={groupDraft.assistantContact}
+                onChange={(event) => setGroupDraft({ ...groupDraft, assistantContact: event.target.value })}
+              />
+            </Field>
+            <Field label="Notes">
+              <TextArea
+                rows="4"
+                value={groupDraft.notes}
+                onChange={(event) => setGroupDraft({ ...groupDraft, notes: event.target.value })}
+              />
+            </Field>
+          </form>
+        ) : null}
       </Drawer>
 
       <ConfirmDialog
         open={Boolean(deleteTarget)}
-        title={deleteTarget?.type === "clear-local" ? "Remove the old local copy?" : deleteTarget?.type === "archive-student" ? `Archive ${deleteTarget?.item?.fullName || "student"}?` : `Delete ${deleteTarget?.item?.fullName || deleteTarget?.item?.name || "record"}?`}
-        description={deleteTarget?.type === "archive-student" ? "The student becomes inactive while grade, attendance, and payment history stays available." : deleteTarget?.type === "group" ? "Groups with assigned students cannot be deleted." : deleteTarget?.type === "clear-local" ? "This removes only the legacy browser copy on this device. Your signed-in cloud workspace remains available." : "This cannot be undone without a JSON backup."}
-        confirmLabel={deleteTarget?.type === "archive-student" ? "Archive student" : deleteTarget?.type === "clear-local" ? "Remove local copy" : "Delete"}
+        title={
+          deleteTarget?.type === "clear-local"
+            ? "Remove the old local copy?"
+            : deleteTarget?.type === "archive-student"
+              ? `Archive ${deleteTarget?.item?.fullName || "student"}?`
+              : `Delete ${deleteTarget?.item?.fullName || deleteTarget?.item?.name || "record"}?`
+        }
+        description={
+          deleteTarget?.type === "archive-student"
+            ? "The student becomes inactive while grade, attendance, and payment history stays available."
+            : deleteTarget?.type === "group"
+              ? "Groups with assigned students cannot be deleted."
+              : deleteTarget?.type === "clear-local"
+                ? "This removes only the legacy browser copy on this device. Your signed-in cloud workspace remains available."
+                : "This cannot be undone without a JSON backup."
+        }
+        confirmLabel={
+          deleteTarget?.type === "archive-student"
+            ? "Archive student"
+            : deleteTarget?.type === "clear-local"
+              ? "Remove local copy"
+              : "Delete"
+        }
         tone={deleteTarget?.type === "archive-student" ? "primary" : "danger"}
         busy={saving}
         onClose={() => setDeleteTarget(null)}
@@ -394,7 +765,11 @@ export default function Setup({ state, derived, actions, persistenceMode, intent
       <ConfirmDialog
         open={Boolean(pendingImport)}
         title="Restore this backup?"
-        description={pendingImport ? `${pendingImport.name} contains ${pendingImport.counts.students} students, ${pendingImport.counts.groups} groups, ${pendingImport.counts.grades} grades, and ${pendingImport.counts.classes} class records. Restoring replaces the data currently saved in ${persistenceMode === "cloud" ? "your cloud workspace" : "this browser"}.` : ""}
+        description={
+          pendingImport
+            ? `${pendingImport.name} contains ${pendingImport.counts.students} students, ${pendingImport.counts.groups} groups, ${pendingImport.counts.grades} grades, and ${pendingImport.counts.classes} class records. Restoring replaces the data currently saved in ${persistenceMode === "cloud" ? "your cloud workspace" : "this browser"}.`
+            : ""
+        }
         confirmLabel="Restore backup"
         tone="primary"
         busy={saving}

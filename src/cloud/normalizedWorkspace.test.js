@@ -16,9 +16,9 @@ describe("normalized workspace patches", () => {
     ];
     const next = {
       ...previous,
-      students: previous.students.map((student) => (
-        student.id === "s2" ? { ...student, fullName: "Luis M." } : student
-      )),
+      students: previous.students.map((student) =>
+        student.id === "s2" ? { ...student, fullName: "Luis M." } : student,
+      ),
     };
 
     const result = buildWorkspacePatch(previous, next, {

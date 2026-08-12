@@ -1,15 +1,7 @@
-import {
-  REAL_ROSTER_BACKUP_KEY,
-  REAL_ROSTER_MIGRATION_KEY,
-  STORAGE_KEY,
-} from "./constants.js";
+import { REAL_ROSTER_BACKUP_KEY, REAL_ROSTER_MIGRATION_KEY, STORAGE_KEY } from "./constants.js";
 import { migrateLegacyDemoToStarterState, isExactLegacyDemoState } from "./migrations.js";
 import { createStarterState } from "./starterState.js";
-import {
-  assertValidState,
-  DomainValidationError,
-  normalizeState,
-} from "./validation.js";
+import { assertValidState, DomainValidationError, normalizeState } from "./validation.js";
 
 export class StorageUnavailableError extends Error {
   constructor(message = "Browser storage is unavailable.", options) {
@@ -212,8 +204,9 @@ export function safeLoadStateWithMigrations(storage = getDefaultStorage(), key =
 }
 
 export function createExportFilename(asOfDate) {
-  const date = typeof asOfDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(asOfDate)
-    ? asOfDate
-    : new Date().toISOString().slice(0, 10);
+  const date =
+    typeof asOfDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(asOfDate)
+      ? asOfDate
+      : new Date().toISOString().slice(0, 10);
   return `class-manager-${date}.json`;
 }

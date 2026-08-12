@@ -18,25 +18,29 @@ function recurringState() {
   const state = createStarterState("2026-08-02");
   state.groups = [createGroup({ id: "group-a", name: "Group A" })];
   state.students = [createStudent({ id: "student-a", code: "STU-001", fullName: "Ana", groupIds: ["group-a"] })];
-  state.classSchedules = [createClassSchedule({
-    id: "series-a",
-    recurrence: "weekly",
-    format: "group",
-    groupId: "group-a",
-    startDate: "2026-07-06",
-    startTime: "10:00",
-    durationHours: 2,
-    daysOfWeek: [1],
-  })];
-  state.classLog = [createClassLogRow({
-    id: "recorded-past",
-    classDate: "2026-07-27",
-    startTime: "10:00",
-    groupId: "group-a",
-    studentId: "student-a",
-    classStatus: "Completed",
-    attendance: "P",
-  })];
+  state.classSchedules = [
+    createClassSchedule({
+      id: "series-a",
+      recurrence: "weekly",
+      format: "group",
+      groupId: "group-a",
+      startDate: "2026-07-06",
+      startTime: "10:00",
+      durationHours: 2,
+      daysOfWeek: [1],
+    }),
+  ];
+  state.classLog = [
+    createClassLogRow({
+      id: "recorded-past",
+      classDate: "2026-07-27",
+      startTime: "10:00",
+      groupId: "group-a",
+      studentId: "student-a",
+      classStatus: "Completed",
+      attendance: "P",
+    }),
+  ];
   return state;
 }
 
@@ -125,7 +129,15 @@ describe("safe scheduled class mutations", () => {
     const past = occurrence(state, "2026-07-27");
     const draft = { ...future, classDate: "2026-08-03" };
 
-    expect(() => editScheduledClassState(state, { session: past, draft, asOfDate: "2026-08-02" })).toThrow(/Recorded classes|Past classes/);
-    expect(() => editScheduledClassState(state, { session: { ...future, rows: [{ id: "saved" }] }, draft, asOfDate: "2026-08-02" })).toThrow(/Recorded classes/);
+    expect(() => editScheduledClassState(state, { session: past, draft, asOfDate: "2026-08-02" })).toThrow(
+      /Recorded classes|Past classes/,
+    );
+    expect(() =>
+      editScheduledClassState(state, {
+        session: { ...future, rows: [{ id: "saved" }] },
+        draft,
+        asOfDate: "2026-08-02",
+      }),
+    ).toThrow(/Recorded classes/);
   });
 });

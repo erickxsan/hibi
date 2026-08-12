@@ -59,7 +59,8 @@ describe("class manager cloud conflict handling", () => {
     const latest = createStarterState();
     latest.settings.hourlyRate = 80;
     const adapter = {
-      save: vi.fn()
+      save: vi
+        .fn()
         .mockRejectedValueOnce(Object.assign(new Error("conflict"), { latestState: latest }))
         .mockImplementationOnce(async (state) => state),
     };
@@ -84,8 +85,9 @@ describe("class manager cloud conflict handling", () => {
     const conflict = Object.assign(new Error("conflict"), { latestState: createStarterState() });
     const adapter = { replace: vi.fn().mockRejectedValue(conflict), save: vi.fn() };
 
-    await expect(persistRecipe({ baseState: base, recipe: (state) => state, adapter, replace: true }))
-      .rejects.toBe(conflict);
+    await expect(persistRecipe({ baseState: base, recipe: (state) => state, adapter, replace: true })).rejects.toBe(
+      conflict,
+    );
     expect(adapter.save).not.toHaveBeenCalled();
   });
 
@@ -94,12 +96,14 @@ describe("class manager cloud conflict handling", () => {
     const conflict = Object.assign(new Error("conflict"), { latestState: createStarterState() });
     const adapter = { importRecords: vi.fn().mockRejectedValue(conflict), save: vi.fn() };
 
-    await expect(persistRecipe({
-      baseState: base,
-      recipe: (state) => state,
-      adapter,
-      importMetadata: { fileHash: "a".repeat(64) },
-    })).rejects.toBe(conflict);
+    await expect(
+      persistRecipe({
+        baseState: base,
+        recipe: (state) => state,
+        adapter,
+        importMetadata: { fileHash: "a".repeat(64) },
+      }),
+    ).rejects.toBe(conflict);
 
     expect(adapter.importRecords).toHaveBeenCalledTimes(1);
     expect(adapter.save).not.toHaveBeenCalled();

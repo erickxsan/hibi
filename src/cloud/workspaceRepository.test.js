@@ -56,9 +56,11 @@ describe("normalized workspace repository", () => {
     const before = createStarterState();
     before.students = [createStudent({ id: "s1", code: "A-1", fullName: "Ana", groupIds: [] })];
     const after = { ...before, students: [{ ...before.students[0], fullName: "Ana P." }] };
-    const rpc = vi.fn(async (name) => name === LOAD_WORKSPACE_RPC
-      ? { data: [workspaceRow(before, 8, { students: { s1: 6 } })], error: null }
-      : { data: [{ event_id: 9, updated_at: "2026-08-12T12:01:00Z" }], error: null });
+    const rpc = vi.fn(async (name) =>
+      name === LOAD_WORKSPACE_RPC
+        ? { data: [workspaceRow(before, 8, { students: { s1: 6 } })], error: null }
+        : { data: [{ event_id: 9, updated_at: "2026-08-12T12:01:00Z" }], error: null },
+    );
     const repository = createWorkspaceRepository(authenticatedClient({ rpc }));
     await repository.loadWorkspace("user-1");
 
@@ -119,29 +121,38 @@ describe("normalized workspace repository", () => {
 
     await repository.replaceWorkspace(state, 10, "user-1");
     await repository.applyWorkspaceImport(state, 10, "user-1", {
-      fileHash: "a".repeat(64), sourceName: "backup.json", summary: {},
+      fileHash: "a".repeat(64),
+      sourceName: "backup.json",
+      summary: {},
     });
     await repository.restoreRecoverySnapshot("snapshot-1", 11, "user-1");
 
     expect(rpc.mock.calls.map(([name]) => name)).toEqual([
-      REPLACE_WORKSPACE_RPC, APPLY_IMPORT_RPC, RESTORE_WORKSPACE_RPC,
+      REPLACE_WORKSPACE_RPC,
+      APPLY_IMPORT_RPC,
+      RESTORE_WORKSPACE_RPC,
     ]);
   });
 
   it("replays small ordered patches after a Realtime event", async () => {
     const initial = createStarterState();
     const query = eventQuery({
-      data: [{
-        owner_id: "user-1",
-        revision: 2,
-        patch: { settings: { ...initial.settings, hourlyRate: 75 } },
-        updated_at: "2026-08-12T12:02:00Z",
-      }],
+      data: [
+        {
+          owner_id: "user-1",
+          revision: 2,
+          patch: { settings: { ...initial.settings, hourlyRate: 75 } },
+          updated_at: "2026-08-12T12:02:00Z",
+        },
+      ],
       error: null,
     });
     let handler;
     const channel = {
-      on: vi.fn((_kind, _filter, callback) => { handler = callback; return channel; }),
+      on: vi.fn((_kind, _filter, callback) => {
+        handler = callback;
+        return channel;
+      }),
       subscribe: vi.fn(() => channel),
     };
     const client = authenticatedClient({
@@ -176,7 +187,10 @@ describe("normalized workspace repository", () => {
     let statusCallback;
     const channel = {
       on: vi.fn(() => channel),
-      subscribe: vi.fn((callback) => { statusCallback = callback; return channel; }),
+      subscribe: vi.fn((callback) => {
+        statusCallback = callback;
+        return channel;
+      }),
     };
     const client = authenticatedClient({
       rpc: vi.fn(async () => {
@@ -201,9 +215,9 @@ describe("normalized workspace repository", () => {
 
   it("blocks preview writes before contacting Supabase", async () => {
     const client = authenticatedClient({ rpc: vi.fn() });
-    await expect(createWorkspaceRepository(client, { allowWrites: false })
-      .saveWorkspace(createStarterState(), 0, "user-1"))
-      .rejects.toThrow("Cloud writes are disabled");
+    await expect(
+      createWorkspaceRepository(client, { allowWrites: false }).saveWorkspace(createStarterState(), 0, "user-1"),
+    ).rejects.toThrow("Cloud writes are disabled");
     expect(client.auth.getUser).not.toHaveBeenCalled();
   });
 });

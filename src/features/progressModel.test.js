@@ -1,11 +1,34 @@
 import { describe, expect, it } from "vitest";
-import { assessmentKey, attendanceRate, buildAssessments, buildClassSessions, classSessionKey, INDIVIDUAL_GROUP_ID } from "./progressModel";
+import {
+  assessmentKey,
+  attendanceRate,
+  buildAssessments,
+  buildClassSessions,
+  classSessionKey,
+  INDIVIDUAL_GROUP_ID,
+} from "./progressModel";
 
 describe("progress workspace model", () => {
   it("groups per-student class rows into one session and preserves individual classes", () => {
     const rows = [
-      { id: "a", classDate: "2026-07-13", groupId: "group_1", groupName: "Secondary", startTime: "16:00", hours: 2, classStatus: "Completed" },
-      { id: "b", classDate: "2026-07-13", groupId: "group_1", groupName: "Secondary", startTime: "16:00", hours: 2, classStatus: "Completed" },
+      {
+        id: "a",
+        classDate: "2026-07-13",
+        groupId: "group_1",
+        groupName: "Secondary",
+        startTime: "16:00",
+        hours: 2,
+        classStatus: "Completed",
+      },
+      {
+        id: "b",
+        classDate: "2026-07-13",
+        groupId: "group_1",
+        groupName: "Secondary",
+        startTime: "16:00",
+        hours: 2,
+        classStatus: "Completed",
+      },
       { id: "c", classDate: "2026-07-12", groupId: "", startTime: "", hours: 1, classStatus: "Completed" },
     ];
     const sessions = buildClassSessions(rows);

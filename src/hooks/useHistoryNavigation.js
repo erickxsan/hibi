@@ -25,12 +25,7 @@ function allowedValue(value, allowedValues) {
  * guard can return false (or show window.confirm and return its result) before
  * either a click or browser Back changes the rendered page.
  */
-export function usePageNavigation({
-  routes = APP_ROUTES,
-  defaultPage = "home",
-  canNavigate,
-  onPageChange,
-} = {}) {
+export function usePageNavigation({ routes = APP_ROUTES, defaultPage = "home", canNavigate, onPageChange } = {}) {
   const [page, setPage] = useState(() => {
     if (typeof window === "undefined") return defaultPage;
     return pageFromPath(window.location.pathname, routes) ?? defaultPage;
@@ -54,11 +49,13 @@ export function usePageNavigation({
       beforePop: ({ pathname }) => {
         const nextPage = pageFromPath(pathname, routesRef.current);
         if (!nextPage || nextPage === pageRef.current) return true;
-        return canNavigateRef.current?.({
-          from: pageRef.current,
-          to: nextPage,
-          reason: "popstate",
-        }) !== false;
+        return (
+          canNavigateRef.current?.({
+            from: pageRef.current,
+            to: nextPage,
+            reason: "popstate",
+          }) !== false
+        );
       },
       onPop: ({ pathname }) => {
         const nextPage = pageFromPath(pathname, routesRef.current);
@@ -70,15 +67,17 @@ export function usePageNavigation({
         onPageChangeRef.current?.(nextPage, { from: previousPage, reason: "popstate" });
       },
     });
-  // The refs deliberately keep this subscription stable while callbacks change.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // The refs deliberately keep this subscription stable while callbacks change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [defaultPage]);
 
   const navigate = useCallback((nextPage, { replace = false } = {}) => {
     if (!pathForPage(nextPage, routesRef.current)) return false;
     const previousPage = pageRef.current;
     if (nextPage === previousPage) return true;
-    if (canNavigateRef.current?.({ from: previousPage, to: nextPage, reason: replace ? "replace" : "push" }) === false) {
+    if (
+      canNavigateRef.current?.({ from: previousPage, to: nextPage, reason: replace ? "replace" : "push" }) === false
+    ) {
       return false;
     }
 
@@ -130,7 +129,10 @@ export function useHistoryBackedState({
     if (allowedValue(restored, allowedValuesRef.current) && restored !== valueRef.current) {
       valueRef.current = restored;
       onChangeRef.current?.(restored, { reason: "restore" });
-    } else if (!allowedValue(restored, allowedValuesRef.current) && allowedValue(defaultValue, allowedValuesRef.current)) {
+    } else if (
+      !allowedValue(restored, allowedValuesRef.current) &&
+      allowedValue(defaultValue, allowedValuesRef.current)
+    ) {
       replaceViewHistory(key, defaultValue);
     }
 
@@ -150,19 +152,22 @@ export function useHistoryBackedState({
     });
   }, [defaultValue, enabled, key]);
 
-  return useCallback((nextValue, { replace = false } = {}) => {
-    if (!enabled || !allowedValue(nextValue, allowedValuesRef.current)) return false;
-    const previousValue = valueRef.current;
-    if (nextValue === previousValue) return true;
-    if (canChangeRef.current?.({ from: previousValue, to: nextValue, reason: replace ? "replace" : "push" }) === false) {
-      return false;
-    }
-    const historyState = replace
-      ? replaceViewHistory(key, nextValue)
-      : pushViewHistory(key, nextValue);
-    if (!historyState) return false;
-    valueRef.current = nextValue;
-    onChangeRef.current?.(nextValue, { from: previousValue, reason: replace ? "replace" : "push" });
-    return true;
-  }, [enabled, key]);
+  return useCallback(
+    (nextValue, { replace = false } = {}) => {
+      if (!enabled || !allowedValue(nextValue, allowedValuesRef.current)) return false;
+      const previousValue = valueRef.current;
+      if (nextValue === previousValue) return true;
+      if (
+        canChangeRef.current?.({ from: previousValue, to: nextValue, reason: replace ? "replace" : "push" }) === false
+      ) {
+        return false;
+      }
+      const historyState = replace ? replaceViewHistory(key, nextValue) : pushViewHistory(key, nextValue);
+      if (!historyState) return false;
+      valueRef.current = nextValue;
+      onChangeRef.current?.(nextValue, { from: previousValue, reason: replace ? "replace" : "push" });
+      return true;
+    },
+    [enabled, key],
+  );
 }

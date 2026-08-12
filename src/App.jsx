@@ -1,5 +1,12 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BarChart3, CalendarDays, CloudOff, Home as HomeIcon, Settings as SettingsIcon, UsersRound } from "lucide-react";
+import {
+  BarChart3,
+  CalendarDays,
+  CloudOff,
+  Home as HomeIcon,
+  Settings as SettingsIcon,
+  UsersRound,
+} from "lucide-react";
 import { AccountMenu, AUTH_MODES, AuthScreen } from "./auth";
 import { AppShell } from "./components/AppShell";
 import { ToastRegion } from "./components/ui";
@@ -33,7 +40,11 @@ const PAYMENT_OVERVIEW_INTENT = Object.freeze({
 });
 
 function PageFallback() {
-  return <div className="route-loading" role="status" aria-live="polite">Loading…</div>;
+  return (
+    <div className="route-loading" role="status" aria-live="polite">
+      Loading…
+    </div>
+  );
 }
 
 const MIGRATION_MARKER_PREFIX = "minimal-class-manager:cloud-migration-dismissed:v1:";
@@ -41,8 +52,9 @@ const LEGACY_DATA_CLAIM_KEY = "minimal-class-manager:legacy-data-claimed:v1";
 let inMemoryLegacyClaim = "";
 
 function hasRecords(state) {
-  return [state?.groups, state?.students, state?.grades, state?.classLog]
-    .some((collection) => Array.isArray(collection) && collection.length > 0);
+  return [state?.groups, state?.students, state?.grades, state?.classLog].some(
+    (collection) => Array.isArray(collection) && collection.length > 0,
+  );
 }
 
 function syncStatusFor(manager, cloudError) {
@@ -65,24 +77,28 @@ export function ClassManagerApplication({ persistence, user, cloudError, onSignO
     navigationBlockers.current.add(blocker);
     return () => navigationBlockers.current.delete(blocker);
   }, []);
-  const allowNavigation = useCallback((context) => {
-    if (canNavigate?.(context) === false) return false;
-    const messages = [...navigationBlockers.current]
-      .map((blocker) => blocker(context))
-      .filter(Boolean);
-    if (!messages.length) return true;
-    if (typeof globalThis.confirm !== "function") return false;
-    return globalThis.confirm([...new Set(messages)].join("\n\n"));
-  }, [canNavigate]);
+  const allowNavigation = useCallback(
+    (context) => {
+      if (canNavigate?.(context) === false) return false;
+      const messages = [...navigationBlockers.current].map((blocker) => blocker(context)).filter(Boolean);
+      if (!messages.length) return true;
+      if (typeof globalThis.confirm !== "function") return false;
+      return globalThis.confirm([...new Set(messages)].join("\n\n"));
+    },
+    [canNavigate],
+  );
   const { page, navigate, navigationReason } = usePageNavigation({
     canNavigate: allowNavigation,
     onPageChange: () => setIntent(null),
   });
-  const openPage = useCallback((nextPage, nextIntent = null) => {
-    if (!navigate(nextPage)) return false;
-    setIntent(nextIntent);
-    return true;
-  }, [navigate]);
+  const openPage = useCallback(
+    (nextPage, nextIntent = null) => {
+      if (!navigate(nextPage)) return false;
+      setIntent(nextIntent);
+      return true;
+    },
+    [navigate],
+  );
   const clearIntent = useCallback(() => setIntent(null), []);
 
   useEffect(() => {
@@ -100,7 +116,12 @@ export function ClassManagerApplication({ persistence, user, cloudError, onSignO
       registerNavigationBlocker,
     };
     if (page === "community" || page === "students" || page === "groups") {
-      return <Community {...common} initialView={page === "students" ? "students" : page === "groups" ? "groups" : undefined} />;
+      return (
+        <Community
+          {...common}
+          initialView={page === "students" ? "students" : page === "groups" ? "groups" : undefined}
+        />
+      );
     }
     if (page === "classes") return <Classes {...common} />;
     if (page === "grades" || page === "payments") return <Tracking {...common} />;
@@ -133,7 +154,11 @@ export function ClassManagerApplication({ persistence, user, cloudError, onSignO
               <AccountMenu
                 email={user.email}
                 syncStatus={syncStatusFor(manager, cloudError)}
-                syncMessage={manager.syncMessage || cloudError?.message || (manager.syncStatus === "saving" ? "Wait for saving to finish before signing out." : undefined)}
+                syncMessage={
+                  manager.syncMessage ||
+                  cloudError?.message ||
+                  (manager.syncStatus === "saving" ? "Wait for saving to finish before signing out." : undefined)
+                }
                 signingOut={signingOut}
                 onSignOut={manager.syncStatus === "saving" ? undefined : handleSignOut}
               />
@@ -180,10 +205,11 @@ function CloudWorkspaceApplication({ session }) {
     return <CloudError error={error} onRetry={retry} onSignOut={() => cloudAuth.signOut()} />;
   }
 
-  const needsMigration = dismissedCloudRevision !== String(workspace.revision)
-    && (!legacyClaim || legacyClaim === user.id)
-    && hasRecords(localSnapshot.state)
-    && !hasRecords(workspace.state);
+  const needsMigration =
+    dismissedCloudRevision !== String(workspace.revision) &&
+    (!legacyClaim || legacyClaim === user.id) &&
+    hasRecords(localSnapshot.state) &&
+    !hasRecords(workspace.state);
 
   if (needsMigration) {
     const importLocalData = async () => {
@@ -254,7 +280,8 @@ function AuthenticatedCloudApplication() {
       setSession(nextSession);
       setLoading(false);
     });
-    cloudAuth.getSession()
+    cloudAuth
+      .getSession()
       .then((current) => {
         if (active) setSession(current);
       })
@@ -279,7 +306,8 @@ function AuthenticatedCloudApplication() {
         error={bootstrapError}
         onModeChange={(mode) => {
           if (mode === AUTH_MODES.RESET_PASSWORD) return;
-          cloudAuth.signOut()
+          cloudAuth
+            .signOut()
             .then(() => setRecoveryMode(false))
             .catch((caught) => setBootstrapError(caught?.message || "Sign out failed."));
         }}

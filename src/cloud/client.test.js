@@ -8,35 +8,45 @@ import {
 
 describe("cloud write origin guard", () => {
   it("allows the canonical production origin and blocks Cloudflare previews", () => {
-    expect(isCloudWriteLocationAllowed({
-      isDevelopment: false,
-      origin: "https://usehibi.pages.dev",
-    })).toBe(true);
-    expect(isCloudWriteLocationAllowed({
-      isDevelopment: false,
-      origin: "https://feature-branch.usehibi.pages.dev",
-    })).toBe(false);
+    expect(
+      isCloudWriteLocationAllowed({
+        isDevelopment: false,
+        origin: "https://usehibi.pages.dev",
+      }),
+    ).toBe(true);
+    expect(
+      isCloudWriteLocationAllowed({
+        isDevelopment: false,
+        origin: "https://feature-branch.usehibi.pages.dev",
+      }),
+    ).toBe(false);
   });
 
   it("requires an explicit opt-in for local writes", () => {
-    expect(isCloudWriteLocationAllowed({
-      isDevelopment: true,
-      enableDevelopmentWrites: false,
-      origin: "http://127.0.0.1:4173",
-    })).toBe(false);
-    expect(isCloudWriteLocationAllowed({
-      isDevelopment: true,
-      enableDevelopmentWrites: true,
-      origin: "http://127.0.0.1:4173",
-    })).toBe(true);
+    expect(
+      isCloudWriteLocationAllowed({
+        isDevelopment: true,
+        enableDevelopmentWrites: false,
+        origin: "http://127.0.0.1:4173",
+      }),
+    ).toBe(false);
+    expect(
+      isCloudWriteLocationAllowed({
+        isDevelopment: true,
+        enableDevelopmentWrites: true,
+        origin: "http://127.0.0.1:4173",
+      }),
+    ).toBe(true);
   });
 
   it("supports an explicit future custom-domain allow-list", () => {
-    expect(isCloudWriteLocationAllowed({
-      isDevelopment: false,
-      allowedOrigins: "https://usehibi.pages.dev, https://hibi.example/",
-      origin: "https://hibi.example",
-    })).toBe(true);
+    expect(
+      isCloudWriteLocationAllowed({
+        isDevelopment: false,
+        allowedOrigins: "https://usehibi.pages.dev, https://hibi.example/",
+        origin: "https://hibi.example",
+      }),
+    ).toBe(true);
   });
 });
 
@@ -92,12 +102,16 @@ describe("cloud auth service", () => {
       captchaToken: "reset-token",
     });
 
-    expect(signUp).toHaveBeenCalledWith(expect.objectContaining({
-      options: { captchaToken: "signup-token" },
-    }));
-    expect(signInWithPassword).toHaveBeenCalledWith(expect.objectContaining({
-      options: { captchaToken: "signin-token" },
-    }));
+    expect(signUp).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: { captchaToken: "signup-token" },
+      }),
+    );
+    expect(signInWithPassword).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: { captchaToken: "signin-token" },
+      }),
+    );
     expect(resetPasswordForEmail).toHaveBeenCalledWith("teacher@example.com", {
       redirectTo: "https://classes.example/reset",
       captchaToken: "reset-token",

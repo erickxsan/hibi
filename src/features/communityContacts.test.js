@@ -11,7 +11,10 @@ import {
 describe("community contact directory", () => {
   it("keeps student email as the primary explicit contact view", () => {
     const student = { studentEmail: "student@example.com", guardianPhone: "272 100 2000", phone: "272 300 4000" };
-    expect(contactForStudent(student, CONTACT_VIEWS.STUDENT_EMAIL)).toEqual({ value: "student@example.com", inferred: false });
+    expect(contactForStudent(student, CONTACT_VIEWS.STUDENT_EMAIL)).toEqual({
+      value: "student@example.com",
+      inferred: false,
+    });
     expect(primaryContactForStudent(student)).toMatchObject({ value: "student@example.com", label: "Student email" });
   });
 
@@ -30,7 +33,9 @@ describe("community contact directory", () => {
       { id: "c", studentEmail: "shared@example.com" },
     ];
     const allRows = groupContactRows(students, CONTACT_VIEWS.STUDENT_EMAIL);
-    expect(groupContactRows(students, CONTACT_VIEWS.STUDENT_EMAIL, { missingOnly: true }).map((row) => row.student.id)).toEqual(["b"]);
+    expect(
+      groupContactRows(students, CONTACT_VIEWS.STUDENT_EMAIL, { missingOnly: true }).map((row) => row.student.id),
+    ).toEqual(["b"]);
     expect(uniqueAvailableContacts(allRows)).toEqual(["shared@example.com"]);
     expect(students[1].studentEmail).toBe("");
   });

@@ -30,9 +30,7 @@ function normalizePath(pathname = "/") {
 
 function validStringRecord(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-  return Object.fromEntries(
-    Object.entries(value).filter(([key, item]) => key && typeof item === "string"),
-  );
+  return Object.fromEntries(Object.entries(value).filter(([key, item]) => key && typeof item === "string"));
 }
 
 function validOverlayIds(value) {
@@ -42,9 +40,11 @@ function validOverlayIds(value) {
 
 export function pageFromPath(pathname, routes = APP_ROUTES) {
   const normalized = normalizePath(pathname);
-  return Object.entries(routes).find(([, path]) => normalizePath(path) === normalized)?.[0]
-    ?? LEGACY_ROUTE_ALIASES[normalized]
-    ?? null;
+  return (
+    Object.entries(routes).find(([, path]) => normalizePath(path) === normalized)?.[0] ??
+    LEGACY_ROUTE_ALIASES[normalized] ??
+    null
+  );
 }
 
 export function pathForPage(page, routes = APP_ROUTES) {
@@ -152,12 +152,15 @@ export function ensurePageHistory(page, routes = APP_ROUTES) {
   const existing = metadataFromBrowser();
   const knownPath = pageFromPath(window.location.pathname, routes);
   const destination = knownPath ? window.location.href : pathForPage(page, routes);
-  return replaceMetadata({
-    entry: existing?.entry ?? 0,
-    page,
-    overlays: [],
-    views: existing?.views ?? {},
-  }, destination);
+  return replaceMetadata(
+    {
+      entry: existing?.entry ?? 0,
+      page,
+      overlays: [],
+      views: existing?.views ?? {},
+    },
+    destination,
+  );
 }
 
 export function pushPageHistory(page, routes = APP_ROUTES) {
@@ -171,19 +174,25 @@ export function pushPageHistory(page, routes = APP_ROUTES) {
   // entry. Replacing it with the destination avoids an orphaned Home -> Home
   // stop before Back reaches the page underneath the drawer.
   if (existing?.overlays?.length) {
-    return replaceMetadata({
-      ...existing,
-      page,
-      overlays: [],
-    }, destination);
+    return replaceMetadata(
+      {
+        ...existing,
+        page,
+        overlays: [],
+      },
+      destination,
+    );
   }
 
-  return pushMetadata({
-    entry: (existing?.entry ?? 0) + 1,
-    page,
-    overlays: [],
-    views: existing?.views ?? {},
-  }, destination);
+  return pushMetadata(
+    {
+      entry: (existing?.entry ?? 0) + 1,
+      page,
+      overlays: [],
+      views: existing?.views ?? {},
+    },
+    destination,
+  );
 }
 
 export function replacePageHistory(page, routes = APP_ROUTES) {
@@ -192,33 +201,42 @@ export function replacePageHistory(page, routes = APP_ROUTES) {
   const existing = metadataFromBrowser() ?? currentMetadata;
   const destination = pathForPage(page, routes);
   if (!destination) return null;
-  return replaceMetadata({
-    entry: existing?.entry ?? 0,
-    page,
-    overlays: [],
-    views: existing?.views ?? {},
-  }, destination);
+  return replaceMetadata(
+    {
+      entry: existing?.entry ?? 0,
+      page,
+      overlays: [],
+      views: existing?.views ?? {},
+    },
+    destination,
+  );
 }
 
 export function pushViewHistory(key, value) {
   if (!browserAvailable() || !key || typeof value !== "string") return null;
   ensureDispatcher();
   const existing = metadataFromBrowser() ?? currentMetadata ?? { entry: 0, page: null, overlays: [], views: {} };
-  return pushMetadata({
-    ...existing,
-    entry: existing.entry + 1,
-    views: { ...existing.views, [key]: value },
-  }, window.location.href);
+  return pushMetadata(
+    {
+      ...existing,
+      entry: existing.entry + 1,
+      views: { ...existing.views, [key]: value },
+    },
+    window.location.href,
+  );
 }
 
 export function replaceViewHistory(key, value) {
   if (!browserAvailable() || !key || typeof value !== "string") return null;
   ensureDispatcher();
   const existing = metadataFromBrowser() ?? currentMetadata ?? { entry: 0, page: null, overlays: [], views: {} };
-  return replaceMetadata({
-    ...existing,
-    views: { ...existing.views, [key]: value },
-  }, window.location.href);
+  return replaceMetadata(
+    {
+      ...existing,
+      views: { ...existing.views, [key]: value },
+    },
+    window.location.href,
+  );
 }
 
 export function currentHistoryView(key) {
@@ -230,11 +248,14 @@ export function pushOverlayHistory(overlayId) {
   ensureDispatcher();
   const existing = metadataFromBrowser() ?? currentMetadata ?? { entry: 0, page: null, overlays: [], views: {} };
   if (existing.overlays.includes(overlayId)) return existing;
-  return pushMetadata({
-    ...existing,
-    entry: existing.entry + 1,
-    overlays: [...existing.overlays, overlayId],
-  }, window.location.href);
+  return pushMetadata(
+    {
+      ...existing,
+      entry: existing.entry + 1,
+      overlays: [...existing.overlays, overlayId],
+    },
+    window.location.href,
+  );
 }
 
 export function isTopHistoryOverlay(overlayId) {
@@ -250,9 +271,12 @@ export function closeOverlayHistory(overlayId) {
     window.history.back();
     return true;
   }
-  replaceMetadata({
-    ...existing,
-    overlays: existing.overlays.filter((item) => item !== overlayId),
-  }, window.location.href);
+  replaceMetadata(
+    {
+      ...existing,
+      overlays: existing.overlays.filter((item) => item !== overlayId),
+    },
+    window.location.href,
+  );
   return false;
 }

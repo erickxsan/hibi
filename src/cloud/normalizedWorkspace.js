@@ -86,9 +86,7 @@ export function applyWorkspacePatch(state, patch) {
 }
 
 export function advanceWorkspaceVersions(versions, patch) {
-  const next = Object.fromEntries(
-    Object.entries(versions || {}).map(([key, value]) => [key, { ...value }]),
-  );
+  const next = Object.fromEntries(Object.entries(versions || {}).map(([key, value]) => [key, { ...value }]));
 
   if (patch?.settings) {
     next.settings ||= {};
@@ -114,10 +112,7 @@ export function workspacePatchesOverlap(left, right) {
   if (left?.settings && right?.settings) return true;
   for (const collection of NORMALIZED_COLLECTIONS) {
     if (!left?.[collection] || !right?.[collection]) continue;
-    const leftIds = new Set([
-      ...left[collection].upserts.map(({ data }) => data.id),
-      ...left[collection].deletes,
-    ]);
+    const leftIds = new Set([...left[collection].upserts.map(({ data }) => data.id), ...left[collection].deletes]);
     if (right[collection].upserts.some(({ data }) => leftIds.has(data.id))) return true;
     if (right[collection].deletes.some((id) => leftIds.has(id))) return true;
   }

@@ -20,8 +20,32 @@ const derived = {
   groups: [{ id: "g1", name: "Reading", activeStudents: 1, attendance: 1 }],
   students: [{ id: "s1", fullName: "Maya", status: "Active", attendance: 1, gradeAverage: 0.9, alerts: [] }],
   classLog: [
-    { id: "current", classDate: "2026-07-14", paymentDate: "2026-07-14", amountPaid: 100, classStatus: "Completed", attendance: "P", charge: 100, outstanding: 0, groupId: "g1", groupName: "Reading", startTime: "10:30" },
-    { id: "previous", classDate: "2026-07-07", paymentDate: "2026-07-07", amountPaid: 80, classStatus: "Completed", attendance: "P", charge: 80, outstanding: 20, groupId: "g1", groupName: "Reading", startTime: "10:30" },
+    {
+      id: "current",
+      classDate: "2026-07-14",
+      paymentDate: "2026-07-14",
+      amountPaid: 100,
+      classStatus: "Completed",
+      attendance: "P",
+      charge: 100,
+      outstanding: 0,
+      groupId: "g1",
+      groupName: "Reading",
+      startTime: "10:30",
+    },
+    {
+      id: "previous",
+      classDate: "2026-07-07",
+      paymentDate: "2026-07-07",
+      amountPaid: 80,
+      classStatus: "Completed",
+      attendance: "P",
+      charge: 80,
+      outstanding: 20,
+      groupId: "g1",
+      groupName: "Reading",
+      startTime: "10:30",
+    },
   ],
   upcomingClasses: [],
 };
@@ -45,18 +69,24 @@ describe("buildHomeDashboard", () => {
   });
 
   it("gives each class card the stable key used by the class editor", () => {
-    const dashboard = buildHomeDashboard(state, {
-      ...derived,
-      upcomingClasses: [{
-        id: "schedule-one:2026-07-16",
-        classDate: "2026-07-16",
-        startTime: "10:00",
-        groupId: "",
-        studentId: "s1",
-        studentName: "Maya",
-        format: "individual",
-      }],
-    }, "today");
+    const dashboard = buildHomeDashboard(
+      state,
+      {
+        ...derived,
+        upcomingClasses: [
+          {
+            id: "schedule-one:2026-07-16",
+            classDate: "2026-07-16",
+            startTime: "10:00",
+            groupId: "",
+            studentId: "s1",
+            studentName: "Maya",
+            format: "individual",
+          },
+        ],
+      },
+      "today",
+    );
 
     expect(dashboard.sessions[0]).toMatchObject({
       workspaceKey: "2026-07-16|s:s1|10:00",

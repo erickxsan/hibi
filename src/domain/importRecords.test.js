@@ -29,7 +29,16 @@ describe("additive record imports", () => {
     const imported = createStarterState();
     imported.settings.hourlyRate = 999;
     imported.groups.push(createGroup({ id: "group-new", name: "Reading" }));
-    imported.students.push(createStudent({ id: "student-new", code: "STU-002", fullName: "Luis", groupIds: ["group-new"], studentEmail: "luis@example.com", guardianPhone: "272 555 0102" }));
+    imported.students.push(
+      createStudent({
+        id: "student-new",
+        code: "STU-002",
+        fullName: "Luis",
+        groupIds: ["group-new"],
+        studentEmail: "luis@example.com",
+        guardianPhone: "272 555 0102",
+      }),
+    );
 
     const plan = buildImportPlan(current, imported);
 
@@ -37,7 +46,10 @@ describe("additive record imports", () => {
     expect(plan.candidate.settings.hourlyRate).toBe(75);
     expect(plan.candidate.groups.map((item) => item.id)).toEqual(["group-current", "group-new"]);
     expect(plan.candidate.students.map((item) => item.id)).toEqual(["student-current", "student-new"]);
-    expect(plan.candidate.students[1]).toMatchObject({ studentEmail: "luis@example.com", guardianPhone: "272 555 0102" });
+    expect(plan.candidate.students[1]).toMatchObject({
+      studentEmail: "luis@example.com",
+      guardianPhone: "272 555 0102",
+    });
   });
 
   it("skips exact duplicates and is idempotent", () => {
@@ -55,17 +67,21 @@ describe("additive record imports", () => {
     const current = stateWithRoster();
     const imported = createStarterState();
     imported.groups.push(createGroup({ id: "foreign-group", name: "Math" }));
-    imported.students.push(createStudent({ id: "foreign-student", code: "STU-001", fullName: "Ana", groupIds: ["foreign-group"] }));
-    imported.classLog.push(createClassLogRow({
-      id: "foreign-class",
-      classDate: "2026-07-27",
-      studentId: "foreign-student",
-      groupId: "foreign-group",
-      hours: 2,
-      appliedHourlyRate: 50,
-      appliedCharge: 100,
-      amountPaid: 0,
-    }));
+    imported.students.push(
+      createStudent({ id: "foreign-student", code: "STU-001", fullName: "Ana", groupIds: ["foreign-group"] }),
+    );
+    imported.classLog.push(
+      createClassLogRow({
+        id: "foreign-class",
+        classDate: "2026-07-27",
+        studentId: "foreign-student",
+        groupId: "foreign-group",
+        hours: 2,
+        appliedHourlyRate: 50,
+        appliedCharge: 100,
+        amountPaid: 0,
+      }),
+    );
 
     const plan = buildImportPlan(current, imported);
 
@@ -77,7 +93,9 @@ describe("additive record imports", () => {
   it("keeps current conflicting information by default", () => {
     const current = stateWithRoster();
     const imported = createStarterState();
-    imported.students.push(createStudent({ id: "foreign-student", code: "STU-001", fullName: "Ana Updated", groupIds: [] }));
+    imported.students.push(
+      createStudent({ id: "foreign-student", code: "STU-001", fullName: "Ana Updated", groupIds: [] }),
+    );
 
     const plan = buildImportPlan(current, imported);
 
@@ -88,7 +106,9 @@ describe("additive record imports", () => {
   it("updates only an explicitly approved conflict and preserves its stable ID", () => {
     const current = stateWithRoster();
     const imported = createStarterState();
-    imported.students.push(createStudent({ id: "foreign-student", code: "STU-001", fullName: "Ana Updated", groupIds: [] }));
+    imported.students.push(
+      createStudent({ id: "foreign-student", code: "STU-001", fullName: "Ana Updated", groupIds: [] }),
+    );
     const preview = buildImportPlan(current, imported);
     const conflict = preview.entries.find((entry) => entry.status === "conflict");
 
@@ -100,11 +120,53 @@ describe("additive record imports", () => {
 
   it("does not duplicate a grade or class with the same business identity", () => {
     const current = stateWithRoster();
-    current.grades.push(createGrade({ id: "grade-current", date: "2026-07-27", studentId: "student-current", assessment: "Quiz", maxScore: 10, score: 8 }));
-    current.classLog.push(createClassLogRow({ id: "class-current", classDate: "2026-07-27", startTime: "10:00", studentId: "student-current", groupId: "group-current", hours: 2, appliedHourlyRate: 50, appliedCharge: 100, amountPaid: 0 }));
+    current.grades.push(
+      createGrade({
+        id: "grade-current",
+        date: "2026-07-27",
+        studentId: "student-current",
+        assessment: "Quiz",
+        maxScore: 10,
+        score: 8,
+      }),
+    );
+    current.classLog.push(
+      createClassLogRow({
+        id: "class-current",
+        classDate: "2026-07-27",
+        startTime: "10:00",
+        studentId: "student-current",
+        groupId: "group-current",
+        hours: 2,
+        appliedHourlyRate: 50,
+        appliedCharge: 100,
+        amountPaid: 0,
+      }),
+    );
     const imported = stateWithRoster();
-    imported.grades.push(createGrade({ id: "grade-other", date: "2026-07-27", studentId: "student-current", assessment: "Quiz", maxScore: 10, score: 9 }));
-    imported.classLog.push(createClassLogRow({ id: "class-other", classDate: "2026-07-27", startTime: "10:00", studentId: "student-current", groupId: "group-current", hours: 2, appliedHourlyRate: 50, appliedCharge: 100, amountPaid: 50 }));
+    imported.grades.push(
+      createGrade({
+        id: "grade-other",
+        date: "2026-07-27",
+        studentId: "student-current",
+        assessment: "Quiz",
+        maxScore: 10,
+        score: 9,
+      }),
+    );
+    imported.classLog.push(
+      createClassLogRow({
+        id: "class-other",
+        classDate: "2026-07-27",
+        startTime: "10:00",
+        studentId: "student-current",
+        groupId: "group-current",
+        hours: 2,
+        appliedHourlyRate: 50,
+        appliedCharge: 100,
+        amountPaid: 50,
+      }),
+    );
 
     const plan = buildImportPlan(current, imported);
 
@@ -115,55 +177,67 @@ describe("additive record imports", () => {
 
   it("remaps the complete schedule graph before merging records", () => {
     const current = createStarterState();
-    current.groups.push(createGroup({
-      id: "group-current",
-      name: "Math",
-      weeklySchedule: [{ id: "slot-current", dayOfWeek: 1, startTime: "10:00", durationHours: 1 }],
-    }));
-    current.students.push(createStudent({
-      id: "student-current",
-      code: "STU-001",
-      fullName: "Ana",
-      groupIds: ["group-current"],
-    }));
-    current.classSchedules.push(createClassSchedule({
-      id: "schedule-current",
-      recurrence: "weekly",
-      format: "group",
-      groupId: "group-current",
-      startDate: "2026-08-11",
-      startTime: "11:00",
-      durationHours: 1,
-      daysOfWeek: [2],
-      participantMode: "custom",
-      participantIds: ["student-current"],
-    }));
+    current.groups.push(
+      createGroup({
+        id: "group-current",
+        name: "Math",
+        weeklySchedule: [{ id: "slot-current", dayOfWeek: 1, startTime: "10:00", durationHours: 1 }],
+      }),
+    );
+    current.students.push(
+      createStudent({
+        id: "student-current",
+        code: "STU-001",
+        fullName: "Ana",
+        groupIds: ["group-current"],
+      }),
+    );
+    current.classSchedules.push(
+      createClassSchedule({
+        id: "schedule-current",
+        recurrence: "weekly",
+        format: "group",
+        groupId: "group-current",
+        startDate: "2026-08-11",
+        startTime: "11:00",
+        durationHours: 1,
+        daysOfWeek: [2],
+        participantMode: "custom",
+        participantIds: ["student-current"],
+      }),
+    );
 
     const imported = createStarterState();
-    imported.groups.push(createGroup({
-      id: "group-imported",
-      name: "Math",
-      notes: "Imported update",
-      weeklySchedule: [{ id: "slot-imported", dayOfWeek: 1, startTime: "10:00", durationHours: 1 }],
-    }));
-    imported.students.push(createStudent({
-      id: "student-imported",
-      code: "STU-001",
-      fullName: "Ana",
-      groupIds: ["group-imported"],
-    }));
-    imported.classSchedules.push(createClassSchedule({
-      id: "schedule-imported",
-      recurrence: "weekly",
-      format: "group",
-      groupId: "group-imported",
-      startDate: "2026-08-11",
-      startTime: "11:00",
-      durationHours: 1,
-      daysOfWeek: [2],
-      participantMode: "custom",
-      participantIds: ["student-imported"],
-    }));
+    imported.groups.push(
+      createGroup({
+        id: "group-imported",
+        name: "Math",
+        notes: "Imported update",
+        weeklySchedule: [{ id: "slot-imported", dayOfWeek: 1, startTime: "10:00", durationHours: 1 }],
+      }),
+    );
+    imported.students.push(
+      createStudent({
+        id: "student-imported",
+        code: "STU-001",
+        fullName: "Ana",
+        groupIds: ["group-imported"],
+      }),
+    );
+    imported.classSchedules.push(
+      createClassSchedule({
+        id: "schedule-imported",
+        recurrence: "weekly",
+        format: "group",
+        groupId: "group-imported",
+        startDate: "2026-08-11",
+        startTime: "11:00",
+        durationHours: 1,
+        daysOfWeek: [2],
+        participantMode: "custom",
+        participantIds: ["student-imported"],
+      }),
+    );
     imported.scheduleExceptions.push(
       createScheduleException({
         id: "group-exception",
@@ -194,36 +268,42 @@ describe("additive record imports", () => {
         participantIds: ["student-imported"],
       }),
     );
-    imported.scheduleChanges.push(createScheduleChange({
-      id: "schedule-change",
-      groupId: "group-imported",
-      scheduleSlotId: "slot-imported",
-      effectiveFrom: "2026-08-17",
-      dayOfWeek: 1,
-      startTime: "12:00",
-      durationHours: 1,
-    }));
-    imported.classLog.push(createClassLogRow({
-      id: "class-log",
-      classDate: "2026-08-11",
-      startTime: "11:30",
-      studentId: "student-imported",
-      groupId: "group-imported",
-      scheduleSlotId: "schedule-imported",
-      hours: 1,
-      appliedHourlyRate: 50,
-      appliedCharge: 50,
-      amountPaid: 0,
-    }));
-    imported.grades.push(createGrade({
-      id: "grade",
-      date: "2026-08-11",
-      studentId: "student-imported",
-      assessment: "Quiz",
-      score: 8,
-      maxScore: 10,
-      classSessionKey: "2026-08-11|g:group-imported|11:30",
-    }));
+    imported.scheduleChanges.push(
+      createScheduleChange({
+        id: "schedule-change",
+        groupId: "group-imported",
+        scheduleSlotId: "slot-imported",
+        effectiveFrom: "2026-08-17",
+        dayOfWeek: 1,
+        startTime: "12:00",
+        durationHours: 1,
+      }),
+    );
+    imported.classLog.push(
+      createClassLogRow({
+        id: "class-log",
+        classDate: "2026-08-11",
+        startTime: "11:30",
+        studentId: "student-imported",
+        groupId: "group-imported",
+        scheduleSlotId: "schedule-imported",
+        hours: 1,
+        appliedHourlyRate: 50,
+        appliedCharge: 50,
+        amountPaid: 0,
+      }),
+    );
+    imported.grades.push(
+      createGrade({
+        id: "grade",
+        date: "2026-08-11",
+        studentId: "student-imported",
+        assessment: "Quiz",
+        score: 8,
+        maxScore: 10,
+        classSessionKey: "2026-08-11|g:group-imported|11:30",
+      }),
+    );
 
     const plan = buildImportPlan(current, imported);
     const [groupException, classScheduleException] = plan.candidate.scheduleExceptions;
@@ -245,7 +325,10 @@ describe("additive record imports", () => {
       scheduleSlotId: "schedule-current",
       participantIds: ["student-current"],
     });
-    expect(plan.candidate.scheduleChanges[0]).toMatchObject({ groupId: "group-current", scheduleSlotId: "slot-current" });
+    expect(plan.candidate.scheduleChanges[0]).toMatchObject({
+      groupId: "group-current",
+      scheduleSlotId: "slot-current",
+    });
     expect(plan.candidate.classLog[0]).toMatchObject({
       studentId: "student-current",
       groupId: "group-current",
@@ -256,9 +339,9 @@ describe("additive record imports", () => {
       classSessionKey: "2026-08-11|g:group-current|11:30",
     });
     expect(() => serializeState(plan.candidate)).not.toThrow();
-    expect(generateScheduledOccurrences(plan.candidate, "2026-08-10", "2026-08-18").map((item) => item.startTime)).toEqual(
-      expect.arrayContaining(["10:30", "11:30", "12:00"]),
-    );
+    expect(
+      generateScheduledOccurrences(plan.candidate, "2026-08-10", "2026-08-18").map((item) => item.startTime),
+    ).toEqual(expect.arrayContaining(["10:30", "11:30", "12:00"]));
 
     const groupConflict = plan.entries.find((entry) => entry.collection === "groups" && entry.status === "conflict");
     const approved = buildImportPlan(current, imported, { [groupConflict.key]: "use-imported" });

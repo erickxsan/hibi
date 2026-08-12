@@ -1,10 +1,6 @@
 import { createContext, useContext, useLayoutEffect, useMemo, useState } from "react";
 import { Languages } from "lucide-react";
-import {
-  LANGUAGE_STORAGE_KEY,
-  SUPPORTED_LANGUAGES,
-  translateUiText,
-} from "./translations";
+import { LANGUAGE_STORAGE_KEY, SUPPORTED_LANGUAGES, translateUiText } from "./translations";
 
 const I18nContext = createContext(null);
 const TRANSLATED_ATTRIBUTES = ["aria-label", "placeholder", "title", "alt"];
@@ -122,15 +118,20 @@ export function I18nProvider({ children }) {
 
   useLayoutEffect(() => {
     document.documentElement.lang = language;
-    document.title = language === SUPPORTED_LANGUAGES.SPANISH
-      ? "hibi — Enseñando, día a día"
-      : "hibi — Teaching, day by day";
+    document.title =
+      language === SUPPORTED_LANGUAGES.SPANISH ? "hibi — Enseñando, día a día" : "hibi — Teaching, day by day";
 
     const translate = (root = document.body) => translateSubtree(root, language);
     translate();
     let scheduled = false;
     let active = true;
-    const observerOptions = { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: TRANSLATED_ATTRIBUTES };
+    const observerOptions = {
+      subtree: true,
+      childList: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: TRANSLATED_ATTRIBUTES,
+    };
     const observer = new MutationObserver(() => {
       if (scheduled) return;
       scheduled = true;
@@ -149,12 +150,15 @@ export function I18nProvider({ children }) {
     };
   }, [language]);
 
-  const value = useMemo(() => ({
-    language,
-    locale: language === SUPPORTED_LANGUAGES.SPANISH ? "es-MX" : "en-MX",
-    setLanguage,
-    t: (value) => translateUiText(value, language),
-  }), [language]);
+  const value = useMemo(
+    () => ({
+      language,
+      locale: language === SUPPORTED_LANGUAGES.SPANISH ? "es-MX" : "en-MX",
+      setLanguage,
+      t: (value) => translateUiText(value, language),
+    }),
+    [language],
+  );
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
@@ -170,8 +174,22 @@ export function LanguageToggle({ className = "" }) {
   return (
     <div className={`language-toggle ${className}`.trim()} role="group" aria-label={t("Language")}>
       <Languages aria-hidden="true" size={16} />
-      <button type="button" className={language === "en" ? "is-active" : ""} aria-pressed={language === "en"} onClick={() => setLanguage("en")}>EN</button>
-      <button type="button" className={language === "es" ? "is-active" : ""} aria-pressed={language === "es"} onClick={() => setLanguage("es")}>ES</button>
+      <button
+        type="button"
+        className={language === "en" ? "is-active" : ""}
+        aria-pressed={language === "en"}
+        onClick={() => setLanguage("en")}
+      >
+        EN
+      </button>
+      <button
+        type="button"
+        className={language === "es" ? "is-active" : ""}
+        aria-pressed={language === "es"}
+        onClick={() => setLanguage("es")}
+      >
+        ES
+      </button>
     </div>
   );
 }

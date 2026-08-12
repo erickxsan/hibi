@@ -30,7 +30,9 @@ export function filterCalendarSessions(sessions = [], { search = "", ownerId = "
   return sessions.filter((session) => {
     if (ownerId && session.groupId !== ownerId && session.studentId !== ownerId) return false;
     if (!needle) return true;
-    return `${session.title || ""} ${session.groupName || ""} ${session.studentName || ""}`.toLocaleLowerCase().includes(needle);
+    return `${session.title || ""} ${session.groupName || ""} ${session.studentName || ""}`
+      .toLocaleLowerCase()
+      .includes(needle);
   });
 }
 

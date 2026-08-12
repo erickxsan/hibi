@@ -63,10 +63,14 @@ export function createDeviceRecoveryStore(indexedDb = globalThis.indexedDB, cryp
       const request = indexedDb.open(DATABASE_NAME, DATABASE_VERSION);
       request.onupgradeneeded = () => {
         const database = request.result;
-        if (!database.objectStoreNames.contains(RECOVERY_STORE)) database.createObjectStore(RECOVERY_STORE, { keyPath: "id" });
-        if (!database.objectStoreNames.contains(CACHE_STORE)) database.createObjectStore(CACHE_STORE, { keyPath: "ownerId" });
-        if (!database.objectStoreNames.contains(OUTBOX_STORE)) database.createObjectStore(OUTBOX_STORE, { keyPath: "id" });
-        if (!database.objectStoreNames.contains(KEY_STORE)) database.createObjectStore(KEY_STORE, { keyPath: "ownerId" });
+        if (!database.objectStoreNames.contains(RECOVERY_STORE))
+          database.createObjectStore(RECOVERY_STORE, { keyPath: "id" });
+        if (!database.objectStoreNames.contains(CACHE_STORE))
+          database.createObjectStore(CACHE_STORE, { keyPath: "ownerId" });
+        if (!database.objectStoreNames.contains(OUTBOX_STORE))
+          database.createObjectStore(OUTBOX_STORE, { keyPath: "id" });
+        if (!database.objectStoreNames.contains(KEY_STORE))
+          database.createObjectStore(KEY_STORE, { keyPath: "ownerId" });
       };
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error || new Error("Device recovery storage is unavailable."));
@@ -76,7 +80,8 @@ export function createDeviceRecoveryStore(indexedDb = globalThis.indexedDB, cryp
   }
 
   async function encryptionKey(database, ownerId) {
-    if (!cryptoApi?.subtle || !cryptoApi?.getRandomValues) throw new Error("Encrypted device storage is unavailable in this browser.");
+    if (!cryptoApi?.subtle || !cryptoApi?.getRandomValues)
+      throw new Error("Encrypted device storage is unavailable in this browser.");
     if (keyPromises.has(ownerId)) return keyPromises.get(ownerId);
     const keyPromise = (async () => {
       const read = database.transaction(KEY_STORE, "readonly");
@@ -113,7 +118,11 @@ export function createDeviceRecoveryStore(indexedDb = globalThis.indexedDB, cryp
     if (!payload || payload.version !== 1) throw new Error("This encrypted device copy uses an unsupported format.");
     const key = await encryptionKey(database, ownerId);
     const additionalData = new TextEncoder().encode(ownerId);
-    const plaintext = await cryptoApi.subtle.decrypt({ name: "AES-GCM", iv: payload.iv, additionalData }, key, payload.ciphertext);
+    const plaintext = await cryptoApi.subtle.decrypt(
+      { name: "AES-GCM", iv: payload.iv, additionalData },
+      key,
+      payload.ciphertext,
+    );
     return JSON.parse(new TextDecoder().decode(plaintext));
   }
 
@@ -124,10 +133,12 @@ export function createDeviceRecoveryStore(indexedDb = globalThis.indexedDB, cryp
     const capturedAt = new Date().toISOString();
     const safeState = canonicalState(state);
     const stableRevision = Number.isSafeInteger(Number(revision)) ? Number(revision) : null;
-    const id = source === AUTOMATIC_BACKUP_SOURCE
-      ? `${ownerId}:${AUTOMATIC_BACKUP_SOURCE}`
-      : stableRevision !== null ? `${ownerId}:revision:${stableRevision}`
-        : `${ownerId}:${source}:${capturedAt}:${Math.random().toString(36).slice(2)}`;
+    const id =
+      source === AUTOMATIC_BACKUP_SOURCE
+        ? `${ownerId}:${AUTOMATIC_BACKUP_SOURCE}`
+        : stableRevision !== null
+          ? `${ownerId}:revision:${stableRevision}`
+          : `${ownerId}:${source}:${capturedAt}:${Math.random().toString(36).slice(2)}`;
     const copy = {
       id,
       ownerId,
@@ -163,7 +174,9 @@ export function createDeviceRecoveryStore(indexedDb = globalThis.indexedDB, cryp
     const owned = all
       .filter((copy) => copy.ownerId === ownerId)
       .sort((left, right) => String(right.capturedAt).localeCompare(String(left.capturedAt)));
-    await Promise.all(owned.map(async (copy) => canonicalState(copy.state || await unseal(database, ownerId, copy.payload))));
+    await Promise.all(
+      owned.map(async (copy) => canonicalState(copy.state || (await unseal(database, ownerId, copy.payload)))),
+    );
     return owned.map(publicMetadata);
   }
 
@@ -175,7 +188,9 @@ export function createDeviceRecoveryStore(indexedDb = globalThis.indexedDB, cryp
     const copy = await requestResult(transaction.objectStore(RECOVERY_STORE).get(copyId));
     await done;
     if (!copy || copy.ownerId !== ownerId) return null;
-    const state = copy.state ? canonicalState(copy.state) : canonicalState(await unseal(database, ownerId, copy.payload));
+    const state = copy.state
+      ? canonicalState(copy.state)
+      : canonicalState(await unseal(database, ownerId, copy.payload));
     return { ...publicMetadata(copy), state };
   }
 
@@ -226,7 +241,14 @@ export function createDeviceRecoveryStore(indexedDb = globalThis.indexedDB, cryp
       await done.catch(() => {});
       throw new Error("Too many offline changes are waiting. Reconnect before editing more records.");
     }
-    outbox.put({ id: mutation.operationId, ownerId, status: "pending", createdAt, payload: operationPayload, encrypted: true });
+    outbox.put({
+      id: mutation.operationId,
+      ownerId,
+      status: "pending",
+      createdAt,
+      payload: operationPayload,
+      encrypted: true,
+    });
     transaction.objectStore(CACHE_STORE).put({ ownerId, payload: cachePayload, cachedAt: createdAt, encrypted: true });
     transaction.objectStore(RECOVERY_STORE).put({
       id: `${ownerId}:${AUTOMATIC_BACKUP_SOURCE}`,
@@ -253,10 +275,12 @@ export function createDeviceRecoveryStore(indexedDb = globalThis.indexedDB, cryp
     const owned = all
       .filter((item) => item.ownerId === ownerId)
       .sort((left, right) => String(left.createdAt).localeCompare(String(right.createdAt)));
-    return Promise.all(owned.map(async (item) => ({
-      ...publicMetadata(item),
-      ...await unseal(database, ownerId, item.payload),
-    })));
+    return Promise.all(
+      owned.map(async (item) => ({
+        ...publicMetadata(item),
+        ...(await unseal(database, ownerId, item.payload)),
+      })),
+    );
   }
 
   async function markMutationConflict(ownerId, operationId, message) {
@@ -270,7 +294,12 @@ export function createDeviceRecoveryStore(indexedDb = globalThis.indexedDB, cryp
       await done;
       return false;
     }
-    store.put({ ...item, status: "conflict", conflictMessage: String(message || "Cloud conflict"), conflictAt: new Date().toISOString() });
+    store.put({
+      ...item,
+      status: "conflict",
+      conflictMessage: String(message || "Cloud conflict"),
+      conflictAt: new Date().toISOString(),
+    });
     await done;
     return true;
   }

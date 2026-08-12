@@ -11,9 +11,11 @@ export function classWorkspaceSessionKey(item = {}) {
 }
 
 function scheduledStatus(session, asOfDate) {
-  if (session.rows?.some((row) => row.classStatus === "Cancelled") || session.status === "Cancelled") return "Cancelled";
+  if (session.rows?.some((row) => row.classStatus === "Cancelled") || session.status === "Cancelled")
+    return "Cancelled";
   if (session.rows?.some((row) => row.classStatus === "Completed")) return "Registered";
-  if (session.kind === "override" && session.occurrenceDate && session.occurrenceDate !== session.classDate) return "Rescheduled";
+  if (session.kind === "override" && session.occurrenceDate && session.occurrenceDate !== session.classDate)
+    return "Rescheduled";
   return session.classDate < asOfDate ? "Pending" : "Scheduled";
 }
 
@@ -65,7 +67,12 @@ function assembleSessions(state, occurrences, classLog, asOfDate) {
 
   return [...sessions.values()]
     .map((session) => ({ ...session, statusLabel: scheduledStatus(session, asOfDate) }))
-    .sort((left, right) => left.classDate.localeCompare(right.classDate) || (left.startTime || "").localeCompare(right.startTime || "") || left.title.localeCompare(right.title));
+    .sort(
+      (left, right) =>
+        left.classDate.localeCompare(right.classDate) ||
+        (left.startTime || "").localeCompare(right.startTime || "") ||
+        left.title.localeCompare(right.title),
+    );
 }
 
 export function buildClassWorkspaceSessions(state = {}, asOfDate = todayDateOnly()) {
@@ -76,8 +83,9 @@ export function buildClassWorkspaceSessions(state = {}, asOfDate = todayDateOnly
 
 export function buildClassWorkspaceSessionsForRange(state = {}, startDate, endDate, asOfDate = todayDateOnly()) {
   const occurrences = generateScheduledOccurrences(state, startDate, endDate);
-  const classLog = (Array.isArray(state.classLog) ? state.classLog : [])
-    .filter((row) => row?.classDate >= startDate && row?.classDate <= endDate);
+  const classLog = (Array.isArray(state.classLog) ? state.classLog : []).filter(
+    (row) => row?.classDate >= startDate && row?.classDate <= endDate,
+  );
   return assembleSessions(state, occurrences, classLog, asOfDate);
 }
 
@@ -124,17 +132,28 @@ export function paymentRecordState(row, charge = 0) {
 }
 
 export function filterClassHistory(sessions = [], filters = {}) {
-  const needle = String(filters.search || "").trim().toLocaleLowerCase();
-  return sessions.filter((session) => {
-    if (session.statusLabel === "Scheduled") return false;
-    const hasSavedRows = Array.isArray(session.rows) && session.rows.length > 0;
-    const isExplicitScheduleEvent = ["Cancelled", "Rescheduled"].includes(session.statusLabel);
-    if (!hasSavedRows && !isExplicitScheduleEvent) return false;
-    if (needle && !`${session.title} ${session.groupName || ""} ${session.studentName || ""}`.toLocaleLowerCase().includes(needle)) return false;
-    if (filters.dateFrom && session.classDate < filters.dateFrom) return false;
-    if (filters.dateTo && session.classDate > filters.dateTo) return false;
-    if (filters.ownerId && session.groupId !== filters.ownerId && session.studentId !== filters.ownerId) return false;
-    if (filters.status && session.statusLabel !== filters.status) return false;
-    return true;
-  }).sort((left, right) => right.classDate.localeCompare(left.classDate) || (right.startTime || "").localeCompare(left.startTime || ""));
+  const needle = String(filters.search || "")
+    .trim()
+    .toLocaleLowerCase();
+  return sessions
+    .filter((session) => {
+      if (session.statusLabel === "Scheduled") return false;
+      const hasSavedRows = Array.isArray(session.rows) && session.rows.length > 0;
+      const isExplicitScheduleEvent = ["Cancelled", "Rescheduled"].includes(session.statusLabel);
+      if (!hasSavedRows && !isExplicitScheduleEvent) return false;
+      if (
+        needle &&
+        !`${session.title} ${session.groupName || ""} ${session.studentName || ""}`.toLocaleLowerCase().includes(needle)
+      )
+        return false;
+      if (filters.dateFrom && session.classDate < filters.dateFrom) return false;
+      if (filters.dateTo && session.classDate > filters.dateTo) return false;
+      if (filters.ownerId && session.groupId !== filters.ownerId && session.studentId !== filters.ownerId) return false;
+      if (filters.status && session.statusLabel !== filters.status) return false;
+      return true;
+    })
+    .sort(
+      (left, right) =>
+        right.classDate.localeCompare(left.classDate) || (right.startTime || "").localeCompare(left.startTime || ""),
+    );
 }

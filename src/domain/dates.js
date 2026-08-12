@@ -19,11 +19,7 @@ export function isDateOnly(value) {
   const month = Number(match[2]);
   const day = Number(match[3]);
   const parsed = utcDate(year, month, day);
-  return (
-    parsed.getUTCFullYear() === year &&
-    parsed.getUTCMonth() + 1 === month &&
-    parsed.getUTCDate() === day
-  );
+  return parsed.getUTCFullYear() === year && parsed.getUTCMonth() + 1 === month && parsed.getUTCDate() === day;
 }
 
 export function parseDateOnly(value) {

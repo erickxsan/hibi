@@ -17,18 +17,24 @@ function sourceSlotId(session) {
 function exceptionMatchesSession(exception, session) {
   if (session.exceptionId && exception.id === session.exceptionId) return true;
   if (session.classScheduleId) {
-    return exception.classScheduleId === session.classScheduleId
-      && exception.occurrenceDate === sourceOccurrenceDate(session);
+    return (
+      exception.classScheduleId === session.classScheduleId &&
+      exception.occurrenceDate === sourceOccurrenceDate(session)
+    );
   }
-  return (exception.sourceGroupId || exception.groupId) === sourceGroupId(session)
-    && (exception.sourceScheduleSlotId || exception.scheduleSlotId) === sourceSlotId(session)
-    && exception.occurrenceDate === sourceOccurrenceDate(session);
+  return (
+    (exception.sourceGroupId || exception.groupId) === sourceGroupId(session) &&
+    (exception.sourceScheduleSlotId || exception.scheduleSlotId) === sourceSlotId(session) &&
+    exception.occurrenceDate === sourceOccurrenceDate(session)
+  );
 }
 
 function isExceptionFromSeries(exception, session) {
   if (session.classScheduleId) return exception.classScheduleId === session.classScheduleId;
-  return (exception.sourceGroupId || exception.groupId) === sourceGroupId(session)
-    && (exception.sourceScheduleSlotId || exception.scheduleSlotId) === sourceSlotId(session);
+  return (
+    (exception.sourceGroupId || exception.groupId) === sourceGroupId(session) &&
+    (exception.sourceScheduleSlotId || exception.scheduleSlotId) === sourceSlotId(session)
+  );
 }
 
 function normalizedDraft(session, draft) {
@@ -41,17 +47,20 @@ function normalizedDraft(session, draft) {
     groupId: format === "group" ? draft.groupId || "" : "",
     studentId: format === "individual" ? draft.studentId || "" : "",
     participantMode: format === "group" && draft.participantMode === "custom" ? "custom" : "default",
-    participantIds: format === "group" && draft.participantMode === "custom"
-      ? [...new Set((draft.participantIds || []).filter(Boolean))]
-      : [],
+    participantIds:
+      format === "group" && draft.participantMode === "custom"
+        ? [...new Set((draft.participantIds || []).filter(Boolean))]
+        : [],
     originalClassDate: session.classDate,
   };
 }
 
 function assertSafeMutation(session, asOfDate) {
   if (!session) throw new Error("Choose a scheduled class first.");
-  if ((session.rows || []).length) throw new Error("Recorded classes must be edited from History; their schedule is protected.");
-  if (sourceOccurrenceDate(session) < asOfDate) throw new Error("Past classes are protected and cannot be rescheduled.");
+  if ((session.rows || []).length)
+    throw new Error("Recorded classes must be edited from History; their schedule is protected.");
+  if (sourceOccurrenceDate(session) < asOfDate)
+    throw new Error("Past classes are protected and cannot be rescheduled.");
   if (!session.classScheduleId && !sourceSlotId(session) && !session.exceptionId) {
     throw new Error("This class is not linked to an editable schedule.");
   }
@@ -60,7 +69,8 @@ function assertSafeMutation(session, asOfDate) {
 function assertDraft(draft, minimumDate) {
   if (!draft.classDate || draft.classDate < minimumDate) throw new Error("Choose a valid future date.");
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(draft.startTime || "")) throw new Error("Choose a valid class time.");
-  if (!Number.isFinite(draft.durationHours) || draft.durationHours < 0.25) throw new Error("Choose a valid class duration.");
+  if (!Number.isFinite(draft.durationHours) || draft.durationHours < 0.25)
+    throw new Error("Choose a valid class duration.");
   if (draft.format === "group" && !draft.groupId) throw new Error("Choose a group.");
   if (draft.format === "individual" && !draft.studentId) throw new Error("Choose a student.");
 }
@@ -68,7 +78,7 @@ function assertDraft(draft, minimumDate) {
 function upsertException(items, next, session) {
   const found = items.some((item) => exceptionMatchesSession(item, session));
   return found
-    ? items.map((item) => exceptionMatchesSession(item, session) ? { ...next, id: item.id } : item)
+    ? items.map((item) => (exceptionMatchesSession(item, session) ? { ...next, id: item.id } : item))
     : [...items, next];
 }
 
@@ -120,16 +130,16 @@ export function editScheduledClassState(state, { session, draft: rawDraft, scope
   }
 
   const effectiveFrom = sourceOccurrenceDate(session);
-  const remainingExceptions = (state.scheduleExceptions || []).filter((item) => (
-    !isExceptionFromSeries(item, session) || item.occurrenceDate < effectiveFrom
-  ));
+  const remainingExceptions = (state.scheduleExceptions || []).filter(
+    (item) => !isExceptionFromSeries(item, session) || item.occurrenceDate < effectiveFrom,
+  );
 
   if (session.classScheduleId) {
     const source = state.classSchedules.find((item) => item.id === session.classScheduleId);
     if (!source) throw new Error("The recurring class could not be found.");
     const oldDay = dayOfWeekForDate(effectiveFrom);
     const newDay = dayOfWeekForDate(draft.classDate);
-    const nextDays = [...new Set((source.daysOfWeek || [oldDay]).map((day) => day === oldDay ? newDay : day))].sort();
+    const nextDays = [...new Set((source.daysOfWeek || [oldDay]).map((day) => (day === oldDay ? newDay : day)))].sort();
     const { id: _sourceId, endDate: _sourceEndDate, ...sourceFields } = source;
     const replacement = createClassSchedule({
       ...sourceFields,
@@ -148,7 +158,9 @@ export function editScheduledClassState(state, { session, draft: rawDraft, scope
     return {
       ...state,
       classSchedules: [
-        ...state.classSchedules.map((item) => item.id === source.id ? { ...item, endDate: addDays(effectiveFrom, -1) } : item),
+        ...state.classSchedules.map((item) =>
+          item.id === source.id ? { ...item, endDate: addDays(effectiveFrom, -1) } : item,
+        ),
         replacement,
       ],
       scheduleExceptions: remainingExceptions,
@@ -210,15 +222,15 @@ export function removeScheduledClassState(state, { session, scope = "occurrence"
   }
 
   const effectiveFrom = sourceOccurrenceDate(session);
-  const scheduleExceptions = (state.scheduleExceptions || []).filter((item) => (
-    !isExceptionFromSeries(item, session) || item.occurrenceDate < effectiveFrom
-  ));
+  const scheduleExceptions = (state.scheduleExceptions || []).filter(
+    (item) => !isExceptionFromSeries(item, session) || item.occurrenceDate < effectiveFrom,
+  );
   if (session.classScheduleId) {
     return {
       ...state,
-      classSchedules: state.classSchedules.map((item) => item.id === session.classScheduleId
-        ? { ...item, endDate: addDays(effectiveFrom, -1) }
-        : item),
+      classSchedules: state.classSchedules.map((item) =>
+        item.id === session.classScheduleId ? { ...item, endDate: addDays(effectiveFrom, -1) } : item,
+      ),
       scheduleExceptions,
     };
   }
@@ -228,15 +240,18 @@ export function removeScheduledClassState(state, { session, scope = "occurrence"
   if (!group || !slot) throw new Error("The recurring class could not be found.");
   return {
     ...state,
-    scheduleChanges: [...(state.scheduleChanges || []), createScheduleChange({
-      groupId: group.id,
-      scheduleSlotId: slot.id,
-      effectiveFrom,
-      dayOfWeek: slot.dayOfWeek,
-      startTime: slot.startTime,
-      durationHours: slot.durationHours,
-      status: "Cancelled",
-    })],
+    scheduleChanges: [
+      ...(state.scheduleChanges || []),
+      createScheduleChange({
+        groupId: group.id,
+        scheduleSlotId: slot.id,
+        effectiveFrom,
+        dayOfWeek: slot.dayOfWeek,
+        startTime: slot.startTime,
+        durationHours: slot.durationHours,
+        status: "Cancelled",
+      }),
+    ],
     scheduleExceptions,
   };
 }

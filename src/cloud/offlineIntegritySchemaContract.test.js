@@ -35,7 +35,9 @@ describe("offline sync and database integrity schema", () => {
   it("makes the idempotent RPC the only authenticated patch writer", () => {
     expect(strictValidationMigration).toContain("workspace_patch_shape_is_valid");
     expect(strictValidationMigration).toContain("perform private.assert_normalized_workspace_integrity(caller_id)");
-    expect(strictValidationMigration).toContain("revoke all on function public.apply_workspace_patch(uuid,jsonb,jsonb)");
+    expect(strictValidationMigration).toContain(
+      "revoke all on function public.apply_workspace_patch(uuid,jsonb,jsonb)",
+    );
   });
 
   it("enforces canonical nested metadata and per-owner natural keys", () => {

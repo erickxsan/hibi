@@ -1,12 +1,15 @@
 export function studentMatchesFilters(student, filters = {}) {
   const studentGroupIds = Array.isArray(student?.groupIds)
     ? student.groupIds
-    : student?.groupId ? [student.groupId] : [];
+    : student?.groupId
+      ? [student.groupId]
+      : [];
   const selectedGroups = Array.isArray(filters.groupIds) ? filters.groupIds : [];
   if (selectedGroups.length) {
-    const matches = filters.groupMatch === "all"
-      ? selectedGroups.every((id) => studentGroupIds.includes(id))
-      : selectedGroups.some((id) => studentGroupIds.includes(id));
+    const matches =
+      filters.groupMatch === "all"
+        ? selectedGroups.every((id) => studentGroupIds.includes(id))
+        : selectedGroups.some((id) => studentGroupIds.includes(id));
     if (!matches) return false;
   }
 

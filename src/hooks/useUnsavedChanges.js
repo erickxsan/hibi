@@ -29,9 +29,9 @@ export function useUnsavedChanges(registerNavigationBlocker, dirty, message = DE
 
   useEffect(() => {
     if (typeof registerNavigationBlocker !== "function") return undefined;
-    return registerNavigationBlocker(() => (stateRef.current.dirty
-      ? translateUiText(stateRef.current.message, getUiLanguage())
-      : ""));
+    return registerNavigationBlocker(() =>
+      stateRef.current.dirty ? translateUiText(stateRef.current.message, getUiLanguage()) : "",
+    );
   }, [registerNavigationBlocker]);
 
   useEffect(() => {

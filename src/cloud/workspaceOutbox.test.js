@@ -55,7 +55,9 @@ describe("persistent workspace outbox", () => {
     const conflict = new WorkspaceConflictError({ latestState: createStarterState(), latestRevision: 3 });
     const repository = {
       loadWorkspace: vi.fn(async () => ({ state: createStarterState(), versions: {}, revision: 2 })),
-      applyWorkspaceMutation: vi.fn(async () => { throw conflict; }),
+      applyWorkspaceMutation: vi.fn(async () => {
+        throw conflict;
+      }),
     };
 
     const result = await flushWorkspaceOutbox({ ownerId: "user-1", store, repository });
@@ -70,7 +72,9 @@ describe("persistent workspace outbox", () => {
     const store = memoryStore([queued("a")]);
     const repository = {
       loadWorkspace: vi.fn(async () => ({ state: createStarterState(), versions: {}, revision: 2 })),
-      applyWorkspaceMutation: vi.fn(async () => { throw new Error("network unavailable"); }),
+      applyWorkspaceMutation: vi.fn(async () => {
+        throw new Error("network unavailable");
+      }),
     };
 
     await expect(flushWorkspaceOutbox({ ownerId: "user-1", store, repository })).rejects.toThrow("network unavailable");

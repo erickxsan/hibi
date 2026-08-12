@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildClassWorkspaceSessions, buildClassWorkspaceSessionsForRange, filterClassHistory, paymentRecordState, rosterForClassSession, selectPrimaryClassSession } from "./classesWorkspaceModel";
+import {
+  buildClassWorkspaceSessions,
+  buildClassWorkspaceSessionsForRange,
+  filterClassHistory,
+  paymentRecordState,
+  rosterForClassSession,
+  selectPrimaryClassSession,
+} from "./classesWorkspaceModel";
 
 const state = {
   settings: { defaultClassHours: 2 },
@@ -8,7 +15,20 @@ const state = {
     { id: "s1", fullName: "Ana", groupIds: ["g1"], status: "Active" },
     { id: "s2", fullName: "Ben", groupIds: ["g1"], status: "Inactive" },
   ],
-  classSchedules: [{ id: "cs1", recurrence: "weekly", format: "group", groupId: "g1", studentId: "", startDate: "2026-07-01", startTime: "10:00", durationHours: 2, intervalWeeks: 1, daysOfWeek: [3] }],
+  classSchedules: [
+    {
+      id: "cs1",
+      recurrence: "weekly",
+      format: "group",
+      groupId: "g1",
+      studentId: "",
+      startDate: "2026-07-01",
+      startTime: "10:00",
+      durationHours: 2,
+      intervalWeeks: 1,
+      daysOfWeek: [3],
+    },
+  ],
   classLog: [],
   scheduleExceptions: [],
   scheduleChanges: [],
@@ -41,7 +61,16 @@ describe("classes workspace model", () => {
 
   it("preserves explicit payment states and filters history", () => {
     expect(paymentRecordState({ paymentState: "Unpaid", amountPaid: 0 }, 100)).toBe("Unpaid");
-    const rows = [{ title: "Math", statusLabel: "Registered", classDate: "2026-07-10", startTime: "10:00", groupId: "g1", rows: [{ id: "saved" }] }];
+    const rows = [
+      {
+        title: "Math",
+        statusLabel: "Registered",
+        classDate: "2026-07-10",
+        startTime: "10:00",
+        groupId: "g1",
+        rows: [{ id: "saved" }],
+      },
+    ];
     expect(filterClassHistory(rows, { search: "math", status: "Registered" })).toHaveLength(1);
   });
 
@@ -56,6 +85,12 @@ describe("classes workspace model", () => {
 
   it("builds an exact calendar range without dropping scheduled classes", () => {
     const sessions = buildClassWorkspaceSessionsForRange(state, "2026-07-01", "2026-07-31", "2026-07-15");
-    expect(sessions.map((session) => session.classDate)).toEqual(["2026-07-01", "2026-07-08", "2026-07-15", "2026-07-22", "2026-07-29"]);
+    expect(sessions.map((session) => session.classDate)).toEqual([
+      "2026-07-01",
+      "2026-07-08",
+      "2026-07-15",
+      "2026-07-22",
+      "2026-07-29",
+    ]);
   });
 });

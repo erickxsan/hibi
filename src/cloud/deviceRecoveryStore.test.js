@@ -13,8 +13,7 @@ describe("device recovery store", () => {
 
   it("degrades safely when IndexedDB is unavailable", async () => {
     const store = createDeviceRecoveryStore(null);
-    await expect(store.capture({ ownerId: "user-1", state: createStarterState(), revision: 1 }))
-      .resolves.toBeNull();
+    await expect(store.capture({ ownerId: "user-1", state: createStarterState(), revision: 1 })).resolves.toBeNull();
     await expect(store.list("user-1")).resolves.toEqual([]);
     await expect(store.load("user-1", "missing")).resolves.toBeNull();
     await expect(store.loadWorkspaceCache("user-1")).resolves.toBeNull();
@@ -52,7 +51,12 @@ describe("device recovery store", () => {
 
     await expect(reopened.loadWorkspaceCache("user-1")).resolves.toMatchObject({ state, revision: 4 });
     await expect(reopened.listMutations("user-1")).resolves.toEqual([
-      expect.objectContaining({ id: mutation.operationId, status: "pending", mutation, workspace: expect.objectContaining({ state }) }),
+      expect.objectContaining({
+        id: mutation.operationId,
+        status: "pending",
+        mutation,
+        workspace: expect.objectContaining({ state }),
+      }),
     ]);
     const recoveryPoints = await reopened.list("user-1");
     expect(recoveryPoints[0]).toMatchObject({ source: "automatic-local", encrypted: true });
@@ -64,7 +68,10 @@ describe("device recovery store", () => {
       request.onerror = () => reject(request.error);
     });
     const raw = await new Promise((resolve, reject) => {
-      const request = database.transaction("workspace-outbox", "readonly").objectStore("workspace-outbox").get(mutation.operationId);
+      const request = database
+        .transaction("workspace-outbox", "readonly")
+        .objectStore("workspace-outbox")
+        .get(mutation.operationId);
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });

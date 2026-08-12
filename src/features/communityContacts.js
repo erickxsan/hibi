@@ -12,7 +12,9 @@ export function extractLegacyGuardianPhone(value) {
   const text = clean(value);
   if (!text) return "";
   const candidates = text.match(/\+?(?:\d[\s().-]*){7,}/g) || [];
-  return candidates.map((candidate) => candidate.trim()).find((candidate) => candidate.replace(/\D/g, "").length >= 7) || "";
+  return (
+    candidates.map((candidate) => candidate.trim()).find((candidate) => candidate.replace(/\D/g, "").length >= 7) || ""
+  );
 }
 
 export function contactForStudent(student, view) {

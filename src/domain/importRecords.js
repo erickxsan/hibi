@@ -21,7 +21,9 @@ const COLLECTION_LABELS = {
 };
 
 function normalizedText(value) {
-  return String(value ?? "").trim().toLocaleLowerCase();
+  return String(value ?? "")
+    .trim()
+    .toLocaleLowerCase();
 }
 
 function stableValue(value, key = "") {
@@ -30,7 +32,11 @@ function stableValue(value, key = "") {
     return key === "groupIds" || key === "daysOfWeek" ? items.sort() : items;
   }
   if (value && typeof value === "object") {
-    return Object.fromEntries(Object.keys(value).sort().map((childKey) => [childKey, stableValue(value[childKey], childKey)]));
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort()
+        .map((childKey) => [childKey, stableValue(value[childKey], childKey)]),
+    );
   }
   return value;
 }
@@ -47,13 +53,24 @@ function businessKey(collection, record) {
     case "students":
       return normalizedText(record.code) || null;
     case "grades":
-      return [record.studentId, record.date, normalizedText(record.assessment), normalizedText(record.category), record.maxScore ?? ""]
-        .join("\u0000");
+      return [
+        record.studentId,
+        record.date,
+        normalizedText(record.assessment),
+        normalizedText(record.category),
+        record.maxScore ?? "",
+      ].join("\u0000");
     case "classLog":
       return [record.studentId, record.classDate, record.startTime || ""].join("\u0000");
     case "classSchedules":
-      return [record.format, record.groupId || record.studentId, record.recurrence, record.startDate, record.startTime, [...(record.daysOfWeek || [])].sort().join(",")]
-        .join("\u0000");
+      return [
+        record.format,
+        record.groupId || record.studentId,
+        record.recurrence,
+        record.startDate,
+        record.startTime,
+        [...(record.daysOfWeek || [])].sort().join(","),
+      ].join("\u0000");
     case "scheduleExceptions":
       return [record.scheduleSlotId, record.occurrenceDate, record.classDate, record.startTime].join("\u0000");
     case "scheduleChanges":
@@ -68,8 +85,10 @@ function recordLabel(collection, record, context) {
   if (collection === "students") return record.fullName || record.code || "Unnamed student";
   const student = context.studentsById.get(record.studentId);
   if (collection === "grades") return `${student?.fullName || "Student"} · ${record.assessment || record.date}`;
-  if (collection === "classLog") return `${student?.fullName || "Student"} · ${record.classDate}${record.startTime ? ` ${record.startTime}` : ""}`;
-  if (collection === "classSchedules") return `${record.format === "individual" ? student?.fullName || "Individual" : context.groupsById.get(record.groupId)?.name || "Group"} · ${record.startDate} ${record.startTime}`;
+  if (collection === "classLog")
+    return `${student?.fullName || "Student"} · ${record.classDate}${record.startTime ? ` ${record.startTime}` : ""}`;
+  if (collection === "classSchedules")
+    return `${record.format === "individual" ? student?.fullName || "Individual" : context.groupsById.get(record.groupId)?.name || "Group"} · ${record.startDate} ${record.startTime}`;
   if (collection === "scheduleExceptions") return `Exception · ${record.occurrenceDate || record.classDate}`;
   return `Schedule change · ${record.effectiveFrom}`;
 }
@@ -147,8 +166,10 @@ function remapRecord(collection, source, maps) {
   if (record.groupId) record.groupId = groupIds.get(record.groupId) || record.groupId;
   if (record.sourceGroupId) record.sourceGroupId = groupIds.get(record.sourceGroupId) || record.sourceGroupId;
   if (record.studentId) record.studentId = studentIds.get(record.studentId) || record.studentId;
-  if (record.classScheduleId) record.classScheduleId = classScheduleIds.get(record.classScheduleId) || record.classScheduleId;
-  if (record.classSessionKey) record.classSessionKey = remapClassSessionKey(record.classSessionKey, groupIds, studentIds);
+  if (record.classScheduleId)
+    record.classScheduleId = classScheduleIds.get(record.classScheduleId) || record.classScheduleId;
+  if (record.classSessionKey)
+    record.classSessionKey = remapClassSessionKey(record.classSessionKey, groupIds, studentIds);
   if (Array.isArray(record.groupIds)) {
     record.groupIds = [...new Set(record.groupIds.map((id) => groupIds.get(id) || id))];
   }
@@ -233,7 +254,9 @@ export function buildImportPlan(currentInput, importedInput, decisions = {}) {
           decision = "skip";
         } else {
           status = "conflict";
-          reason = byId.has(importedId) ? "Same stable ID, different information" : "Same identifying information, different details";
+          reason = byId.has(importedId)
+            ? "Same stable ID, different information"
+            : "Same identifying information, different details";
           decision = decisions[entryKey] === "use-imported" ? "use-imported" : "keep-current";
         }
       }
@@ -263,13 +286,17 @@ export function buildImportPlan(currentInput, importedInput, decisions = {}) {
         if (key) byBusinessKey.set(key, remapped);
       }
 
-      if (collection === "groups") context.groupsById.set(finalId, status === "conflict" && decision !== "use-imported" ? existing : remapped);
-      if (collection === "students") context.studentsById.set(finalId, status === "conflict" && decision !== "use-imported" ? existing : remapped);
+      if (collection === "groups")
+        context.groupsById.set(finalId, status === "conflict" && decision !== "use-imported" ? existing : remapped);
+      if (collection === "students")
+        context.studentsById.set(finalId, status === "conflict" && decision !== "use-imported" ? existing : remapped);
     });
   }
 
   const canonicalCandidate = importState(serializeState(candidate));
-  const byCollection = Object.fromEntries(IMPORT_COLLECTIONS.map((collection) => [collection, emptyCollectionSummary()]));
+  const byCollection = Object.fromEntries(
+    IMPORT_COLLECTIONS.map((collection) => [collection, emptyCollectionSummary()]),
+  );
   const summary = { added: 0, duplicates: 0, conflicts: 0, updated: 0, kept: 0, byCollection };
   for (const entry of entries) {
     const collectionSummary = byCollection[entry.collection];

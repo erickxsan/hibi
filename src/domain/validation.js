@@ -37,7 +37,13 @@ function enumValue(errors, value, allowed, path, label, { optional = false } = {
   }
 }
 
-function finiteNumber(errors, value, path, label, { min = -Infinity, max = Infinity, integer = false, optional = false } = {}) {
+function finiteNumber(
+  errors,
+  value,
+  path,
+  label,
+  { min = -Infinity, max = Infinity, integer = false, optional = false } = {},
+) {
   if (optional && (value === null || value === "" || value === undefined)) return;
   if (typeof value !== "number" || !Number.isFinite(value)) {
     errors.push(issue(path, "invalid_number", `${label} must be a finite number.`, value));
@@ -100,12 +106,19 @@ export function validateGroup(group, state = null) {
     integer: true,
   });
   finiteNumber(errors, group.hourlyRate, "hourlyRate", "Group hourly rate", { min: 0, optional: true });
-  if (group.weeklySchedule !== undefined && !Array.isArray(group.weeklySchedule)) errors.push(issue("weeklySchedule", "invalid_type", "Weekly schedule must be an array."));
+  if (group.weeklySchedule !== undefined && !Array.isArray(group.weeklySchedule))
+    errors.push(issue("weeklySchedule", "invalid_type", "Weekly schedule must be an array."));
   (group.weeklySchedule || []).forEach((slot, index) => {
     requiredText(errors, slot?.id, `weeklySchedule[${index}].id`, "Schedule slot ID");
-    finiteNumber(errors, slot?.dayOfWeek, `weeklySchedule[${index}].dayOfWeek`, "Schedule day", { min: 1, max: 7, integer: true });
+    finiteNumber(errors, slot?.dayOfWeek, `weeklySchedule[${index}].dayOfWeek`, "Schedule day", {
+      min: 1,
+      max: 7,
+      integer: true,
+    });
     timeOnly(errors, slot?.startTime, `weeklySchedule[${index}].startTime`, "Schedule time");
-    finiteNumber(errors, slot?.durationHours, `weeklySchedule[${index}].durationHours`, "Schedule duration", { min: 0 });
+    finiteNumber(errors, slot?.durationHours, `weeklySchedule[${index}].durationHours`, "Schedule duration", {
+      min: 0,
+    });
   });
   if (state && duplicateIn(state.groups, "name", group.name, group.id)) {
     errors.push(issue("name", "duplicate", "Group name must be unique.", group.name));
@@ -126,13 +139,16 @@ export function validateStudent(student, state = null) {
   if (state && duplicateIn(state.students, "code", student.code, student.id)) {
     errors.push(issue("code", "duplicate", "Student code must be unique.", student.code));
   }
-  if (student.groupIds !== undefined && !Array.isArray(student.groupIds)) errors.push(issue("groupIds", "invalid_type", "Student groups must be an array."));
-  if (student.isIndividual !== undefined && typeof student.isIndividual !== "boolean") errors.push(issue("isIndividual", "invalid_type", "Individual enrollment must be true or false."));
+  if (student.groupIds !== undefined && !Array.isArray(student.groupIds))
+    errors.push(issue("groupIds", "invalid_type", "Student groups must be an array."));
+  if (student.isIndividual !== undefined && typeof student.isIndividual !== "boolean")
+    errors.push(issue("isIndividual", "invalid_type", "Individual enrollment must be true or false."));
   finiteNumber(errors, student.customHourlyRate, "customHourlyRate", "Custom hourly rate", { min: 0, optional: true });
   const seenGroups = new Set();
   const legacyGroups = student.groupId ? [student.groupId] : [];
   for (const groupId of Array.isArray(student.groupIds) ? student.groupIds : legacyGroups) {
-    if (seenGroups.has(groupId)) errors.push(issue("groupIds", "duplicate", "A student cannot be assigned to the same group twice.", groupId));
+    if (seenGroups.has(groupId))
+      errors.push(issue("groupIds", "duplicate", "A student cannot be assigned to the same group twice.", groupId));
     seenGroups.add(groupId);
     if (state && groupId && !state.groups?.some((group) => group?.id === groupId)) {
       errors.push(issue("groupIds", "unknown_reference", "Student references a group that does not exist.", groupId));
@@ -154,17 +170,29 @@ export function validateGrade(grade, state = null) {
   finiteNumber(errors, grade.maxScore, "maxScore", "Maximum score", { min: Number.EPSILON });
   enumValue(errors, grade.workStatus, WORK_STATUSES, "workStatus", "Work status");
   if (state && grade.studentId && !state.students?.some((student) => student?.id === grade.studentId)) {
-    errors.push(issue("studentId", "unknown_reference", "Grade references a student that does not exist.", grade.studentId));
+    errors.push(
+      issue("studentId", "unknown_reference", "Grade references a student that does not exist.", grade.studentId),
+    );
   }
   if (state && grade.classSessionKey) {
     const [, owner] = grade.classSessionKey.split("|");
-    const groupId = owner?.startsWith("g:") ? owner.slice(2) : owner && !owner.startsWith("s:") && owner !== "__individual__" ? owner : "";
+    const groupId = owner?.startsWith("g:")
+      ? owner.slice(2)
+      : owner && !owner.startsWith("s:") && owner !== "__individual__"
+        ? owner
+        : "";
     const studentId = owner?.startsWith("s:") ? owner.slice(2) : "";
-    if (groupId && !state.groups?.some((group) => group.id === groupId)) errors.push(issue("classSessionKey", "unknown_reference", "Grade references a missing class group.", groupId));
-    if (studentId && !state.students?.some((student) => student.id === studentId)) errors.push(issue("classSessionKey", "unknown_reference", "Grade references a missing class student.", studentId));
+    if (groupId && !state.groups?.some((group) => group.id === groupId))
+      errors.push(issue("classSessionKey", "unknown_reference", "Grade references a missing class group.", groupId));
+    if (studentId && !state.students?.some((student) => student.id === studentId))
+      errors.push(
+        issue("classSessionKey", "unknown_reference", "Grade references a missing class student.", studentId),
+      );
   }
   if (typeof grade.score === "number" && typeof grade.maxScore === "number" && grade.score > grade.maxScore) {
-    warnings.push(issue("score", "over_maximum", "Score is above the maximum; confirm that this is intentional.", grade.score));
+    warnings.push(
+      issue("score", "over_maximum", "Score is above the maximum; confirm that this is intentional.", grade.score),
+    );
   }
   if (grade.workStatus === "Missing" && typeof grade.score === "number") {
     warnings.push(issue("score", "missing_with_score", "Missing work has a score; confirm the work status."));
@@ -184,17 +212,30 @@ export function validateClassSchedule(item, state = null) {
   finiteNumber(errors, item.durationHours, "durationHours", "Class duration", { min: 0.25 });
   finiteNumber(errors, item.intervalWeeks, "intervalWeeks", "Repeat interval", { min: 1, integer: true });
   if (!Array.isArray(item.daysOfWeek)) errors.push(issue("daysOfWeek", "invalid_type", "Class days must be an array."));
-  if (!Array.isArray(item.participantIds)) errors.push(issue("participantIds", "invalid_type", "Class participants must be an array."));
+  if (!Array.isArray(item.participantIds))
+    errors.push(issue("participantIds", "invalid_type", "Class participants must be an array."));
   enumValue(errors, item.participantMode, ["default", "custom"], "participantMode", "Participant mode");
-  (item.daysOfWeek || []).forEach((day, index) => finiteNumber(errors, day, `daysOfWeek[${index}]`, "Class day", { min: 1, max: 7, integer: true }));
-  if (item.recurrence === "weekly" && !(item.daysOfWeek || []).length) errors.push(issue("daysOfWeek", "required", "Choose at least one class day."));
+  (item.daysOfWeek || []).forEach((day, index) =>
+    finiteNumber(errors, day, `daysOfWeek[${index}]`, "Class day", { min: 1, max: 7, integer: true }),
+  );
+  if (item.recurrence === "weekly" && !(item.daysOfWeek || []).length)
+    errors.push(issue("daysOfWeek", "required", "Choose at least one class day."));
   if (item.format === "group") requiredText(errors, item.groupId, "groupId", "Class group");
   if (item.format === "individual") requiredText(errors, item.studentId, "studentId", "Class student");
-  if (state && item.groupId && !state.groups?.some((group) => group.id === item.groupId)) errors.push(issue("groupId", "unknown_reference", "Class schedule references a missing group."));
-  if (state && item.studentId && !state.students?.some((student) => student.id === item.studentId)) errors.push(issue("studentId", "unknown_reference", "Class schedule references a missing student."));
+  if (state && item.groupId && !state.groups?.some((group) => group.id === item.groupId))
+    errors.push(issue("groupId", "unknown_reference", "Class schedule references a missing group."));
+  if (state && item.studentId && !state.students?.some((student) => student.id === item.studentId))
+    errors.push(issue("studentId", "unknown_reference", "Class schedule references a missing student."));
   (item.participantIds || []).forEach((studentId, index) => {
     if (state && !state.students?.some((student) => student.id === studentId)) {
-      errors.push(issue(`participantIds[${index}]`, "unknown_reference", "Class schedule references a missing participant.", studentId));
+      errors.push(
+        issue(
+          `participantIds[${index}]`,
+          "unknown_reference",
+          "Class schedule references a missing participant.",
+          studentId,
+        ),
+      );
     }
   });
   return result(errors, []);
@@ -219,21 +260,37 @@ export function validateClassLogRow(row, state = null) {
   enumValue(errors, row.paymentState, PAYMENT_RECORD_STATES, "paymentState", "Payment state", { optional: true });
 
   if (state && row.studentId && !state.students?.some((student) => student?.id === row.studentId)) {
-    errors.push(issue("studentId", "unknown_reference", "Class row references a student that does not exist.", row.studentId));
+    errors.push(
+      issue("studentId", "unknown_reference", "Class row references a student that does not exist.", row.studentId),
+    );
   }
   if (state && row.groupId && !state.groups?.some((group) => group?.id === row.groupId)) {
-    errors.push(issue("groupId", "unknown_reference", "Class row references a group that does not exist.", row.groupId));
+    errors.push(
+      issue("groupId", "unknown_reference", "Class row references a group that does not exist.", row.groupId),
+    );
   }
   if (state && row.scheduleSlotId) {
-    const groupSlotExists = state.groups?.find((group) => group.id === row.groupId)?.weeklySchedule?.some((slot) => slot.id === row.scheduleSlotId);
+    const groupSlotExists = state.groups
+      ?.find((group) => group.id === row.groupId)
+      ?.weeklySchedule?.some((slot) => slot.id === row.scheduleSlotId);
     const classScheduleExists = state.classSchedules?.some((schedule) => schedule.id === row.scheduleSlotId);
-    if (!groupSlotExists && !classScheduleExists) errors.push(issue("scheduleSlotId", "unknown_reference", "Class row references a schedule slot that does not exist.", row.scheduleSlotId));
+    if (!groupSlotExists && !classScheduleExists)
+      errors.push(
+        issue(
+          "scheduleSlotId",
+          "unknown_reference",
+          "Class row references a schedule slot that does not exist.",
+          row.scheduleSlotId,
+        ),
+      );
   }
   if (row.classStatus === "Completed" && !row.attendance) {
     warnings.push(issue("attendance", "attendance_missing", "Completed class has no attendance mark."));
   }
   if (row.classStatus !== "Completed" && row.attendance) {
-    warnings.push(issue("attendance", "attendance_on_noncompleted", "Attendance is normally only recorded for completed classes."));
+    warnings.push(
+      issue("attendance", "attendance_on_noncompleted", "Attendance is normally only recorded for completed classes."),
+    );
   }
   if (typeof row.amountPaid === "number" && row.amountPaid > 0 && !row.paymentDate) {
     warnings.push(issue("paymentDate", "payment_date_missing", "A positive payment needs a payment date."));
@@ -271,11 +328,7 @@ function normalizeOptionalNumber(value) {
 }
 
 function normalizeGroupIds(student) {
-  const source = Array.isArray(student?.groupIds)
-    ? student.groupIds
-    : student?.groupId
-      ? [student.groupId]
-      : [];
+  const source = Array.isArray(student?.groupIds) ? student.groupIds : student?.groupId ? [student.groupId] : [];
   return [...new Set(source.map(normalizeText).filter(Boolean))];
 }
 
@@ -284,7 +337,7 @@ export function normalizeState(input) {
   const sourceSettings = isRecord(source.settings) ? source.settings : {};
   const selectedMonth = isDateOnly(sourceSettings.selectedMonth)
     ? startOfMonth(sourceSettings.selectedMonth)
-    : sourceSettings.selectedMonth ?? DEFAULT_SETTINGS.selectedMonth;
+    : (sourceSettings.selectedMonth ?? DEFAULT_SETTINGS.selectedMonth);
   const normalizedStudents = (Array.isArray(source.students) ? source.students : []).map((student) => ({
     id: normalizeText(student?.id),
     code: normalizeText(student?.code),
@@ -300,9 +353,11 @@ export function normalizeState(input) {
     notes: normalizeText(student?.notes),
     status: normalizeText(student?.status),
   }));
-  const inferableGroupByStudent = new Map(normalizedStudents
-    .filter((student) => student.groupIds.length === 1)
-    .map((student) => [student.id, student.groupIds[0]]));
+  const inferableGroupByStudent = new Map(
+    normalizedStudents
+      .filter((student) => student.groupIds.length === 1)
+      .map((student) => [student.id, student.groupIds[0]]),
+  );
 
   const normalized = {
     version: normalizeNumber(source.version, SCHEMA_VERSION),
@@ -310,9 +365,15 @@ export function normalizeState(input) {
       currency: normalizeText(sourceSettings.currency ?? DEFAULT_SETTINGS.currency),
       hourlyRate: normalizeNumber(sourceSettings.hourlyRate, DEFAULT_SETTINGS.hourlyRate),
       defaultClassHours: normalizeNumber(sourceSettings.defaultClassHours, DEFAULT_SETTINGS.defaultClassHours),
-      recentProjectionWeeks: normalizeNumber(sourceSettings.recentProjectionWeeks, DEFAULT_SETTINGS.recentProjectionWeeks),
+      recentProjectionWeeks: normalizeNumber(
+        sourceSettings.recentProjectionWeeks,
+        DEFAULT_SETTINGS.recentProjectionWeeks,
+      ),
       lowGradeThreshold: normalizeNumber(sourceSettings.lowGradeThreshold, DEFAULT_SETTINGS.lowGradeThreshold),
-      lowAttendanceThreshold: normalizeNumber(sourceSettings.lowAttendanceThreshold, DEFAULT_SETTINGS.lowAttendanceThreshold),
+      lowAttendanceThreshold: normalizeNumber(
+        sourceSettings.lowAttendanceThreshold,
+        DEFAULT_SETTINGS.lowAttendanceThreshold,
+      ),
       selectedMonth,
       asOfDate: sourceSettings.asOfDate ?? DEFAULT_SETTINGS.asOfDate,
     },
@@ -327,7 +388,10 @@ export function normalizeState(input) {
         id: normalizeText(slot?.id) || `slot_${normalizeText(group?.id)}_${index + 1}`,
         dayOfWeek: normalizeNumber(slot?.dayOfWeek, 1),
         startTime: normalizeText(slot?.startTime),
-        durationHours: normalizeNumber(slot?.durationHours, sourceSettings.defaultClassHours ?? DEFAULT_SETTINGS.defaultClassHours),
+        durationHours: normalizeNumber(
+          slot?.durationHours,
+          sourceSettings.defaultClassHours ?? DEFAULT_SETTINGS.defaultClassHours,
+        ),
       })),
       plannedSessionsPerMonth: normalizeNumber(group?.plannedSessionsPerMonth, 0),
       assistantContact: normalizeText(group?.assistantContact),
@@ -376,30 +440,43 @@ export function normalizeState(input) {
       startDate: normalizeText(item?.startDate),
       endDate: normalizeOptionalText(item?.endDate) || "",
       startTime: normalizeText(item?.startTime),
-      durationHours: normalizeNumber(item?.durationHours, sourceSettings.defaultClassHours ?? DEFAULT_SETTINGS.defaultClassHours),
+      durationHours: normalizeNumber(
+        item?.durationHours,
+        sourceSettings.defaultClassHours ?? DEFAULT_SETTINGS.defaultClassHours,
+      ),
       intervalWeeks: normalizeNumber(item?.intervalWeeks, 1),
-      daysOfWeek: [...new Set((Array.isArray(item?.daysOfWeek) ? item.daysOfWeek : []).map((day) => normalizeNumber(day, 1)))],
+      daysOfWeek: [
+        ...new Set((Array.isArray(item?.daysOfWeek) ? item.daysOfWeek : []).map((day) => normalizeNumber(day, 1))),
+      ],
       participantMode: item?.participantMode === "custom" ? "custom" : "default",
-      participantIds: [...new Set((Array.isArray(item?.participantIds) ? item.participantIds : []).map(normalizeText).filter(Boolean))],
+      participantIds: [
+        ...new Set((Array.isArray(item?.participantIds) ? item.participantIds : []).map(normalizeText).filter(Boolean)),
+      ],
     })),
-    scheduleExceptions: (Array.isArray(source.scheduleExceptions) ? source.scheduleExceptions : []).map((item, index) => ({
-      id: normalizeText(item?.id) || `schedule_exception_${index + 1}`,
-      classScheduleId: normalizeText(item?.classScheduleId),
-      sourceGroupId: normalizeText(item?.sourceGroupId) || normalizeText(item?.groupId),
-      sourceScheduleSlotId: normalizeText(item?.sourceScheduleSlotId) || normalizeText(item?.scheduleSlotId),
-      groupId: normalizeText(item?.groupId),
-      studentId: normalizeText(item?.studentId),
-      format: item?.format === "individual" ? "individual" : "group",
-      scheduleSlotId: normalizeText(item?.scheduleSlotId),
-      occurrenceDate: normalizeText(item?.occurrenceDate),
-      classDate: normalizeText(item?.classDate),
-      startTime: normalizeText(item?.startTime),
-      durationHours: normalizeOptionalNumber(item?.durationHours),
-      participantMode: item?.participantMode === "custom" ? "custom" : "default",
-      participantIds: [...new Set((Array.isArray(item?.participantIds) ? item.participantIds : []).map(normalizeText).filter(Boolean))],
-      status: normalizeText(item?.status) || "Scheduled",
-      kind: item?.kind === "added" ? "added" : "override",
-    })),
+    scheduleExceptions: (Array.isArray(source.scheduleExceptions) ? source.scheduleExceptions : []).map(
+      (item, index) => ({
+        id: normalizeText(item?.id) || `schedule_exception_${index + 1}`,
+        classScheduleId: normalizeText(item?.classScheduleId),
+        sourceGroupId: normalizeText(item?.sourceGroupId) || normalizeText(item?.groupId),
+        sourceScheduleSlotId: normalizeText(item?.sourceScheduleSlotId) || normalizeText(item?.scheduleSlotId),
+        groupId: normalizeText(item?.groupId),
+        studentId: normalizeText(item?.studentId),
+        format: item?.format === "individual" ? "individual" : "group",
+        scheduleSlotId: normalizeText(item?.scheduleSlotId),
+        occurrenceDate: normalizeText(item?.occurrenceDate),
+        classDate: normalizeText(item?.classDate),
+        startTime: normalizeText(item?.startTime),
+        durationHours: normalizeOptionalNumber(item?.durationHours),
+        participantMode: item?.participantMode === "custom" ? "custom" : "default",
+        participantIds: [
+          ...new Set(
+            (Array.isArray(item?.participantIds) ? item.participantIds : []).map(normalizeText).filter(Boolean),
+          ),
+        ],
+        status: normalizeText(item?.status) || "Scheduled",
+        kind: item?.kind === "added" ? "added" : "override",
+      }),
+    ),
     scheduleChanges: (Array.isArray(source.scheduleChanges) ? source.scheduleChanges : []).map((item, index) => ({
       id: normalizeText(item?.id) || `schedule_change_${index + 1}`,
       groupId: normalizeText(item?.groupId),
@@ -437,26 +514,58 @@ function validateScheduleException(item, state) {
   dateOnly(errors, item?.classDate, "classDate", "Exception class date");
   timeOnly(errors, item?.startTime, "startTime", "Exception time");
   finiteNumber(errors, item?.durationHours, "durationHours", "Exception duration", { min: 0 });
-  if (!Array.isArray(item?.participantIds)) errors.push(issue("participantIds", "invalid_type", "Exception participants must be an array."));
+  if (!Array.isArray(item?.participantIds))
+    errors.push(issue("participantIds", "invalid_type", "Exception participants must be an array."));
   enumValue(errors, item?.participantMode, ["default", "custom"], "participantMode", "Exception participant mode");
   enumValue(errors, item?.status, CLASS_STATUSES, "status", "Exception status");
-  if (!['override', 'added'].includes(item?.kind)) errors.push(issue("kind", "invalid_enum", "Exception kind must be override or added."));
-  if (state && item?.groupId && !state.groups.some((group) => group.id === item.groupId)) errors.push(issue("groupId", "unknown_reference", "Schedule exception references a missing group."));
-  if (state && item?.studentId && !state.students.some((student) => student.id === item.studentId)) errors.push(issue("studentId", "unknown_reference", "Schedule exception references a missing student."));
-  if (state && item?.sourceGroupId && !state.groups.some((group) => group.id === item.sourceGroupId)) errors.push(issue("sourceGroupId", "unknown_reference", "Schedule exception references a missing source group."));
-  if (state && item?.classScheduleId && !state.classSchedules.some((schedule) => schedule.id === item.classScheduleId)) errors.push(issue("classScheduleId", "unknown_reference", "Schedule exception references a missing class schedule."));
+  if (!["override", "added"].includes(item?.kind))
+    errors.push(issue("kind", "invalid_enum", "Exception kind must be override or added."));
+  if (state && item?.groupId && !state.groups.some((group) => group.id === item.groupId))
+    errors.push(issue("groupId", "unknown_reference", "Schedule exception references a missing group."));
+  if (state && item?.studentId && !state.students.some((student) => student.id === item.studentId))
+    errors.push(issue("studentId", "unknown_reference", "Schedule exception references a missing student."));
+  if (state && item?.sourceGroupId && !state.groups.some((group) => group.id === item.sourceGroupId))
+    errors.push(issue("sourceGroupId", "unknown_reference", "Schedule exception references a missing source group."));
+  if (state && item?.classScheduleId && !state.classSchedules.some((schedule) => schedule.id === item.classScheduleId))
+    errors.push(
+      issue("classScheduleId", "unknown_reference", "Schedule exception references a missing class schedule."),
+    );
   (item?.participantIds || []).forEach((studentId, index) => {
     if (state && !state.students.some((student) => student.id === studentId)) {
-      errors.push(issue(`participantIds[${index}]`, "unknown_reference", "Schedule exception references a missing participant.", studentId));
+      errors.push(
+        issue(
+          `participantIds[${index}]`,
+          "unknown_reference",
+          "Schedule exception references a missing participant.",
+          studentId,
+        ),
+      );
     }
   });
   const sourceGroupId = item?.sourceGroupId || item?.groupId;
   const sourceSlots = state?.groups.find((group) => group.id === sourceGroupId)?.weeklySchedule || [];
-  const scheduleReferenceExists = (id) => item?.classScheduleId
-    ? id === item.classScheduleId && state.classSchedules.some((schedule) => schedule.id === id)
-    : sourceSlots.some((slot) => slot.id === id);
-  if (state && item?.sourceScheduleSlotId && !scheduleReferenceExists(item.sourceScheduleSlotId)) errors.push(issue("sourceScheduleSlotId", "unknown_reference", "Schedule exception references a missing source schedule slot.", item.sourceScheduleSlotId));
-  if (state && item?.scheduleSlotId && !scheduleReferenceExists(item.scheduleSlotId)) errors.push(issue("scheduleSlotId", "unknown_reference", "Schedule exception references a missing schedule slot.", item.scheduleSlotId));
+  const scheduleReferenceExists = (id) =>
+    item?.classScheduleId
+      ? id === item.classScheduleId && state.classSchedules.some((schedule) => schedule.id === id)
+      : sourceSlots.some((slot) => slot.id === id);
+  if (state && item?.sourceScheduleSlotId && !scheduleReferenceExists(item.sourceScheduleSlotId))
+    errors.push(
+      issue(
+        "sourceScheduleSlotId",
+        "unknown_reference",
+        "Schedule exception references a missing source schedule slot.",
+        item.sourceScheduleSlotId,
+      ),
+    );
+  if (state && item?.scheduleSlotId && !scheduleReferenceExists(item.scheduleSlotId))
+    errors.push(
+      issue(
+        "scheduleSlotId",
+        "unknown_reference",
+        "Schedule exception references a missing schedule slot.",
+        item.scheduleSlotId,
+      ),
+    );
   return result(errors, []);
 }
 
@@ -470,9 +579,23 @@ function validateScheduleChange(item, state) {
   timeOnly(errors, item?.startTime, "startTime", "Schedule time");
   finiteNumber(errors, item?.durationHours, "durationHours", "Schedule duration", { min: 0 });
   enumValue(errors, item?.status, ["Scheduled", "Cancelled"], "status", "Schedule change status");
-  if (state && !state.groups.some((group) => group.id === item.groupId)) errors.push(issue("groupId", "unknown_reference", "Schedule change references a missing group."));
-  if (state && item?.scheduleSlotId && !state.groups.find((group) => group.id === item.groupId)?.weeklySchedule?.some((slot) => slot.id === item.scheduleSlotId)) {
-    errors.push(issue("scheduleSlotId", "unknown_reference", "Schedule change references a missing schedule slot.", item.scheduleSlotId));
+  if (state && !state.groups.some((group) => group.id === item.groupId))
+    errors.push(issue("groupId", "unknown_reference", "Schedule change references a missing group."));
+  if (
+    state &&
+    item?.scheduleSlotId &&
+    !state.groups
+      .find((group) => group.id === item.groupId)
+      ?.weeklySchedule?.some((slot) => slot.id === item.scheduleSlotId)
+  ) {
+    errors.push(
+      issue(
+        "scheduleSlotId",
+        "unknown_reference",
+        "Schedule change references a missing schedule slot.",
+        item.scheduleSlotId,
+      ),
+    );
   }
   return result(errors, []);
 }
@@ -510,23 +633,47 @@ export function validateState(input) {
   const warnings = [];
   if (!isRecord(input)) return result([issue("", "invalid_type", "Imported data must be a JSON object.")]);
   if (input.version !== SCHEMA_VERSION) {
-    errors.push(issue("version", "unsupported_version", `Only schema version ${SCHEMA_VERSION} is supported.`, input.version));
+    errors.push(
+      issue("version", "unsupported_version", `Only schema version ${SCHEMA_VERSION} is supported.`, input.version),
+    );
   }
   if (!isRecord(input.settings)) {
     errors.push(issue("settings", "invalid_type", "Settings must be an object."));
   } else {
     enumValue(errors, input.settings.currency, ["MXN"], "settings.currency", "Currency");
     finiteNumber(errors, input.settings.hourlyRate, "settings.hourlyRate", "Hourly rate", { min: 0 });
-    finiteNumber(errors, input.settings.defaultClassHours, "settings.defaultClassHours", "Default class hours", { min: 0 });
-    finiteNumber(errors, input.settings.recentProjectionWeeks, "settings.recentProjectionWeeks", "Recent projection weeks", {
-      min: 1,
-      integer: true,
+    finiteNumber(errors, input.settings.defaultClassHours, "settings.defaultClassHours", "Default class hours", {
+      min: 0,
     });
-    finiteNumber(errors, input.settings.lowGradeThreshold, "settings.lowGradeThreshold", "Low-grade threshold", { min: 0, max: 1 });
-    finiteNumber(errors, input.settings.lowAttendanceThreshold, "settings.lowAttendanceThreshold", "Low-attendance threshold", { min: 0, max: 1 });
+    finiteNumber(
+      errors,
+      input.settings.recentProjectionWeeks,
+      "settings.recentProjectionWeeks",
+      "Recent projection weeks",
+      {
+        min: 1,
+        integer: true,
+      },
+    );
+    finiteNumber(errors, input.settings.lowGradeThreshold, "settings.lowGradeThreshold", "Low-grade threshold", {
+      min: 0,
+      max: 1,
+    });
+    finiteNumber(
+      errors,
+      input.settings.lowAttendanceThreshold,
+      "settings.lowAttendanceThreshold",
+      "Low-attendance threshold",
+      { min: 0, max: 1 },
+    );
     dateOnly(errors, input.settings.selectedMonth, "settings.selectedMonth", "Selected month");
-    if (isDateOnly(input.settings.selectedMonth) && startOfMonth(input.settings.selectedMonth) !== input.settings.selectedMonth) {
-      errors.push(issue("settings.selectedMonth", "not_month_start", "Selected month must be the first day of its month."));
+    if (
+      isDateOnly(input.settings.selectedMonth) &&
+      startOfMonth(input.settings.selectedMonth) !== input.settings.selectedMonth
+    ) {
+      errors.push(
+        issue("settings.selectedMonth", "not_month_start", "Selected month must be the first day of its month."),
+      );
     }
     dateOnly(errors, input.settings.asOfDate, "settings.asOfDate", "As-of date");
   }
@@ -535,9 +682,24 @@ export function validateState(input) {
     if (!Array.isArray(input[key])) errors.push(issue(key, "invalid_type", `${key} must be an array.`));
   }
   for (const key of ["classSchedules", "scheduleExceptions", "scheduleChanges"]) {
-    if (input[key] !== undefined && !Array.isArray(input[key])) errors.push(issue(key, "invalid_type", `${key} must be an array.`));
+    if (input[key] !== undefined && !Array.isArray(input[key]))
+      errors.push(issue(key, "invalid_type", `${key} must be an array.`));
   }
-  if (errors.some((entry) => entry.code === "invalid_type" && ["groups", "students", "grades", "classLog", "classSchedules", "scheduleExceptions", "scheduleChanges"].includes(entry.path))) {
+  if (
+    errors.some(
+      (entry) =>
+        entry.code === "invalid_type" &&
+        [
+          "groups",
+          "students",
+          "grades",
+          "classLog",
+          "classSchedules",
+          "scheduleExceptions",
+          "scheduleChanges",
+        ].includes(entry.path),
+    )
+  ) {
     return result(errors, warnings);
   }
 
@@ -590,7 +752,9 @@ export function validateState(input) {
     if (!row?.classDate || !row?.studentId) return;
     const key = `${row.classDate}\u0000${row.studentId}\u0000${row.startTime || ""}`;
     if (classKeys.has(key)) {
-      warnings.push(issue(`classLog[${index}]`, "duplicate_student_class", "Student already has a class row on this date."));
+      warnings.push(
+        issue(`classLog[${index}]`, "duplicate_student_class", "Student already has a class row on this date."),
+      );
     } else {
       classKeys.set(key, index);
     }

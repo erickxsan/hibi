@@ -300,9 +300,7 @@ function deepFreeze(value) {
 }
 
 function clone(value) {
-  return typeof structuredClone === "function"
-    ? structuredClone(value)
-    : JSON.parse(JSON.stringify(value));
+  return typeof structuredClone === "function" ? structuredClone(value) : JSON.parse(JSON.stringify(value));
 }
 
 export const seedState = deepFreeze(BASE_SEED);

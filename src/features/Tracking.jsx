@@ -19,16 +19,7 @@ import {
   UserRoundCheck,
   UsersRound,
 } from "lucide-react";
-import {
-  Button,
-  Drawer,
-  EmptyState,
-  Field,
-  IconButton,
-  Input,
-  Select,
-  StatusBadge,
-} from "../components/ui";
+import { Button, Drawer, EmptyState, Field, IconButton, Input, Select, StatusBadge } from "../components/ui";
 import { StudentAvatar } from "../components/StudentAvatar";
 import { useHistoryBackedState } from "../hooks/useHistoryNavigation";
 import { getUiLocale } from "../i18n";
@@ -65,14 +56,9 @@ const PAYMENT_CHART_ITEMS = [
   { value: "projection", label: "Collected vs. projection" },
 ];
 
-function formatDate(
-  value,
-  options = { day: "2-digit", month: "short", year: "numeric" },
-) {
+function formatDate(value, options = { day: "2-digit", month: "short", year: "numeric" }) {
   if (!value) return "—";
-  return new Intl.DateTimeFormat(getUiLocale(), options).format(
-    new Date(`${value}T12:00:00`),
-  );
+  return new Intl.DateTimeFormat(getUiLocale(), options).format(new Date(`${value}T12:00:00`));
 }
 
 function formatTime(value) {
@@ -156,11 +142,7 @@ function ModeSwitch({ value, onChange, items, label = "View by" }) {
             className={value === item.value ? "active" : ""}
             aria-pressed={value === item.value}
             disabled={item.disabled}
-            title={
-              item.disabled
-                ? "Create a group in Community to use this view"
-                : undefined
-            }
+            title={item.disabled ? "Create a group in Community to use this view" : undefined}
             onClick={() => onChange(item.value)}
           >
             {item.label}
@@ -171,13 +153,7 @@ function ModeSwitch({ value, onChange, items, label = "View by" }) {
   );
 }
 
-function TrackingSelect({
-  label,
-  value,
-  onChange,
-  children,
-  searchable = false,
-}) {
+function TrackingSelect({ label, value, onChange, children, searchable = false }) {
   return (
     <label className="tracking-select">
       <strong>{label}</strong>
@@ -230,19 +206,11 @@ function TrendChart({ title, series, valueFormatter = percent }) {
   const max = Math.max(1, ...series.map((item) => item.value || 0));
   const points = series.map((item, index) => ({
     ...item,
-    x:
-      padding.left +
-      (index / Math.max(series.length - 1, 1)) *
-        (width - padding.left - padding.right),
-    y:
-      padding.top +
-      (1 - (item.value || 0) / max) * (height - padding.top - padding.bottom),
+    x: padding.left + (index / Math.max(series.length - 1, 1)) * (width - padding.left - padding.right),
+    y: padding.top + (1 - (item.value || 0) / max) * (height - padding.top - padding.bottom),
   }));
   const line = points
-    .map(
-      (point, index) =>
-        `${index ? "L" : "M"}${point.x.toFixed(1)} ${point.y.toFixed(1)}`,
-    )
+    .map((point, index) => `${index ? "L" : "M"}${point.x.toFixed(1)} ${point.y.toFixed(1)}`)
     .join(" ");
   const area = `${line} L${points.at(-1).x} ${height - padding.bottom} L${points[0].x} ${height - padding.bottom} Z`;
   return (
@@ -265,20 +233,10 @@ function TrendChart({ title, series, valueFormatter = percent }) {
         {points.map((point) => (
           <g key={`${point.label}-${point.x}`}>
             <circle cx={point.x} cy={point.y} r="4" />
-            <text
-              className="tracking-point-value"
-              x={point.x}
-              y={point.y - 10}
-              textAnchor="middle"
-            >
+            <text className="tracking-point-value" x={point.x} y={point.y - 10} textAnchor="middle">
               {valueFormatter(point.value)}
             </text>
-            <text
-              className="tracking-axis-label"
-              x={point.x}
-              y={height - 10}
-              textAnchor="middle"
-            >
+            <text className="tracking-axis-label" x={point.x} y={height - 10} textAnchor="middle">
               {formatDate(point.label, { day: "numeric", month: "short" })}
             </text>
           </g>
@@ -297,10 +255,7 @@ function DistributionChart({ items }) {
         {items.map((item) => (
           <span key={item.label}>
             <i>
-              <b
-                className={item.tone}
-                style={{ height: `${Math.max(5, (item.value / max) * 100)}%` }}
-              />
+              <b className={item.tone} style={{ height: `${Math.max(5, (item.value / max) * 100)}%` }} />
             </i>
             <strong>{item.value}</strong>
             <small>{item.label}</small>
@@ -322,10 +277,7 @@ function InsightPanel({ title, insights, footer }) {
         {insights.map((insight, index) => {
           const Icon = insight.icon || CheckCircle2;
           return (
-            <li
-              className={insight.tone || "green"}
-              key={`${insight.text}-${index}`}
-            >
+            <li className={insight.tone || "green"} key={`${insight.text}-${index}`}>
               <span>
                 <Icon size={15} aria-hidden="true" />
               </span>
@@ -349,9 +301,7 @@ function RecentPanel({ title, rows, renderRow, footer }) {
       {rows.length ? (
         <div>{rows.map(renderRow)}</div>
       ) : (
-        <p className="tracking-empty-copy">
-          No matching records in this period.
-        </p>
+        <p className="tracking-empty-copy">No matching records in this period.</p>
       )}
       {footer}
     </aside>
@@ -372,12 +322,7 @@ function RelatedClassButton({ sessionKey, onOpen }) {
 function StudentCell({ student }) {
   return (
     <span className="tracking-person">
-      <StudentAvatar
-        avatarId={student?.avatarId}
-        name={student?.fullName}
-        size="tiny"
-        decorative
-      />
+      <StudentAvatar avatarId={student?.avatarId} name={student?.fullName} size="tiny" decorative />
       <span>
         <strong>{student?.fullName || "Unknown student"}</strong>
         <small>{student?.code || ""}</small>
@@ -387,10 +332,6 @@ function StudentCell({ student }) {
 }
 
 function GradeView({ data, mode, onOpenClass }) {
-  const maximum =
-    data.assessment?.maximum ||
-    data.tableRows.find((row) => row.maximum)?.maximum ||
-    10;
   const insights = [
     {
       icon: TrendingUp,
@@ -402,17 +343,11 @@ function GradeView({ data, mode, onOpenClass }) {
     {
       icon: Star,
       text:
-        data.best == null
-          ? "A best result will appear after grading."
-          : `The best result is ${percent(data.best, 0)}.`,
+        data.best == null ? "A best result will appear after grading." : `The best result is ${percent(data.best, 0)}.`,
     },
     {
       icon: CircleAlert,
-      tone: data.tableRows.filter(
-        (row) => row.percentage != null && row.percentage < 0.6,
-      ).length
-        ? "orange"
-        : "green",
+      tone: data.tableRows.filter((row) => row.percentage != null && row.percentage < 0.6).length ? "orange" : "green",
       text: `${data.tableRows.filter((row) => row.percentage != null && row.percentage < 0.6).length} students scored below 60%.`,
     },
     {
@@ -424,33 +359,12 @@ function GradeView({ data, mode, onOpenClass }) {
   return (
     <div className="tracking-content-grid">
       <main>
-        <MetricStrip
-          title={mode === "student" ? "Student summary" : "Assessment summary"}
-        >
-          <Metric
-            icon={TrendingUp}
-            label="Average grade"
-            value={percent(data.average)}
-          />
+        <MetricStrip title={mode === "student" ? "Student summary" : "Assessment summary"}>
+          <Metric icon={TrendingUp} label="Average grade" value={percent(data.average)} />
           <Metric icon={Star} label="Best result" value={percent(data.best)} />
-          <Metric
-            icon={TrendingDown}
-            label="Lowest result"
-            value={percent(data.worst)}
-            tone="red"
-          />
-          <Metric
-            icon={UsersRound}
-            label="Graded assignments"
-            value={data.gradedCount}
-            tone="blue"
-          />
-          <Metric
-            icon={UserRound}
-            label="Not graded"
-            value={data.missingCount}
-            tone="orange"
-          />
+          <Metric icon={TrendingDown} label="Lowest result" value={percent(data.worst)} tone="red" />
+          <Metric icon={UsersRound} label="Graded assignments" value={data.gradedCount} tone="blue" />
+          <Metric icon={UserRound} label="Not graded" value={data.missingCount} tone="orange" />
         </MetricStrip>
         {mode === "student" ? (
           <TrendChart title="Grade evolution" series={data.series} />
@@ -484,26 +398,15 @@ function GradeView({ data, mode, onOpenClass }) {
                     </td>
                   )}
                   <td className="tracking-col-date">{formatDate(row.date)}</td>
-                  <td
-                    className={
-                      row.percentage != null && row.percentage < 0.6
-                        ? "danger-value"
-                        : "good-value"
-                    }
-                  >
+                  <td className={row.percentage != null && row.percentage < 0.6 ? "danger-value" : "good-value"}>
                     {gradeValue(row.score, row.maximum)}
                   </td>
                   <td className="tracking-col-secondary">{percent(row.percentage)}</td>
                   <td>
-                    <StatusBadge tone={row.status.tone}>
-                      {row.status.label}
-                    </StatusBadge>
+                    <StatusBadge tone={row.status.tone}>{row.status.label}</StatusBadge>
                   </td>
                   <td>
-                    <RelatedClassButton
-                      sessionKey={row.sessionKey}
-                      onOpen={onOpenClass}
-                    />
+                    <RelatedClassButton sessionKey={row.sessionKey} onOpen={onOpenClass} />
                   </td>
                 </tr>
               ))}
@@ -519,17 +422,10 @@ function GradeView({ data, mode, onOpenClass }) {
         </section>
       </main>
       <aside className="tracking-sidebar">
-        <InsightPanel
-          title={
-            mode === "student" ? "Student insights" : "Assessment insights"
-          }
-          insights={insights}
-        />
+        <InsightPanel title={mode === "student" ? "Student insights" : "Assessment insights"} insights={insights} />
         <RecentPanel
           title="Latest assignments"
-          rows={data.tableRows
-            .filter((row) => row.percentage != null)
-            .slice(0, 3)}
+          rows={data.tableRows.filter((row) => row.percentage != null).slice(0, 3)}
           renderRow={(row) => (
             <div className="tracking-recent-row" key={`recent-${row.id}`}>
               <span>
@@ -546,12 +442,8 @@ function GradeView({ data, mode, onOpenClass }) {
 }
 
 function AttendanceView({ data, mode, onOpenClass }) {
-  const low = data.tableRows.filter(
-    (row) => row.rate != null && row.rate < 0.8,
-  );
-  const highCount = data.tableRows.filter(
-    (row) => row.rate != null && row.rate >= 0.9,
-  ).length;
+  const low = data.tableRows.filter((row) => row.rate != null && row.rate < 0.8);
+  const highCount = data.tableRows.filter((row) => row.rate != null && row.rate >= 0.9).length;
   const insights = [
     {
       icon: TrendingUp,
@@ -579,35 +471,13 @@ function AttendanceView({ data, mode, onOpenClass }) {
     <div className="tracking-content-grid">
       <main>
         <MetricStrip title="Attendance summary">
-          <Metric
-            icon={UsersRound}
-            label="Average attendance"
-            value={percent(data.average)}
-          />
-          <Metric
-            icon={CalendarDays}
-            label="Recorded classes"
-            value={data.sessions}
-          />
-          <Metric
-            icon={UserRoundCheck}
-            label="Present"
-            value={data.present}
-            note={`of ${data.total}`}
-          />
-          <Metric
-            icon={UserRound}
-            label="Absent"
-            value={data.absent}
-            note={`of ${data.total}`}
-            tone="orange"
-          />
+          <Metric icon={UsersRound} label="Average attendance" value={percent(data.average)} />
+          <Metric icon={CalendarDays} label="Recorded classes" value={data.sessions} />
+          <Metric icon={UserRoundCheck} label="Present" value={data.present} note={`of ${data.total}`} />
+          <Metric icon={UserRound} label="Absent" value={data.absent} note={`of ${data.total}`} tone="orange" />
         </MetricStrip>
         <TrendChart title="Attendance evolution by week" series={data.series} />
-        <section
-          className="tracking-table-shell tracking-table-attendance"
-          aria-label="Attendance details"
-        >
+        <section className="tracking-table-shell tracking-table-attendance" aria-label="Attendance details">
           <table>
             <thead>
               <tr>
@@ -634,30 +504,17 @@ function AttendanceView({ data, mode, onOpenClass }) {
                       <strong>{row.classTitle}</strong>
                     </td>
                   )}
-                  <td
-                    className={
-                      row.rate != null && row.rate < 0.8
-                        ? "danger-value"
-                        : "good-value"
-                    }
-                  >
+                  <td className={row.rate != null && row.rate < 0.8 ? "danger-value" : "good-value"}>
                     {percent(row.rate)}
                   </td>
                   <td className="tracking-col-secondary">{row.present}</td>
-                  <td className={`tracking-col-secondary ${row.absent ? "danger-value" : ""}`.trim()}>
-                    {row.absent}
-                  </td>
+                  <td className={`tracking-col-secondary ${row.absent ? "danger-value" : ""}`.trim()}>{row.absent}</td>
                   <td className="tracking-col-date">{formatDate(row.lastClass || row.classDate)}</td>
                   <td>
-                    <StatusBadge tone={row.status.tone}>
-                      {row.status.label}
-                    </StatusBadge>
+                    <StatusBadge tone={row.status.tone}>{row.status.label}</StatusBadge>
                   </td>
                   <td>
-                    <RelatedClassButton
-                      sessionKey={row.sessionKey}
-                      onOpen={onOpenClass}
-                    />
+                    <RelatedClassButton sessionKey={row.sessionKey} onOpen={onOpenClass} />
                   </td>
                 </tr>
               ))}
@@ -697,8 +554,7 @@ function AttendanceView({ data, mode, onOpenClass }) {
 }
 
 function PaymentBar({ data }) {
-  const ratio =
-    data.generated > 0 ? Math.min(1, data.collected / data.generated) : 0;
+  const ratio = data.generated > 0 ? Math.min(1, data.collected / data.generated) : 0;
   return (
     <div className="tracking-payment-chart">
       <h3>Collected vs. pending</h3>
@@ -739,11 +595,10 @@ function PaymentProjectionChart({ data }) {
   const padding = { left: 48, right: 22, top: 18, bottom: 34 };
   const startTime = dateTime(data.projectionStart);
   const endTime = Math.max(startTime + 1, dateTime(data.projectionEnd));
-  const x = (date) => padding.left
-    + ((dateTime(date) - startTime) / (endTime - startTime)) * (width - padding.left - padding.right);
+  const x = (date) =>
+    padding.left + ((dateTime(date) - startTime) / (endTime - startTime)) * (width - padding.left - padding.right);
   const maximum = Math.max(data.projection, data.collected, 1);
-  const y = (value) => padding.top
-    + (1 - value / maximum) * (height - padding.top - padding.bottom);
+  const y = (value) => padding.top + (1 - value / maximum) * (height - padding.top - padding.bottom);
   const actualSeries = [{ label: data.projectionStart, value: 0 }, ...data.cumulativeSeries];
   if (actualSeries.at(-1)?.label !== data.actualEnd) {
     actualSeries.push({ label: data.actualEnd, value: data.collected });
@@ -758,20 +613,38 @@ function PaymentProjectionChart({ data }) {
   const areaPath = `${actualPath} L${actualPoints.at(-1).x.toFixed(1)} ${height - padding.bottom} L${actualPoints[0].x.toFixed(1)} ${height - padding.bottom} Z`;
   return (
     <div className="payment-projection-chart">
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Collected ${money(data.collected)} versus projected ${money(data.projection)}`}>
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label={`Collected ${money(data.collected)} versus projected ${money(data.projection)}`}
+      >
         <g className="tracking-grid">
-          {[0, .25, .5, .75, 1].map((ratio) => (
-            <line key={ratio} x1={padding.left} x2={width - padding.right} y1={padding.top + ratio * (height - padding.top - padding.bottom)} y2={padding.top + ratio * (height - padding.top - padding.bottom)} />
+          {[0, 0.25, 0.5, 0.75, 1].map((ratio) => (
+            <line
+              key={ratio}
+              x1={padding.left}
+              x2={width - padding.right}
+              y1={padding.top + ratio * (height - padding.top - padding.bottom)}
+              y2={padding.top + ratio * (height - padding.top - padding.bottom)}
+            />
           ))}
         </g>
         <path className="payment-projection-area" d={areaPath} />
         <path className="payment-projection-line" d={projectionPath} />
         <path className="tracking-line" d={actualPath} />
-        {actualPoints.slice(1).map((point) => <circle key={`${point.label}-${point.value}`} cx={point.x} cy={point.y} r="3.5" />)}
+        {actualPoints.slice(1).map((point) => (
+          <circle key={`${point.label}-${point.value}`} cx={point.x} cy={point.y} r="3.5" />
+        ))}
         <circle className="projection-end" cx={projectionPoints[1].x} cy={projectionPoints[1].y} r="4" />
-        <text className="tracking-axis-label" x={padding.left} y={height - 9} textAnchor="start">{formatDate(data.projectionStart, { month: "short", day: "numeric" })}</text>
-        <text className="tracking-axis-label" x={x(data.actualEnd)} y={height - 9} textAnchor="middle">Today</text>
-        <text className="tracking-axis-label" x={width - padding.right} y={height - 9} textAnchor="end">{formatDate(data.projectionEnd, { month: "short", day: "numeric" })}</text>
+        <text className="tracking-axis-label" x={padding.left} y={height - 9} textAnchor="start">
+          {formatDate(data.projectionStart, { month: "short", day: "numeric" })}
+        </text>
+        <text className="tracking-axis-label" x={x(data.actualEnd)} y={height - 9} textAnchor="middle">
+          Today
+        </text>
+        <text className="tracking-axis-label" x={width - padding.right} y={height - 9} textAnchor="end">
+          {formatDate(data.projectionEnd, { month: "short", day: "numeric" })}
+        </text>
       </svg>
     </div>
   );
@@ -783,15 +656,36 @@ function PaymentAnalytics({ data, value, onChange }) {
       <header>
         <div className="payment-chart-toggle" role="tablist" aria-label="Payment chart">
           {PAYMENT_CHART_ITEMS.map((item) => (
-            <button key={item.value} type="button" role="tab" aria-selected={value === item.value} className={value === item.value ? "active" : ""} onClick={() => onChange(item.value)}>{item.label}</button>
+            <button
+              key={item.value}
+              type="button"
+              role="tab"
+              aria-selected={value === item.value}
+              className={value === item.value ? "active" : ""}
+              onClick={() => onChange(item.value)}
+            >
+              {item.label}
+            </button>
           ))}
         </div>
         {value === "projection" ? (
           <div className="payment-forecast-values">
-            <span className="actual"><small>Actual</small><strong>{money(data.collected)}</strong></span>
-            <span className="projection"><small>Projection</small><strong>{money(data.projection)}</strong></span>
-            <span><small>Gap</small><strong>{money(data.projectionGap)}</strong></span>
-            <span className="overdue"><small>Overdue</small><strong>{money(data.overdue)}</strong></span>
+            <span className="actual">
+              <small>Actual</small>
+              <strong>{money(data.collected)}</strong>
+            </span>
+            <span className="projection">
+              <small>Projection</small>
+              <strong>{money(data.projection)}</strong>
+            </span>
+            <span>
+              <small>Gap</small>
+              <strong>{money(data.projectionGap)}</strong>
+            </span>
+            <span className="overdue">
+              <small>Overdue</small>
+              <strong>{money(data.overdue)}</strong>
+            </span>
           </div>
         ) : null}
       </header>
@@ -806,10 +700,7 @@ function PaymentAnalytics({ data, value, onChange }) {
 
 function PaymentView({ data, mode, scope, chartView, onChartViewChange, onOpenClass }) {
   const pendingRows = data.tableRows.filter(
-    (row) =>
-      row.pending > 0 ||
-      row.status?.label === "Pending" ||
-      row.status?.label === "Overdue",
+    (row) => row.pending > 0 || row.status?.label === "Pending" || row.status?.label === "Overdue",
   );
   const insights = [
     {
@@ -818,16 +709,18 @@ function PaymentView({ data, mode, scope, chartView, onChartViewChange, onOpenCl
     },
     {
       icon: CheckCircle2,
-      text: scope === "overview"
-        ? `${data.paidClasses} paid class ${data.paidClasses === 1 ? "record" : "records"}.`
-        : `${data.paidStudents} ${data.paidStudents === 1 ? "student has" : "students have"} paid.`,
+      text:
+        scope === "overview"
+          ? `${data.paidClasses} paid class ${data.paidClasses === 1 ? "record" : "records"}.`
+          : `${data.paidStudents} ${data.paidStudents === 1 ? "student has" : "students have"} paid.`,
     },
     {
       icon: Clock3,
       tone: pendingRows.length ? "orange" : "green",
-      text: scope === "overview"
-        ? `${data.unpaidClasses} pending class ${data.unpaidClasses === 1 ? "record" : "records"}.`
-        : `${data.pendingStudents} ${data.pendingStudents === 1 ? "student still has" : "students still have"} a pending balance.`,
+      text:
+        scope === "overview"
+          ? `${data.unpaidClasses} pending class ${data.unpaidClasses === 1 ? "record" : "records"}.`
+          : `${data.pendingStudents} ${data.pendingStudents === 1 ? "student still has" : "students still have"} a pending balance.`,
     },
     {
       icon: CircleAlert,
@@ -839,27 +732,10 @@ function PaymentView({ data, mode, scope, chartView, onChartViewChange, onOpenCl
   return (
     <div className="tracking-content-grid">
       <main>
-        <MetricStrip
-          title={
-            mode === "class" ? "Class collection summary" : "Payment summary"
-          }
-        >
-          <Metric
-            icon={CircleDollarSign}
-            label="Generated value"
-            value={money(data.generated)}
-          />
-          <Metric
-            icon={CheckCircle2}
-            label="Amount collected"
-            value={money(data.collected)}
-          />
-          <Metric
-            icon={Clock3}
-            label="Pending amount"
-            value={money(data.pending)}
-            tone="orange"
-          />
+        <MetricStrip title={mode === "class" ? "Class collection summary" : "Payment summary"}>
+          <Metric icon={CircleDollarSign} label="Generated value" value={money(data.generated)} />
+          <Metric icon={CheckCircle2} label="Amount collected" value={money(data.collected)} />
+          <Metric icon={Clock3} label="Pending amount" value={money(data.pending)} tone="orange" />
           {mode === "class" ? (
             <>
               <Metric
@@ -879,18 +755,8 @@ function PaymentView({ data, mode, scope, chartView, onChartViewChange, onOpenCl
             </>
           ) : (
             <>
-              <Metric
-                icon={CalendarDays}
-                label="Paid classes"
-                value={data.paidClasses}
-                tone="blue"
-              />
-              <Metric
-                icon={CalendarDays}
-                label="Unpaid classes"
-                value={data.unpaidClasses}
-                tone="orange"
-              />
+              <Metric icon={CalendarDays} label="Paid classes" value={data.paidClasses} tone="blue" />
+              <Metric icon={CalendarDays} label="Unpaid classes" value={data.unpaidClasses} tone="orange" />
             </>
           )}
         </MetricStrip>
@@ -925,21 +791,14 @@ function PaymentView({ data, mode, scope, chartView, onChartViewChange, onOpenCl
                   )}
                   <td>{money(aggregateByStudent ? row.paid : row.charged)}</td>
                   {aggregateByStudent ? (
-                    <td className={row.pending ? "warning-value" : ""}>
-                      {money(row.pending)}
-                    </td>
+                    <td className={row.pending ? "warning-value" : ""}>{money(row.pending)}</td>
                   ) : null}
                   <td>
-                    <StatusBadge tone={row.status.tone}>
-                      {row.status.label}
-                    </StatusBadge>
+                    <StatusBadge tone={row.status.tone}>{row.status.label}</StatusBadge>
                   </td>
                   <td className="tracking-col-date">{formatDate(row.lastPayment || row.paymentDate)}</td>
                   <td>
-                    <RelatedClassButton
-                      sessionKey={row.sessionKey}
-                      onOpen={onOpenClass}
-                    />
+                    <RelatedClassButton sessionKey={row.sessionKey} onOpen={onOpenClass} />
                   </td>
                 </tr>
               ))}
@@ -962,9 +821,7 @@ function PaymentView({ data, mode, scope, chartView, onChartViewChange, onOpenCl
           renderRow={(row) => (
             <div className="tracking-recent-row" key={`pending-${row.id}`}>
               <StudentCell student={row.student} />
-              <b className="warning-value">
-                {money(row.pending || row.charged)}
-              </b>
+              <b className="warning-value">{money(row.pending || row.charged)}</b>
             </div>
           )}
         />
@@ -973,43 +830,24 @@ function PaymentView({ data, mode, scope, chartView, onChartViewChange, onOpenCl
   );
 }
 
-export default function Tracking({
-  state = {},
-  derived = {},
-  actions = {},
-  openPage,
-  intent,
-  clearIntent,
-}) {
-  const groups = (state.groups || []).filter(
-    (group) => group.status !== "Inactive",
-  );
-  const students = (state.students || []).filter(
-    (student) => student.status !== "Inactive",
-  );
+export default function Tracking({ state = {}, derived = {}, actions = {}, openPage, intent, clearIntent }) {
+  const groups = (state.groups || []).filter((group) => group.status !== "Inactive");
+  const students = (state.students || []).filter((student) => student.status !== "Inactive");
   const gradeRows = derived.gradeRows || state.grades || [];
-  const classRows =
-    derived.classLogRows || derived.classLog || state.classLog || [];
+  const classRows = derived.classLogRows || derived.classLog || state.classLog || [];
   const [tab, setTab] = useState("grades");
   const [period, setPeriod] = useState("month");
   const [search, setSearch] = useState("");
-  const [gradeMode, setGradeMode] = useState(() =>
-    groups.length ? "group" : "student",
-  );
-  const [attendanceMode, setAttendanceMode] = useState(() =>
-    groups.length ? "group" : "student",
-  );
-  const [paymentMode, setPaymentMode] = useState(() =>
-    groups.length ? "group" : "student",
-  );
+  const [gradeMode, setGradeMode] = useState(() => (groups.length ? "group" : "student"));
+  const [attendanceMode, setAttendanceMode] = useState(() => (groups.length ? "group" : "student"));
+  const [paymentMode, setPaymentMode] = useState(() => (groups.length ? "group" : "student"));
   const [paymentScope, setPaymentScope] = useState("overview");
   const [paymentChart, setPaymentChart] = useState("projection");
   const [groupId, setGroupId] = useState(groups[0]?.id || "");
   const [studentId, setStudentId] = useState(students[0]?.id || "");
   const [assessmentKey, setAssessmentKey] = useState("");
   const [sessionKey, setSessionKey] = useState("");
-  const liveDate =
-    state.settings?.asOfDate || new Date().toISOString().slice(0, 10);
+  const liveDate = state.settings?.asOfDate || new Date().toISOString().slice(0, 10);
   const [historicalDate, setHistoricalDate] = useState("");
   const [dateSettingsOpen, setDateSettingsOpen] = useState(false);
   const [dateModeDraft, setDateModeDraft] = useState("automatic");
@@ -1069,8 +907,7 @@ export default function Tracking({
     [gradeRows, groupId, range, reportState],
   );
   useEffect(() => {
-    if (!assessments.some((item) => item.key === assessmentKey))
-      setAssessmentKey(assessments[0]?.key || "");
+    if (!assessments.some((item) => item.key === assessmentKey)) setAssessmentKey(assessments[0]?.key || "");
   }, [assessmentKey, assessments]);
   const gradeData = useMemo(
     () =>
@@ -1083,17 +920,7 @@ export default function Tracking({
         search,
         classRows,
       }),
-    [
-      assessmentKey,
-      classRows,
-      gradeMode,
-      gradeRows,
-      groupId,
-      range,
-      search,
-      reportState,
-      studentId,
-    ],
+    [assessmentKey, classRows, gradeMode, gradeRows, groupId, range, search, reportState, studentId],
   );
   const attendanceData = useMemo(
     () =>
@@ -1136,45 +963,21 @@ export default function Tracking({
         search,
         projectionTotal: activePaymentMode === "overview" ? overviewProjection : undefined,
       }),
-    [
-      activePaymentMode,
-      classRows,
-      groupId,
-      overviewProjection,
-      range,
-      search,
-      sessionKey,
-      reportState,
-      studentId,
-    ],
+    [activePaymentMode, classRows, groupId, overviewProjection, range, search, sessionKey, reportState, studentId],
   );
 
-  const activeMode =
-    tab === "grades"
-      ? gradeMode
-      : tab === "attendance"
-        ? attendanceMode
-        : activePaymentMode;
-  const modeItems = tab === "payments"
-    ? PAYMENT_MODE_ITEMS.map((item) => ({ ...item, disabled: item.value === "group" && !groups.length }))
-    : [
-        { value: "group", label: "Group", disabled: !groups.length },
-        { value: "student", label: "Student" },
-      ];
-  const setMode =
-    tab === "grades"
-      ? setGradeMode
-      : tab === "attendance"
-        ? setAttendanceMode
-        : setPaymentMode;
-  const useStudentOwner =
-    activeMode === "student" ||
-    (tab === "payments" && activeMode === "class" && !groups.length);
+  const activeMode = tab === "grades" ? gradeMode : tab === "attendance" ? attendanceMode : activePaymentMode;
+  const modeItems =
+    tab === "payments"
+      ? PAYMENT_MODE_ITEMS.map((item) => ({ ...item, disabled: item.value === "group" && !groups.length }))
+      : [
+          { value: "group", label: "Group", disabled: !groups.length },
+          { value: "student", label: "Student" },
+        ];
+  const setMode = tab === "grades" ? setGradeMode : tab === "attendance" ? setAttendanceMode : setPaymentMode;
+  const useStudentOwner = activeMode === "student" || (tab === "payments" && activeMode === "class" && !groups.length);
   const openRelatedClass = (key) =>
-    openPage?.(
-      "classes",
-      key ? { type: "open-history-class", sessionKey: key } : "class-history",
-    );
+    openPage?.("classes", key ? { type: "open-history-class", sessionKey: key } : "class-history");
   const exportRows =
     tab === "grades"
       ? gradeData.tableRows.map((row) => ({
@@ -1207,11 +1010,7 @@ export default function Tracking({
             PaymentDate: row.lastPayment || row.paymentDate || "",
           }));
   const exportVisible = () => {
-    if (!exportRows.length)
-      return actions.notify?.(
-        "There is nothing to export in this view.",
-        "error",
-      );
+    if (!exportRows.length) return actions.notify?.("There is nothing to export in this view.", "error");
     downloadExcel(
       `hibi-${tab}-${range.start}-${range.end}.xls`,
       `Hibi ${tab} · ${range.start} to ${range.end}`,
@@ -1237,16 +1036,10 @@ export default function Tracking({
             <h1>
               Tracking <span aria-hidden="true">🌿</span>
             </h1>
-            <p>
-              Review grades, attendance, and payments for students and groups.
-            </p>
+            <p>Review grades, attendance, and payments for students and groups.</p>
           </div>
           <div className="tracking-top-actions">
-            <TrackingSelect
-              label="Period"
-              value={period}
-              onChange={(event) => setPeriod(event.target.value)}
-            >
+            <TrackingSelect label="Period" value={period} onChange={(event) => setPeriod(event.target.value)}>
               {PERIOD_ITEMS.map((item) => (
                 <option key={item.value} value={item.value}>
                   {item.label}
@@ -1288,26 +1081,60 @@ export default function Tracking({
         <div className="tracking-context">
           {tab === "payments" ? (
             <>
-              <ModeSwitch label="Scope" value={paymentScope} onChange={changePaymentScope} items={PAYMENT_SCOPE_ITEMS} />
+              <ModeSwitch
+                label="Scope"
+                value={paymentScope}
+                onChange={changePaymentScope}
+                items={PAYMENT_SCOPE_ITEMS}
+              />
               {paymentScope === "overview" ? (
                 <span className="tracking-scope-summary">All groups, students, and classes</span>
               ) : (
                 <>
                   <ModeSwitch value={paymentMode} onChange={setPaymentMode} items={modeItems} />
                   {useStudentOwner ? (
-                    <TrackingSelect label="Student" value={studentId} onChange={(event) => setStudentId(event.target.value)} searchable>
-                      {students.map((student) => <option key={student.id} value={student.id}>{student.fullName}</option>)}
+                    <TrackingSelect
+                      label="Student"
+                      value={studentId}
+                      onChange={(event) => setStudentId(event.target.value)}
+                      searchable
+                    >
+                      {students.map((student) => (
+                        <option key={student.id} value={student.id}>
+                          {student.fullName}
+                        </option>
+                      ))}
                     </TrackingSelect>
                   ) : (
-                    <TrackingSelect label="Group" value={groupId} onChange={(event) => setGroupId(event.target.value)} searchable>
-                      {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+                    <TrackingSelect
+                      label="Group"
+                      value={groupId}
+                      onChange={(event) => setGroupId(event.target.value)}
+                      searchable
+                    >
+                      {groups.map((group) => (
+                        <option key={group.id} value={group.id}>
+                          {group.name}
+                        </option>
+                      ))}
                     </TrackingSelect>
                   )}
                   {paymentMode === "class" ? (
-                    <TrackingSelect label="Class" value={sessionKey} onChange={(event) => setSessionKey(event.target.value)} searchable>
-                      {paymentBase.sessions.length ? paymentBase.sessions.map((item) => (
-                        <option key={item.key} value={item.key}>{formatDate(item.classDate)} · {formatTime(item.startTime)} · {item.title}</option>
-                      )) : <option value="">No classes</option>}
+                    <TrackingSelect
+                      label="Class"
+                      value={sessionKey}
+                      onChange={(event) => setSessionKey(event.target.value)}
+                      searchable
+                    >
+                      {paymentBase.sessions.length ? (
+                        paymentBase.sessions.map((item) => (
+                          <option key={item.key} value={item.key}>
+                            {formatDate(item.classDate)} · {formatTime(item.startTime)} · {item.title}
+                          </option>
+                        ))
+                      ) : (
+                        <option value="">No classes</option>
+                      )}
                     </TrackingSelect>
                   ) : null}
                 </>
@@ -1315,88 +1142,77 @@ export default function Tracking({
             </>
           ) : (
             <>
-          <ModeSwitch value={activeMode} onChange={setMode} items={modeItems} />
-          {useStudentOwner ? (
-            <TrackingSelect
-              label="Student"
-              value={studentId}
-              onChange={(event) => setStudentId(event.target.value)}
-              searchable
-            >
-              {students.map((student) => (
-                <option key={student.id} value={student.id}>
-                  {student.fullName}
-                </option>
-              ))}
-            </TrackingSelect>
-          ) : (
-            <TrackingSelect
-              label="Group"
-              value={groupId}
-              onChange={(event) => setGroupId(event.target.value)}
-              searchable
-            >
-              {groups.map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.name}
-                </option>
-              ))}
-            </TrackingSelect>
-          )}
-          {tab === "grades" && gradeMode === "group" ? (
-            <TrackingSelect
-              label="Assignment"
-              value={assessmentKey}
-              onChange={(event) => setAssessmentKey(event.target.value)}
-              searchable
-            >
-              {assessments.length ? (
-                assessments.map((item) => (
-                  <option key={item.key} value={item.key}>
-                    {item.assessment} · {formatDate(item.date)}
-                  </option>
-                ))
+              <ModeSwitch value={activeMode} onChange={setMode} items={modeItems} />
+              {useStudentOwner ? (
+                <TrackingSelect
+                  label="Student"
+                  value={studentId}
+                  onChange={(event) => setStudentId(event.target.value)}
+                  searchable
+                >
+                  {students.map((student) => (
+                    <option key={student.id} value={student.id}>
+                      {student.fullName}
+                    </option>
+                  ))}
+                </TrackingSelect>
               ) : (
-                <option value="">No assignments</option>
+                <TrackingSelect
+                  label="Group"
+                  value={groupId}
+                  onChange={(event) => setGroupId(event.target.value)}
+                  searchable
+                >
+                  {groups.map((group) => (
+                    <option key={group.id} value={group.id}>
+                      {group.name}
+                    </option>
+                  ))}
+                </TrackingSelect>
               )}
-            </TrackingSelect>
-          ) : null}
-          {tab === "payments" && paymentMode === "class" ? (
-            <TrackingSelect
-              label="Class"
-              value={sessionKey}
-              onChange={(event) => setSessionKey(event.target.value)}
-              searchable
-            >
-              {paymentBase.sessions.length ? (
-                paymentBase.sessions.map((item) => (
-                  <option key={item.key} value={item.key}>
-                    {formatDate(item.classDate)} · {formatTime(item.startTime)}{" "}
-                    · {item.title}
-                  </option>
-                ))
-              ) : (
-                <option value="">No classes</option>
-              )}
-            </TrackingSelect>
-          ) : null}
+              {tab === "grades" && gradeMode === "group" ? (
+                <TrackingSelect
+                  label="Assignment"
+                  value={assessmentKey}
+                  onChange={(event) => setAssessmentKey(event.target.value)}
+                  searchable
+                >
+                  {assessments.length ? (
+                    assessments.map((item) => (
+                      <option key={item.key} value={item.key}>
+                        {item.assessment} · {formatDate(item.date)}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="">No assignments</option>
+                  )}
+                </TrackingSelect>
+              ) : null}
+              {tab === "payments" && paymentMode === "class" ? (
+                <TrackingSelect
+                  label="Class"
+                  value={sessionKey}
+                  onChange={(event) => setSessionKey(event.target.value)}
+                  searchable
+                >
+                  {paymentBase.sessions.length ? (
+                    paymentBase.sessions.map((item) => (
+                      <option key={item.key} value={item.key}>
+                        {formatDate(item.classDate)} · {formatTime(item.startTime)} · {item.title}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="">No classes</option>
+                  )}
+                </TrackingSelect>
+              ) : null}
             </>
           )}
         </div>
         <section role="tabpanel">
-          {tab === "grades" ? (
-            <GradeView
-              data={gradeData}
-              mode={gradeMode}
-              onOpenClass={openRelatedClass}
-            />
-          ) : null}
+          {tab === "grades" ? <GradeView data={gradeData} mode={gradeMode} onOpenClass={openRelatedClass} /> : null}
           {tab === "attendance" ? (
-            <AttendanceView
-              data={attendanceData}
-              mode={attendanceMode}
-              onOpenClass={openRelatedClass}
-            />
+            <AttendanceView data={attendanceData} mode={attendanceMode} onOpenClass={openRelatedClass} />
           ) : null}
           {tab === "payments" ? (
             <PaymentView
@@ -1430,11 +1246,7 @@ export default function Tracking({
         }
       >
         <div className="tracking-date-settings">
-          <div
-            className="tracking-date-mode"
-            role="group"
-            aria-label="Reporting date mode"
-          >
+          <div className="tracking-date-mode" role="group" aria-label="Reporting date mode">
             <button
               type="button"
               className={dateModeDraft === "automatic" ? "active" : ""}
@@ -1467,8 +1279,7 @@ export default function Tracking({
                 <div>
                   <strong>Historical preview</strong>
                   <p>
-                    You will see grades, attendance, and payments recorded
-                    through{" "}
+                    You will see grades, attendance, and payments recorded through{" "}
                     <time dateTime={dateDraft}>{formatDate(dateDraft)}</time>.
                   </p>
                 </div>
@@ -1479,8 +1290,7 @@ export default function Tracking({
               <CalendarDays size={19} aria-hidden="true" />
               <div>
                 <strong>
-                  Using today:{" "}
-                  <time dateTime={liveDate}>{formatDate(liveDate)}</time>
+                  Using today: <time dateTime={liveDate}>{formatDate(liveDate)}</time>
                 </strong>
                 <p>Hibi will update this date automatically each day.</p>
               </div>

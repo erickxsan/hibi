@@ -1,7 +1,11 @@
 node_modules/
 dist/
+coverage/
+playwright-report/
+test-results/
 *.log
 .env
 .env.*
 !.env.example
 .supabase/
+supabase/.temp/

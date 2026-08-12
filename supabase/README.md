@@ -27,11 +27,13 @@ Apply every migration in filename order. The normalization migration backfills e
 For a clean local verification:
 
 ```sh
+pnpm install
 supabase start
-supabase db reset
-supabase test db
+pnpm test:db
 ```
 
-`tests/workspaces_rls.test.sql` creates two temporary Auth accounts inside a rolled-back transaction and verifies signup provisioning, A/B isolation, denied direct and anonymous access, per-entity conflicts, normalized memberships/payments, ordered change events, full-state reconstruction, and explicit snapshot recovery.
+The Supabase CLI is a pinned development dependency, so no global CLI installation is required. Docker Desktop (or another compatible Docker daemon) must be running. `pnpm test:db` resets the local database to apply every migration in filename order, runs `supabase db lint`, and then executes every pgTAP file.
+
+`tests/workspaces_rls.test.sql` creates two temporary Auth accounts inside a rolled-back transaction and verifies signup provisioning, A/B isolation, denied direct and anonymous access, per-entity conflicts, normalized memberships/payments, ordered change events, full-state reconstruction, and explicit snapshot recovery. `tests/workspace_imports.test.sql` adds coverage for normalized import confirmation, idempotency, non-destructive behavior, domain constraints, snapshots, and cross-account isolation.
 
 Use the Supabase service key only on a trusted server or Edge Function—never in the web bundle. Backups and database rows contain student, guardian, grade, attendance, and payment information and must be handled as sensitive personal data.

@@ -11,16 +11,16 @@
 
 ## Compatibility map
 
-| Surface | Integration decision |
-| --- | --- |
-| App shell, desktop sidebar, mobile navigation, dashboard, design tokens, responsive layout, companion art | Reuse from the redesign and connect to production state. |
-| Students, Groups, Classes, Payments, Settings | Adapt to the production actions, validation, unsaved-change protection, complete record fields, and existing data semantics. |
-| Authentication, account menu, cloud states | Preserve production implementation and apply only compatible redesign styling. |
-| Supabase client, revisioned workspace repository, Realtime subscription, RLS ownership | Preserve unchanged. |
-| Grades | Preserve the complete production workflow and restyle/adapt it for multiple-group enrollment. |
-| Legacy Setup and Class Log behavior | Preserve all capabilities inside the redesigned routes; retain compatibility for `/setup` and `/class-log`. |
-| JSON import/export and browser-to-cloud migration | Preserve unchanged, then extend the canonical normalizer additively for new optional fields. |
-| Mock or seed data from the redesign | Never copy into production or deployment. |
+| Surface                                                                                                   | Integration decision                                                                                                         |
+| --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| App shell, desktop sidebar, mobile navigation, dashboard, design tokens, responsive layout, companion art | Reuse from the redesign and connect to production state.                                                                     |
+| Students, Groups, Classes, Payments, Settings                                                             | Adapt to the production actions, validation, unsaved-change protection, complete record fields, and existing data semantics. |
+| Authentication, account menu, cloud states                                                                | Preserve production implementation and apply only compatible redesign styling.                                               |
+| Supabase client, revisioned workspace repository, Realtime subscription, RLS ownership                    | Preserve unchanged.                                                                                                          |
+| Grades                                                                                                    | Preserve the complete production workflow and restyle/adapt it for multiple-group enrollment.                                |
+| Legacy Setup and Class Log behavior                                                                       | Preserve all capabilities inside the redesigned routes; retain compatibility for `/setup` and `/class-log`.                  |
+| JSON import/export and browser-to-cloud migration                                                         | Preserve unchanged, then extend the canonical normalizer additively for new optional fields.                                 |
+| Mock or seed data from the redesign                                                                       | Never copy into production or deployment.                                                                                    |
 
 ## External services and public configuration
 
@@ -50,16 +50,16 @@
 
 ## UX changes after redesign stabilization
 
-| Original problem | Implemented change | Workflow and data effect |
-| --- | --- | --- |
-| The redesign exposed polished tabs and actions that were partly static. | Connected every student/group detail tab, payment shortcut, class-history link, editor, and destructive action to the production actions and derived data. | Removes dead ends without changing record ownership or IDs. |
-| Students could only be represented by one group in legacy records. | Added an additive `groupIds` compatibility layer plus an independent individual-class flag. | Legacy `groupId` values are retained during normalization; students can now take individual classes, multiple groups, or both. |
-| Mobile Back could leave the app while the More menu was open. | Made the More menu a history-backed overlay with Escape, outside-click, focus return, and Back handling. | Navigation behavior changes only while the overlay is open; stored data is unaffected. |
-| Switching from a dirty new-class form to History could leave hidden draft values behind. | Reset the discarded draft after confirmation. | Prevents an accidental later save of values the user already chose to discard. |
-| Settings in the redesign omitted several production controls. | Restored reporting dates, alert thresholds, projection window, safe import preview, export, and cloud/local privacy controls inside the redesigned cards. | Existing settings and backups remain compatible; imports are capped at 5 MB and require confirmation. |
-| Payment totals were difficult to connect to their source records. | Added a direct detailed-history action and an in-place mark-paid action with a saving state. | Reuses the existing class-record payment model; no duplicate payment source of truth was introduced. |
-| Student initials did not provide an on-brand identity across workflows. | Added one shared, keyboard/touch-accessible animal-avatar component and compact selector. | Stores only a stable optional `avatarId`; legacy students use a cat fallback and require no manual edit. |
-| Route changes and saves felt abrupt. | Added a short route settle and one-time cat success reaction. | Motion is decorative, non-blocking, and disabled by the existing reduced-motion rules. |
+| Original problem                                                                         | Implemented change                                                                                                                                         | Workflow and data effect                                                                                                       |
+| ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| The redesign exposed polished tabs and actions that were partly static.                  | Connected every student/group detail tab, payment shortcut, class-history link, editor, and destructive action to the production actions and derived data. | Removes dead ends without changing record ownership or IDs.                                                                    |
+| Students could only be represented by one group in legacy records.                       | Added an additive `groupIds` compatibility layer plus an independent individual-class flag.                                                                | Legacy `groupId` values are retained during normalization; students can now take individual classes, multiple groups, or both. |
+| Mobile Back could leave the app while the More menu was open.                            | Made the More menu a history-backed overlay with Escape, outside-click, focus return, and Back handling.                                                   | Navigation behavior changes only while the overlay is open; stored data is unaffected.                                         |
+| Switching from a dirty new-class form to History could leave hidden draft values behind. | Reset the discarded draft after confirmation.                                                                                                              | Prevents an accidental later save of values the user already chose to discard.                                                 |
+| Settings in the redesign omitted several production controls.                            | Restored reporting dates, alert thresholds, projection window, safe import preview, export, and cloud/local privacy controls inside the redesigned cards.  | Existing settings and backups remain compatible; imports are capped at 5 MB and require confirmation.                          |
+| Payment totals were difficult to connect to their source records.                        | Added a direct detailed-history action and an in-place mark-paid action with a saving state.                                                               | Reuses the existing class-record payment model; no duplicate payment source of truth was introduced.                           |
+| Student initials did not provide an on-brand identity across workflows.                  | Added one shared, keyboard/touch-accessible animal-avatar component and compact selector.                                                                  | Stores only a stable optional `avatarId`; legacy students use a cat fallback and require no manual edit.                       |
+| Route changes and saves felt abrupt.                                                     | Added a short route settle and one-time cat success reaction.                                                                                              | Motion is decorative, non-blocking, and disabled by the existing reduced-motion rules.                                         |
 
 ## Verification record
 

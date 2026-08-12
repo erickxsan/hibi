@@ -151,7 +151,8 @@ function paymentStatusForContext(context, row, student, group) {
   if (paid === 0) return row.classDate > context.asOf ? PAYMENT_STATUSES.SCHEDULED : PAYMENT_STATUSES.PENDING;
   if (finiteNumber(charge) && paid < charge) return PAYMENT_STATUSES.PARTIAL;
   if (finiteNumber(charge) && paid > charge) return PAYMENT_STATUSES.OVERPAID;
-  if (hasPaymentDate && (row.paymentDate < row.classDate || row.classDate > context.asOf)) return PAYMENT_STATUSES.PAID_IN_ADVANCE;
+  if (hasPaymentDate && (row.paymentDate < row.classDate || row.classDate > context.asOf))
+    return PAYMENT_STATUSES.PAID_IN_ADVANCE;
   return PAYMENT_STATUSES.PAID;
 }
 
@@ -164,7 +165,11 @@ export function gradePercentage(row) {
 export function deriveGradeRow(state, row, suppliedContext) {
   const context = suppliedContext || createDerivationContext(state);
   const student = context.studentsById.get(row?.studentId) ?? null;
-  const studentGroups = student ? studentGroupIds(student).map((id) => context.groupsById.get(id)).filter(Boolean) : [];
+  const studentGroups = student
+    ? studentGroupIds(student)
+        .map((id) => context.groupsById.get(id))
+        .filter(Boolean)
+    : [];
   const group = studentGroups[0] ?? null;
   return {
     ...row,
@@ -238,25 +243,19 @@ export function calculateOutstanding(state, row, asOfDate) {
   if (row.classDate > asOf || row.classStatus === "Cancelled" || charge === 0) return 0;
   if (!finiteNumber(charge)) return null;
 
-  const recognizedPayment = isDateOnly(row.paymentDate) && row.paymentDate <= asOf
-    ? validPaymentAmount(row)
-    : 0;
+  const recognizedPayment = isDateOnly(row.paymentDate) && row.paymentDate <= asOf ? validPaymentAmount(row) : 0;
   return Math.max(charge - recognizedPayment, 0);
 }
 
 export function deriveClassLogRow(state, row, asOfDate, suppliedContext) {
   const context = suppliedContext || createDerivationContext(state, asOfDate);
   const student = context.studentsById.get(row?.studentId) ?? null;
-  const group = context.groupsById.get(row?.groupId) ?? (student ? context.groupsById.get(studentGroupIds(student)[0]) : null);
+  const group =
+    context.groupsById.get(row?.groupId) ?? (student ? context.groupsById.get(studentGroupIds(student)[0]) : null);
   const config = context.config;
-  const effectiveHours = row?.classStatus === "Cancelled"
-    ? 0
-    : finiteNumber(row?.hours)
-      ? row.hours
-      : config.defaultClassHours;
-  const recognizedPaid = isDateOnly(row?.paymentDate) && row.paymentDate <= context.asOf
-    ? validPaymentAmount(row)
-    : 0;
+  const effectiveHours =
+    row?.classStatus === "Cancelled" ? 0 : finiteNumber(row?.hours) ? row.hours : config.defaultClassHours;
+  const recognizedPaid = isDateOnly(row?.paymentDate) && row.paymentDate <= context.asOf ? validPaymentAmount(row) : 0;
 
   return {
     ...row,
@@ -283,7 +282,9 @@ export function deriveStudent(state, studentId, asOfDate, suppliedContext) {
   const asOf = context.asOf;
   const student = context.studentsById.get(studentId) ?? null;
   if (!student) return null;
-  const studentGroups = studentGroupIds(student).map((id) => context.groupsById.get(id)).filter(Boolean);
+  const studentGroups = studentGroupIds(student)
+    .map((id) => context.groupsById.get(id))
+    .filter(Boolean);
   const group = studentGroups[0] ?? null;
   const gradeRows = context.gradesByStudent.get(studentId) || [];
   const logRows = context.logsByStudent.get(studentId) || [];
@@ -295,12 +296,9 @@ export function deriveStudent(state, studentId, asOfDate, suppliedContext) {
   const attended = attendanceRows.filter((row) => row.attendance === "P" || row.attendance === "L").length;
   const attendance = attendanceRows.length ? attended / attendanceRows.length : null;
   const missingAssignments = gradeRows.filter((row) => row?.workStatus === "Missing").length;
-  const outstanding = sum(logRows, (row) => outstandingForContext(
-    context,
-    row,
-    student,
-    context.groupsById.get(row?.groupId) ?? group,
-  ));
+  const outstanding = sum(logRows, (row) =>
+    outstandingForContext(context, row, student, context.groupsById.get(row?.groupId) ?? group),
+  );
   const paidThroughToday = sum(
     logRows.filter((row) => isDateOnly(row?.paymentDate) && row.paymentDate <= asOf),
     validPaymentAmount,
@@ -354,14 +352,13 @@ export function deriveGroup(state, groupId, asOfDate, suppliedContext) {
   const activeStudents = activeStudentRecords.length;
   const groupStudentIds = new Set(students.map((student) => student.id));
   const explicitGroupLog = context.logsByGroup.get(groupId) || [];
-  const unassignedStudentLog = students.flatMap((student) => (
-    (context.logsByStudent.get(student.id) || []).filter((row) => !row?.groupId)
-  ));
+  const unassignedStudentLog = students.flatMap((student) =>
+    (context.logsByStudent.get(student.id) || []).filter((row) => !row?.groupId),
+  );
   const groupLog = [...explicitGroupLog, ...unassignedStudentLog.filter((row) => groupStudentIds.has(row?.studentId))];
   const config = context.config;
-  const collectedSelectedMonth = selectedMonth <= selectedMonthEnd
-    ? amountCollectedInRange(groupLog, selectedMonth, selectedMonthEnd)
-    : 0;
+  const collectedSelectedMonth =
+    selectedMonth <= selectedMonthEnd ? amountCollectedInRange(groupLog, selectedMonth, selectedMonthEnd) : 0;
 
   if (!context.selectedMonthOccurrences) {
     context.selectedMonthOccurrences = generateScheduledOccurrences(state, selectedMonth, endOfMonth(selectedMonth));
@@ -370,14 +367,19 @@ export function deriveGroup(state, groupId, asOfDate, suppliedContext) {
     ? context.selectedMonthOccurrences.filter((item) => item.groupId === groupId && item.status !== "Cancelled")
     : [];
   const idealRevenue = scheduledOccurrences.length
-    ? sum(scheduledOccurrences, (occurrence) => sum(activeStudentRecords, (student) => (
-      numberOrZero(resolveHourlyRate(state, student, group)) * numberOrZero(occurrence.durationHours)
-    )))
-    : sum(activeStudentRecords, (student) => (
-      numberOrZero(group.plannedSessionsPerMonth)
-      * numberOrZero(config.defaultClassHours)
-      * numberOrZero(resolveHourlyRate(state, student, group))
-    ));
+    ? sum(scheduledOccurrences, (occurrence) =>
+        sum(
+          activeStudentRecords,
+          (student) => numberOrZero(resolveHourlyRate(state, student, group)) * numberOrZero(occurrence.durationHours),
+        ),
+      )
+    : sum(
+        activeStudentRecords,
+        (student) =>
+          numberOrZero(group.plannedSessionsPerMonth) *
+          numberOrZero(config.defaultClassHours) *
+          numberOrZero(resolveHourlyRate(state, student, group)),
+      );
 
   const derived = {
     ...group,
@@ -401,7 +403,9 @@ export function deriveGroup(state, groupId, asOfDate, suppliedContext) {
 export function deriveUnassignedGroup(state, asOfDate, suppliedContext) {
   const context = suppliedContext || createDerivationContext(state, asOfDate);
   const asOf = context.asOf;
-  const students = context.data.students.filter((student) => student?.isIndividual || studentGroupIds(student).length === 0);
+  const students = context.data.students.filter(
+    (student) => student?.isIndividual || studentGroupIds(student).length === 0,
+  );
   if (!students.length) return null;
 
   const selectedMonth = resolveSelectedMonth(state);
@@ -410,9 +414,9 @@ export function deriveUnassignedGroup(state, asOfDate, suppliedContext) {
   const derivedStudents = activeStudentRecords.map((student) => deriveStudent(state, student.id, asOf, context));
   const activeStudents = activeStudentRecords.length;
   const studentIds = new Set(students.map((student) => student.id));
-  const groupLog = students.flatMap((student) => (
-    (context.logsByStudent.get(student.id) || []).filter((row) => !row?.groupId && studentIds.has(row?.studentId))
-  ));
+  const groupLog = students.flatMap((student) =>
+    (context.logsByStudent.get(student.id) || []).filter((row) => !row?.groupId && studentIds.has(row?.studentId)),
+  );
 
   return {
     id: "__unassigned__",
@@ -426,9 +430,7 @@ export function deriveUnassignedGroup(state, asOfDate, suppliedContext) {
     attendance: average(derivedStudents.map((student) => student.attendance)),
     missingAssignments: sum(derivedStudents, (student) => student.missingAssignments),
     collectedSelectedMonth:
-      selectedMonth <= selectedMonthEnd
-        ? amountCollectedInRange(groupLog, selectedMonth, selectedMonthEnd)
-        : 0,
+      selectedMonth <= selectedMonthEnd ? amountCollectedInRange(groupLog, selectedMonth, selectedMonthEnd) : 0,
     outstanding: sum(derivedStudents, (student) => student.outstanding),
     idealRevenue: 0,
     projectionExcluded: true,
@@ -478,19 +480,17 @@ export function deriveDashboard(state, asOfDate, suppliedContext) {
 
   const weekStart = startOfWeek(asOf, 1);
   const selectedMonthEnd = minDateOnly(endOfMonth(selectedMonth), asOf);
-  const recentWeeks = Number.isInteger(config.recentProjectionWeeks) && config.recentProjectionWeeks > 0
-    ? config.recentProjectionWeeks
-    : DEFAULT_SETTINGS.recentProjectionWeeks;
+  const recentWeeks =
+    Number.isInteger(config.recentProjectionWeeks) && config.recentProjectionWeeks > 0
+      ? config.recentProjectionWeeks
+      : DEFAULT_SETTINGS.recentProjectionWeeks;
   const recentStart = addDays(asOf, -7 * recentWeeks + 1);
   const recentCollections = amountCollectedInRange(data.classLog, recentStart, asOf);
 
   const paidForFutureClasses = sum(
     data.classLog.filter(
       (row) =>
-        isDateOnly(row?.classDate) &&
-        row.classDate > asOf &&
-        isDateOnly(row.paymentDate) &&
-        row.paymentDate <= asOf,
+        isDateOnly(row?.classDate) && row.classDate > asOf && isDateOnly(row.paymentDate) && row.paymentDate <= asOf,
     ),
     validPaymentAmount,
   );
@@ -504,14 +504,11 @@ export function deriveDashboard(state, asOfDate, suppliedContext) {
     missingAssignments: sum(active, (student) => student.missingAssignments),
     collectedThisWeek: amountCollectedInRange(data.classLog, weekStart, asOf),
     collectedSelectedMonth:
-      selectedMonth <= selectedMonthEnd
-        ? amountCollectedInRange(data.classLog, selectedMonth, selectedMonthEnd)
-        : 0,
+      selectedMonth <= selectedMonthEnd ? amountCollectedInRange(data.classLog, selectedMonth, selectedMonthEnd) : 0,
     outstandingThroughToday: sum(active, (student) => student.outstanding),
     paidForFutureClasses,
     idealRevenue: sum(groups, (group) => group.idealRevenue),
-    recentProjection:
-      (recentCollections / recentWeeks) * (daysInMonth(selectedMonth) / 7),
+    recentProjection: (recentCollections / recentWeeks) * (daysInMonth(selectedMonth) / 7),
     recentCollections,
     recentWeeklyAverage: recentCollections / recentWeeks,
     groupSummaries: groups,

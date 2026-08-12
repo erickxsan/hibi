@@ -40,11 +40,12 @@ export function buildClassSessions(classRows = [], upcomingRows = []) {
       occurrenceDate: row.occurrenceDate || row.classDate,
     });
   }
-  return [...sessions.values()].sort((left, right) => (
-    right.classDate.localeCompare(left.classDate)
-      || right.startTime.localeCompare(left.startTime)
-      || left.groupName.localeCompare(right.groupName)
-  ));
+  return [...sessions.values()].sort(
+    (left, right) =>
+      right.classDate.localeCompare(left.classDate) ||
+      right.startTime.localeCompare(left.startTime) ||
+      left.groupName.localeCompare(right.groupName),
+  );
 }
 
 export function assessmentKey(row = {}) {
@@ -66,9 +67,9 @@ export function buildAssessments(gradeRows = []) {
       });
     }
   }
-  return [...assessments.values()].sort((left, right) => (
-    right.date.localeCompare(left.date) || left.assessment.localeCompare(right.assessment)
-  ));
+  return [...assessments.values()].sort(
+    (left, right) => right.date.localeCompare(left.date) || left.assessment.localeCompare(right.assessment),
+  );
 }
 
 export function attendanceRate(codes = []) {

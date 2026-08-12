@@ -1,9 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim() ?? "";
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim()
-  || import.meta.env.VITE_SUPABASE_ANON_KEY?.trim()
-  || "";
+const supabaseAnonKey =
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim() || import.meta.env.VITE_SUPABASE_ANON_KEY?.trim() || "";
 const forceLocalDevelopment = import.meta.env.DEV && import.meta.env.VITE_FORCE_LOCAL_MODE === "true";
 const DEFAULT_CLOUD_WRITE_ORIGIN = "https://usehibi.pages.dev";
 
@@ -30,7 +29,8 @@ export function isCloudWriteLocationAllowed({
 export const cloudWritesEnabled = isCloudWriteLocationAllowed();
 
 export const isCloudConfigured = !forceLocalDevelopment && Boolean(supabaseUrl && supabaseAnonKey);
-export const isLocalModeAllowed = forceLocalDevelopment || import.meta.env.DEV || import.meta.env.VITE_ALLOW_LOCAL_MODE === "true";
+export const isLocalModeAllowed =
+  forceLocalDevelopment || import.meta.env.DEV || import.meta.env.VITE_ALLOW_LOCAL_MODE === "true";
 export const hCaptchaSiteKey = import.meta.env.VITE_HCAPTCHA_SITE_KEY?.trim() ?? "";
 
 /**
@@ -125,10 +125,7 @@ export function createAuthService(client = supabase) {
       throwAuthError(error, "The account could not be signed out.");
     },
 
-    async sendPasswordReset(email, {
-      redirectTo = `${globalThis.location?.origin ?? ""}/`,
-      captchaToken = "",
-    } = {}) {
+    async sendPasswordReset(email, { redirectTo = `${globalThis.location?.origin ?? ""}/`, captchaToken = "" } = {}) {
       const { error } = await cloud().auth.resetPasswordForEmail(email.trim(), {
         redirectTo,
         ...(captchaToken ? { captchaToken } : {}),

@@ -31,25 +31,28 @@ function yearStart(value) {
 }
 
 function rangeFor(asOf, period) {
-  const start = period === "today"
-    ? asOf
-    : period === "weekly"
-      ? startOfWeek(asOf, 1)
-      : period === "monthly"
-        ? startOfMonth(asOf)
-        : yearStart(asOf);
+  const start =
+    period === "today"
+      ? asOf
+      : period === "weekly"
+        ? startOfWeek(asOf, 1)
+        : period === "monthly"
+          ? startOfMonth(asOf)
+          : yearStart(asOf);
   const length = dayCount(start, asOf);
-  const previousStart = period === "today"
-    ? addDays(asOf, -1)
-    : period === "weekly"
-      ? addDays(start, -7)
-      : period === "monthly"
-        ? addMonths(start, -1)
-        : `${Number(asOf.slice(0, 4)) - 1}-01-01`;
+  const previousStart =
+    period === "today"
+      ? addDays(asOf, -1)
+      : period === "weekly"
+        ? addDays(start, -7)
+        : period === "monthly"
+          ? addMonths(start, -1)
+          : `${Number(asOf.slice(0, 4)) - 1}-01-01`;
   const naturalPreviousEnd = addDays(previousStart, length - 1);
-  const previousEnd = period === "monthly" && naturalPreviousEnd > endOfMonth(previousStart)
-    ? endOfMonth(previousStart)
-    : naturalPreviousEnd;
+  const previousEnd =
+    period === "monthly" && naturalPreviousEnd > endOfMonth(previousStart)
+      ? endOfMonth(previousStart)
+      : naturalPreviousEnd;
   return {
     start,
     end: asOf,
@@ -65,26 +68,37 @@ function inRange(value, range, previous = false) {
 }
 
 function attendanceFor(rows, range, previous = false) {
-  const applicable = rows.filter((row) => row.classStatus === "Completed"
-    && ["P", "L", "A"].includes(row.attendance)
-    && inRange(row.classDate, range, previous));
+  const applicable = rows.filter(
+    (row) =>
+      row.classStatus === "Completed" &&
+      ["P", "L", "A"].includes(row.attendance) &&
+      inRange(row.classDate, range, previous),
+  );
   if (!applicable.length) return null;
   return applicable.filter((row) => row.attendance === "P" || row.attendance === "L").length / applicable.length;
 }
 
 function gradeFor(rows, range, previous = false) {
   const values = rows
-    .filter((row) => inRange(row.date, range, previous) && finite(row.score) && finite(row.maxScore) && row.maxScore > 0)
+    .filter(
+      (row) => inRange(row.date, range, previous) && finite(row.score) && finite(row.maxScore) && row.maxScore > 0,
+    )
     .map((row) => row.score / row.maxScore);
   return values.length ? values.reduce((total, value) => total + value, 0) / values.length : null;
 }
 
 function collectedFor(rows, range, previous = false) {
-  return sum(rows.filter((row) => inRange(row.paymentDate, range, previous)), (row) => row.amountPaid);
+  return sum(
+    rows.filter((row) => inRange(row.paymentDate, range, previous)),
+    (row) => row.amountPaid,
+  );
 }
 
 function generatedFor(rows, range, previous = false) {
-  return sum(rows.filter((row) => inRange(row.classDate, range, previous)), (row) => row.charge);
+  return sum(
+    rows.filter((row) => inRange(row.classDate, range, previous)),
+    (row) => row.charge,
+  );
 }
 
 function delta(current, previous) {
@@ -131,9 +145,13 @@ function chartWindows(asOf, period) {
 function revenueSeries(rows, asOf, period) {
   let running = 0;
   return chartWindows(asOf, period).map((window) => {
-    const value = window.start > asOf
-      ? 0
-      : sum(rows.filter((row) => isDateInRange(row.classDate, window.start, window.end)), (row) => row.charge);
+    const value =
+      window.start > asOf
+        ? 0
+        : sum(
+            rows.filter((row) => isDateInRange(row.classDate, window.start, window.end)),
+            (row) => row.charge,
+          );
     running += value;
     return { ...window, value: running };
   });
@@ -173,7 +191,7 @@ function todaySessions(state, derived, asOf) {
       studentId: row.groupId ? "" : row.studentId,
       title: row.classTitle || row.groupName || row.studentName || "Individual class",
       startTime: row.startTime,
-      expected: row.groupId ? (activeStudents.get(row.groupId) || 0) : 1,
+      expected: row.groupId ? activeStudents.get(row.groupId) || 0 : 1,
       attended: 0,
       records: 0,
       status: "Pending",
@@ -201,12 +219,22 @@ function academicAlerts(student) {
 
 function topStudents(students) {
   return students
-    .filter((student) => student.status === "Active" && !academicAlerts(student).length && (finite(student.gradeAverage) || finite(student.attendance)))
-    .sort((left, right) => ((right.gradeAverage ?? right.attendance ?? 0) - (left.gradeAverage ?? left.attendance ?? 0)))
+    .filter(
+      (student) =>
+        student.status === "Active" &&
+        !academicAlerts(student).length &&
+        (finite(student.gradeAverage) || finite(student.attendance)),
+    )
+    .sort((left, right) => (right.gradeAverage ?? right.attendance ?? 0) - (left.gradeAverage ?? left.attendance ?? 0))
     .slice(0, 3)
     .map((student) => ({
       ...student,
-      highlight: student.attendance === 1 ? "Perfect attendance" : finite(student.gradeAverage) ? "Strong average" : "Consistent progress",
+      highlight:
+        student.attendance === 1
+          ? "Perfect attendance"
+          : finite(student.gradeAverage)
+            ? "Strong average"
+            : "Consistent progress",
     }));
 }
 

@@ -6,12 +6,7 @@ import {
   NORMALIZED_COLLECTIONS,
   workspacePatchesOverlap,
 } from "./normalizedWorkspace.js";
-import {
-  CloudAuthenticationError,
-  cloudWritesEnabled,
-  requireCloudClient,
-  supabase,
-} from "./client.js";
+import { CloudAuthenticationError, cloudWritesEnabled, requireCloudClient, supabase } from "./client.js";
 
 export const LOAD_WORKSPACE_RPC = "load_normalized_workspace";
 export const SAVE_WORKSPACE_RPC = "apply_workspace_patch_idempotent";
@@ -67,7 +62,8 @@ export function createOperationId(cryptoApi = globalThis.crypto) {
   if (typeof cryptoApi?.randomUUID === "function") return cryptoApi.randomUUID();
   const bytes = new Uint8Array(16);
   cryptoApi?.getRandomValues?.(bytes);
-  if (!bytes.some(Boolean)) throw new CloudPersistenceError("Secure local operation IDs are unavailable in this browser.");
+  if (!bytes.some(Boolean))
+    throw new CloudPersistenceError("Secure local operation IDs are unavailable in this browser.");
   bytes[6] = (bytes[6] & 0x0f) | 0x40;
   bytes[8] = (bytes[8] & 0x3f) | 0x80;
   const hex = [...bytes].map((value) => value.toString(16).padStart(2, "0")).join("");
@@ -91,9 +87,9 @@ function normalizeVersions(value) {
   const normalized = {};
   for (const key of ["settings", ...NORMALIZED_COLLECTIONS]) {
     if (!value[key] || typeof value[key] !== "object" || Array.isArray(value[key])) continue;
-    normalized[key] = Object.fromEntries(Object.entries(value[key]).map(([id, revision]) => (
-      [id, normalizeRevision(revision)]
-    )));
+    normalized[key] = Object.fromEntries(
+      Object.entries(value[key]).map(([id, revision]) => [id, normalizeRevision(revision)]),
+    );
   }
   return normalized;
 }
@@ -119,7 +115,9 @@ function isEntityConflict(error) {
 function persistenceFailure(message, error) {
   const providerMessage = String(error?.message || "");
   if (providerMessage.includes("workspace_entity_conflict")) {
-    return new CloudPersistenceError("The same record changed on another device. Hibi is loading that version.", { cause: error });
+    return new CloudPersistenceError("The same record changed on another device. Hibi is loading that version.", {
+      cause: error,
+    });
   }
   if (providerMessage.includes("workspace_replacement_not_confirmed")) {
     return new CloudPersistenceError("The full-workspace replacement was not confirmed.", { cause: error });
@@ -144,7 +142,9 @@ export function createWorkspaceRepository(client = supabase, { allowWrites = tru
 
   function requireWritesEnabled() {
     if (!allowWrites) {
-      throw new CloudPersistenceError("Cloud writes are disabled on this preview or development address. Open the official Hibi site to make changes.");
+      throw new CloudPersistenceError(
+        "Cloud writes are disabled on this preview or development address. Open the official Hibi site to make changes.",
+      );
     }
   }
 
@@ -180,7 +180,9 @@ export function createWorkspaceRepository(client = supabase, { allowWrites = tru
   async function loadOrCreateWorkspace(expectedOwnerId) {
     const loaded = await loadWorkspace(expectedOwnerId);
     if (loaded) return loaded;
-    throw new CloudPersistenceError("Your cloud workspace is missing. Apply the latest Supabase migration, then try again.");
+    throw new CloudPersistenceError(
+      "Your cloud workspace is missing. Apply the latest Supabase migration, then try again.",
+    );
   }
 
   async function conflictFrom(error, ownerId) {
@@ -227,7 +229,13 @@ export function createWorkspaceRepository(client = supabase, { allowWrites = tru
     };
   }
 
-  async function saveWorkspace(state, _expectedRevision, expectedOwnerId, previousState, operationId = createOperationId()) {
+  async function saveWorkspace(
+    state,
+    _expectedRevision,
+    expectedOwnerId,
+    previousState,
+    operationId = createOperationId(),
+  ) {
     requireWritesEnabled();
     const user = await requireUser(expectedOwnerId);
     const ownerId = expectedOwnerId || user.id;
@@ -282,9 +290,12 @@ export function createWorkspaceRepository(client = supabase, { allowWrites = tru
     if (!SHA256_RE.test(String(fileHash || ""))) throw new TypeError("A valid SHA-256 file hash is required.");
     const user = await requireUser(expectedOwnerId);
     const ownerId = expectedOwnerId || user.id;
-    const { data, error } = await cloud().from(IMPORT_JOBS_TABLE)
+    const { data, error } = await cloud()
+      .from(IMPORT_JOBS_TABLE)
       .select("id, owner_id, file_hash, source_name, base_revision, result_revision, summary, created_at")
-      .eq("owner_id", ownerId).eq("file_hash", fileHash).maybeSingle();
+      .eq("owner_id", ownerId)
+      .eq("file_hash", fileHash)
+      .maybeSingle();
     if (error) throw persistenceFailure("Import history could not be checked.", error);
     if (!data) return null;
     return {
@@ -338,9 +349,12 @@ export function createWorkspaceRepository(client = supabase, { allowWrites = tru
   async function listRecoverySnapshots(expectedOwnerId) {
     const user = await requireUser(expectedOwnerId);
     const ownerId = expectedOwnerId || user.id;
-    const { data, error } = await cloud().from(RECOVERY_SNAPSHOTS_TABLE)
+    const { data, error } = await cloud()
+      .from(RECOVERY_SNAPSHOTS_TABLE)
       .select("id, owner_id, source_revision, reason, created_at")
-      .eq("owner_id", ownerId).order("created_at", { ascending: false }).limit(20);
+      .eq("owner_id", ownerId)
+      .order("created_at", { ascending: false })
+      .limit(20);
     if (error) throw persistenceFailure("Recovery history could not be loaded.", error);
     return (data || []).map((row) => ({
       id: row.id,
@@ -355,9 +369,12 @@ export function createWorkspaceRepository(client = supabase, { allowWrites = tru
   async function loadRecoverySnapshot(snapshotId, expectedOwnerId) {
     const user = await requireUser(expectedOwnerId);
     const ownerId = expectedOwnerId || user.id;
-    const { data, error } = await cloud().from(RECOVERY_SNAPSHOTS_TABLE)
+    const { data, error } = await cloud()
+      .from(RECOVERY_SNAPSHOTS_TABLE)
       .select("id, owner_id, state, source_revision, reason, created_at")
-      .eq("owner_id", ownerId).eq("id", snapshotId).maybeSingle();
+      .eq("owner_id", ownerId)
+      .eq("id", snapshotId)
+      .maybeSingle();
     if (error) throw persistenceFailure("The recovery copy could not be loaded.", error);
     if (!data) return null;
     return {
@@ -389,10 +406,13 @@ export function createWorkspaceRepository(client = supabase, { allowWrites = tru
 
   async function loadMissedEvents(ownerId) {
     if (!cache) return fetchWorkspace(ownerId);
-    const { data, error } = await cloud().from(WORKSPACE_CHANGE_EVENTS_TABLE)
+    const { data, error } = await cloud()
+      .from(WORKSPACE_CHANGE_EVENTS_TABLE)
       .select("revision, owner_id, patch, updated_at")
-      .eq("owner_id", ownerId).gt("revision", cache.revision)
-      .order("revision", { ascending: true }).limit(101);
+      .eq("owner_id", ownerId)
+      .gt("revision", cache.revision)
+      .order("revision", { ascending: true })
+      .limit(101);
     if (error) throw persistenceFailure("Cloud live updates could not be loaded.", error);
     if ((data || []).length > 100 || (data || []).some((event) => event.patch?.reload)) {
       return fetchWorkspace(ownerId);
@@ -437,16 +457,21 @@ export function createWorkspaceRepository(client = supabase, { allowWrites = tru
       return refreshTask;
     };
 
-    const channel = cloud().channel(`workspace-events:${ownerId}`)
-      .on("postgres_changes", {
-        event: "INSERT",
-        schema: "public",
-        table: WORKSPACE_CHANGE_EVENTS_TABLE,
-        filter: `owner_id=eq.${ownerId}`,
-      }, (payload) => {
-        if (!active || payload?.new?.owner_id !== ownerId) return;
-        void refresh();
-      })
+    const channel = cloud()
+      .channel(`workspace-events:${ownerId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: WORKSPACE_CHANGE_EVENTS_TABLE,
+          filter: `owner_id=eq.${ownerId}`,
+        },
+        (payload) => {
+          if (!active || payload?.new?.owner_id !== ownerId) return;
+          void refresh();
+        },
+      )
       .subscribe((status, error) => {
         if (!active) return;
         onStatus?.(status);

@@ -1,7 +1,9 @@
 const PREFIX_RE = /[^a-z0-9_-]+/gi;
 
 function safePrefix(prefix) {
-  const normalized = String(prefix || "item").replace(PREFIX_RE, "-").replace(/^-+|-+$/g, "");
+  const normalized = String(prefix || "item")
+    .replace(PREFIX_RE, "-")
+    .replace(/^-+|-+$/g, "");
   return normalized || "item";
 }
 

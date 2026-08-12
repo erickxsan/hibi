@@ -1,10 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import {
-  LOAD_WORKSPACE_RPC,
-  SAVE_WORKSPACE_RPC,
-  WORKSPACE_CHANGE_EVENTS_TABLE,
-} from "./workspaceRepository.js";
+import { LOAD_WORKSPACE_RPC, SAVE_WORKSPACE_RPC, WORKSPACE_CHANGE_EVENTS_TABLE } from "./workspaceRepository.js";
 
 const migration = readFileSync(
   new URL("../../supabase/migrations/202608120001_normalized_workspace_entities.sql", import.meta.url),
@@ -29,8 +25,16 @@ describe("normalized Supabase schema contract", () => {
 
   it("stores each domain entity independently with owner-bound keys", () => {
     for (const table of [
-      "workspace_settings", "groups", "students", "student_groups", "grades",
-      "class_schedules", "schedule_exceptions", "schedule_changes", "class_records", "payments",
+      "workspace_settings",
+      "groups",
+      "students",
+      "student_groups",
+      "grades",
+      "class_schedules",
+      "schedule_exceptions",
+      "schedule_changes",
+      "class_records",
+      "payments",
     ]) {
       expect(migration).toContain(`create table public.${table}`);
     }

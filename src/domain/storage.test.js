@@ -63,8 +63,9 @@ describe("persistence and import/export", () => {
   });
 
   it("does not normalize an unrecognized document into an empty workspace", () => {
-    expect(() => deserializeState(JSON.stringify({ version: 1, settings: {} })))
-      .toThrow("not valid class-manager data");
+    expect(() => deserializeState(JSON.stringify({ version: 1, settings: {} }))).toThrow(
+      "not valid class-manager data",
+    );
   });
 
   it("loads the public-safe empty starter when empty and saves valid data to localStorage-compatible storage", () => {
@@ -162,7 +163,7 @@ describe("persistence and import/export", () => {
   it("exports readable JSON that imports back to the same state", () => {
     const state = createSeedState();
     const text = exportState(state);
-    expect(text).toContain("\n  \"settings\"");
+    expect(text).toContain('\n  "settings"');
     expect(importState(text)).toEqual(normalizeState(state));
   });
 });
