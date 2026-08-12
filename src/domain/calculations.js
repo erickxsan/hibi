@@ -55,6 +55,17 @@ function resolveSelectedMonth(state) {
   return startOfMonth(isDateOnly(value) ? value : resolveAsOf(state));
 }
 
+function selectedMonthOccurrences(context, selectedMonth) {
+  if (!context.selectedMonthOccurrences) {
+    context.selectedMonthOccurrences = generateScheduledOccurrences(
+      context.state,
+      selectedMonth,
+      endOfMonth(selectedMonth),
+    );
+  }
+  return context.selectedMonthOccurrences;
+}
+
 function findById(items, id) {
   return items.find((item) => item?.id === id) ?? null;
 }
@@ -374,19 +385,20 @@ export function deriveGroup(state, groupId, asOfDate, suppliedContext) {
   const collectedSelectedMonth =
     selectedMonth <= selectedMonthEnd ? amountCollectedInRange(groupLog, selectedMonth, selectedMonthEnd) : 0;
 
-  if (!context.selectedMonthOccurrences) {
-    context.selectedMonthOccurrences = generateScheduledOccurrences(state, selectedMonth, endOfMonth(selectedMonth));
-  }
-  const scheduledOccurrences = group.weeklySchedule?.length
-    ? context.selectedMonthOccurrences.filter((item) => item.groupId === groupId && item.status !== "Cancelled")
-    : [];
+  const scheduledOccurrences = selectedMonthOccurrences(context, selectedMonth).filter(
+    (item) => item.groupId === groupId && item.status !== "Cancelled",
+  );
   const idealRevenue = scheduledOccurrences.length
-    ? sum(scheduledOccurrences, (occurrence) =>
-        sum(
-          activeStudentRecords,
+    ? sum(scheduledOccurrences, (occurrence) => {
+        const participants =
+          occurrence.participantMode === "custom"
+            ? activeStudentRecords.filter((student) => occurrence.participantIds?.includes(student.id))
+            : activeStudentRecords;
+        return sum(
+          participants,
           (student) => numberOrZero(resolveHourlyRate(state, student, group)) * numberOrZero(occurrence.durationHours),
-        ),
-      )
+        );
+      })
     : sum(
         activeStudentRecords,
         (student) =>
@@ -426,6 +438,14 @@ export function deriveUnassignedGroup(state, asOfDate, suppliedContext) {
   const selectedMonthEnd = minDateOnly(endOfMonth(selectedMonth), asOf);
   const activeStudentRecords = students.filter((student) => student?.status === "Active");
   const activeStudents = activeStudentRecords.length;
+  const activeStudentsById = new Map(activeStudentRecords.map((student) => [student.id, student]));
+  const scheduledOccurrences = selectedMonthOccurrences(context, selectedMonth).filter(
+    (item) => activeStudentsById.has(item.studentId) && item.status !== "Cancelled",
+  );
+  const idealRevenue = sum(scheduledOccurrences, (occurrence) => {
+    const student = activeStudentsById.get(occurrence.studentId);
+    return numberOrZero(resolveHourlyRate(state, student)) * numberOrZero(occurrence.durationHours);
+  });
   const studentIds = new Set(students.map((student) => student.id));
   const groupLog = students.flatMap((student) =>
     (context.logsByStudent.get(student.id) || []).filter((row) => !row?.groupId && studentIds.has(row?.studentId)),
@@ -457,8 +477,9 @@ export function deriveUnassignedGroup(state, asOfDate, suppliedContext) {
     collectedSelectedMonth:
       selectedMonth <= selectedMonthEnd ? amountCollectedInRange(groupLog, selectedMonth, selectedMonthEnd) : 0,
     outstanding: sum(studentMetrics, (metrics) => metrics.outstanding),
-    idealRevenue: 0,
-    projectionExcluded: true,
+    idealRevenue,
+    scheduledOccurrences: scheduledOccurrences.length,
+    projectionExcluded: scheduledOccurrences.length === 0,
   };
 }
 

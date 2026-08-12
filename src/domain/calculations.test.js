@@ -3,6 +3,7 @@ import {
   calculateCharge,
   calculateOutstanding,
   calculatePaymentStatus,
+  createClassSchedule,
   createSeedState,
   createGroup,
   createStarterState,
@@ -221,6 +222,68 @@ describe("minimal class-manager calculations", () => {
     const summary = deriveGroup(state, group.id, "2026-07-31");
     expect(summary.scheduledOccurrences).toBe(5);
     expect(summary.idealRevenue).toBe(900);
+  });
+
+  it("projects normalized group schedules without a legacy weekly schedule", () => {
+    const state = createStarterState("2026-08-31");
+    state.settings.selectedMonth = "2026-08-01";
+    const group = createGroup({ id: "normalized-group", name: "Normalized group", hourlyRate: 100 });
+    state.groups = [group];
+    state.students = [
+      createStudent({ id: "group-student", code: "GROUP-1", fullName: "Group student", groupIds: [group.id] }),
+    ];
+    state.classSchedules = [
+      createClassSchedule({
+        id: "normalized-group-schedule",
+        recurrence: "weekly",
+        format: "group",
+        groupId: group.id,
+        startDate: "2026-08-03",
+        startTime: "16:00",
+        durationHours: 1,
+        daysOfWeek: [1],
+      }),
+    ];
+
+    const summary = deriveGroup(state, group.id, "2026-08-31");
+
+    expect(summary.scheduledOccurrences).toBe(5);
+    expect(summary.idealRevenue).toBe(500);
+  });
+
+  it("includes normalized individual schedules in ideal revenue", () => {
+    const state = createStarterState("2026-08-31");
+    state.settings.selectedMonth = "2026-08-01";
+    const student = createStudent({
+      id: "individual-student",
+      code: "INDIVIDUAL-1",
+      fullName: "Individual student",
+      isIndividual: true,
+      customHourlyRate: 100,
+    });
+    state.students = [student];
+    state.classSchedules = [
+      createClassSchedule({
+        id: "normalized-individual-schedule",
+        recurrence: "weekly",
+        format: "individual",
+        studentId: student.id,
+        startDate: "2026-08-03",
+        startTime: "18:00",
+        durationHours: 1,
+        daysOfWeek: [1],
+      }),
+    ];
+
+    const dashboard = deriveDashboard(state, "2026-08-31");
+    const individualSummary = dashboard.groupSummaries.find((groupSummary) => groupSummary.isUnassigned);
+
+    expect(individualSummary).toMatchObject({
+      scheduledOccurrences: 5,
+      idealRevenue: 500,
+      projectionExcluded: false,
+    });
+    expect(dashboard.idealRevenue).toBe(500);
   });
 
   it("keeps grades, attendance, and payments scoped to their explicit group", () => {
