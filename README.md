@@ -4,7 +4,7 @@ A calm, minimalist class companion for students, groups, grades, attendance, cla
 
 The app now supports two modes:
 
-- **Cloud mode:** Supabase accounts with Google registration and legacy email sign-in, one private workspace per account, live updates across devices, and revision checks that prevent silent concurrent overwrites.
+- **Cloud mode:** Supabase accounts with Google registration and legacy email sign-in, normalized private records, small live patches across devices, and per-entity revision checks that preserve independent concurrent edits.
 - **Local fallback:** when cloud environment variables are absent, the app continues using this browser's `localStorage`.
 
 No real student or guardian information is bundled in the source or production build.

@@ -5,7 +5,7 @@ The recommended free stack is Supabase for authentication/database and Cloudflar
 ## 1. Create and configure Supabase
 
 1. Create a Supabase project.
-2. Apply `supabase/migrations/202607110001_initial_multi_account_workspaces.sql` using the Supabase SQL Editor, or link the Supabase CLI and run `supabase db push`. If SQL Editor was used, mark migration `202607110001` as applied before a future CLI `db push` so remote migration history stays aligned.
+2. Apply every file in `supabase/migrations/` in filename order, preferably by linking the Supabase CLI and running `supabase db push`. The `202608120001_normalized_workspace_entities.sql` migration backfills existing JSON workspaces into normalized tables. Deploy it before the matching frontend; old open tabs will fail closed on save until refreshed.
 3. In **Authentication → URL Configuration**, set the production Site URL to `https://usehibi.pages.dev/` and add these redirect URLs:
    - `http://127.0.0.1:4173/`
    - `https://usehibi.pages.dev/`
@@ -59,7 +59,7 @@ Because `localStorage` is tied to an exact origin, use this safe sequence:
 ## Operational notes
 
 - Supabase Free projects may pause after inactivity; monitor the project before a scheduled class.
-- Realtime sync is convenience, while revision checking is the protection against silent overwrites.
+- Realtime replays small entity patches; per-entity revision checks protect same-record edits without rejecting unrelated concurrent changes.
 - Export periodic backups and keep them in protected storage.
 - Removing an Auth user through an admin operation cascades to that account's workspace.
 - Support contact: `hibicontact.old339@passinbox.com`. Ensure this mailbox remains available before publishing it as the account-deletion channel.

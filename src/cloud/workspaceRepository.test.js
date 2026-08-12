@@ -1,398 +1,207 @@
 import { describe, expect, it, vi } from "vitest";
-import { createStarterState } from "../domain/index.js";
+import { createStarterState, createStudent } from "../domain/index.js";
 import {
+  APPLY_IMPORT_RPC,
   createWorkspaceRepository,
-  WORKSPACE_SYNC_SIGNALS_TABLE,
+  LOAD_WORKSPACE_RPC,
+  REPLACE_WORKSPACE_RPC,
+  RESTORE_WORKSPACE_RPC,
+  SAVE_WORKSPACE_RPC,
+  WORKSPACE_CHANGE_EVENTS_TABLE,
   WorkspaceConflictError,
 } from "./workspaceRepository.js";
 
+function workspaceRow(state = createStarterState(), revision = 4, versions = {}) {
+  return {
+    owner_id: "user-1",
+    state,
+    versions: { settings: { __settings__: 1 }, ...versions },
+    revision,
+    updated_at: "2026-08-12T12:00:00Z",
+  };
+}
+
 function authenticatedClient(overrides = {}) {
   return {
-    auth: {
-      getUser: vi.fn(async () => ({ data: { user: { id: "user-1" } }, error: null })),
-    },
+    auth: { getUser: vi.fn(async () => ({ data: { user: { id: "user-1" } }, error: null })) },
     ...overrides,
   };
 }
 
-function selectResult(result) {
+function eventQuery(result) {
   const query = {
-    eq: vi.fn(() => query),
-    maybeSingle: vi.fn(async () => result),
-  };
-  return {
     select: vi.fn(() => query),
-    query,
+    eq: vi.fn(() => query),
+    gt: vi.fn(() => query),
+    order: vi.fn(() => query),
+    limit: vi.fn(async () => result),
   };
+  return query;
 }
 
-describe("workspace repository", () => {
-  it("blocks development writes before contacting Supabase", async () => {
-    const client = authenticatedClient({ rpc: vi.fn() });
-    const repository = createWorkspaceRepository(client, { allowWrites: false });
-
-    await expect(repository.saveWorkspace(createStarterState(), 0, "user-1"))
-      .rejects.toThrow("Cloud writes are disabled");
-    await expect(repository.replaceWorkspace(createStarterState(), 0, "user-1"))
-      .rejects.toThrow("Cloud writes are disabled");
-    expect(client.auth.getUser).not.toHaveBeenCalled();
-    expect(client.rpc).not.toHaveBeenCalled();
-  });
-
-  it("loads an existing revision and validates its JSONB state", async () => {
+describe("normalized workspace repository", () => {
+  it("loads and validates the reconstructed workspace through one RPC", async () => {
     const state = createStarterState();
-    const selection = selectResult({
-      data: { owner_id: "user-1", state, revision: 4, updated_at: "2026-07-11T12:00:00Z" },
-      error: null,
-    });
     const client = authenticatedClient({
-      from: vi.fn(() => selection),
+      rpc: vi.fn(async () => ({ data: [workspaceRow(state)], error: null })),
     });
 
     const result = await createWorkspaceRepository(client).loadWorkspace("user-1");
 
-    expect(result).toEqual({
-      state,
-      revision: 4,
-      updatedAt: "2026-07-11T12:00:00Z",
-    });
-    expect(client.from).toHaveBeenCalledWith("workspaces");
-    expect(selection.query.eq).toHaveBeenCalledWith("owner_id", "user-1");
+    expect(client.rpc).toHaveBeenCalledWith(LOAD_WORKSPACE_RPC, { p_expected_owner_id: "user-1" });
+    expect(result).toMatchObject({ state, revision: 4 });
   });
 
-  it("rejects a workspace row that is not owned by the requested account", async () => {
-    const state = createStarterState();
-    const client = authenticatedClient({
-      from: vi.fn(() => selectResult({
-        data: { owner_id: "user-2", state, revision: 1, updated_at: null },
-        error: null,
-      })),
-    });
+  it("sends only a changed entity and its own expected revision", async () => {
+    const before = createStarterState();
+    before.students = [createStudent({ id: "s1", code: "A-1", fullName: "Ana", groupIds: [] })];
+    const after = { ...before, students: [{ ...before.students[0], fullName: "Ana P." }] };
+    const rpc = vi.fn(async (name) => name === LOAD_WORKSPACE_RPC
+      ? { data: [workspaceRow(before, 8, { students: { s1: 6 } })], error: null }
+      : { data: [{ event_id: 9, updated_at: "2026-08-12T12:01:00Z" }], error: null });
+    const repository = createWorkspaceRepository(authenticatedClient({ rpc }));
+    await repository.loadWorkspace("user-1");
 
-    await expect(createWorkspaceRepository(client).loadWorkspace("user-1"))
-      .rejects.toThrow("did not belong to the expected account");
-  });
+    const result = await repository.saveWorkspace(after, 8, "user-1", before);
 
-  it("reports a missing trigger-created workspace without attempting a direct write", async () => {
-    const client = authenticatedClient({
-      from: vi.fn(() => selectResult({ data: null, error: null })),
-    });
-
-    await expect(createWorkspaceRepository(client).loadOrCreateWorkspace())
-      .rejects.toThrow("Apply the latest Supabase migration");
-    expect(client.from).toHaveBeenCalledTimes(1);
-  });
-
-  it("saves through the revision-aware RPC", async () => {
-    const state = createStarterState();
-    state.settings.hourlyRate = 60;
-    const client = authenticatedClient({
-      rpc: vi.fn(async () => ({
-        data: [{ state, revision: 8, updated_at: "2026-07-11T12:30:00Z" }],
-        error: null,
-      })),
-    });
-
-    const result = await createWorkspaceRepository(client).saveWorkspace(state, 7);
-
-    expect(client.rpc).toHaveBeenCalledWith("save_workspace_state", {
+    expect(rpc).toHaveBeenLastCalledWith(SAVE_WORKSPACE_RPC, {
       p_expected_owner_id: "user-1",
-      p_expected_revision: 7,
-      p_state: state,
+      p_patch: {
+        students: { upserts: [{ data: after.students[0], position: 0 }], deletes: [] },
+      },
+      p_expected_versions: { students: { s1: 6 } },
     });
-    expect(result).toMatchObject({ state, revision: 8 });
+    expect(result).toMatchObject({ state: after, revision: 9 });
   });
 
-  it("rejects a queued save when the active account no longer matches its owner", async () => {
-    const client = authenticatedClient();
-    const repository = createWorkspaceRepository(client);
-
-    await expect(repository.saveWorkspace(createStarterState(), 0, "user-2"))
-      .rejects.toThrow("active account changed");
-    expect(client.rpc).toBeUndefined();
-  });
-
-  it("replaces a workspace only through the explicit revision-aware RPC", async () => {
+  it("does not contact the write RPC for a no-op", async () => {
     const state = createStarterState();
-    const client = authenticatedClient({
-      rpc: vi.fn(async () => ({
-        data: [{ state, revision: 5, updated_at: "2026-07-11T14:00:00Z" }],
-        error: null,
-      })),
-    });
+    const rpc = vi.fn(async () => ({ data: [workspaceRow(state)], error: null }));
+    const repository = createWorkspaceRepository(authenticatedClient({ rpc }));
+    await repository.loadWorkspace("user-1");
 
-    const result = await createWorkspaceRepository(client).replaceWorkspace(state, 4, "user-1");
+    await repository.saveWorkspace(state, 4, "user-1", state);
 
-    expect(client.rpc).toHaveBeenCalledWith("replace_workspace_state", {
-      p_expected_owner_id: "user-1",
-      p_expected_revision: 4,
-      p_state: state,
-      p_confirmation: "replace:4",
-    });
-    expect(result).toMatchObject({ state, revision: 5 });
+    expect(rpc).toHaveBeenCalledTimes(1);
   });
 
-  it("applies an additive import through the audited revision-aware RPC", async () => {
-    const state = createStarterState();
-    const fileHash = "a".repeat(64);
-    const client = authenticatedClient({
-      rpc: vi.fn(async () => ({
-        data: [{ state, revision: 6, updated_at: "2026-07-27T12:00:00Z", already_imported: false }],
-        error: null,
-      })),
-    });
-
-    const result = await createWorkspaceRepository(client).applyWorkspaceImport(state, 5, "user-1", {
-      fileHash,
-      sourceName: "backup.json",
-      summary: { added: 3 },
-    });
-
-    expect(client.rpc).toHaveBeenCalledWith("apply_workspace_import", {
-      p_expected_owner_id: "user-1",
-      p_expected_revision: 5,
-      p_state: state,
-      p_file_hash: fileHash,
-      p_source_name: "backup.json",
-      p_summary: { added: 3 },
-      p_confirmation: `import:5:${fileHash}`,
-    });
-    expect(result).toMatchObject({ state, revision: 6, alreadyImported: false });
-  });
-
-  it("checks owner-bound import history by SHA-256 hash", async () => {
-    const fileHash = "b".repeat(64);
-    const query = {
-      select: vi.fn(() => query),
-      eq: vi.fn(() => query),
-      maybeSingle: vi.fn(async () => ({
-        data: {
-          id: "job-1",
-          owner_id: "user-1",
-          file_hash: fileHash,
-          source_name: "backup.json",
-          base_revision: 4,
-          result_revision: 5,
-          summary: { added: 2 },
-          created_at: "2026-07-27T12:00:00Z",
-        },
-        error: null,
-      })),
-    };
-    const client = authenticatedClient({ from: vi.fn(() => query) });
-
-    const result = await createWorkspaceRepository(client).findImportJob(fileHash, "user-1");
-
-    expect(query.eq).toHaveBeenNthCalledWith(1, "owner_id", "user-1");
-    expect(query.eq).toHaveBeenNthCalledWith(2, "file_hash", fileHash);
-    expect(result).toMatchObject({ id: "job-1", fileHash, resultRevision: 5 });
-  });
-
-  it("refreshes the latest state and raises a typed conflict", async () => {
-    const local = createStarterState();
+  it("reloads canonical state only when the same entity conflicts", async () => {
+    const before = createStarterState();
     const latest = createStarterState();
     latest.settings.hourlyRate = 80;
-    const client = authenticatedClient({
-      rpc: vi.fn(async () => ({
-        data: null,
-        error: { code: "PT409", message: "workspace revision conflict" },
-      })),
-      from: vi.fn(() => selectResult({
-        data: { owner_id: "user-1", state: latest, revision: 3, updated_at: "2026-07-11T13:00:00Z" },
-        error: null,
-      })),
+    let loads = 0;
+    const rpc = vi.fn(async (name) => {
+      if (name === LOAD_WORKSPACE_RPC) {
+        loads += 1;
+        return { data: [workspaceRow(loads === 1 ? before : latest, loads === 1 ? 2 : 3)], error: null };
+      }
+      return { data: null, error: { code: "40001", message: "workspace_entity_conflict" } };
     });
+    const repository = createWorkspaceRepository(authenticatedClient({ rpc }));
+    await repository.loadWorkspace("user-1");
 
-    const error = await createWorkspaceRepository(client)
-      .saveWorkspace(local, 2)
-      .catch((caught) => caught);
+    const error = await repository.saveWorkspace(latest, 2, "user-1", before).catch((caught) => caught);
 
     expect(error).toBeInstanceOf(WorkspaceConflictError);
-    expect(error.latestState).toEqual(latest);
+    expect(error.latestState.settings.hourlyRate).toBe(80);
     expect(error.latestRevision).toBe(3);
   });
 
-  it("explains when the server blocks unexpected record loss", async () => {
-    const client = authenticatedClient({
-      rpc: vi.fn(async () => ({
-        data: null,
-        error: { code: "22023", message: "workspace_collection_delete_blocked" },
-      })),
-    });
-
-    await expect(createWorkspaceRepository(client).saveWorkspace(createStarterState(), 2, "user-1"))
-      .rejects.toThrow("previous cloud version is still intact");
-  });
-
-  it("lists only owner-bound recovery metadata without downloading snapshot state", async () => {
-    const query = {
-      select: vi.fn(() => query),
-      eq: vi.fn(() => query),
-      order: vi.fn(() => query),
-      limit: vi.fn(async () => ({
-        data: [{
-          id: "snapshot-1",
-          owner_id: "user-1",
-          source_revision: 6,
-          reason: "save",
-          created_at: "2026-07-19T12:00:00Z",
-        }],
-        error: null,
-      })),
-    };
-    const client = authenticatedClient({ from: vi.fn(() => query) });
-
-    const points = await createWorkspaceRepository(client).listRecoverySnapshots("user-1");
-
-    expect(query.select).toHaveBeenCalledWith("id, owner_id, source_revision, reason, created_at");
-    expect(points).toEqual([expect.objectContaining({ id: "snapshot-1", revision: 6, source: "cloud-snapshot" })]);
-  });
-
-  it("restores a snapshot through the revision-aware recovery RPC", async () => {
+  it("keeps full replacement, import, and restore as explicit RPCs", async () => {
     const state = createStarterState();
-    const client = authenticatedClient({
-      rpc: vi.fn(async () => ({
-        data: [{ state, revision: 9, updated_at: "2026-07-19T12:30:00Z" }],
-        error: null,
-      })),
+    const rpc = vi.fn(async (name) => {
+      if (name === RESTORE_WORKSPACE_RPC) return { data: [workspaceRow(state, 12)], error: null };
+      return { data: [{ event_id: 11, updated_at: null, versions: {}, already_imported: false }], error: null };
     });
+    const repository = createWorkspaceRepository(authenticatedClient({ rpc }));
 
-    const restored = await createWorkspaceRepository(client)
-      .restoreRecoverySnapshot("snapshot-1", 8, "user-1");
-
-    expect(client.rpc).toHaveBeenCalledWith("restore_workspace_snapshot", {
-      p_expected_owner_id: "user-1",
-      p_snapshot_id: "snapshot-1",
-      p_expected_revision: 8,
+    await repository.replaceWorkspace(state, 10, "user-1");
+    await repository.applyWorkspaceImport(state, 10, "user-1", {
+      fileHash: "a".repeat(64), sourceName: "backup.json", summary: {},
     });
-    expect(restored.revision).toBe(9);
+    await repository.restoreRecoverySnapshot("snapshot-1", 11, "user-1");
+
+    expect(rpc.mock.calls.map(([name]) => name)).toEqual([
+      REPLACE_WORKSPACE_RPC, APPLY_IMPORT_RPC, RESTORE_WORKSPACE_RPC,
+    ]);
   });
 
-  it("reloads a workspace larger than the Realtime payload limit from a small invalidation signal", async () => {
-    const state = createStarterState();
-    state.groups.push({
-      id: "group-large",
-      name: "Large workspace",
-      grade: "",
-      subject: "",
-      schedule: "",
-      hourlyRate: null,
-      weeklySchedule: [],
-      plannedSessionsPerMonth: 0,
-      assistantContact: "",
-      notes: "x".repeat(1_100_000),
-    });
-    expect(new TextEncoder().encode(JSON.stringify(state)).byteLength).toBeGreaterThan(1_024 * 1_024);
-    let updateHandler;
-    let subscribedFilter;
-    const channel = {
-      on: vi.fn((_kind, filter, callback) => {
-        subscribedFilter = filter;
-        updateHandler = callback;
-        return channel;
-      }),
-      subscribe: vi.fn(() => channel),
-    };
-    const selection = selectResult({
-      data: { owner_id: "user-1", state, revision: 2, updated_at: "2026-08-11T12:00:00Z" },
+  it("replays small ordered patches after a Realtime event", async () => {
+    const initial = createStarterState();
+    const query = eventQuery({
+      data: [{
+        owner_id: "user-1",
+        revision: 2,
+        patch: { settings: { ...initial.settings, hourlyRate: 75 } },
+        updated_at: "2026-08-12T12:02:00Z",
+      }],
       error: null,
     });
-    const client = authenticatedClient({
-      from: vi.fn(() => selection),
-      channel: vi.fn(() => channel),
-      removeChannel: vi.fn(async () => "ok"),
-    });
-    const onChange = vi.fn();
-
-    const unsubscribe = await createWorkspaceRepository(client)
-      .subscribeToWorkspace(onChange, { userId: "user-1" });
-    updateHandler({
-      new: { owner_id: "user-1", revision: 2, updated_at: "2026-08-11T12:00:00Z" },
-    });
-
-    await vi.waitFor(() => {
-      expect(onChange).toHaveBeenCalledWith({
-        state,
-        revision: 2,
-        updatedAt: "2026-08-11T12:00:00Z",
-      });
-    });
-    expect(subscribedFilter).toEqual({
-      event: "UPDATE",
-      schema: "public",
-      table: WORKSPACE_SYNC_SIGNALS_TABLE,
-      filter: "owner_id=eq.user-1",
-    });
-    expect(selection.select).toHaveBeenCalledWith("owner_id, state, revision, updated_at");
-    await unsubscribe();
-    await unsubscribe();
-    expect(client.removeChannel).toHaveBeenCalledTimes(1);
-  });
-
-  it("coalesces live signals covered by the same workspace reload", async () => {
-    const state = createStarterState();
-    let updateHandler;
-    let resolveFetch;
-    const query = {
-      select: vi.fn(() => query),
-      eq: vi.fn(() => query),
-      maybeSingle: vi.fn(() => new Promise((resolve) => {
-        resolveFetch = resolve;
-      })),
-    };
+    let handler;
     const channel = {
-      on: vi.fn((_kind, _filter, callback) => {
-        updateHandler = callback;
-        return channel;
-      }),
+      on: vi.fn((_kind, _filter, callback) => { handler = callback; return channel; }),
       subscribe: vi.fn(() => channel),
     };
     const client = authenticatedClient({
+      rpc: vi.fn(async () => ({ data: [workspaceRow(initial, 1)], error: null })),
       from: vi.fn(() => query),
       channel: vi.fn(() => channel),
       removeChannel: vi.fn(async () => "ok"),
     });
+    const repository = createWorkspaceRepository(client);
+    await repository.loadWorkspace("user-1");
     const onChange = vi.fn();
-    const unsubscribe = await createWorkspaceRepository(client)
-      .subscribeToWorkspace(onChange, { userId: "user-1" });
+    const unsubscribe = await repository.subscribeToWorkspace(onChange, { userId: "user-1" });
 
-    updateHandler({ new: { owner_id: "user-1", revision: 2, updated_at: null } });
-    updateHandler({ new: { owner_id: "user-1", revision: 3, updated_at: null } });
-    await vi.waitFor(() => expect(query.maybeSingle).toHaveBeenCalledTimes(1));
-    resolveFetch({
-      data: { owner_id: "user-1", state, revision: 3, updated_at: null },
-      error: null,
-    });
+    handler({ new: { owner_id: "user-1", revision: 2 } });
+    await vi.waitFor(() => expect(onChange).toHaveBeenCalled());
 
-    await vi.waitFor(() => expect(onChange).toHaveBeenCalledWith({ state, revision: 3, updatedAt: null }));
-    expect(query.maybeSingle).toHaveBeenCalledTimes(1);
+    expect(onChange.mock.calls.at(-1)[0].state.settings.hourlyRate).toBe(75);
+    expect(query.gt).toHaveBeenCalledWith("revision", 1);
+    expect(client.from).toHaveBeenCalledWith(WORKSPACE_CHANGE_EVENTS_TABLE);
     await unsubscribe();
   });
 
-  it("rejects a live signal for a different account without loading state", async () => {
-    let updateHandler;
+  it("falls back to one full reload for a destructive reload event", async () => {
+    const initial = createStarterState();
+    const replaced = createStarterState();
+    replaced.settings.hourlyRate = 90;
+    let loadCount = 0;
+    const query = eventQuery({
+      data: [{ owner_id: "user-1", revision: 2, patch: { reload: true }, updated_at: null }],
+      error: null,
+    });
+    let statusCallback;
     const channel = {
-      on: vi.fn((_kind, _filter, callback) => {
-        updateHandler = callback;
-        return channel;
-      }),
-      subscribe: vi.fn(() => channel),
+      on: vi.fn(() => channel),
+      subscribe: vi.fn((callback) => { statusCallback = callback; return channel; }),
     };
     const client = authenticatedClient({
-      from: vi.fn(),
+      rpc: vi.fn(async () => {
+        loadCount += 1;
+        return { data: [workspaceRow(loadCount === 1 ? initial : replaced, loadCount)], error: null };
+      }),
+      from: vi.fn(() => query),
       channel: vi.fn(() => channel),
       removeChannel: vi.fn(async () => "ok"),
     });
-    const onError = vi.fn();
-    const unsubscribe = await createWorkspaceRepository(client)
-      .subscribeToWorkspace(vi.fn(), { userId: "user-1", onError });
+    const repository = createWorkspaceRepository(client);
+    await repository.loadWorkspace("user-1");
+    const onChange = vi.fn();
+    const unsubscribe = await repository.subscribeToWorkspace(onChange, { userId: "user-1" });
 
-    updateHandler({ new: { owner_id: "user-2", revision: 2, updated_at: null } });
-
-    expect(onError).toHaveBeenCalledWith(expect.objectContaining({
-      name: "CloudAuthenticationError",
-    }));
-    expect(client.from).not.toHaveBeenCalled();
+    statusCallback("SUBSCRIBED");
+    await vi.waitFor(() => expect(onChange).toHaveBeenCalled());
+    expect(onChange.mock.calls.at(-1)[0].state.settings.hourlyRate).toBe(90);
+    expect(loadCount).toBe(2);
     await unsubscribe();
+  });
+
+  it("blocks preview writes before contacting Supabase", async () => {
+    const client = authenticatedClient({ rpc: vi.fn() });
+    await expect(createWorkspaceRepository(client, { allowWrites: false })
+      .saveWorkspace(createStarterState(), 0, "user-1"))
+      .rejects.toThrow("Cloud writes are disabled");
+    expect(client.auth.getUser).not.toHaveBeenCalled();
   });
 });

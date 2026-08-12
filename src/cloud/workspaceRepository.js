@@ -1,21 +1,29 @@
 import { deserializeState, MAX_BACKUP_BYTES } from "../domain/index.js";
 import {
+  advanceWorkspaceVersions,
+  applyWorkspacePatch,
+  buildWorkspacePatch,
+  NORMALIZED_COLLECTIONS,
+  workspacePatchesOverlap,
+} from "./normalizedWorkspace.js";
+import {
   CloudAuthenticationError,
   cloudWritesEnabled,
   requireCloudClient,
   supabase,
 } from "./client.js";
 
-export const WORKSPACES_TABLE = "workspaces";
-export const WORKSPACE_SYNC_SIGNALS_TABLE = "workspace_sync_signals";
-export const SAVE_WORKSPACE_RPC = "save_workspace_state";
-export const REPLACE_WORKSPACE_RPC = "replace_workspace_state";
-export const RESTORE_WORKSPACE_RPC = "restore_workspace_snapshot";
+export const LOAD_WORKSPACE_RPC = "load_normalized_workspace";
+export const SAVE_WORKSPACE_RPC = "apply_workspace_patch";
+export const REPLACE_WORKSPACE_RPC = "replace_normalized_workspace_state";
+export const RESTORE_WORKSPACE_RPC = "restore_normalized_workspace_snapshot";
+export const APPLY_IMPORT_RPC = "apply_normalized_workspace_import";
+export const WORKSPACE_CHANGE_EVENTS_TABLE = "workspace_change_events";
 export const RECOVERY_SNAPSHOTS_TABLE = "workspace_recovery_snapshots";
-export const APPLY_IMPORT_RPC = "apply_workspace_import";
 export const IMPORT_JOBS_TABLE = "workspace_import_jobs";
 
 const SHA256_RE = /^[0-9a-f]{64}$/;
+const MAX_PATCH_BYTES = 1024 * 1024;
 
 export class CloudPersistenceError extends Error {
   constructor(message = "Cloud records could not be loaded or saved.", options) {
@@ -26,7 +34,7 @@ export class CloudPersistenceError extends Error {
 
 export class WorkspaceConflictError extends CloudPersistenceError {
   constructor({ latestState, latestRevision, latestUpdatedAt = null, cause } = {}) {
-    super("These records changed in another session. The latest cloud version has been loaded.", { cause });
+    super("This record changed in another session. The latest cloud version has been loaded.", { cause });
     this.name = "WorkspaceConflictError";
     this.latestState = latestState;
     this.latestRevision = latestRevision;
@@ -35,89 +43,92 @@ export class WorkspaceConflictError extends CloudPersistenceError {
 }
 
 function canonicalState(value) {
-  // Reuse the import boundary so malformed remote JSON never enters app state.
   return deserializeState(JSON.stringify(value));
 }
 
+function byteLength(value) {
+  return new TextEncoder().encode(JSON.stringify(value)).byteLength;
+}
+
 function assertStateSize(state) {
-  const bytes = new TextEncoder().encode(JSON.stringify(state)).byteLength;
-  if (bytes > MAX_BACKUP_BYTES) {
-    throw new CloudPersistenceError("This workspace is larger than the 5 MB cloud limit. Export a backup and remove old records before saving more.");
+  if (byteLength(state) > MAX_BACKUP_BYTES) {
+    throw new CloudPersistenceError("This backup is larger than the 5 MB import and recovery limit.");
+  }
+}
+
+function assertPatchSize(patch) {
+  if (byteLength(patch) > MAX_PATCH_BYTES) {
+    throw new CloudPersistenceError("This single change is too large to synchronize. Save it in smaller batches.");
   }
 }
 
 function normalizeRevision(value) {
-  const revision = Number(value);
+  const revision = Number(value ?? 0);
   if (!Number.isSafeInteger(revision) || revision < 0) {
-    throw new CloudPersistenceError("The cloud workspace has an invalid revision number.");
+    throw new CloudPersistenceError("The cloud workspace has an invalid synchronization cursor.");
   }
   return revision;
-}
-
-function workspaceFromRow(row, expectedOwnerId) {
-  if (!row || typeof row !== "object") {
-    throw new CloudPersistenceError("The cloud workspace response was empty.");
-  }
-  if (expectedOwnerId && row.owner_id !== expectedOwnerId) {
-    throw new CloudAuthenticationError("The cloud workspace did not belong to the expected account.");
-  }
-  return {
-    state: canonicalState(row.state),
-    revision: normalizeRevision(row.revision),
-    updatedAt: row.updated_at ?? null,
-  };
 }
 
 function firstRow(data) {
   return Array.isArray(data) ? data[0] : data;
 }
 
-function isRevisionConflict(error) {
-  const text = `${error?.code ?? ""} ${error?.message ?? ""} ${error?.details ?? ""}`.toLowerCase();
-  return error?.code === "PT409"
-    || error?.code === "40001"
-    || text.includes("revision_conflict")
-    || text.includes("revision conflict")
-    || text.includes("stale revision");
+function normalizeVersions(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const normalized = {};
+  for (const key of ["settings", ...NORMALIZED_COLLECTIONS]) {
+    if (!value[key] || typeof value[key] !== "object" || Array.isArray(value[key])) continue;
+    normalized[key] = Object.fromEntries(Object.entries(value[key]).map(([id, revision]) => (
+      [id, normalizeRevision(revision)]
+    )));
+  }
+  return normalized;
 }
 
-function persistenceFailure(message, error) {
-  const providerMessage = String(error?.message || "");
-  if ([
-    "workspace_collection_delete_blocked",
-    "workspace_large_delete_blocked",
-    "workspace_mass_delete_blocked",
-  ].some((code) => providerMessage.includes(code))) {
-    return new CloudPersistenceError("Hibi blocked an unexpected loss of records. Your previous cloud version is still intact.", { cause: error });
-  }
-  if (providerMessage.includes("empty_workspace_replacement_blocked")) {
-    return new CloudPersistenceError("Hibi will not replace a populated workspace with an empty backup.", { cause: error });
-  }
-  if (providerMessage.includes("workspace_import_would_remove_records")) {
-    return new CloudPersistenceError("Hibi blocked an import that could remove existing records. Reopen the preview and try again.", { cause: error });
-  }
-  return new CloudPersistenceError(error?.message || message, { cause: error });
-}
-
-function workspaceSignalFromRow(row, expectedOwnerId) {
-  if (!row || typeof row !== "object") {
-    throw new CloudPersistenceError("The cloud live-update signal was empty.");
-  }
-  if (row.owner_id !== expectedOwnerId) {
-    throw new CloudAuthenticationError("The cloud live-update signal did not belong to the expected account.");
+function workspaceFromRow(row, expectedOwnerId, { validate = true } = {}) {
+  if (!row || typeof row !== "object") throw new CloudPersistenceError("The cloud workspace response was empty.");
+  if (expectedOwnerId && row.owner_id && row.owner_id !== expectedOwnerId) {
+    throw new CloudAuthenticationError("The cloud workspace did not belong to the expected account.");
   }
   return {
-    revision: normalizeRevision(row.revision),
+    state: validate ? canonicalState(row.state) : row.state,
+    versions: normalizeVersions(row.versions),
+    revision: normalizeRevision(row.revision ?? row.event_id),
     updatedAt: row.updated_at ?? null,
   };
 }
 
-/**
- * One authenticated account owns one JSONB workspace. Keeping all canonical app
- * state in one row makes a complete edit atomic and preserves import/export.
- */
+function isEntityConflict(error) {
+  const text = `${error?.code ?? ""} ${error?.message ?? ""} ${error?.details ?? ""}`.toLowerCase();
+  return error?.code === "40001" || text.includes("workspace_entity_conflict");
+}
+
+function persistenceFailure(message, error) {
+  const providerMessage = String(error?.message || "");
+  if (providerMessage.includes("workspace_entity_conflict")) {
+    return new CloudPersistenceError("The same record changed on another device. Hibi is loading that version.", { cause: error });
+  }
+  if (providerMessage.includes("workspace_replacement_not_confirmed")) {
+    return new CloudPersistenceError("The full-workspace replacement was not confirmed.", { cause: error });
+  }
+  if (providerMessage.includes("workspace_import_would_remove_records")) {
+    return new CloudPersistenceError("Hibi blocked an import that could remove existing records.", { cause: error });
+  }
+  return new CloudPersistenceError(error?.message || message, { cause: error });
+}
+
+function importVersionsForState(state) {
+  const versions = { settings: { __settings__: 1 } };
+  for (const collection of NORMALIZED_COLLECTIONS) {
+    versions[collection] = Object.fromEntries((state[collection] || []).map((item) => [item.id, 1]));
+  }
+  return versions;
+}
+
 export function createWorkspaceRepository(client = supabase, { allowWrites = true } = {}) {
   const cloud = () => requireCloudClient(client);
+  let cache = null;
 
   function requireWritesEnabled() {
     if (!allowWrites) {
@@ -135,15 +146,18 @@ export function createWorkspaceRepository(client = supabase, { allowWrites = tru
     return data.user;
   }
 
-  async function fetchWorkspace(expectedOwnerId) {
-    const { data, error } = await cloud()
-      .from(WORKSPACES_TABLE)
-      .select("owner_id, state, revision, updated_at")
-      .eq("owner_id", expectedOwnerId)
-      .maybeSingle();
+  function adopt(workspace) {
+    cache = workspace;
+    return workspace;
+  }
 
+  async function fetchWorkspace(expectedOwnerId) {
+    const { data, error } = await cloud().rpc(LOAD_WORKSPACE_RPC, {
+      p_expected_owner_id: expectedOwnerId,
+    });
     if (error) throw persistenceFailure("Cloud records could not be loaded.", error);
-    return data ? workspaceFromRow(data, expectedOwnerId) : null;
+    const row = firstRow(data);
+    return row ? adopt(workspaceFromRow(row, expectedOwnerId)) : null;
   }
 
   async function loadWorkspace(expectedOwnerId) {
@@ -152,85 +166,89 @@ export function createWorkspaceRepository(client = supabase, { allowWrites = tru
   }
 
   async function loadOrCreateWorkspace(expectedOwnerId) {
-    const user = await requireUser(expectedOwnerId);
-    const existing = await fetchWorkspace(expectedOwnerId || user.id);
-    if (existing) return existing;
+    const loaded = await loadWorkspace(expectedOwnerId);
+    if (loaded) return loaded;
     throw new CloudPersistenceError("Your cloud workspace is missing. Apply the latest Supabase migration, then try again.");
   }
 
-  async function saveWorkspace(state, expectedRevision, expectedOwnerId) {
+  async function conflictFrom(error, ownerId) {
+    const latest = await fetchWorkspace(ownerId);
+    if (!latest) throw persistenceFailure("The latest cloud records could not be recovered.", error);
+    return new WorkspaceConflictError({
+      latestState: latest.state,
+      latestRevision: latest.revision,
+      latestUpdatedAt: latest.updatedAt,
+      cause: error,
+    });
+  }
+
+  async function saveWorkspace(state, _expectedRevision, expectedOwnerId, previousState) {
     requireWritesEnabled();
     const user = await requireUser(expectedOwnerId);
-    const nextState = canonicalState(state);
-    assertStateSize(nextState);
-    const revision = normalizeRevision(expectedRevision);
-    const { data, error } = await cloud().rpc(SAVE_WORKSPACE_RPC, {
-      p_expected_owner_id: expectedOwnerId || user.id,
-      p_expected_revision: revision,
-      p_state: nextState,
-    });
-
-    if (error && isRevisionConflict(error)) {
-      await requireUser(expectedOwnerId);
-      const latest = await fetchWorkspace(expectedOwnerId || user.id);
-      if (!latest) throw persistenceFailure("The latest cloud records could not be recovered.", error);
+    const ownerId = expectedOwnerId || user.id;
+    if (!cache) await fetchWorkspace(ownerId);
+    const base = previousState || cache.state;
+    const { patch, expectedVersions, empty } = buildWorkspacePatch(base, state, cache.versions);
+    if (empty) return cache;
+    const remotePatch = buildWorkspacePatch(base, cache.state, cache.versions).patch;
+    if (workspacePatchesOverlap(patch, remotePatch)) {
       throw new WorkspaceConflictError({
-        latestState: latest.state,
-        latestRevision: latest.revision,
-        latestUpdatedAt: latest.updatedAt,
-        cause: error,
+        latestState: cache.state,
+        latestRevision: cache.revision,
+        latestUpdatedAt: cache.updatedAt,
       });
     }
+    assertPatchSize(patch);
+
+    const { data, error } = await cloud().rpc(SAVE_WORKSPACE_RPC, {
+      p_expected_owner_id: ownerId,
+      p_patch: patch,
+      p_expected_versions: expectedVersions,
+    });
+    if (error && isEntityConflict(error)) throw await conflictFrom(error, ownerId);
     if (error) throw persistenceFailure("Cloud records could not be saved.", error);
-
     const row = firstRow(data);
-    if (row) return workspaceFromRow(row);
-
-    // Support SQL functions declared without a row return while still reporting
-    // the revision actually committed by the server.
-    const saved = await fetchWorkspace(expectedOwnerId || user.id);
-    if (!saved) throw new CloudPersistenceError("The saved cloud workspace could not be reloaded.");
-    return saved;
+    if (!row) throw new CloudPersistenceError("The saved cloud change response was empty.");
+    return adopt({
+      state: applyWorkspacePatch(cache.state, patch),
+      versions: advanceWorkspaceVersions(cache.versions, patch),
+      revision: normalizeRevision(row.event_id),
+      updatedAt: row.updated_at ?? null,
+    });
   }
 
   async function replaceWorkspace(state, expectedRevision, expectedOwnerId) {
     requireWritesEnabled();
     const user = await requireUser(expectedOwnerId);
+    const ownerId = expectedOwnerId || user.id;
     const nextState = canonicalState(state);
     assertStateSize(nextState);
     const revision = normalizeRevision(expectedRevision);
     const { data, error } = await cloud().rpc(REPLACE_WORKSPACE_RPC, {
-      p_expected_owner_id: expectedOwnerId || user.id,
+      p_expected_owner_id: ownerId,
       p_expected_revision: revision,
       p_state: nextState,
       p_confirmation: `replace:${revision}`,
     });
-    if (error && isRevisionConflict(error)) {
-      const latest = await fetchWorkspace(expectedOwnerId || user.id);
-      if (!latest) throw persistenceFailure("The latest cloud records could not be recovered.", error);
-      throw new WorkspaceConflictError({
-        latestState: latest.state,
-        latestRevision: latest.revision,
-        latestUpdatedAt: latest.updatedAt,
-        cause: error,
-      });
-    }
+    if (error && isEntityConflict(error)) throw await conflictFrom(error, ownerId);
     if (error) throw persistenceFailure("The backup could not replace the cloud workspace.", error);
     const row = firstRow(data);
     if (!row) throw new CloudPersistenceError("The replacement cloud workspace response was empty.");
-    return workspaceFromRow(row);
+    return adopt({
+      state: nextState,
+      versions: normalizeVersions(row.versions || importVersionsForState(nextState)),
+      revision: normalizeRevision(row.event_id),
+      updatedAt: row.updated_at ?? null,
+    });
   }
 
   async function findImportJob(fileHash, expectedOwnerId) {
     if (!SHA256_RE.test(String(fileHash || ""))) throw new TypeError("A valid SHA-256 file hash is required.");
     const user = await requireUser(expectedOwnerId);
     const ownerId = expectedOwnerId || user.id;
-    const { data, error } = await cloud()
-      .from(IMPORT_JOBS_TABLE)
+    const { data, error } = await cloud().from(IMPORT_JOBS_TABLE)
       .select("id, owner_id, file_hash, source_name, base_revision, result_revision, summary, created_at")
-      .eq("owner_id", ownerId)
-      .eq("file_hash", fileHash)
-      .maybeSingle();
+      .eq("owner_id", ownerId).eq("file_hash", fileHash).maybeSingle();
     if (error) throw persistenceFailure("Import history could not be checked.", error);
     if (!data) return null;
     return {
@@ -248,46 +266,45 @@ export function createWorkspaceRepository(client = supabase, { allowWrites = tru
   async function applyWorkspaceImport(state, expectedRevision, expectedOwnerId, metadata = {}) {
     requireWritesEnabled();
     const user = await requireUser(expectedOwnerId);
+    const ownerId = expectedOwnerId || user.id;
     const nextState = canonicalState(state);
     assertStateSize(nextState);
     const revision = normalizeRevision(expectedRevision);
     const fileHash = String(metadata.fileHash || "");
     if (!SHA256_RE.test(fileHash)) throw new TypeError("A valid SHA-256 file hash is required.");
-    const summary = metadata.summary && typeof metadata.summary === "object" ? metadata.summary : {};
     const { data, error } = await cloud().rpc(APPLY_IMPORT_RPC, {
-      p_expected_owner_id: expectedOwnerId || user.id,
+      p_expected_owner_id: ownerId,
       p_expected_revision: revision,
       p_state: nextState,
       p_file_hash: fileHash,
       p_source_name: String(metadata.sourceName || "").slice(0, 255),
-      p_summary: summary,
+      p_summary: metadata.summary && typeof metadata.summary === "object" ? metadata.summary : {},
       p_confirmation: `import:${revision}:${fileHash}`,
     });
-    if (error && isRevisionConflict(error)) {
-      const latest = await fetchWorkspace(expectedOwnerId || user.id);
-      if (!latest) throw persistenceFailure("The latest cloud records could not be recovered.", error);
-      throw new WorkspaceConflictError({
-        latestState: latest.state,
-        latestRevision: latest.revision,
-        latestUpdatedAt: latest.updatedAt,
-        cause: error,
-      });
-    }
+    if (error && isEntityConflict(error)) throw await conflictFrom(error, ownerId);
     if (error) throw persistenceFailure("The records could not be imported.", error);
     const row = firstRow(data);
     if (!row) throw new CloudPersistenceError("The imported cloud workspace response was empty.");
-    return { ...workspaceFromRow(row), alreadyImported: Boolean(row.already_imported) };
+    if (row.already_imported) {
+      const latest = await fetchWorkspace(ownerId);
+      if (!latest) throw new CloudPersistenceError("The imported cloud workspace could not be reloaded.");
+      return { ...latest, alreadyImported: true };
+    }
+    const imported = adopt({
+      state: nextState,
+      versions: normalizeVersions(row.versions || importVersionsForState(nextState)),
+      revision: normalizeRevision(row.event_id),
+      updatedAt: row.updated_at ?? null,
+    });
+    return { ...imported, alreadyImported: false };
   }
 
   async function listRecoverySnapshots(expectedOwnerId) {
     const user = await requireUser(expectedOwnerId);
     const ownerId = expectedOwnerId || user.id;
-    const { data, error } = await cloud()
-      .from(RECOVERY_SNAPSHOTS_TABLE)
+    const { data, error } = await cloud().from(RECOVERY_SNAPSHOTS_TABLE)
       .select("id, owner_id, source_revision, reason, created_at")
-      .eq("owner_id", ownerId)
-      .order("created_at", { ascending: false })
-      .limit(20);
+      .eq("owner_id", ownerId).order("created_at", { ascending: false }).limit(20);
     if (error) throw persistenceFailure("Recovery history could not be loaded.", error);
     return (data || []).map((row) => ({
       id: row.id,
@@ -302,15 +319,11 @@ export function createWorkspaceRepository(client = supabase, { allowWrites = tru
   async function loadRecoverySnapshot(snapshotId, expectedOwnerId) {
     const user = await requireUser(expectedOwnerId);
     const ownerId = expectedOwnerId || user.id;
-    const { data, error } = await cloud()
-      .from(RECOVERY_SNAPSHOTS_TABLE)
+    const { data, error } = await cloud().from(RECOVERY_SNAPSHOTS_TABLE)
       .select("id, owner_id, state, source_revision, reason, created_at")
-      .eq("owner_id", ownerId)
-      .eq("id", snapshotId)
-      .maybeSingle();
+      .eq("owner_id", ownerId).eq("id", snapshotId).maybeSingle();
     if (error) throw persistenceFailure("The recovery copy could not be loaded.", error);
     if (!data) return null;
-    if (data.owner_id !== ownerId) throw new CloudAuthenticationError("The recovery copy did not belong to the expected account.");
     return {
       id: data.id,
       ownerId: data.owner_id,
@@ -325,108 +338,83 @@ export function createWorkspaceRepository(client = supabase, { allowWrites = tru
   async function restoreRecoverySnapshot(snapshotId, expectedRevision, expectedOwnerId) {
     requireWritesEnabled();
     const user = await requireUser(expectedOwnerId);
-    const revision = normalizeRevision(expectedRevision);
+    const ownerId = expectedOwnerId || user.id;
     const { data, error } = await cloud().rpc(RESTORE_WORKSPACE_RPC, {
-      p_expected_owner_id: expectedOwnerId || user.id,
+      p_expected_owner_id: ownerId,
       p_snapshot_id: snapshotId,
-      p_expected_revision: revision,
+      p_expected_revision: normalizeRevision(expectedRevision),
     });
-    if (error && isRevisionConflict(error)) {
-      const latest = await fetchWorkspace(expectedOwnerId || user.id);
-      if (!latest) throw persistenceFailure("The latest cloud records could not be recovered.", error);
-      throw new WorkspaceConflictError({
-        latestState: latest.state,
-        latestRevision: latest.revision,
-        latestUpdatedAt: latest.updatedAt,
-        cause: error,
-      });
-    }
+    if (error && isEntityConflict(error)) throw await conflictFrom(error, ownerId);
     if (error) throw persistenceFailure("The recovery copy could not be restored.", error);
     const row = firstRow(data);
     if (!row) throw new CloudPersistenceError("The restored cloud workspace response was empty.");
-    return workspaceFromRow(row);
+    return adopt(workspaceFromRow(row, ownerId));
   }
 
-  /**
-   * Subscribe to small revision signals from other tabs or devices, then load
-   * the complete document over the Data API. Realtime never carries `state`, so
-   * this path remains valid for every workspace accepted by the 5 MB limit.
-   */
-  async function subscribeToWorkspace(onChange, { userId, onStatus, onError } = {}) {
-    if (typeof onChange !== "function") {
-      throw new TypeError("subscribeToWorkspace requires an update callback.");
+  async function loadMissedEvents(ownerId) {
+    if (!cache) return fetchWorkspace(ownerId);
+    const { data, error } = await cloud().from(WORKSPACE_CHANGE_EVENTS_TABLE)
+      .select("revision, owner_id, patch, updated_at")
+      .eq("owner_id", ownerId).gt("revision", cache.revision)
+      .order("revision", { ascending: true }).limit(101);
+    if (error) throw persistenceFailure("Cloud live updates could not be loaded.", error);
+    if ((data || []).length > 100 || (data || []).some((event) => event.patch?.reload)) {
+      return fetchWorkspace(ownerId);
     }
+    for (const event of data || []) {
+      if (normalizeRevision(event.revision) <= cache.revision) continue;
+      cache = {
+        state: applyWorkspacePatch(cache.state, event.patch),
+        versions: advanceWorkspaceVersions(cache.versions, event.patch),
+        revision: normalizeRevision(event.revision),
+        updatedAt: event.updated_at ?? null,
+      };
+    }
+    return cache;
+  }
+
+  async function subscribeToWorkspace(onChange, { userId, onStatus, onError } = {}) {
+    if (typeof onChange !== "function") throw new TypeError("subscribeToWorkspace requires an update callback.");
     const ownerId = (await requireUser(userId)).id;
     let active = true;
-    let pendingRevision = null;
     let refreshTask = null;
+    let refreshQueued = false;
 
-    const reportLiveError = (error) => {
-      if (!active) return;
-      onError?.(
-        error instanceof CloudPersistenceError || error instanceof CloudAuthenticationError
-          ? error
-          : persistenceFailure("Cloud live updates could not be loaded.", error),
-      );
-    };
-
-    const drainRefreshQueue = async () => {
-      try {
-        while (active && pendingRevision !== null) {
-          const requestedRevision = pendingRevision;
-          pendingRevision = null;
-          const latest = await fetchWorkspace(ownerId);
-          if (!active) return;
-          if (!latest) {
-            throw new CloudPersistenceError("The updated cloud workspace could not be reloaded.");
-          }
-          if (latest.revision < requestedRevision) {
-            throw new CloudPersistenceError("The cloud workspace was older than its live-update signal.");
-          }
-
-          onChange(latest);
-
-          // A fetch can already include changes announced while it was in
-          // flight. Avoid downloading the same large document a second time.
-          if (pendingRevision !== null && pendingRevision <= latest.revision) {
-            pendingRevision = null;
-          }
-        }
-      } catch (error) {
-        reportLiveError(error);
-      } finally {
-        refreshTask = null;
-        if (active && pendingRevision !== null) {
-          refreshTask = drainRefreshQueue();
-        }
+    const refresh = () => {
+      if (!active) return null;
+      if (refreshTask) {
+        refreshQueued = true;
+        return refreshTask;
       }
+      refreshQueued = false;
+      refreshTask = loadMissedEvents(ownerId)
+        .then((latest) => {
+          if (active && latest) onChange(latest);
+        })
+        .catch((error) => {
+          if (active) onError?.(error);
+        })
+        .finally(() => {
+          refreshTask = null;
+          if (active && refreshQueued) void refresh();
+        });
+      return refreshTask;
     };
 
-    const queueRefresh = (payload) => {
-      try {
-        const signal = workspaceSignalFromRow(payload?.new, ownerId);
-        pendingRevision = Math.max(pendingRevision ?? -1, signal.revision);
-        if (!refreshTask) refreshTask = drainRefreshQueue();
-      } catch (error) {
-        reportLiveError(error);
-      }
-    };
-
-    const channel = cloud()
-      .channel(`workspace-sync:${ownerId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: WORKSPACE_SYNC_SIGNALS_TABLE,
-          filter: `owner_id=eq.${ownerId}`,
-        },
-        queueRefresh,
-      )
+    const channel = cloud().channel(`workspace-events:${ownerId}`)
+      .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: WORKSPACE_CHANGE_EVENTS_TABLE,
+        filter: `owner_id=eq.${ownerId}`,
+      }, (payload) => {
+        if (!active || payload?.new?.owner_id !== ownerId) return;
+        void refresh();
+      })
       .subscribe((status, error) => {
         if (!active) return;
         onStatus?.(status);
+        if (status === "SUBSCRIBED") void refresh();
         if (error) onError?.(persistenceFailure("Cloud live updates disconnected.", error));
       });
 

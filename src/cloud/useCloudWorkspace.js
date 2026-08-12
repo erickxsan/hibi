@@ -52,13 +52,14 @@ export function useCloudWorkspace(user) {
     };
   }, [applyWorkspace, captureDeviceCopy, reloadToken, user.id]);
 
-  const save = useCallback(async (state) => {
+  const save = useCallback(async (state, previousState) => {
     try {
-      const previous = workspaceRef.current;
-      if (previous?.state) {
-        await captureDeviceCopy(previous.state, previous.revision, "before-save", previous.updatedAt);
-      }
-      const saved = await workspaceRepository.saveWorkspace(state, revisionRef.current, user.id);
+      const saved = await workspaceRepository.saveWorkspace(
+        state,
+        revisionRef.current,
+        user.id,
+        previousState,
+      );
       if (!applyWorkspace(saved)) {
         const latest = await workspaceRepository.loadWorkspace(user.id);
         if (!latest) throw new Error("The latest cloud workspace could not be reloaded.");
@@ -66,7 +67,6 @@ export function useCloudWorkspace(user) {
         setError(null);
         return workspaceRef.current.state;
       }
-      void captureDeviceCopy(saved.state, saved.revision, "cloud-save", saved.updatedAt);
       setError(null);
       return saved.state;
     } catch (caught) {
@@ -84,7 +84,7 @@ export function useCloudWorkspace(user) {
       }
       throw caught;
     }
-  }, [applyWorkspace, captureDeviceCopy, user.id]);
+  }, [applyWorkspace, user.id]);
 
   const replace = useCallback(async (state) => {
     try {

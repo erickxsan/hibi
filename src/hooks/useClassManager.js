@@ -226,12 +226,15 @@ export async function persistRecipe({ baseState, recipe, adapter, replace = fals
       : replace && adapter?.replace
       ? await adapter.replace(state)
       : adapter?.save
-        ? await adapter.save(state)
+        ? await adapter.save(state, baseState)
         : saveState(state);
-    return canonicalize(result?.state ?? result ?? state);
+    const saved = result?.state ?? result ?? state;
+    return adapter?.mode === "cloud" && !replace && !importMetadata ? saved : canonicalize(saved);
   };
 
-  const next = canonicalize(recipe(baseState));
+  const next = adapter?.mode === "cloud" && !replace && !importMetadata
+    ? recipe(baseState)
+    : canonicalize(recipe(baseState));
   try {
     return { state: await persist(next), mergedConflict: false };
   } catch (error) {
@@ -240,9 +243,9 @@ export async function persistRecipe({ baseState, recipe, adapter, replace = fals
     // Full backup replacement is intentionally never merged automatically.
     if (replace || importMetadata || !error?.latestState || typeof adapter?.save !== "function") throw error;
     const latest = canonicalize(error.latestState);
-    const rebased = canonicalize(recipe(latest));
-    const retried = await adapter.save(rebased);
-    return { state: canonicalize(retried?.state ?? retried ?? rebased), mergedConflict: true };
+    const rebased = recipe(latest);
+    const retried = await adapter.save(rebased, latest);
+    return { state: retried?.state ?? retried ?? rebased, mergedConflict: true };
   }
 }
 
@@ -333,9 +336,11 @@ export function useClassManager({ persistence } = {}) {
           importMetadata,
         });
         if (!mountedRef.current) return false;
-        const saved = importState(serializeState(result.state));
+        const saved = adapter?.mode === "cloud" && !replace && !importMetadata
+          ? result.state
+          : importState(serializeState(result.state));
         stateRef.current = saved;
-        persistedSnapshot.current = serializeState(saved);
+        if (adapter?.mode !== "cloud") persistedSnapshot.current = serializeState(saved);
         setCanonicalState(saved);
         if (result.mergedConflict) notify("Your edit was safely combined with a newer cloud change.");
         if (successMessage) notify(successMessage);
@@ -397,11 +402,11 @@ export function useClassManager({ persistence } = {}) {
     return subscribe((incoming) => {
       if (!mountedRef.current) return;
       try {
-        const next = importState(serializeState(incoming?.state ?? incoming));
-        const snapshot = serializeState(next);
-        if (snapshot === persistedSnapshot.current) return;
+        const next = incoming?.state ?? incoming;
+        const snapshot = persistenceRef.current?.mode === "cloud" ? null : serializeState(next);
+        if (snapshot !== null && snapshot === persistedSnapshot.current) return;
         stateRef.current = next;
-        persistedSnapshot.current = snapshot;
+        if (snapshot !== null) persistedSnapshot.current = snapshot;
         setCanonicalState(next);
         notify("Records updated from another device");
       } catch (error) {
@@ -518,7 +523,9 @@ export function useClassManager({ persistence } = {}) {
     return commit((current) => ({
       ...current,
       groups: current.groups.filter((group) => group.id !== id),
-      scheduleExceptions: current.scheduleExceptions.filter((item) => item.groupId !== id),
+      classLog: current.classLog.map((row) => row.groupId === id ? { ...row, groupId: "" } : row),
+      classSchedules: current.classSchedules.filter((item) => item.groupId !== id),
+      scheduleExceptions: current.scheduleExceptions.filter((item) => item.groupId !== id && item.sourceGroupId !== id),
       scheduleChanges: current.scheduleChanges.filter((item) => item.groupId !== id),
     }), "Group deleted");
   }, [commit, notify]);
@@ -537,7 +544,12 @@ export function useClassManager({ persistence } = {}) {
 
   const deleteStudent = useCallback((id) => {
     if (stateRef.current.grades.some((grade) => grade.studentId === id) || stateRef.current.classLog.some((row) => row.studentId === id)) return notify("Archive this student to preserve grade and payment history.", "error");
-    return commit((current) => ({ ...current, students: current.students.filter((student) => student.id !== id) }), "Student deleted");
+    return commit((current) => ({
+      ...current,
+      students: current.students.filter((student) => student.id !== id),
+      classSchedules: current.classSchedules.filter((item) => item.studentId !== id && !item.participantIds?.includes(id)),
+      scheduleExceptions: current.scheduleExceptions.filter((item) => item.studentId !== id && !item.participantIds?.includes(id)),
+    }), "Student deleted");
   }, [commit, notify]);
 
   const upsertGrade = useCallback((draft) => {
