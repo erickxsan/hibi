@@ -45,6 +45,14 @@ export {
 } from "./ids.js";
 
 export {
+  classRecordIdentity,
+  classSessionIdentity,
+  gradeIdentity,
+  normalizeClassSessionIdentity,
+  workspaceEntityIdentity,
+} from "./semanticIdentity.js";
+
+export {
   DAY_OPTIONS,
   dayOfWeekForDate,
   formatWeeklySchedule,

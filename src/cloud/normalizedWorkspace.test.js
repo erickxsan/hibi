@@ -69,4 +69,82 @@ describe("normalized workspace patches", () => {
     expect(workspacePatchesOverlap(groupPatch, sameGroupPatch)).toBe(true);
     expect(workspacePatchesOverlap(groupPatch, studentPatch)).toBe(false);
   });
+
+  it("treats concurrent class UUIDs for the same student session as overlapping", () => {
+    const first = {
+      classLog: {
+        upserts: [
+          {
+            data: {
+              id: "class-uuid-a",
+              studentId: "s1",
+              groupId: "g1",
+              classDate: "2026-08-12",
+              startTime: "10:00",
+            },
+          },
+        ],
+        deletes: [],
+      },
+    };
+    const second = {
+      classLog: {
+        upserts: [{ data: { ...first.classLog.upserts[0].data, id: "class-uuid-b" } }],
+        deletes: [],
+      },
+    };
+    const differentTime = {
+      classLog: {
+        upserts: [{ data: { ...first.classLog.upserts[0].data, id: "class-uuid-c", startTime: "11:00" } }],
+        deletes: [],
+      },
+    };
+
+    expect(workspacePatchesOverlap(first, second)).toBe(true);
+    expect(workspacePatchesOverlap(first, differentTime)).toBe(false);
+  });
+
+  it("treats concurrent grade UUIDs for the same student and session as overlapping", () => {
+    const first = {
+      grades: {
+        upserts: [
+          {
+            data: {
+              id: "grade-uuid-a",
+              studentId: "s1",
+              classSessionKey: "2026-08-12|g:g1|10:00",
+            },
+          },
+        ],
+        deletes: [],
+      },
+    };
+    const second = {
+      grades: {
+        upserts: [
+          {
+            data: {
+              id: "grade-uuid-b",
+              studentId: "s1",
+              classSessionKey: "2026-08-12|g1|10:00",
+            },
+          },
+        ],
+        deletes: [],
+      },
+    };
+
+    expect(workspacePatchesOverlap(first, second)).toBe(true);
+  });
+
+  it("treats different UUIDs with the same student code as overlapping", () => {
+    const first = {
+      students: { upserts: [{ data: { id: "student-a", code: " A-1 " } }], deletes: [] },
+    };
+    const second = {
+      students: { upserts: [{ data: { id: "student-b", code: "a-1" } }], deletes: [] },
+    };
+
+    expect(workspacePatchesOverlap(first, second)).toBe(true);
+  });
 });

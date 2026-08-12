@@ -1,4 +1,5 @@
 import { importState, serializeState } from "./storage.js";
+import { workspaceEntityIdentity } from "./semanticIdentity.js";
 
 export const IMPORT_COLLECTIONS = [
   "groups",
@@ -47,11 +48,9 @@ function comparable(record) {
 }
 
 function businessKey(collection, record) {
+  const semanticIdentity = workspaceEntityIdentity(collection, record);
+  if (semanticIdentity) return semanticIdentity;
   switch (collection) {
-    case "groups":
-      return normalizedText(record.name) || null;
-    case "students":
-      return normalizedText(record.code) || null;
     case "grades":
       return [
         record.studentId,
@@ -60,8 +59,6 @@ function businessKey(collection, record) {
         normalizedText(record.category),
         record.maxScore ?? "",
       ].join("\u0000");
-    case "classLog":
-      return [record.studentId, record.classDate, record.startTime || ""].join("\u0000");
     case "classSchedules":
       return [
         record.format,

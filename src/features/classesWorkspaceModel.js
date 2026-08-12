@@ -1,13 +1,13 @@
 import { addDays, todayDateOnly } from "../domain/dates";
 import { generateScheduledOccurrences } from "../domain/schedule";
+import { classSessionIdentity } from "../domain/semanticIdentity";
 
 function studentGroupIds(student) {
   return Array.isArray(student?.groupIds) ? student.groupIds : student?.groupId ? [student.groupId] : [];
 }
 
 export function classWorkspaceSessionKey(item = {}) {
-  const owner = item.groupId ? `g:${item.groupId}` : `s:${item.studentId || "unknown"}`;
-  return `${item.classDate || ""}|${owner}|${item.startTime || ""}`;
+  return classSessionIdentity(item);
 }
 
 function scheduledStatus(session, asOfDate) {

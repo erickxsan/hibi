@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(55);
+select plan(59);
 
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data)
 values
@@ -151,8 +151,8 @@ select lives_ok($$
     '11111111-1111-4111-8111-111111111111',
     '10000000-0000-4000-8000-000000000010',
     '{
-      "grades":{"upserts":[{"position":0,"data":{"id":"gr1","studentId":"s1","date":"2026-08-10","assessment":"Quiz","category":"Quiz","score":8,"maxScore":10,"workStatus":"On time","classSessionKey":""}}],"deletes":[]},
-      "classLog":{"upserts":[{"position":0,"data":{"id":"c1","studentId":"s1","groupId":"g1","classDate":"2026-08-10","classStatus":"Completed","amountPaid":120,"paymentDate":"2026-08-10","paymentState":"Paid","paymentMethod":"Transfer","paymentReference":"R1"}}],"deletes":[]}
+      "grades":{"upserts":[{"position":0,"data":{"id":"gr1","studentId":"s1","date":"2026-08-10","assessment":"Quiz","category":"Quiz","score":8,"maxScore":10,"workStatus":"On time","classSessionKey":"2026-08-10|g:g1|10:00"}}],"deletes":[]},
+      "classLog":{"upserts":[{"position":0,"data":{"id":"c1","studentId":"s1","groupId":"g1","classDate":"2026-08-10","startTime":"10:00","classStatus":"Completed","amountPaid":120,"paymentDate":"2026-08-10","paymentState":"Paid","paymentMethod":"Transfer","paymentReference":"R1"}}],"deletes":[]}
     }'::jsonb,
     '{"grades":{"gr1":0},"classLog":{"c1":0}}'::jsonb
   )
@@ -163,6 +163,27 @@ select is((select count(*) from public.payments), 1::bigint, 'payment is normali
 select is((select amount from public.payments where id = 'c1'), 120.00::numeric, 'payment amount is typed and indexed');
 select is((select state -> 'classLog' -> 0 ->> 'paymentReference' from public.load_normalized_workspace('11111111-1111-4111-8111-111111111111')), 'R1', 'load reconstructs the stable export shape');
 select is((select count(*) from public.workspace_recovery_snapshots), 0::bigint, 'ordinary entity edits do not create full snapshots');
+
+select throws_ok($$
+  select * from public.apply_workspace_patch_idempotent(
+    '11111111-1111-4111-8111-111111111111',
+    '10000000-0000-4000-8000-000000000014',
+    '{"grades":{"upserts":[{"position":1,"data":{"id":"gr2","studentId":"s1","date":"2026-08-10","assessment":"Quiz","category":"Quiz","score":9,"maxScore":10,"workStatus":"On time","classSessionKey":"2026-08-10|g1|10:00"}}],"deletes":[]}}'::jsonb,
+    '{"grades":{"gr2":0}}'::jsonb
+  )
+$$, '40001', 'workspace_entity_conflict', 'competing grade UUIDs for one student session conflict');
+
+select throws_ok($$
+  select * from public.apply_workspace_patch_idempotent(
+    '11111111-1111-4111-8111-111111111111',
+    '10000000-0000-4000-8000-000000000015',
+    '{"classLog":{"upserts":[{"position":1,"data":{"id":"c2","studentId":"s1","groupId":"g1","classDate":"2026-08-10","startTime":"10:00","classStatus":"Completed","amountPaid":120,"paymentDate":"2026-08-10","paymentState":"Paid","paymentMethod":"Transfer","paymentReference":"R2"}}],"deletes":[]}}'::jsonb,
+    '{"classLog":{"c2":0}}'::jsonb
+  )
+$$, '40001', 'workspace_entity_conflict', 'competing class UUIDs for one student date and time conflict');
+
+select is((select count(*) from public.grades), 1::bigint, 'the losing grade UUID is not stored');
+select is((select count(*) from public.class_records), 1::bigint, 'the losing class UUID and charge are not stored');
 
 select lives_ok($$
   select * from public.replace_normalized_workspace_state(

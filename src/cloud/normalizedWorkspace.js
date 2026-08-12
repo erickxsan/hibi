@@ -1,3 +1,5 @@
+import { workspaceEntityIdentity } from "../domain/semanticIdentity.js";
+
 export const NORMALIZED_COLLECTIONS = Object.freeze([
   "groups",
   "students",
@@ -113,7 +115,12 @@ export function workspacePatchesOverlap(left, right) {
   for (const collection of NORMALIZED_COLLECTIONS) {
     if (!left?.[collection] || !right?.[collection]) continue;
     const leftIds = new Set([...left[collection].upserts.map(({ data }) => data.id), ...left[collection].deletes]);
+    const leftIdentities = new Set(
+      left[collection].upserts.map(({ data }) => workspaceEntityIdentity(collection, data)).filter(Boolean),
+    );
     if (right[collection].upserts.some(({ data }) => leftIds.has(data.id))) return true;
+    if (right[collection].upserts.some(({ data }) => leftIdentities.has(workspaceEntityIdentity(collection, data))))
+      return true;
     if (right[collection].deletes.some((id) => leftIds.has(id))) return true;
   }
   return false;

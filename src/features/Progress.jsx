@@ -30,6 +30,7 @@ import { confirmDiscard, draftChanged, useUnsavedChanges } from "../hooks/useUns
 import { getUiLocale, useI18n } from "../i18n";
 import { playHibiSound } from "../utils/hibiSounds";
 import { normalizeSearchText } from "../utils/searchText";
+import { classSessionIdentity } from "../domain/semanticIdentity";
 import {
   assessmentKey,
   attendanceRate,
@@ -418,6 +419,12 @@ export default function Progress({ state, derived, actions, intent, clearIntent,
               maximum,
               workStatus: existing?.workStatus || "On time",
               feedback: entry.feedback || "",
+              classSessionKey: classSessionIdentity({
+                classDate: recordContext.classDate,
+                groupId: recordContext.groupId === INDIVIDUAL_GROUP_ID ? "" : recordContext.groupId,
+                studentId: student.id,
+                startTime: recordContext.startTime,
+              }),
             },
           ];
         })
