@@ -1,6 +1,7 @@
-import { Cloud, DatabaseBackup, LogOut, RefreshCw, ShieldCheck } from "lucide-react";
+import { useState } from "react";
+import { CheckCircle2, Cloud, DatabaseBackup, LogOut, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
 import { BrandMark } from "../components/BrandMark";
-import { Button } from "../components/ui";
+import { Button, Field, Input } from "../components/ui";
 import { LanguageToggle } from "../i18n";
 import "./cloud.css";
 
@@ -57,6 +58,117 @@ export function CloudConfigurationRequired() {
           This production build is missing its Supabase URL or public publishable key. No records can be entered until
           the deployment is configured correctly.
         </p>
+      </section>
+    </main>
+  );
+}
+
+export function AccountDeletionPending({ busy = false, error, onResume, onSignOut }) {
+  const [confirmation, setConfirmation] = useState("");
+  const [localError, setLocalError] = useState("");
+  return (
+    <main className="cloud-state-screen">
+      <LanguageToggle className="cloud-language-toggle" />
+      <section className="cloud-state-card cloud-deletion-card" aria-labelledby="deletion-pending-title">
+        <span className="cloud-state-icon">
+          <Trash2 aria-hidden="true" />
+        </span>
+        <h1 id="deletion-pending-title">Account deletion is pending</h1>
+        <p>
+          Hibi has blocked this account so an old device, JWT, or offline outbox cannot recreate records. Resume the
+          verified deletion to finish removing Auth.
+        </p>
+        <Field label="Type DELETE MY ACCOUNT to resume" error={localError || error}>
+          <Input
+            value={confirmation}
+            onChange={(event) => setConfirmation(event.target.value)}
+            autoComplete="off"
+            spellCheck="false"
+          />
+        </Field>
+        <div className="cloud-state-actions">
+          <Button
+            variant="danger"
+            icon={Trash2}
+            disabled={busy || confirmation !== "DELETE MY ACCOUNT"}
+            onClick={async () => {
+              setLocalError("");
+              try {
+                await onResume({ confirmation });
+              } catch (caught) {
+                setLocalError(caught?.message || "Deletion could not be resumed.");
+              }
+            }}
+          >
+            {busy ? "Finishing deletion…" : "Resume permanent deletion"}
+          </Button>
+          <Button icon={LogOut} onClick={onSignOut} disabled={busy}>
+            Sign out
+          </Button>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+export function AccountDeletionComplete({ receipt, onRetryLocalPurge, onContinue }) {
+  const [purgeBusy, setPurgeBusy] = useState(false);
+  const [purgeError, setPurgeError] = useState("");
+  return (
+    <main className="cloud-state-screen">
+      <LanguageToggle className="cloud-language-toggle" />
+      <section className="cloud-state-card cloud-deletion-complete" aria-labelledby="deletion-complete-title">
+        <span className="cloud-state-icon">
+          <CheckCircle2 aria-hidden="true" />
+        </span>
+        <h1 id="deletion-complete-title">Account and data deleted</h1>
+        <p>
+          Cloud records, recovery history, imports, synchronization data, and the Auth account were permanently removed.
+          {receipt.localPurgeComplete
+            ? " Hibi also purged this account's encrypted copies from the current device."
+            : " Local browser purging could not be verified."}
+        </p>
+        {!receipt.localPurgeComplete ? (
+          <div className="cloud-local-purge-warning" role="alert">
+            <p>{purgeError || "Retry while this browser is still open to remove the remaining device copy."}</p>
+            <Button
+              icon={RefreshCw}
+              disabled={purgeBusy}
+              onClick={async () => {
+                setPurgeBusy(true);
+                setPurgeError("");
+                try {
+                  await onRetryLocalPurge?.();
+                } catch {
+                  setPurgeError("Device cleanup is still blocked. Close other Hibi tabs and retry.");
+                } finally {
+                  setPurgeBusy(false);
+                }
+              }}
+            >
+              {purgeBusy ? "Cleaning device…" : "Retry device cleanup"}
+            </Button>
+          </div>
+        ) : null}
+        <dl className="deletion-receipt">
+          <div>
+            <dt>Request</dt>
+            <dd>{receipt.requestId}</dd>
+          </div>
+          <div>
+            <dt>Verification code</dt>
+            <dd>{receipt.receiptSecret}</dd>
+          </div>
+          <div>
+            <dt>Completed</dt>
+            <dd>{new Date(receipt.completedAt).toLocaleString()}</dd>
+          </div>
+        </dl>
+        <div className="cloud-state-actions">
+          <Button variant="primary" onClick={onContinue}>
+            Continue to sign in
+          </Button>
+        </div>
       </section>
     </main>
   );

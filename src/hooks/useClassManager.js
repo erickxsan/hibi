@@ -1059,6 +1059,40 @@ export function useClassManager({ persistence } = {}) {
     [notify],
   );
 
+  const resetWorkspace = useCallback(() => {
+    const operation = async () => {
+      const reset = persistenceRef.current?.resetWorkspace;
+      if (typeof reset !== "function") return false;
+      pendingWrites.current += 1;
+      setSyncStatus("saving");
+      try {
+        const result = await reset();
+        const next = importState(serializeState(result?.state ?? result));
+        if (!mountedRef.current) return false;
+        stateRef.current = next;
+        persistedSnapshot.current = serializeState(next);
+        setCanonicalState(next);
+        setSyncStatus("saved");
+        notify("Workspace reset. A recovery copy is retained for up to 30 days.");
+        return true;
+      } catch (error) {
+        if (mountedRef.current) {
+          setSyncStatus("error");
+          notify(messageForError(error), "error");
+        }
+        return false;
+      } finally {
+        pendingWrites.current = Math.max(0, pendingWrites.current - 1);
+      }
+    };
+    const queued = operationQueue.current.then(operation, operation);
+    operationQueue.current = queued.then(
+      () => undefined,
+      () => undefined,
+    );
+    return queued;
+  }, [notify]);
+
   const actions = useMemo(
     () => ({
       updatePreferences,
@@ -1089,6 +1123,7 @@ export function useClassManager({ persistence } = {}) {
       listRecoveryPoints,
       exportRecoveryPoint,
       restoreRecoveryPoint,
+      resetWorkspace,
       notify,
     }),
     [
@@ -1110,6 +1145,7 @@ export function useClassManager({ persistence } = {}) {
       previewImportRecords,
       removeScheduledClass,
       restoreRecoveryPoint,
+      resetWorkspace,
       saveProgress,
       updatePreferences,
       updateSettings,

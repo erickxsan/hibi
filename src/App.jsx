@@ -10,8 +10,24 @@ import {
 import { AccountMenu, AUTH_MODES, AuthScreen } from "./auth";
 import { AppShell } from "./components/AppShell";
 import { ToastRegion } from "./components/ui";
-import { cloudAuth, hCaptchaSiteKey, isCloudConfigured, isLocalModeAllowed } from "./cloud";
-import { CloudConfigurationRequired, CloudError, CloudLoading, LocalDataMigration } from "./cloud/CloudStates";
+import {
+  accountDeletionService,
+  cloudAuth,
+  hCaptchaSiteKey,
+  isCloudConfigured,
+  isLocalModeAllowed,
+  LEGACY_DATA_CLAIM_KEY,
+  MIGRATION_MARKER_PREFIX,
+  purgeLocalAccountData,
+} from "./cloud";
+import {
+  AccountDeletionComplete,
+  AccountDeletionPending,
+  CloudConfigurationRequired,
+  CloudError,
+  CloudLoading,
+  LocalDataMigration,
+} from "./cloud/CloudStates";
 import { useCloudWorkspace } from "./cloud/useCloudWorkspace";
 import { safeLoadStateWithMigrations } from "./domain";
 import { useClassManager } from "./hooks/useClassManager";
@@ -47,8 +63,6 @@ function PageFallback() {
   );
 }
 
-const MIGRATION_MARKER_PREFIX = "minimal-class-manager:cloud-migration-dismissed:v1:";
-const LEGACY_DATA_CLAIM_KEY = "minimal-class-manager:legacy-data-claimed:v1";
 let inMemoryLegacyClaim = "";
 
 function hasRecords(state) {
@@ -66,7 +80,7 @@ function syncStatusFor(manager, cloudError) {
   return "synced";
 }
 
-export function ClassManagerApplication({ persistence, user, cloudError, onSignOut, canNavigate }) {
+export function ClassManagerApplication({ persistence, user, cloudError, onSignOut, onDeleteAccount, canNavigate }) {
   useI18n();
   const manager = useClassManager({ persistence });
   const [intent, setIntent] = useState(null);
@@ -114,6 +128,7 @@ export function ClassManagerApplication({ persistence, user, cloudError, onSignO
       navigate,
       openPage,
       registerNavigationBlocker,
+      onDeleteAccount,
     };
     if (page === "community" || page === "students" || page === "groups") {
       return (
@@ -127,7 +142,7 @@ export function ClassManagerApplication({ persistence, user, cloudError, onSignO
     if (page === "grades" || page === "payments") return <Tracking {...common} />;
     if (page === "settings") return <Settings {...common} />;
     return <Home {...common} />;
-  }, [clearIntent, intent, manager, navigate, openPage, page, registerNavigationBlocker]);
+  }, [clearIntent, intent, manager, navigate, onDeleteAccount, openPage, page, registerNavigationBlocker]);
 
   const handleSignOut = async () => {
     if (!onSignOut || signingOut) return;
@@ -178,7 +193,7 @@ export function ClassManagerApplication({ persistence, user, cloudError, onSignO
   );
 }
 
-function CloudWorkspaceApplication({ session }) {
+function CloudWorkspaceApplication({ session, onDeletionCompleted }) {
   const user = session.user;
   const { workspace, persistence, loading, error, retry, save } = useCloudWorkspace(user);
   const localSnapshot = useMemo(() => safeLoadStateWithMigrations(), [user.id]);
@@ -199,9 +214,59 @@ function CloudWorkspaceApplication({ session }) {
   });
   const [migrationBusy, setMigrationBusy] = useState(false);
   const [migrationError, setMigrationError] = useState("");
+  const [deletionBusy, setDeletionBusy] = useState(false);
+  const [deletionPending, setDeletionPending] = useState("");
+
+  const deleteAccount = useCallback(
+    async ({ confirmation }) => {
+      if (deletionBusy) return;
+      setDeletionBusy(true);
+      try {
+        const receipt = await accountDeletionService.removeAccount({ confirmation });
+        let localPurgeComplete = true;
+        try {
+          await purgeLocalAccountData(user.id);
+          inMemoryLegacyClaim = "";
+        } catch {
+          localPurgeComplete = false;
+        }
+        try {
+          await cloudAuth.signOut({ scope: "local" });
+        } catch {
+          // Auth is already hard-deleted; the parent still clears its session.
+        }
+        onDeletionCompleted({ ...receipt, localPurgeComplete });
+      } catch (caught) {
+        if (caught?.retryable) setDeletionPending(caught.message);
+        throw caught;
+      } finally {
+        setDeletionBusy(false);
+      }
+    },
+    [deletionBusy, onDeletionCompleted, user.id],
+  );
 
   if (loading) return <CloudLoading />;
+  if (deletionPending) {
+    return (
+      <AccountDeletionPending
+        busy={deletionBusy}
+        error={deletionPending}
+        onResume={deleteAccount}
+        onSignOut={() => cloudAuth.signOut({ scope: "local" })}
+      />
+    );
+  }
   if (!workspace || !persistence) {
+    if (error?.code === "account_deletion_pending") {
+      return (
+        <AccountDeletionPending
+          busy={deletionBusy}
+          onResume={deleteAccount}
+          onSignOut={() => cloudAuth.signOut({ scope: "local" })}
+        />
+      );
+    }
     return <CloudError error={error} onRetry={retry} onSignOut={() => cloudAuth.signOut()} />;
   }
 
@@ -260,6 +325,7 @@ function CloudWorkspaceApplication({ session }) {
       user={user}
       cloudError={error}
       onSignOut={() => cloudAuth.signOut()}
+      onDeleteAccount={deleteAccount}
     />
   );
 }
@@ -269,6 +335,7 @@ function AuthenticatedCloudApplication() {
   const [loading, setLoading] = useState(true);
   const [recoveryMode, setRecoveryMode] = useState(false);
   const [bootstrapError, setBootstrapError] = useState("");
+  const [deletionReceipt, setDeletionReceipt] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -298,6 +365,18 @@ function AuthenticatedCloudApplication() {
   }, []);
 
   if (loading) return <CloudLoading message="Checking your secure session…" />;
+  if (deletionReceipt) {
+    return (
+      <AccountDeletionComplete
+        receipt={deletionReceipt}
+        onRetryLocalPurge={async () => {
+          await purgeLocalAccountData(deletionReceipt.ownerId);
+          setDeletionReceipt((current) => ({ ...current, localPurgeComplete: true }));
+        }}
+        onContinue={() => setDeletionReceipt(null)}
+      />
+    );
+  }
   if (recoveryMode) {
     return (
       <AuthScreen
@@ -330,7 +409,16 @@ function AuthenticatedCloudApplication() {
     );
   }
 
-  return <CloudWorkspaceApplication key={session.user.id} session={session} />;
+  return (
+    <CloudWorkspaceApplication
+      key={session.user.id}
+      session={session}
+      onDeletionCompleted={(receipt) => {
+        setDeletionReceipt(receipt);
+        setSession(null);
+      }}
+    />
+  );
 }
 
 export default function App() {

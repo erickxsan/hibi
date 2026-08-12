@@ -80,4 +80,38 @@ describe("device recovery store", () => {
     expect(raw.payload).toMatchObject({ version: 1 });
     expect(JSON.stringify(raw)).not.toContain("Private Student");
   });
+
+  it("purges only the selected account from copies, cache, outbox, and keys", async () => {
+    const indexedDb = new IDBFactory();
+    const store = createDeviceRecoveryStore(indexedDb, globalThis.crypto);
+    const stateA = createStarterState();
+    const stateB = createStarterState();
+    stateA.settings.hourlyRate = 111;
+    stateB.settings.hourlyRate = 222;
+    const mutation = (operationId) => ({ operationId, patch: {}, expectedVersions: {} });
+
+    await store.capture({ ownerId: "user-a", state: stateA, revision: 1 });
+    await store.capture({ ownerId: "user-b", state: stateB, revision: 1 });
+    await store.cacheWorkspace("user-a", { state: stateA, versions: {}, revision: 1 });
+    await store.cacheWorkspace("user-b", { state: stateB, versions: {}, revision: 1 });
+    await store.stageMutation({
+      ownerId: "user-a",
+      workspace: { state: stateA, versions: {}, revision: 1 },
+      mutation: mutation("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
+    });
+    await store.stageMutation({
+      ownerId: "user-b",
+      workspace: { state: stateB, versions: {}, revision: 1 },
+      mutation: mutation("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"),
+    });
+
+    await store.purgeAccount("user-a");
+
+    await expect(store.list("user-a")).resolves.toEqual([]);
+    await expect(store.loadWorkspaceCache("user-a")).resolves.toBeNull();
+    await expect(store.listMutations("user-a")).resolves.toEqual([]);
+    await expect(store.list("user-b")).resolves.toHaveLength(2);
+    await expect(store.loadWorkspaceCache("user-b")).resolves.toMatchObject({ revision: 1 });
+    await expect(store.listMutations("user-b")).resolves.toHaveLength(1);
+  });
 });

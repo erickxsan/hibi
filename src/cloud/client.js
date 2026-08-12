@@ -120,8 +120,8 @@ export function createAuthService(client = supabase) {
       return data;
     },
 
-    async signOut() {
-      const { error } = await cloud().auth.signOut();
+    async signOut(options) {
+      const { error } = await cloud().auth.signOut(options);
       throwAuthError(error, "The account could not be signed out.");
     },
 

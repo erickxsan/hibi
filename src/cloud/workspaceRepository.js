@@ -12,6 +12,7 @@ export const LOAD_WORKSPACE_RPC = "load_normalized_workspace";
 export const SAVE_WORKSPACE_RPC = "apply_workspace_patch_idempotent";
 export const REPLACE_WORKSPACE_RPC = "replace_normalized_workspace_state";
 export const RESTORE_WORKSPACE_RPC = "restore_normalized_workspace_snapshot";
+export const RESET_WORKSPACE_RPC = "reset_normalized_workspace_records";
 export const APPLY_IMPORT_RPC = "apply_normalized_workspace_import";
 export const WORKSPACE_CHANGE_EVENTS_TABLE = "workspace_change_events";
 export const RECOVERY_SNAPSHOTS_TABLE = "workspace_recovery_snapshots";
@@ -114,6 +115,14 @@ function isEntityConflict(error) {
 
 function persistenceFailure(message, error) {
   const providerMessage = String(error?.message || "");
+  if (providerMessage.includes("account_deletion_pending")) {
+    const pending = new CloudPersistenceError(
+      "This account is pending deletion. Resume the verified deletion instead of editing this workspace.",
+      { cause: error },
+    );
+    pending.code = "account_deletion_pending";
+    return pending;
+  }
   if (providerMessage.includes("workspace_entity_conflict")) {
     return new CloudPersistenceError("The same record changed on another device. Hibi is loading that version.", {
       cause: error,
@@ -404,6 +413,23 @@ export function createWorkspaceRepository(client = supabase, { allowWrites = tru
     return adopt(workspaceFromRow(row, ownerId));
   }
 
+  async function resetWorkspace(expectedRevision, expectedOwnerId) {
+    requireWritesEnabled();
+    const user = await requireUser(expectedOwnerId);
+    const ownerId = expectedOwnerId || user.id;
+    const revision = normalizeRevision(expectedRevision);
+    const { data, error } = await cloud().rpc(RESET_WORKSPACE_RPC, {
+      p_expected_owner_id: ownerId,
+      p_expected_revision: revision,
+      p_confirmation: `reset:${revision}`,
+    });
+    if (error && isEntityConflict(error)) throw await conflictFrom(error, ownerId);
+    if (error) throw persistenceFailure("The workspace could not be reset.", error);
+    const row = firstRow(data);
+    if (!row) throw new CloudPersistenceError("The reset workspace response was empty.");
+    return adopt(workspaceFromRow(row, ownerId));
+  }
+
   async function loadMissedEvents(ownerId) {
     if (!cache) return fetchWorkspace(ownerId);
     const { data, error } = await cloud()
@@ -498,6 +524,7 @@ export function createWorkspaceRepository(client = supabase, { allowWrites = tru
     listRecoverySnapshots,
     loadRecoverySnapshot,
     restoreRecoverySnapshot,
+    resetWorkspace,
     subscribeToWorkspace,
   };
 }

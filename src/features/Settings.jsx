@@ -8,6 +8,7 @@ import {
   LockKeyhole,
   RotateCcw,
   ShieldCheck,
+  Trash2,
   Upload,
   Volume2,
 } from "lucide-react";
@@ -27,7 +28,7 @@ async function sha256(text) {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export default function Settings({ state, actions, persistenceMode, registerNavigationBlocker }) {
+export default function Settings({ state, actions, persistenceMode, registerNavigationBlocker, onDeleteAccount }) {
   const { t } = useI18n();
   const [draft, setDraft] = useState(() => settingsDraft(state.settings));
   const [saving, setSaving] = useState(false);
@@ -37,6 +38,13 @@ export default function Settings({ state, actions, persistenceMode, registerNavi
   const [recordImportBusy, setRecordImportBusy] = useState(false);
   const [importConfirmation, setImportConfirmation] = useState("");
   const [clearTarget, setClearTarget] = useState("");
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetConfirmation, setResetConfirmation] = useState("");
+  const [resetBusy, setResetBusy] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const [recoveryOpen, setRecoveryOpen] = useState(false);
   const [recoveryLoading, setRecoveryLoading] = useState(false);
   const [recoveryPoints, setRecoveryPoints] = useState([]);
@@ -338,12 +346,53 @@ export default function Settings({ state, actions, persistenceMode, registerNavi
             <h2>Data & privacy</h2>
             <p>Backups include student, parent, grade, attendance, and payment data. Store them privately.</p>
             {persistenceMode === "cloud" ? (
-              <div className="danger-line secondary-danger">
-                <span>
-                  <strong>Remove old browser copy</strong>
-                  <small>Your signed-in cloud workspace and recovery history are not affected.</small>
-                </span>
-                <Button onClick={() => setClearTarget("local")}>Remove local copy</Button>
+              <div className="privacy-actions">
+                <div className="danger-line secondary-danger">
+                  <span>
+                    <strong>Remove old browser copy</strong>
+                    <small>Your signed-in cloud workspace and recovery history are not affected.</small>
+                  </span>
+                  <Button onClick={() => setClearTarget("local")}>Remove local copy</Button>
+                </div>
+                <div className="danger-line workspace-reset-line">
+                  <span>
+                    <strong>Reset workspace</strong>
+                    <small>
+                      Clears active students, groups, grades, classes, schedules, and payments. Server snapshots and
+                      encrypted copies on this device have a 30-day recovery window. Expired device copies are purged
+                      the next time Hibi opens on that device. This is not permanent deletion.
+                    </small>
+                  </span>
+                  <Button
+                    icon={RotateCcw}
+                    onClick={() => {
+                      setResetConfirmation("");
+                      setResetOpen(true);
+                    }}
+                  >
+                    Reset workspace
+                  </Button>
+                </div>
+                <div className="danger-line permanent-delete-line">
+                  <span>
+                    <strong>Delete account and data</strong>
+                    <small>
+                      Permanently erases active records, snapshots, imports, synchronization history, the Auth account,
+                      and this account&apos;s copies on the current device. There is no recovery.
+                    </small>
+                  </span>
+                  <Button
+                    variant="danger"
+                    icon={Trash2}
+                    onClick={() => {
+                      setDeleteConfirmation("");
+                      setDeleteError("");
+                      setDeleteOpen(true);
+                    }}
+                  >
+                    Delete account and data
+                  </Button>
+                </div>
               </div>
             ) : null}
           </div>
@@ -590,6 +639,92 @@ export default function Settings({ state, actions, persistenceMode, registerNavi
           if (cleared) setClearTarget("");
         }}
       />
+      <Drawer
+        open={resetOpen}
+        onClose={() => {
+          if (!resetBusy) setResetOpen(false);
+        }}
+        title="Reset this workspace?"
+        description="Active records will be emptied immediately. The recovery window is 30 days, so this is not permanent deletion."
+        size="compact"
+        footer={
+          <>
+            <Button onClick={() => setResetOpen(false)} disabled={resetBusy}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              disabled={resetBusy || resetConfirmation !== "RESET"}
+              onClick={async () => {
+                setResetBusy(true);
+                try {
+                  if (await actions.resetWorkspace()) setResetOpen(false);
+                } finally {
+                  setResetBusy(false);
+                }
+              }}
+            >
+              {resetBusy ? "Resetting…" : "Reset workspace"}
+            </Button>
+          </>
+        }
+      >
+        <Field label="Type RESET to confirm" hint="Your settings stay in place; active class data is emptied.">
+          <Input
+            value={resetConfirmation}
+            onChange={(event) => setResetConfirmation(event.target.value)}
+            autoComplete="off"
+            spellCheck="false"
+          />
+        </Field>
+      </Drawer>
+      <Drawer
+        open={deleteOpen}
+        onClose={() => {
+          if (!deleteBusy) setDeleteOpen(false);
+        }}
+        title="Permanently delete account and data?"
+        description="This verified deletion has no recovery. Sign in again first if your last authentication was more than 10 minutes ago."
+        size="compact"
+        footer={
+          <>
+            <Button onClick={() => setDeleteOpen(false)} disabled={deleteBusy}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              disabled={deleteBusy || deleteConfirmation !== "DELETE MY ACCOUNT"}
+              onClick={async () => {
+                setDeleteBusy(true);
+                setDeleteError("");
+                try {
+                  await onDeleteAccount?.({ confirmation: deleteConfirmation });
+                } catch (error) {
+                  setDeleteError(error?.message || "Account deletion could not be completed.");
+                  setDeleteBusy(false);
+                }
+              }}
+            >
+              {deleteBusy ? "Deleting…" : "Delete permanently"}
+            </Button>
+          </>
+        }
+      >
+        <div className="permanent-delete-confirmation">
+          <p>
+            Hibi will purge cloud records and recovery history first, then hard-delete the Auth user and this
+            account&apos;s encrypted data on this device.
+          </p>
+          <Field label="Type DELETE MY ACCOUNT to confirm" error={deleteError}>
+            <Input
+              value={deleteConfirmation}
+              onChange={(event) => setDeleteConfirmation(event.target.value)}
+              autoComplete="off"
+              spellCheck="false"
+            />
+          </Field>
+        </div>
+      </Drawer>
     </div>
   );
 }

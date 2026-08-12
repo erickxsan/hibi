@@ -149,7 +149,13 @@ export function useCloudWorkspace(user) {
         }
       } catch (caught) {
         if (!active) return;
-        if (localWorkspace) {
+        if (caught?.code === "account_deletion_pending") {
+          workspaceRef.current = null;
+          revisionRef.current = 0;
+          setWorkspace(null);
+          setError(caught);
+          updateSync("error", caught.message);
+        } else if (localWorkspace) {
           updateSync(
             queued.length ? "pending" : "offline",
             queued.length
@@ -315,6 +321,27 @@ export function useCloudWorkspace(user) {
     [applyWorkspace, captureDeviceCopy, preserveLocalRevision, updateSync, user.id],
   );
 
+  const resetWorkspace = useCallback(async () => {
+    const previous = workspaceRef.current;
+    if (!previous?.state) throw new Error("The cloud workspace is not ready.");
+    await captureDeviceCopy(previous.state, previous.revision, "before-reset", previous.updatedAt);
+    try {
+      const reset = await workspaceRepository.resetWorkspace(revisionRef.current, user.id);
+      applyWorkspace(reset);
+      await deviceRecoveryStore.clearMutations(user.id);
+      await deviceRecoveryStore.cacheWorkspace(user.id, reset);
+      setError(null);
+      updateSync("saved");
+      return reset.state;
+    } catch (caught) {
+      if (caught instanceof WorkspaceConflictError) {
+        preserveLocalRevision(caught.latestRevision);
+        updateSync("conflict", "The cloud changed before reset. Review the latest records and retry.");
+      }
+      throw caught;
+    }
+  }, [applyWorkspace, captureDeviceCopy, preserveLocalRevision, updateSync, user.id]);
+
   const subscribe = useCallback(
     (onChange) => {
       let disposed = false;
@@ -395,6 +422,7 @@ export function useCloudWorkspace(user) {
             listRecoveryPoints,
             loadRecoveryPoint,
             restoreRecoveryPoint,
+            resetWorkspace,
           }
         : null,
     [
@@ -404,6 +432,7 @@ export function useCloudWorkspace(user) {
       loadRecoveryPoint,
       replace,
       restoreRecoveryPoint,
+      resetWorkspace,
       save,
       subscribe,
       syncMessage,
@@ -418,5 +447,17 @@ export function useCloudWorkspace(user) {
     else setReloadToken((current) => current + 1);
   }, [flushPending]);
 
-  return { workspace, persistence, loading, error, retry, save, replace, importRecords, syncStatus, syncMessage };
+  return {
+    workspace,
+    persistence,
+    loading,
+    error,
+    retry,
+    save,
+    replace,
+    importRecords,
+    resetWorkspace,
+    syncStatus,
+    syncMessage,
+  };
 }

@@ -70,6 +70,66 @@
   color: var(--danger);
 }
 
+.cloud-deletion-card {
+  max-width: 520px;
+}
+.cloud-deletion-card .cloud-state-icon {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.cloud-deletion-card .field {
+  width: 100%;
+  text-align: left;
+}
+.cloud-deletion-complete {
+  max-width: 580px;
+}
+.cloud-deletion-complete .cloud-state-icon {
+  background: var(--olive-soft);
+  color: #426c46;
+}
+.deletion-receipt {
+  display: grid;
+  width: 100%;
+  gap: 8px;
+  margin: 8px 0 0;
+  text-align: left;
+}
+.deletion-receipt > div {
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: #fbf8f1;
+}
+.deletion-receipt dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.deletion-receipt dd {
+  overflow-wrap: anywhere;
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+.cloud-local-purge-warning {
+  display: grid;
+  gap: 0.75rem;
+  justify-items: center;
+  padding: 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--danger) 28%, transparent);
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, var(--danger) 7%, transparent);
+}
+
+.cloud-local-purge-warning p {
+  margin: 0;
+}
+
 .cloud-state-actions {
   display: flex;
   flex-wrap: wrap;

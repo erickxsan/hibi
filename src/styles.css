@@ -1602,6 +1602,33 @@ body,
 .danger-line small {
   color: var(--hibi-muted);
 }
+.privacy-actions {
+  display: grid;
+  gap: 0;
+}
+.privacy-actions .danger-line {
+  padding: 14px 0;
+}
+.workspace-reset-line small,
+.permanent-delete-line small {
+  max-width: 720px;
+  line-height: 1.45;
+}
+.permanent-delete-line {
+  color: var(--danger);
+}
+.permanent-delete-line small {
+  color: var(--hibi-muted);
+}
+.permanent-delete-confirmation {
+  display: grid;
+  gap: 16px;
+}
+.permanent-delete-confirmation > p {
+  margin: 0;
+  color: var(--hibi-muted);
+  line-height: 1.5;
+}
 .settings-data-actions {
   display: grid;
   gap: 10px;

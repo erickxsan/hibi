@@ -7,6 +7,7 @@ const OUTBOX_STORE = "workspace-outbox";
 const KEY_STORE = "encryption-keys";
 const DATABASE_VERSION = 2;
 const MAX_COPIES_PER_ACCOUNT = 8;
+const MAX_COPY_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_OUTBOX_OPERATIONS = 100;
 const AUTOMATIC_BACKUP_SOURCE = "automatic-local";
 
@@ -157,8 +158,16 @@ export function createDeviceRecoveryStore(indexedDb = globalThis.indexedDB, cryp
     const all = await requestResult(store.getAll());
     store.put(copy);
     const owned = all
-      .filter((item) => item.ownerId === ownerId && item.id !== id)
+      .filter(
+        (item) =>
+          item.ownerId === ownerId &&
+          item.id !== id &&
+          Date.parse(item.capturedAt || "") >= Date.now() - MAX_COPY_AGE_MS,
+      )
       .sort((left, right) => String(right.capturedAt).localeCompare(String(left.capturedAt)));
+    all
+      .filter((item) => item.ownerId === ownerId && Date.parse(item.capturedAt || "") < Date.now() - MAX_COPY_AGE_MS)
+      .forEach((item) => store.delete(item.id));
     owned.slice(MAX_COPIES_PER_ACCOUNT - 1).forEach((item) => store.delete(item.id));
     await done;
     return publicMetadata(copy);
@@ -167,12 +176,17 @@ export function createDeviceRecoveryStore(indexedDb = globalThis.indexedDB, cryp
   async function list(ownerId) {
     const database = await openDatabase();
     if (!database) return [];
-    const transaction = database.transaction(RECOVERY_STORE, "readonly");
+    const transaction = database.transaction(RECOVERY_STORE, "readwrite");
     const done = transactionDone(transaction);
-    const all = await requestResult(transaction.objectStore(RECOVERY_STORE).getAll());
+    const store = transaction.objectStore(RECOVERY_STORE);
+    const all = await requestResult(store.getAll());
+    const expiresBefore = Date.now() - MAX_COPY_AGE_MS;
+    all
+      .filter((copy) => copy.ownerId === ownerId && Date.parse(copy.capturedAt || "") < expiresBefore)
+      .forEach((copy) => store.delete(copy.id));
     await done;
     const owned = all
-      .filter((copy) => copy.ownerId === ownerId)
+      .filter((copy) => copy.ownerId === ownerId && Date.parse(copy.capturedAt || "") >= expiresBefore)
       .sort((left, right) => String(right.capturedAt).localeCompare(String(left.capturedAt)));
     await Promise.all(
       owned.map(async (copy) => canonicalState(copy.state || (await unseal(database, ownerId, copy.payload)))),
@@ -327,6 +341,25 @@ export function createDeviceRecoveryStore(indexedDb = globalThis.indexedDB, cryp
     await done;
   }
 
+  async function purgeAccount(ownerId) {
+    if (!ownerId) throw new TypeError("An account ID is required for device purging.");
+    keyPromises.delete(ownerId);
+    const database = await openDatabase();
+    if (!database) return;
+    const transaction = database.transaction([RECOVERY_STORE, CACHE_STORE, OUTBOX_STORE, KEY_STORE], "readwrite");
+    const done = transactionDone(transaction);
+    const recovery = transaction.objectStore(RECOVERY_STORE);
+    const outbox = transaction.objectStore(OUTBOX_STORE);
+    const recoveryRequest = recovery.getAll();
+    const outboxRequest = outbox.getAll();
+    const [copies, mutations] = await Promise.all([requestResult(recoveryRequest), requestResult(outboxRequest)]);
+    copies.filter((copy) => copy.ownerId === ownerId).forEach((copy) => recovery.delete(copy.id));
+    mutations.filter((item) => item.ownerId === ownerId).forEach((item) => outbox.delete(item.id));
+    transaction.objectStore(CACHE_STORE).delete(ownerId);
+    transaction.objectStore(KEY_STORE).delete(ownerId);
+    await done;
+  }
+
   return {
     capture,
     list,
@@ -338,6 +371,7 @@ export function createDeviceRecoveryStore(indexedDb = globalThis.indexedDB, cryp
     markMutationConflict,
     completeMutation,
     clearMutations,
+    purgeAccount,
   };
 }
 

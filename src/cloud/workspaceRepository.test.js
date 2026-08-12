@@ -5,6 +5,7 @@ import {
   createWorkspaceRepository,
   LOAD_WORKSPACE_RPC,
   REPLACE_WORKSPACE_RPC,
+  RESET_WORKSPACE_RPC,
   RESTORE_WORKSPACE_RPC,
   SAVE_WORKSPACE_RPC,
   WORKSPACE_CHANGE_EVENTS_TABLE,
@@ -111,10 +112,12 @@ describe("normalized workspace repository", () => {
     expect(error.latestRevision).toBe(3);
   });
 
-  it("keeps full replacement, import, and restore as explicit RPCs", async () => {
+  it("keeps full replacement, import, restore, and reset as explicit RPCs", async () => {
     const state = createStarterState();
     const rpc = vi.fn(async (name) => {
-      if (name === RESTORE_WORKSPACE_RPC) return { data: [workspaceRow(state, 12)], error: null };
+      if (name === RESTORE_WORKSPACE_RPC || name === RESET_WORKSPACE_RPC) {
+        return { data: [workspaceRow(state, name === RESET_WORKSPACE_RPC ? 13 : 12)], error: null };
+      }
       return { data: [{ event_id: 11, updated_at: null, versions: {}, already_imported: false }], error: null };
     });
     const repository = createWorkspaceRepository(authenticatedClient({ rpc }));
@@ -126,12 +129,19 @@ describe("normalized workspace repository", () => {
       summary: {},
     });
     await repository.restoreRecoverySnapshot("snapshot-1", 11, "user-1");
+    await repository.resetWorkspace(12, "user-1");
 
     expect(rpc.mock.calls.map(([name]) => name)).toEqual([
       REPLACE_WORKSPACE_RPC,
       APPLY_IMPORT_RPC,
       RESTORE_WORKSPACE_RPC,
+      RESET_WORKSPACE_RPC,
     ]);
+    expect(rpc).toHaveBeenLastCalledWith(RESET_WORKSPACE_RPC, {
+      p_expected_owner_id: "user-1",
+      p_expected_revision: 12,
+      p_confirmation: "reset:12",
+    });
   });
 
   it("replays small ordered patches after a Realtime event", async () => {

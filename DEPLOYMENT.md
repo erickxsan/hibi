@@ -17,6 +17,16 @@ The recommended free stack is Supabase for authentication/database and Cloudflar
 6. hibi exposes Google registration and legacy email/password sign-in. It does not expose email registration or password recovery until custom SMTP is configured. The Supabase demonstration mailer is not suitable for public accounts.
 7. Optionally protect legacy password sign-in with hCaptcha. Set `VITE_HCAPTCHA_SITE_KEY` in the deployed frontend before enabling hCaptcha in Supabase, or password sign-in will be rejected.
 8. Copy the Project URL and the public publishable key. Never use the service-role/secret key in this frontend.
+9. Deploy the administrative deletion function after the database migrations:
+
+   ```sh
+   supabase secrets set HIBI_ALLOWED_ORIGINS=https://usehibi.pages.dev
+   supabase functions deploy delete-account --no-verify-jwt
+   ```
+
+   Supabase supplies the URL and publishable/secret keys to the function; the implementation also accepts the legacy
+   anon/service-role names during the platform key migration. A secret or service-role key must never be copied into a
+   `VITE_` variable. Add a custom production origin to `HIBI_ALLOWED_ORIGINS` when one is introduced.
 
 Create `.env.local` from `.env.example`:
 
@@ -61,8 +71,16 @@ Because `localStorage` is tied to an exact origin, use this safe sequence:
 - Supabase Free projects may pause after inactivity; monitor the project before a scheduled class.
 - Realtime replays small entity patches; per-entity revision checks protect same-record edits without rejecting unrelated concurrent changes.
 - Export periodic backups and keep them in protected storage.
-- Removing an Auth user through an admin operation cascades to that account's workspace.
-- Support contact: `hibicontact.old339@passinbox.com`. Ensure this mailbox remains available before publishing it as the account-deletion channel.
+- Do not remove Auth users from the dashboard. The protective `RESTRICT` constraints are intentional. Hibi's
+  authenticated **Delete account and data** flow tombstones the account, removes owned Storage objects through the
+  Storage API, erases every registered owner table, hard-deletes Auth in the Edge Function, and retains a minimal
+  pseudonymous receipt containing only hashes and timestamps for 90 days.
+- **Reset workspace** is recoverable, not permanent deletion. Server snapshots are limited to 20 revisions and have a
+  30-day window enforced by the scheduled `pg_cron` purge. Encrypted device copies are limited to 8; expired copies are
+  purged when Hibi next opens on that device. The deprecated JSON workspace document is scrubbed and is not an extra
+  recovery copy.
+- Keep the support contact monitored for privacy and ARCO requests even though routine account deletion is now
+  available inside the app.
 - Public launch pages are available at `/privacy.html` and `/terms.html`. Review them for the operator's jurisdiction and keep the published support mailbox available.
 - A `pages.dev` hostname can run an External/In-production Google OAuth client, but it cannot provide the DNS ownership Google expects for a verified production brand. A later verified custom domain is recommended to remove the unverified-brand limitation.
 - Before leaving Google OAuth testing mode or promoting hibi publicly, publish a reviewed privacy notice and define consent, access, retention, and deletion procedures appropriate to the students' jurisdiction.
