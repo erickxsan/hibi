@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   classRecordIdentity,
+  classSessionGroupId,
   classSessionIdentity,
+  gradeGroupId,
   gradeIdentity,
   normalizeClassSessionIdentity,
   workspaceEntityIdentity,
@@ -20,6 +22,13 @@ describe("semantic entity identity", () => {
   it("normalizes legacy group and individual session keys", () => {
     expect(normalizeClassSessionIdentity("2026-08-12|g1|10:00", "s1")).toBe("2026-08-12|g:g1|10:00");
     expect(normalizeClassSessionIdentity("2026-08-12|__individual__|10:00", "s1")).toBe("2026-08-12|s:s1|10:00");
+  });
+
+  it("attributes grades only when their session key names a group", () => {
+    expect(classSessionGroupId("2026-08-12|g:g1|10:00")).toBe("g1");
+    expect(classSessionGroupId("2026-08-12|g1|10:00")).toBe("g1");
+    expect(gradeGroupId({ studentId: "s1", classSessionKey: "2026-08-12|s:s1|10:00" })).toBeNull();
+    expect(gradeGroupId({ studentId: "s1", classSessionKey: "" })).toBeNull();
   });
 
   it("identifies class rows by student, date, and typed time", () => {

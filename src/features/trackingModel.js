@@ -1,4 +1,5 @@
 import { addDays, endOfMonth, parseDateOnly, startOfMonth, startOfWeek } from "../domain/dates";
+import { gradeGroupId } from "../domain/semanticIdentity";
 import { classWorkspaceSessionKey } from "./classesWorkspaceModel";
 
 export const TRACKING_TABS = Object.freeze(["grades", "attendance", "payments"]);
@@ -65,7 +66,13 @@ export function buildAssessmentOptions(state, gradeRows, groupId, range) {
   const studentIds = new Set(studentsForGroup(state, groupId).map((student) => student.id));
   const options = new Map();
   for (const row of gradeRows) {
-    if (!studentIds.has(row.studentId) || !inTrackingRange(row.date, range) || !row.assessment) continue;
+    if (
+      !studentIds.has(row.studentId) ||
+      gradeGroupId(row) !== groupId ||
+      !inTrackingRange(row.date, range) ||
+      !row.assessment
+    )
+      continue;
     const maximum = row.maxScore ?? row.maximum ?? 0;
     const key = `${row.date}|${row.assessment}|${maximum}`;
     if (!options.has(key)) options.set(key, { key, date: row.date, assessment: row.assessment, maximum });
@@ -94,7 +101,12 @@ export function buildGradeTracking(
       ? (state.students || []).filter((student) => student.id === studentId)
       : studentsForGroup(state, groupId);
   const rosterIds = new Set(roster.map((student) => student.id));
-  let rows = gradeRows.filter((row) => rosterIds.has(row.studentId) && inTrackingRange(row.date, range));
+  let rows = gradeRows.filter(
+    (row) =>
+      rosterIds.has(row.studentId) &&
+      (mode !== "group" || gradeGroupId(row) === groupId) &&
+      inTrackingRange(row.date, range),
+  );
   const assessment =
     mode === "group"
       ? buildAssessmentOptions(state, gradeRows, groupId, range).find((item) => item.key === assessmentKey)
@@ -113,7 +125,10 @@ export function buildGradeTracking(
             const percentage = finite(grade?.score) && finite(maximum) && maximum > 0 ? grade.score / maximum : null;
             const relatedClass = classRows.find(
               (row) =>
-                row.studentId === student.id && row.classDate === assessment.date && row.classStatus !== "Cancelled",
+                row.studentId === student.id &&
+                row.groupId === groupId &&
+                row.classDate === assessment.date &&
+                row.classStatus !== "Cancelled",
             );
             const sessionKey =
               grade?.classSessionKey ||
@@ -216,7 +231,11 @@ export function buildAttendanceTracking(state, classRows, { mode, groupId, stude
       : studentsForGroup(state, groupId);
   const rosterIds = new Set(roster.map((student) => student.id));
   const relevant = classRows.filter(
-    (row) => row.classStatus === "Completed" && rosterIds.has(row.studentId) && inTrackingRange(row.classDate, range),
+    (row) =>
+      row.classStatus === "Completed" &&
+      rosterIds.has(row.studentId) &&
+      (mode !== "group" || row.groupId === groupId) &&
+      inTrackingRange(row.classDate, range),
   );
   const tableRows =
     mode === "student"
@@ -311,8 +330,13 @@ export function buildPaymentTracking(
         ? activeStudents.filter((student) => student.id === studentId)
         : studentsForGroup(state, groupId);
   const rosterIds = new Set(roster.map((student) => student.id));
+  const groupScoped = (mode === "group" || mode === "class") && Boolean(groupId);
   let relevant = classRows.filter(
-    (row) => row.classStatus !== "Cancelled" && rosterIds.has(row.studentId) && inTrackingRange(row.classDate, range),
+    (row) =>
+      row.classStatus !== "Cancelled" &&
+      rosterIds.has(row.studentId) &&
+      (!groupScoped || row.groupId === groupId) &&
+      inTrackingRange(row.classDate, range),
   );
   if (mode === "class" && sessionKey)
     relevant = relevant.filter(

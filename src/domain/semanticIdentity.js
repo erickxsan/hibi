@@ -19,6 +19,24 @@ export function normalizeClassSessionIdentity(value, studentId = "") {
   return parts.map(clean).join("|");
 }
 
+/**
+ * Group-scoped reports only accept an explicit group owner in the session key.
+ * Legacy grades without a parseable owner stay available in student/global views
+ * but are not attributed to every group on the student's current roster.
+ */
+export function classSessionGroupId(value, studentId = "") {
+  const session = normalizeClassSessionIdentity(value, studentId);
+  if (!session) return null;
+
+  const parts = session.split("|");
+  if (parts.length !== 3 || !parts[0] || !parts[2] || !parts[1].startsWith("g:")) return null;
+  return clean(parts[1].slice(2)) || null;
+}
+
+export function gradeGroupId(record = {}) {
+  return classSessionGroupId(record.classSessionKey, record.studentId);
+}
+
 export function classSessionIdentity(item = {}) {
   const owner = item.groupId ? `g:${clean(item.groupId)}` : `s:${clean(item.studentId)}`;
   return `${clean(item.classDate ?? item.date)}|${owner}|${clean(item.startTime)}`;

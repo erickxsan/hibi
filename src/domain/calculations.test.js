@@ -9,6 +9,7 @@ import {
   createStudent,
   deriveClassLogRow,
   deriveDashboard,
+  deriveGradeRow,
   deriveGroup,
   deriveStudent,
   PAYMENT_STATUSES,
@@ -220,5 +221,98 @@ describe("minimal class-manager calculations", () => {
     const summary = deriveGroup(state, group.id, "2026-07-31");
     expect(summary.scheduledOccurrences).toBe(5);
     expect(summary.idealRevenue).toBe(900);
+  });
+
+  it("keeps grades, attendance, and payments scoped to their explicit group", () => {
+    const state = createStarterState({
+      settings: { asOfDate: "2026-07-25", selectedMonth: "2026-07-01" },
+    });
+    const math = createGroup({ id: "g1", name: "Math", hourlyRate: 100 });
+    const science = createGroup({ id: "g2", name: "Science", hourlyRate: 100 });
+    const student = createStudent({
+      id: "s1",
+      code: "MULTI-1",
+      fullName: "Multi Group",
+      groupIds: [math.id, science.id],
+    });
+    state.groups = [math, science];
+    state.students = [student];
+    state.grades = [
+      {
+        id: "grade-g1",
+        studentId: student.id,
+        date: "2026-07-20",
+        score: 9,
+        maxScore: 10,
+        workStatus: "On time",
+        classSessionKey: "2026-07-20|g:g1|10:00",
+      },
+      {
+        id: "grade-g2",
+        studentId: student.id,
+        date: "2026-07-20",
+        score: 2,
+        maxScore: 10,
+        workStatus: "Missing",
+        classSessionKey: "2026-07-20|g:g2|12:00",
+      },
+      {
+        id: "legacy-grade",
+        studentId: student.id,
+        date: "2026-07-20",
+        score: 0,
+        maxScore: 10,
+        workStatus: "Missing",
+        classSessionKey: "",
+      },
+    ];
+    const baseClass = {
+      studentId: student.id,
+      classDate: "2026-07-20",
+      classStatus: "Completed",
+      hours: 1,
+      appliedCharge: 100,
+      paymentDate: null,
+      amountPaid: 0,
+    };
+    state.classLog = [
+      {
+        ...baseClass,
+        id: "class-g1",
+        groupId: math.id,
+        startTime: "10:00",
+        attendance: "P",
+        paymentDate: "2026-07-20",
+        amountPaid: 100,
+      },
+      { ...baseClass, id: "class-g2", groupId: science.id, startTime: "12:00", attendance: "A" },
+      { ...baseClass, id: "legacy-class", groupId: "", startTime: "14:00", attendance: "A" },
+    ];
+
+    const mathSummary = deriveGroup(state, math.id, "2026-07-25");
+    const scienceSummary = deriveGroup(state, science.id, "2026-07-25");
+    const dashboard = deriveDashboard(state, "2026-07-25");
+
+    expect(mathSummary).toMatchObject({
+      averageGrade: 0.9,
+      attendance: 1,
+      missingAssignments: 0,
+      collectedSelectedMonth: 100,
+      outstanding: 0,
+    });
+    expect(scienceSummary).toMatchObject({
+      averageGrade: 0.2,
+      attendance: 0,
+      missingAssignments: 1,
+      collectedSelectedMonth: 0,
+      outstanding: 100,
+    });
+    expect(dashboard.groupSummaries.find((group) => group.id === math.id).attendance).toBe(1);
+    expect(deriveClassLogRow(state, state.classLog[2], "2026-07-25")).toMatchObject({
+      group: null,
+      groupId: "",
+      groupName: "",
+    });
+    expect(deriveGradeRow(state, state.grades[2])).toMatchObject({ group: null, groupId: "", groupName: "" });
   });
 });

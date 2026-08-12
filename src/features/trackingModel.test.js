@@ -14,15 +14,52 @@ const state = {
     { id: "g2", name: "Science" },
   ],
   students: [
-    { id: "s1", fullName: "Ana", code: "S-1", status: "Active", groupIds: ["g1"] },
+    { id: "s1", fullName: "Ana", code: "S-1", status: "Active", groupIds: ["g1", "g2"] },
     { id: "s2", fullName: "Ben", code: "S-2", status: "Active", groupIds: ["g1"] },
     { id: "s3", fullName: "Cam", code: "S-3", status: "Active", groupIds: ["g2"] },
   ],
 };
 const range = trackingRange("2026-07-25", "month");
 const grades = [
-  { id: "a", date: "2026-07-20", studentId: "s1", studentName: "Ana", assessment: "Fractions", score: 9, maxScore: 10 },
-  { id: "b", date: "2026-07-20", studentId: "s2", studentName: "Ben", assessment: "Fractions", score: 5, maxScore: 10 },
+  {
+    id: "other-group",
+    date: "2026-07-20",
+    studentId: "s1",
+    studentName: "Ana",
+    assessment: "Fractions",
+    score: 1,
+    maxScore: 10,
+    classSessionKey: "2026-07-20|g:g2|12:00",
+  },
+  {
+    id: "legacy-unscoped",
+    date: "2026-07-20",
+    studentId: "s1",
+    studentName: "Ana",
+    assessment: "Fractions",
+    score: 0,
+    maxScore: 10,
+  },
+  {
+    id: "a",
+    date: "2026-07-20",
+    studentId: "s1",
+    studentName: "Ana",
+    assessment: "Fractions",
+    score: 9,
+    maxScore: 10,
+    classSessionKey: "2026-07-20|g:g1|10:00",
+  },
+  {
+    id: "b",
+    date: "2026-07-20",
+    studentId: "s2",
+    studentName: "Ben",
+    assessment: "Fractions",
+    score: 5,
+    maxScore: 10,
+    classSessionKey: "2026-07-20|g:g1|10:00",
+  },
 ];
 const classes = [
   {
@@ -67,6 +104,34 @@ const classes = [
     outstanding: 150,
     paymentDate: "2026-07-24",
   },
+  {
+    id: "c4",
+    classDate: "2026-07-21",
+    startTime: "12:00",
+    groupId: "g2",
+    studentId: "s1",
+    studentName: "Ana",
+    classStatus: "Completed",
+    attendance: "A",
+    charge: 200,
+    recognizedPaid: 0,
+    outstanding: 200,
+    paymentDate: "",
+  },
+  {
+    id: "legacy-unscoped",
+    classDate: "2026-07-22",
+    startTime: "14:00",
+    groupId: "",
+    studentId: "s1",
+    studentName: "Ana",
+    classStatus: "Completed",
+    attendance: "A",
+    charge: 300,
+    recognizedPaid: 0,
+    outstanding: 300,
+    paymentDate: "",
+  },
 ];
 
 describe("tracking model", () => {
@@ -82,6 +147,7 @@ describe("tracking model", () => {
     expect(result.best).toBe(0.9);
     expect(result.worst).toBe(0.5);
     expect(result.tableRows).toHaveLength(2);
+    expect(result.tableRows.find((row) => row.student.id === "s1").score).toBe(9);
   });
 
   it("summarizes attendance by student and week", () => {
@@ -106,23 +172,33 @@ describe("tracking model", () => {
     expect(result.series).toEqual([{ label: "2026-07-20", value: 100 }]);
   });
 
+  it("does not attribute another group or an unscoped legacy record to a multi-group student's report", () => {
+    const attendance = buildAttendanceTracking(state, classes, { mode: "group", groupId: "g1", range });
+    const payments = buildPaymentTracking(state, classes, { mode: "group", groupId: "g1", range });
+
+    expect(attendance).toMatchObject({ present: 1, absent: 1, total: 2, average: 0.5 });
+    expect(payments).toMatchObject({ generated: 200, collected: 100, pending: 100 });
+  });
+
   it("builds a global payment overview with cumulative collections and forecast metadata", () => {
     const result = buildPaymentTracking(state, classes, {
       mode: "overview",
       range,
       projectionTotal: 900,
     });
-    expect(result.generated).toBe(400);
+    expect(result.generated).toBe(900);
     expect(result.collected).toBe(150);
-    expect(result.pending).toBe(250);
+    expect(result.pending).toBe(750);
     expect(result.paidClasses).toBe(1);
-    expect(result.unpaidClasses).toBe(2);
-    expect(result.overdue).toBe(250);
-    expect(result.overdueClasses).toBe(2);
+    expect(result.unpaidClasses).toBe(4);
+    expect(result.overdue).toBe(750);
+    expect(result.overdueClasses).toBe(4);
     expect(result.projection).toBe(900);
     expect(result.projectionGap).toBe(750);
     expect(result.cumulativeSeries).toEqual([
       { label: "2026-07-20", value: 100 },
+      { label: "2026-07-21", value: 100 },
+      { label: "2026-07-22", value: 100 },
       { label: "2026-07-24", value: 150 },
     ]);
     expect(result.tableRows).toHaveLength(3);

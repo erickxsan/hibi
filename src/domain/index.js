@@ -46,7 +46,9 @@ export {
 
 export {
   classRecordIdentity,
+  classSessionGroupId,
   classSessionIdentity,
+  gradeGroupId,
   gradeIdentity,
   normalizeClassSessionIdentity,
   workspaceEntityIdentity,

@@ -11,6 +11,7 @@ import {
   startOfWeek,
   todayDateOnly,
 } from "./dates.js";
+import { gradeGroupId } from "./semanticIdentity.js";
 import { generateScheduledOccurrences, resolveHourlyRate } from "./schedule.js";
 
 function isRecord(value) {
@@ -97,6 +98,7 @@ function createDerivationContext(state, asOfDate) {
     studentsById: new Map(data.students.map((student) => [student.id, student])),
     groupsById: new Map(data.groups.map((group) => [group.id, group])),
     gradesByStudent: new Map(),
+    gradesByGroup: new Map(),
     logsByStudent: new Map(),
     logsByGroup: new Map(),
     studentsByGroup: new Map(),
@@ -104,7 +106,10 @@ function createDerivationContext(state, asOfDate) {
     derivedGroups: new Map(),
     selectedMonthOccurrences: null,
   };
-  data.grades.forEach((row) => appendToIndex(context.gradesByStudent, row?.studentId, row));
+  data.grades.forEach((row) => {
+    appendToIndex(context.gradesByStudent, row?.studentId, row);
+    appendToIndex(context.gradesByGroup, gradeGroupId(row), row);
+  });
   data.classLog.forEach((row) => {
     appendToIndex(context.logsByStudent, row?.studentId, row);
     appendToIndex(context.logsByGroup, row?.groupId, row);
@@ -170,7 +175,7 @@ export function deriveGradeRow(state, row, suppliedContext) {
         .map((id) => context.groupsById.get(id))
         .filter(Boolean)
     : [];
-  const group = studentGroups[0] ?? null;
+  const group = context.groupsById.get(gradeGroupId(row)) ?? null;
   return {
     ...row,
     // `maximum` is a view-model alias used by the compact grade editor.
@@ -250,8 +255,8 @@ export function calculateOutstanding(state, row, asOfDate) {
 export function deriveClassLogRow(state, row, asOfDate, suppliedContext) {
   const context = suppliedContext || createDerivationContext(state, asOfDate);
   const student = context.studentsById.get(row?.studentId) ?? null;
-  const group =
-    context.groupsById.get(row?.groupId) ?? (student ? context.groupsById.get(studentGroupIds(student)[0]) : null);
+  const group = context.groupsById.get(row?.groupId) ?? null;
+  const pricingGroup = group ?? (student ? context.groupsById.get(studentGroupIds(student)[0]) : null);
   const config = context.config;
   const effectiveHours =
     row?.classStatus === "Cancelled" ? 0 : finiteNumber(row?.hours) ? row.hours : config.defaultClassHours;
@@ -263,33 +268,21 @@ export function deriveClassLogRow(state, row, asOfDate, suppliedContext) {
     studentName: student?.fullName ?? "",
     studentCode: student?.code ?? "",
     group,
-    groupId: group?.id ?? "",
+    groupId: row?.groupId ?? "",
     groupName: group?.name ?? "",
     effectiveHours,
     appliedHourlyRate: finiteNumber(row?.appliedHourlyRate)
       ? row.appliedHourlyRate
-      : rateForContext(context, student, group),
-    charge: chargeForContext(context, row, student, group),
+      : rateForContext(context, student, pricingGroup),
+    charge: chargeForContext(context, row, student, pricingGroup),
     recognizedPaid,
-    paymentStatus: paymentStatusForContext(context, row, student, group),
-    outstanding: outstandingForContext(context, row, student, group),
+    paymentStatus: paymentStatusForContext(context, row, student, pricingGroup),
+    outstanding: outstandingForContext(context, row, student, pricingGroup),
   };
 }
 
-export function deriveStudent(state, studentId, asOfDate, suppliedContext) {
-  const context = suppliedContext || createDerivationContext(state, asOfDate);
-  if (context.derivedStudents.has(studentId)) return context.derivedStudents.get(studentId);
-  const asOf = context.asOf;
-  const student = context.studentsById.get(studentId) ?? null;
-  if (!student) return null;
-  const studentGroups = studentGroupIds(student)
-    .map((id) => context.groupsById.get(id))
-    .filter(Boolean);
-  const group = studentGroups[0] ?? null;
-  const gradeRows = context.gradesByStudent.get(studentId) || [];
-  const logRows = context.logsByStudent.get(studentId) || [];
+function studentMetricsForRows(context, student, gradeRows, logRows, fallbackGroup) {
   const percentages = gradeRows.map(gradePercentage).filter(finiteNumber);
-
   const attendanceRows = logRows.filter(
     (row) => row?.classStatus === "Completed" && ["P", "L", "A"].includes(row.attendance),
   );
@@ -297,10 +290,10 @@ export function deriveStudent(state, studentId, asOfDate, suppliedContext) {
   const attendance = attendanceRows.length ? attended / attendanceRows.length : null;
   const missingAssignments = gradeRows.filter((row) => row?.workStatus === "Missing").length;
   const outstanding = sum(logRows, (row) =>
-    outstandingForContext(context, row, student, context.groupsById.get(row?.groupId) ?? group),
+    outstandingForContext(context, row, student, context.groupsById.get(row?.groupId) ?? fallbackGroup),
   );
   const paidThroughToday = sum(
-    logRows.filter((row) => isDateOnly(row?.paymentDate) && row.paymentDate <= asOf),
+    logRows.filter((row) => isDateOnly(row?.paymentDate) && row.paymentDate <= context.asOf),
     validPaymentAmount,
   );
 
@@ -310,19 +303,13 @@ export function deriveStudent(state, studentId, asOfDate, suppliedContext) {
   }
 
   const gradeAverage = average(percentages);
-  const config = context.config;
   const alerts = [];
-  if (finiteNumber(gradeAverage) && gradeAverage < config.lowGradeThreshold) alerts.push("Low grade");
-  if (finiteNumber(attendance) && attendance < config.lowAttendanceThreshold) alerts.push("Low attendance");
+  if (finiteNumber(gradeAverage) && gradeAverage < context.config.lowGradeThreshold) alerts.push("Low grade");
+  if (finiteNumber(attendance) && attendance < context.config.lowAttendanceThreshold) alerts.push("Low attendance");
   if (missingAssignments > 0) alerts.push("Missing work");
   if (outstanding > 0) alerts.push("Balance due");
 
-  const derived = {
-    ...student,
-    group,
-    groupName: group?.name ?? "",
-    groups: studentGroups,
-    groupNames: studentGroups.map((item) => item.name),
+  return {
     gradeAverage,
     attendance,
     attendedClasses: attended,
@@ -333,6 +320,29 @@ export function deriveStudent(state, studentId, asOfDate, suppliedContext) {
     latestFeedback,
     alerts,
     alertText: alerts.join("; "),
+  };
+}
+
+export function deriveStudent(state, studentId, asOfDate, suppliedContext) {
+  const context = suppliedContext || createDerivationContext(state, asOfDate);
+  if (context.derivedStudents.has(studentId)) return context.derivedStudents.get(studentId);
+  const student = context.studentsById.get(studentId) ?? null;
+  if (!student) return null;
+  const studentGroups = studentGroupIds(student)
+    .map((id) => context.groupsById.get(id))
+    .filter(Boolean);
+  const group = studentGroups[0] ?? null;
+  const gradeRows = context.gradesByStudent.get(studentId) || [];
+  const logRows = context.logsByStudent.get(studentId) || [];
+  const metrics = studentMetricsForRows(context, student, gradeRows, logRows, group);
+
+  const derived = {
+    ...student,
+    group,
+    groupName: group?.name ?? "",
+    groups: studentGroups,
+    groupNames: studentGroups.map((item) => item.name),
+    ...metrics,
   };
   context.derivedStudents.set(studentId, derived);
   return derived;
@@ -348,14 +358,18 @@ export function deriveGroup(state, groupId, asOfDate, suppliedContext) {
   const selectedMonthEnd = minDateOnly(endOfMonth(selectedMonth), asOf);
   const students = context.studentsByGroup.get(groupId) || [];
   const activeStudentRecords = students.filter((student) => student?.status === "Active");
-  const derivedStudents = activeStudentRecords.map((student) => deriveStudent(state, student.id, asOf, context));
   const activeStudents = activeStudentRecords.length;
-  const groupStudentIds = new Set(students.map((student) => student.id));
-  const explicitGroupLog = context.logsByGroup.get(groupId) || [];
-  const unassignedStudentLog = students.flatMap((student) =>
-    (context.logsByStudent.get(student.id) || []).filter((row) => !row?.groupId),
+  const groupGrades = context.gradesByGroup.get(groupId) || [];
+  const groupLog = context.logsByGroup.get(groupId) || [];
+  const studentMetrics = activeStudentRecords.map((student) =>
+    studentMetricsForRows(
+      context,
+      student,
+      groupGrades.filter((row) => row?.studentId === student.id),
+      groupLog.filter((row) => row?.studentId === student.id),
+      group,
+    ),
   );
-  const groupLog = [...explicitGroupLog, ...unassignedStudentLog.filter((row) => groupStudentIds.has(row?.studentId))];
   const config = context.config;
   const collectedSelectedMonth =
     selectedMonth <= selectedMonthEnd ? amountCollectedInRange(groupLog, selectedMonth, selectedMonthEnd) : 0;
@@ -387,11 +401,11 @@ export function deriveGroup(state, groupId, asOfDate, suppliedContext) {
     studentCount: students.length,
     activeStudents,
     activeStudentCount: activeStudents,
-    averageGrade: average(derivedStudents.map((student) => student.gradeAverage)),
-    attendance: average(derivedStudents.map((student) => student.attendance)),
-    missingAssignments: sum(derivedStudents, (student) => student.missingAssignments),
+    averageGrade: average(studentMetrics.map((metrics) => metrics.gradeAverage)),
+    attendance: average(studentMetrics.map((metrics) => metrics.attendance)),
+    missingAssignments: sum(studentMetrics, (metrics) => metrics.missingAssignments),
     collectedSelectedMonth,
-    outstanding: sum(derivedStudents, (student) => student.outstanding),
+    outstanding: sum(studentMetrics, (metrics) => metrics.outstanding),
     idealRevenue,
     scheduledOccurrences: scheduledOccurrences.length,
     effectiveHourlyRate: finiteNumber(group.hourlyRate) ? group.hourlyRate : config.hourlyRate,
@@ -411,11 +425,22 @@ export function deriveUnassignedGroup(state, asOfDate, suppliedContext) {
   const selectedMonth = resolveSelectedMonth(state);
   const selectedMonthEnd = minDateOnly(endOfMonth(selectedMonth), asOf);
   const activeStudentRecords = students.filter((student) => student?.status === "Active");
-  const derivedStudents = activeStudentRecords.map((student) => deriveStudent(state, student.id, asOf, context));
   const activeStudents = activeStudentRecords.length;
   const studentIds = new Set(students.map((student) => student.id));
   const groupLog = students.flatMap((student) =>
     (context.logsByStudent.get(student.id) || []).filter((row) => !row?.groupId && studentIds.has(row?.studentId)),
+  );
+  const unassignedGrades = context.data.grades.filter(
+    (row) => studentIds.has(row?.studentId) && gradeGroupId(row) === null,
+  );
+  const studentMetrics = activeStudentRecords.map((student) =>
+    studentMetricsForRows(
+      context,
+      student,
+      unassignedGrades.filter((row) => row?.studentId === student.id),
+      groupLog.filter((row) => row?.studentId === student.id),
+      null,
+    ),
   );
 
   return {
@@ -426,12 +451,12 @@ export function deriveUnassignedGroup(state, asOfDate, suppliedContext) {
     studentCount: students.length,
     activeStudents,
     activeStudentCount: activeStudents,
-    averageGrade: average(derivedStudents.map((student) => student.gradeAverage)),
-    attendance: average(derivedStudents.map((student) => student.attendance)),
-    missingAssignments: sum(derivedStudents, (student) => student.missingAssignments),
+    averageGrade: average(studentMetrics.map((metrics) => metrics.gradeAverage)),
+    attendance: average(studentMetrics.map((metrics) => metrics.attendance)),
+    missingAssignments: sum(studentMetrics, (metrics) => metrics.missingAssignments),
     collectedSelectedMonth:
       selectedMonth <= selectedMonthEnd ? amountCollectedInRange(groupLog, selectedMonth, selectedMonthEnd) : 0,
-    outstanding: sum(derivedStudents, (student) => student.outstanding),
+    outstanding: sum(studentMetrics, (metrics) => metrics.outstanding),
     idealRevenue: 0,
     projectionExcluded: true,
   };
