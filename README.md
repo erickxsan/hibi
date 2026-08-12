@@ -114,6 +114,10 @@ Después de iniciar sesión en la versión publicada, restaura el archivo desde 
 
 La opción **Importar registros** añade información sin borrar lo existente: muestra una vista previa de registros nuevos, duplicados exactos y posibles conflictos antes de guardar. **Restaurar respaldo completo** es una operación de recuperación separada que reemplaza el espacio de trabajo únicamente después de una confirmación explícita.
 
+## Licencia
+
+Hibi es software de código abierto bajo la [licencia MIT](./LICENSE). Puedes usarlo, copiarlo, modificarlo, publicarlo y distribuirlo, incluso con fines comerciales, siempre que conserves el aviso de copyright y la licencia.
+
 ---
 
 <p align="center"><strong>Hibi acompaña la enseñanza, día a día. 🌿</strong></p>

@@ -2,6 +2,7 @@
   "name": "hibi-class-manager",
   "private": true,
   "version": "1.0.0",
+  "license": "MIT",
   "packageManager": "pnpm@11.16.0",
   "engines": {
     "node": ">=22 <25"
