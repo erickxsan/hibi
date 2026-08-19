@@ -558,6 +558,19 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "At risk": "En riesgo",
   "Low attendance": "Baja asistencia",
   "Recorded classes": "Clases registradas",
+  "Calculated from present and absent records.": "Calculada con registros presentes y ausentes.",
+  "Period status": "Estado del periodo",
+  "Attendance composition (all records)": "Composición de asistencia (del total de registros)",
+  "Total records": "Total de registros",
+  "Important signals": "Señales importantes",
+  "They missed 2 or more classes in the period.": "Han faltado a 2 o más clases en el periodo.",
+  "They did not miss any class in the period.": "No han faltado a ninguna clase en el periodo.",
+  "Their attendance increased from the previous week.": "Su asistencia aumentó respecto a la semana anterior.",
+  "Lowest-attendance classes": "Clases con menor asistencia",
+  "No classes with attendance records in this period.": "No hay clases con asistencia registrada en este periodo.",
+  "Students requiring follow-up": "Alumnos que requieren seguimiento",
+  "Risk threshold": "Umbral de riesgo",
+  "No attendance records to summarize.": "No hay registros de asistencia para resumir.",
   "Attendance evolution by week": "Evolución de la asistencia por semana",
   "Attendance details": "Detalle de asistencias",
   Absences: "Ausencias",
@@ -1484,6 +1497,21 @@ const DYNAMIC_TRANSLATIONS = [
     (match) => `${match[1]} ${Number(match[1]) === 1 ? "tarea sigue" : "tareas siguen"} sin calificación.`,
   ],
   [/^Average attendance is (.+)\.$/, (match) => `La asistencia promedio es ${match[1]}.`],
+  [/^Average attendance (.+)$/, (match) => `Asistencia promedio ${match[1]}`],
+  [
+    /^(\d+) (?:student with|students with) repeated absences$/,
+    (match) =>
+      `${match[1]} ${Number(match[1]) === 1 ? "alumno con ausencias repetidas" : "alumnos con ausencias repetidas"}`,
+  ],
+  [
+    /^(\d+) (?:student with|students with) perfect attendance$/,
+    (match) =>
+      `${match[1]} ${Number(match[1]) === 1 ? "alumno con asistencia perfecta" : "alumnos con asistencia perfecta"}`,
+  ],
+  [
+    /^(\d+) (?:student improving|students improving)$/,
+    (match) => `${match[1]} ${Number(match[1]) === 1 ? "alumno mejorando" : "alumnos mejorando"}`,
+  ],
   [
     /^(\d+) (?:record is|records are) at or above 90%\.$/,
     (match) => `${match[1]} ${Number(match[1]) === 1 ? "registro está" : "registros están"} en 90% o más.`,

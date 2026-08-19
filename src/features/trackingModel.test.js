@@ -159,6 +159,37 @@ describe("tracking model", () => {
     expect(result.series).toHaveLength(1);
   });
 
+  it("builds a global attendance overview from the existing attendance records", () => {
+    const result = buildAttendanceTracking(state, classes, { mode: "overview", range });
+
+    expect(result).toMatchObject({
+      present: 2,
+      absent: 3,
+      total: 5,
+      average: 0.4,
+      sessions: 4,
+      repeatedAbsenceStudents: 1,
+      perfectAttendanceStudents: 1,
+      improvingStudents: 0,
+      threshold: 0.8,
+    });
+    expect(result.tableRows.map((row) => row.student.fullName)).toEqual(["Ben", "Ana", "Cam"]);
+    expect(result.tableRows.find((row) => row.student.id === "s1")).toMatchObject({
+      present: 1,
+      absent: 2,
+      rate: 1 / 3,
+    });
+    expect(result.lowestSessions).toHaveLength(2);
+  });
+
+  it("keeps the global attendance overview searchable without changing attendance values", () => {
+    const result = buildAttendanceTracking(state, classes, { mode: "overview", range, search: "Cam" });
+
+    expect(result).toMatchObject({ present: 1, absent: 0, total: 1, average: 1 });
+    expect(result.tableRows).toHaveLength(1);
+    expect(result.tableRows[0].student.fullName).toBe("Cam");
+  });
+
   it("keeps class payments granular and calculates collected versus pending", () => {
     const sessionKey = "2026-07-20|g:g1|10:00";
     const result = buildPaymentTracking(state, classes, { mode: "class", groupId: "g1", sessionKey, range });

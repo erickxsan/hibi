@@ -46,6 +46,10 @@ const PAYMENT_SCOPE_ITEMS = [
   { value: "overview", label: "Overview" },
   { value: "breakdown", label: "Breakdown" },
 ];
+const ATTENDANCE_SCOPE_ITEMS = [
+  { value: "overview", label: "Overview" },
+  { value: "breakdown", label: "Breakdown" },
+];
 const PAYMENT_MODE_ITEMS = [
   { value: "group", label: "Group" },
   { value: "student", label: "Student" },
@@ -188,10 +192,10 @@ function MetricStrip({ title, children }) {
   );
 }
 
-function TrendChart({ title, series, valueFormatter = percent }) {
+function TrendChart({ title, series, valueFormatter = percent, maximum, threshold, footer, className = "" }) {
   if (!series.length)
     return (
-      <div className="tracking-chart">
+      <div className={`tracking-chart ${className}`.trim()}>
         <h3>{title}</h3>
         <EmptyState
           icon={BarChart3}
@@ -203,7 +207,7 @@ function TrendChart({ title, series, valueFormatter = percent }) {
   const width = 760;
   const height = 168;
   const padding = { left: 42, right: 20, top: 24, bottom: 34 };
-  const max = Math.max(1, ...series.map((item) => item.value || 0));
+  const max = maximum ?? Math.max(1, ...series.map((item) => item.value || 0));
   const points = series.map((item, index) => ({
     ...item,
     x: padding.left + (index / Math.max(series.length - 1, 1)) * (width - padding.left - padding.right),
@@ -214,7 +218,7 @@ function TrendChart({ title, series, valueFormatter = percent }) {
     .join(" ");
   const area = `${line} L${points.at(-1).x} ${height - padding.bottom} L${points[0].x} ${height - padding.bottom} Z`;
   return (
-    <div className="tracking-chart">
+    <div className={`tracking-chart ${className}`.trim()}>
       <h3>{title}</h3>
       <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={title}>
         <g className="tracking-grid">
@@ -228,6 +232,22 @@ function TrendChart({ title, series, valueFormatter = percent }) {
             />
           ))}
         </g>
+        {threshold != null ? (
+          <g className="tracking-threshold">
+            <line
+              x1={padding.left}
+              x2={width - padding.right}
+              y1={padding.top + (1 - threshold / max) * (height - padding.top - padding.bottom)}
+              y2={padding.top + (1 - threshold / max) * (height - padding.top - padding.bottom)}
+            />
+            <text
+              x={padding.left + 4}
+              y={padding.top + (1 - threshold / max) * (height - padding.top - padding.bottom) - 5}
+            >
+              {percent(threshold)}
+            </text>
+          </g>
+        ) : null}
         <path className="tracking-area" d={area} />
         <path className="tracking-line" d={line} />
         {points.map((point) => (
@@ -242,6 +262,7 @@ function TrendChart({ title, series, valueFormatter = percent }) {
           </g>
         ))}
       </svg>
+      {footer}
     </div>
   );
 }
@@ -441,7 +462,232 @@ function GradeView({ data, mode, onOpenClass }) {
   );
 }
 
-function AttendanceView({ data, mode, onOpenClass }) {
+function AttendanceOverviewSummary({ data }) {
+  const rate = data.average == null ? 0 : Math.max(0, Math.min(1, data.average));
+  return (
+    <section className="attendance-overview-summary" aria-labelledby="attendance-overview-heading">
+      <h2 id="attendance-overview-heading">Attendance summary</h2>
+      <div>
+        <div
+          className="attendance-rate-ring"
+          style={{ "--attendance-rate": `${rate * 360}deg` }}
+          role="img"
+          aria-label={`Average attendance ${percent(data.average)}`}
+        >
+          <span>
+            <strong>{percent(data.average)}</strong>
+            <small>Average attendance</small>
+          </span>
+        </div>
+        <div className="attendance-rate-copy">
+          <p>Calculated from present and absent records.</p>
+          <strong>P / (P + A)</strong>
+        </div>
+        <div className="attendance-overview-metrics">
+          <Metric icon={CalendarDays} label="Recorded classes" value={data.sessions} tone="blue" />
+          <Metric icon={UserRoundCheck} label="Present" value={data.present} />
+          <Metric icon={UserRound} label="Absent" value={data.absent} tone="red" />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function AttendanceCompositionPanel({ data }) {
+  const presentRatio = data.total ? data.present / data.total : 0;
+  const absentRatio = data.total ? data.absent / data.total : 0;
+  return (
+    <aside className="tracking-side-card attendance-composition" aria-labelledby="attendance-period-heading">
+      <h3 id="attendance-period-heading">Period status</h3>
+      <p>Attendance composition (all records)</p>
+      {data.total ? (
+        <>
+          <div
+            className="attendance-composition-bar"
+            role="img"
+            aria-label={`Present ${percent(presentRatio)}, absent ${percent(absentRatio)}`}
+          >
+            <span className="present" style={{ width: `${presentRatio * 100}%` }}>
+              {data.present} ({percent(presentRatio)})
+            </span>
+            <span className="absent" style={{ width: `${absentRatio * 100}%` }}>
+              {data.absent} ({percent(absentRatio)})
+            </span>
+          </div>
+          <dl>
+            <div>
+              <dt>
+                <i className="present" /> Present
+              </dt>
+              <dd>
+                {data.present} ({percent(presentRatio)})
+              </dd>
+            </div>
+            <div>
+              <dt>
+                <i className="absent" /> Absent
+              </dt>
+              <dd>
+                {data.absent} ({percent(absentRatio)})
+              </dd>
+            </div>
+          </dl>
+          <footer>
+            <span>Total records</span>
+            <strong>{data.total}</strong>
+          </footer>
+        </>
+      ) : (
+        <p className="tracking-empty-copy">No attendance records to summarize.</p>
+      )}
+    </aside>
+  );
+}
+
+function attendanceSignalText(count, singular, plural = singular) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function AttendanceSignalsPanel({ data }) {
+  const lowest = data.lowestSessions || [];
+  const signals = [
+    {
+      icon: CircleAlert,
+      tone: "red",
+      title: attendanceSignalText(
+        data.repeatedAbsenceStudents,
+        "student with repeated absences",
+        "students with repeated absences",
+      ),
+      detail: "They missed 2 or more classes in the period.",
+    },
+    {
+      icon: UserRoundCheck,
+      tone: "green",
+      title: attendanceSignalText(
+        data.perfectAttendanceStudents,
+        "student with perfect attendance",
+        "students with perfect attendance",
+      ),
+      detail: "They did not miss any class in the period.",
+    },
+    {
+      icon: TrendingUp,
+      tone: "green",
+      title: attendanceSignalText(data.improvingStudents, "student improving", "students improving"),
+      detail: "Their attendance increased from the previous week.",
+    },
+    {
+      icon: CalendarDays,
+      tone: "blue",
+      title: "Lowest-attendance classes",
+      detail: lowest.length
+        ? lowest.map((item) => `${item.title} ${formatTime(item.startTime)} (${percent(item.rate)})`).join(" · ")
+        : "No classes with attendance records in this period.",
+    },
+  ];
+  return (
+    <aside className="tracking-side-card attendance-signals" aria-labelledby="attendance-signals-heading">
+      <h3 id="attendance-signals-heading">
+        <Lightbulb size={20} aria-hidden="true" />
+        Important signals
+      </h3>
+      <ul>
+        {signals.map(({ icon: Icon, tone, title, detail }) => (
+          <li className={tone} key={title}>
+            <span>
+              <Icon size={15} aria-hidden="true" />
+            </span>
+            <p>
+              <strong>{title}</strong>
+              <small>{detail}</small>
+            </p>
+          </li>
+        ))}
+      </ul>
+    </aside>
+  );
+}
+
+function AttendanceOverview({ data, onOpenClass }) {
+  return (
+    <div className="tracking-content-grid attendance-overview-grid">
+      <main>
+        <AttendanceOverviewSummary data={data} />
+        <TrendChart
+          title="Attendance evolution by week"
+          series={data.series}
+          maximum={1}
+          threshold={data.threshold}
+          className="attendance-overview-trend"
+          footer={
+            <div className="attendance-chart-legend" aria-hidden="true">
+              <span>Attendance</span>
+              <span>Risk threshold ({percent(data.threshold)})</span>
+            </div>
+          }
+        />
+        <section className="attendance-follow-up" aria-labelledby="attendance-follow-up-heading">
+          <h3 id="attendance-follow-up-heading">Students requiring follow-up</h3>
+          <div className="tracking-table-shell tracking-table-attendance" aria-label="Attendance details">
+            <table>
+              <thead>
+                <tr>
+                  <th>Student</th>
+                  <th>Group</th>
+                  <th>Attendance</th>
+                  <th className="tracking-col-secondary">Absences</th>
+                  <th className="tracking-col-date">Last class</th>
+                  <th>Status</th>
+                  <th>
+                    <span className="sr-only">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.tableRows.map((row) => (
+                  <tr key={row.id}>
+                    <td>
+                      <StudentCell student={row.student} />
+                    </td>
+                    <td>{row.groupName || "—"}</td>
+                    <td className={row.rate != null && row.rate < data.threshold ? "danger-value" : "good-value"}>
+                      {percent(row.rate)}
+                    </td>
+                    <td className={`tracking-col-secondary ${row.absent ? "danger-value" : ""}`.trim()}>
+                      {row.absent}
+                    </td>
+                    <td className="tracking-col-date">{formatDate(row.lastClass)}</td>
+                    <td>
+                      <StatusBadge tone={row.status.tone}>{row.status.label}</StatusBadge>
+                    </td>
+                    <td>
+                      <RelatedClassButton sessionKey={row.sessionKey} onOpen={onOpenClass} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!data.tableRows.length ? (
+              <EmptyState
+                icon={UserRoundCheck}
+                title="No attendance found"
+                description="No attendance has been recorded in this period."
+              />
+            ) : null}
+          </div>
+        </section>
+      </main>
+      <aside className="tracking-sidebar">
+        <AttendanceCompositionPanel data={data} />
+        <AttendanceSignalsPanel data={data} />
+      </aside>
+    </div>
+  );
+}
+
+function AttendanceView({ data, mode, scope = "breakdown", onOpenClass }) {
+  if (scope === "overview") return <AttendanceOverview data={data} onOpenClass={onOpenClass} />;
   const low = data.tableRows.filter((row) => row.rate != null && row.rate < 0.8);
   const highCount = data.tableRows.filter((row) => row.rate != null && row.rate >= 0.9).length;
   const insights = [
@@ -840,6 +1086,7 @@ export default function Tracking({ state = {}, derived = {}, actions = {}, openP
   const [search, setSearch] = useState("");
   const [gradeMode, setGradeMode] = useState(() => (groups.length ? "group" : "student"));
   const [attendanceMode, setAttendanceMode] = useState(() => (groups.length ? "group" : "student"));
+  const [attendanceScope, setAttendanceScope] = useState("overview");
   const [paymentMode, setPaymentMode] = useState(() => (groups.length ? "group" : "student"));
   const [paymentScope, setPaymentScope] = useState("overview");
   const [paymentChart, setPaymentChart] = useState("projection");
@@ -877,6 +1124,13 @@ export default function Tracking({ state = {}, derived = {}, actions = {}, openP
     onChange: setPaymentScope,
     defaultValue: "overview",
     allowedValues: PAYMENT_SCOPE_ITEMS.map((item) => item.value),
+  });
+  const changeAttendanceScope = useHistoryBackedState({
+    key: "tracking-attendance-scope",
+    value: attendanceScope,
+    onChange: setAttendanceScope,
+    defaultValue: "overview",
+    allowedValues: ATTENDANCE_SCOPE_ITEMS.map((item) => item.value),
   });
   const changePaymentChart = useHistoryBackedState({
     key: "tracking-payment-chart",
@@ -922,16 +1176,17 @@ export default function Tracking({ state = {}, derived = {}, actions = {}, openP
       }),
     [assessmentKey, classRows, gradeMode, gradeRows, groupId, range, search, reportState, studentId],
   );
+  const activeAttendanceMode = attendanceScope === "overview" ? "overview" : attendanceMode;
   const attendanceData = useMemo(
     () =>
       buildAttendanceTracking(reportState, classRows, {
-        mode: attendanceMode,
+        mode: activeAttendanceMode,
         groupId,
         studentId,
         range,
         search,
       }),
-    [attendanceMode, classRows, groupId, range, reportState, search, studentId],
+    [activeAttendanceMode, classRows, groupId, range, reportState, search, studentId],
   );
   const activePaymentMode = paymentScope === "overview" ? "overview" : paymentMode;
   const overviewProjection = period === "month" ? derived.dashboard?.recentProjection : undefined;
@@ -966,7 +1221,7 @@ export default function Tracking({ state = {}, derived = {}, actions = {}, openP
     [activePaymentMode, classRows, groupId, overviewProjection, range, search, sessionKey, reportState, studentId],
   );
 
-  const activeMode = tab === "grades" ? gradeMode : tab === "attendance" ? attendanceMode : activePaymentMode;
+  const activeMode = tab === "grades" ? gradeMode : tab === "attendance" ? activeAttendanceMode : activePaymentMode;
   const modeItems =
     tab === "payments"
       ? PAYMENT_MODE_ITEMS.map((item) => ({ ...item, disabled: item.value === "group" && !groups.length }))
@@ -992,6 +1247,7 @@ export default function Tracking({ state = {}, derived = {}, actions = {}, openP
       : tab === "attendance"
         ? attendanceData.tableRows.map((row) => ({
             Student: row.student?.fullName || "",
+            Group: row.groupName || "",
             Class: row.classTitle || "",
             Date: row.lastClass || row.classDate || "",
             Attendance: percent(row.rate),
@@ -1140,6 +1396,49 @@ export default function Tracking({ state = {}, derived = {}, actions = {}, openP
                 </>
               )}
             </>
+          ) : tab === "attendance" ? (
+            <>
+              <ModeSwitch
+                label="Scope"
+                value={attendanceScope}
+                onChange={changeAttendanceScope}
+                items={ATTENDANCE_SCOPE_ITEMS}
+              />
+              {attendanceScope === "overview" ? (
+                <span className="tracking-scope-summary">All groups, students, and classes</span>
+              ) : (
+                <>
+                  <ModeSwitch value={attendanceMode} onChange={setAttendanceMode} items={modeItems} />
+                  {attendanceMode === "student" ? (
+                    <TrackingSelect
+                      label="Student"
+                      value={studentId}
+                      onChange={(event) => setStudentId(event.target.value)}
+                      searchable
+                    >
+                      {students.map((student) => (
+                        <option key={student.id} value={student.id}>
+                          {student.fullName}
+                        </option>
+                      ))}
+                    </TrackingSelect>
+                  ) : (
+                    <TrackingSelect
+                      label="Group"
+                      value={groupId}
+                      onChange={(event) => setGroupId(event.target.value)}
+                      searchable
+                    >
+                      {groups.map((group) => (
+                        <option key={group.id} value={group.id}>
+                          {group.name}
+                        </option>
+                      ))}
+                    </TrackingSelect>
+                  )}
+                </>
+              )}
+            </>
           ) : (
             <>
               <ModeSwitch value={activeMode} onChange={setMode} items={modeItems} />
@@ -1212,7 +1511,12 @@ export default function Tracking({ state = {}, derived = {}, actions = {}, openP
         <section role="tabpanel">
           {tab === "grades" ? <GradeView data={gradeData} mode={gradeMode} onOpenClass={openRelatedClass} /> : null}
           {tab === "attendance" ? (
-            <AttendanceView data={attendanceData} mode={attendanceMode} onOpenClass={openRelatedClass} />
+            <AttendanceView
+              data={attendanceData}
+              mode={activeAttendanceMode}
+              scope={attendanceScope}
+              onOpenClass={openRelatedClass}
+            />
           ) : null}
           {tab === "payments" ? (
             <PaymentView

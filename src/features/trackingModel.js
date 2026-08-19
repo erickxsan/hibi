@@ -225,18 +225,24 @@ function attended(code) {
 }
 
 export function buildAttendanceTracking(state, classRows, { mode, groupId, studentId, range, search = "" }) {
+  const activeStudents = (state.students || []).filter((student) => student.status !== "Inactive");
   const roster =
-    mode === "student"
-      ? (state.students || []).filter((student) => student.id === studentId)
-      : studentsForGroup(state, groupId);
+    mode === "overview"
+      ? activeStudents
+      : mode === "student"
+        ? (state.students || []).filter((student) => student.id === studentId)
+        : studentsForGroup(state, groupId);
   const rosterIds = new Set(roster.map((student) => student.id));
   const relevant = classRows.filter(
     (row) =>
       row.classStatus === "Completed" &&
       rosterIds.has(row.studentId) &&
       (mode !== "group" || row.groupId === groupId) &&
-      inTrackingRange(row.classDate, range),
+      inTrackingRange(row.classDate, range) &&
+      (mode !== "overview" || matchesSearch([row.studentName, row.classTitle, row.groupName], search)),
   );
+  const studentsById = new Map((state.students || []).map((student) => [student.id, student]));
+  const groupsById = new Map((state.groups || []).map((group) => [group.id, group]));
   const tableRows =
     mode === "student"
       ? relevant
@@ -265,6 +271,10 @@ export function buildAttendanceTracking(state, classRows, { mode, groupId, stude
             const present = recorded.filter((row) => attended(row.attendance)).length;
             const absent = recorded.filter((row) => row.attendance === "A").length;
             const rate = recorded.length ? present / recorded.length : null;
+            const lastRow = rows.slice().sort((left, right) => right.classDate.localeCompare(left.classDate))[0];
+            const groupNames = [
+              ...new Set(rows.map((row) => row.groupName || groupsById.get(row.groupId)?.name).filter(Boolean)),
+            ];
             return {
               id: student.id,
               student,
@@ -277,7 +287,18 @@ export function buildAttendanceTracking(state, classRows, { mode, groupId, stude
                   .sort()
                   .at(-1) || "",
               status: attendanceStatus(rate),
+              groupName: groupNames.join(", "),
+              sessionKey: lastRow
+                ? classWorkspaceSessionKey({ ...lastRow, studentId: lastRow.groupId ? "" : lastRow.studentId })
+                : "",
             };
+          })
+          .filter((row) => mode !== "overview" || row.rate != null)
+          .sort((left, right) => {
+            if (mode !== "overview") return 0;
+            if (left.rate == null) return 1;
+            if (right.rate == null) return -1;
+            return left.rate - right.rate || right.absent - left.absent;
           });
   const recorded = relevant.filter((row) => ["P", "L", "A"].includes(row.attendance));
   const present = recorded.filter((row) => attended(row.attendance)).length;
@@ -296,6 +317,47 @@ export function buildAttendanceTracking(state, classRows, { mode, groupId, stude
   const series = [...weekly.values()]
     .sort((a, b) => a.label.localeCompare(b.label))
     .map((item) => ({ label: item.label, value: item.total ? item.present / item.total : 0 }));
+  const studentWeekly = new Map();
+  for (const row of recorded) {
+    const week = startOfWeek(row.classDate, 1);
+    const values = studentWeekly.get(row.studentId) || new Map();
+    const current = values.get(week) || { present: 0, total: 0 };
+    current.total += 1;
+    if (attended(row.attendance)) current.present += 1;
+    values.set(week, current);
+    studentWeekly.set(row.studentId, values);
+  }
+  const improvingStudents = [...studentWeekly.values()].filter((values) => {
+    const weeks = [...values.entries()].sort(([left], [right]) => left.localeCompare(right));
+    if (weeks.length < 2) return false;
+    const first = weeks[0][1];
+    const last = weeks.at(-1)[1];
+    return last.present / last.total > first.present / first.total;
+  }).length;
+  const sessionRows = new Map();
+  for (const row of recorded) {
+    const key = classWorkspaceSessionKey({ ...row, studentId: row.groupId ? "" : row.studentId });
+    const current = sessionRows.get(key) || {
+      key,
+      classDate: row.classDate,
+      startTime: row.startTime || "",
+      title:
+        row.groupName ||
+        groupsById.get(row.groupId)?.name ||
+        row.classTitle ||
+        studentsById.get(row.studentId)?.fullName ||
+        "Class",
+      present: 0,
+      total: 0,
+    };
+    current.total += 1;
+    if (attended(row.attendance)) current.present += 1;
+    sessionRows.set(key, current);
+  }
+  const lowestSessions = [...sessionRows.values()]
+    .map((item) => ({ ...item, rate: item.total ? item.present / item.total : null }))
+    .sort((left, right) => left.rate - right.rate || right.classDate.localeCompare(left.classDate))
+    .slice(0, 2);
   return {
     tableRows,
     average: recorded.length ? present / recorded.length : null,
@@ -304,6 +366,11 @@ export function buildAttendanceTracking(state, classRows, { mode, groupId, stude
     absent,
     total: recorded.length,
     series,
+    repeatedAbsenceStudents: tableRows.filter((row) => row.absent >= 2).length,
+    perfectAttendanceStudents: tableRows.filter((row) => row.rate === 1).length,
+    improvingStudents,
+    lowestSessions,
+    threshold: finite(state.settings?.lowAttendanceThreshold) ? state.settings.lowAttendanceThreshold : 0.8,
   };
 }
 
