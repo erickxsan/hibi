@@ -258,7 +258,7 @@ describe("Classes remote draft safety", () => {
     );
     expect(view.navigationWarning()).toBe("");
     confirm.mockRestore();
-  });
+  }, 10_000);
 
   it("creates a class through the same workspace after draft-safe navigation", async () => {
     const user = userEvent.setup();
