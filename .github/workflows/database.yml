@@ -25,7 +25,7 @@ jobs:
           version: 2.113.0
           github-token: ${{ github.token }}
       - name: Start local Supabase stack
-        run: supabase start
+        run: supabase start --exclude mailpit
       - name: Apply every migration from scratch
         run: supabase db reset --local
       - name: Lint the resulting schema
