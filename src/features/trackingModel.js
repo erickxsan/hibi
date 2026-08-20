@@ -225,24 +225,36 @@ function attended(code) {
 }
 
 export function buildAttendanceTracking(state, classRows, { mode, groupId, studentId, range, search = "" }) {
-  const activeStudents = (state.students || []).filter((student) => student.status !== "Inactive");
-  const roster =
-    mode === "overview"
-      ? activeStudents
-      : mode === "student"
-        ? (state.students || []).filter((student) => student.id === studentId)
-        : studentsForGroup(state, groupId);
-  const rosterIds = new Set(roster.map((student) => student.id));
+  const studentsById = new Map((state.students || []).map((student) => [student.id, student]));
+  const groupsById = new Map((state.groups || []).map((group) => [group.id, group]));
+  const currentRoster =
+    mode === "student"
+      ? (state.students || []).filter((student) => student.id === studentId)
+      : studentsForGroup(state, groupId);
+  const rosterIds = new Set(currentRoster.map((student) => student.id));
   const relevant = classRows.filter(
     (row) =>
       row.classStatus === "Completed" &&
-      rosterIds.has(row.studentId) &&
+      (mode === "overview" || rosterIds.has(row.studentId)) &&
       (mode !== "group" || row.groupId === groupId) &&
       inTrackingRange(row.classDate, range) &&
       (mode !== "overview" || matchesSearch([row.studentName, row.classTitle, row.groupName], search)),
   );
-  const studentsById = new Map((state.students || []).map((student) => [student.id, student]));
-  const groupsById = new Map((state.groups || []).map((group) => [group.id, group]));
+  const roster =
+    mode === "overview"
+      ? [...new Set(relevant.map((row) => row.studentId).filter(Boolean))].map((id) => {
+          const historicalRow = relevant.find((row) => row.studentId === id);
+          return (
+            studentsById.get(id) || {
+              id,
+              fullName: historicalRow?.studentName || "Unknown student",
+              code: historicalRow?.studentCode || "",
+              status: "Inactive",
+              groupIds: historicalRow?.groupId ? [historicalRow.groupId] : [],
+            }
+          );
+        })
+      : currentRoster;
   const tableRows =
     mode === "student"
       ? relevant
@@ -264,7 +276,7 @@ export function buildAttendanceTracking(state, classRows, { mode, groupId, stude
             sessionKey: classWorkspaceSessionKey({ ...row, studentId: row.groupId ? "" : row.studentId }),
           }))
       : roster
-          .filter((student) => matchesSearch([student.fullName, student.code], search))
+          .filter((student) => mode === "overview" || matchesSearch([student.fullName, student.code], search))
           .map((student) => {
             const rows = relevant.filter((row) => row.studentId === student.id);
             const recorded = rows.filter((row) => ["P", "L", "A"].includes(row.attendance));

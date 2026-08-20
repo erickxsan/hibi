@@ -190,6 +190,50 @@ describe("tracking model", () => {
     expect(result.tableRows[0].student.fullName).toBe("Cam");
   });
 
+  it("keeps completed attendance in the global overview after the current roster changes", () => {
+    const historicalState = {
+      ...state,
+      students: [
+        ...state.students,
+        { id: "inactive", fullName: "Inactive student", code: "OLD-1", status: "Inactive", groupIds: ["g1"] },
+      ],
+    };
+    const historicalClasses = [
+      {
+        id: "inactive-present",
+        classDate: "2026-08-08",
+        startTime: "08:00",
+        studentId: "inactive",
+        studentName: "Inactive student",
+        groupId: "g1",
+        groupName: "Math",
+        classStatus: "Completed",
+        attendance: "P",
+      },
+      {
+        id: "removed-absent",
+        classDate: "2026-08-09",
+        startTime: "08:00",
+        studentId: "removed",
+        studentName: "Former student",
+        studentCode: "OLD-2",
+        groupId: "g1",
+        groupName: "Math",
+        classStatus: "Completed",
+        attendance: "A",
+      },
+    ];
+
+    const augustRange = trackingRange("2026-08-19", "month");
+    const result = buildAttendanceTracking(historicalState, historicalClasses, {
+      mode: "overview",
+      range: augustRange,
+    });
+
+    expect(result).toMatchObject({ present: 1, absent: 1, total: 2, average: 0.5, sessions: 2 });
+    expect(result.tableRows.map((row) => row.student.fullName)).toEqual(["Former student", "Inactive student"]);
+  });
+
   it("keeps class payments granular and calculates collected versus pending", () => {
     const sessionKey = "2026-07-20|g:g1|10:00";
     const result = buildPaymentTracking(state, classes, { mode: "class", groupId: "g1", sessionKey, range });
