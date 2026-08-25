@@ -1,6 +1,7 @@
 import { addDays, todayDateOnly } from "../domain/dates";
 import { generateScheduledOccurrences } from "../domain/schedule";
 import { classSessionIdentity } from "../domain/semanticIdentity";
+import { minutesFromTime } from "./classesCalendarModel";
 
 function studentGroupIds(student) {
   return Array.isArray(student?.groupIds) ? student.groupIds : student?.groupId ? [student.groupId] : [];
@@ -92,10 +93,25 @@ export function buildClassWorkspaceSessionsForRange(state = {}, startDate, endDa
 export function selectPrimaryClassSession(sessions = [], asOfDate = todayDateOnly(), nowTime = "23:59") {
   const available = sessions.filter((session) => !["Registered", "Cancelled"].includes(session.statusLabel));
   const today = available.filter((session) => session.classDate === asOfDate);
-  const nextToday = today.find((session) => (session.startTime || "00:00") > nowTime);
+  const nowMinutes = minutesFromTime(nowTime);
+  const activeToday = today
+    .filter((session) => {
+      const durationMinutes = Number(session.durationHours) * 60;
+      const startMinutes = minutesFromTime(session.startTime);
+      return (
+        session.startTime &&
+        durationMinutes > 0 &&
+        startMinutes <= nowMinutes &&
+        nowMinutes < startMinutes + durationMinutes
+      );
+    })
+    .at(-1);
+  if (activeToday) return activeToday;
+
+  const nextToday = today.find((session) => minutesFromTime(session.startTime) > nowMinutes);
   if (nextToday) return nextToday;
 
-  const pendingToday = today.filter((session) => (session.startTime || "00:00") <= nowTime).at(-1);
+  const pendingToday = today.filter((session) => minutesFromTime(session.startTime) <= nowMinutes).at(-1);
   if (pendingToday) return pendingToday;
 
   return available.find((session) => session.classDate > asOfDate) || null;

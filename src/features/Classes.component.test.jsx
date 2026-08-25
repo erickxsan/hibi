@@ -85,18 +85,26 @@ function renderClasses(state = classState()) {
   };
 }
 
-async function markAnaAbsent(user) {
+async function markAnaPresent(user) {
   const attendance = screen.getByRole("group", { name: "Attendance for Ana" });
-  await user.click(within(attendance).getByTitle("Absent"));
-  return within(attendance).getByTitle("Absent");
+  await user.click(within(attendance).getByTitle("Present"));
+  return within(attendance).getByTitle("Present");
 }
 
 describe("Classes remote draft safety", () => {
+  it("defaults new attendance to absent", () => {
+    renderClasses();
+    expect(within(screen.getByRole("group", { name: "Attendance for Ana" })).getByTitle("Absent")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
   it("does not rehydrate a dirty draft for an unrelated state update", async () => {
     const user = userEvent.setup();
     const state = classState();
     const view = renderClasses(state);
-    const absent = await markAnaAbsent(user);
+    const present = await markAnaPresent(user);
 
     view.rerenderState({
       ...state,
@@ -105,7 +113,7 @@ describe("Classes remote draft safety", () => {
       ),
     });
 
-    expect(absent).toHaveAttribute("aria-pressed", "true");
+    expect(present).toHaveAttribute("aria-pressed", "true");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(view.navigationWarning()).toMatch(/Discard your unsaved class changes/);
   });
@@ -114,7 +122,7 @@ describe("Classes remote draft safety", () => {
     const user = userEvent.setup();
     const state = classState();
     const view = renderClasses(state);
-    const absent = await markAnaAbsent(user);
+    const present = await markAnaPresent(user);
 
     view.rerenderState({
       ...state,
@@ -135,7 +143,7 @@ describe("Classes remote draft safety", () => {
     });
 
     expect(await screen.findByRole("alert")).toBeInTheDocument();
-    expect(absent).toHaveAttribute("aria-pressed", "true");
+    expect(present).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByText("Registered")).toBeInTheDocument();
     expect(view.navigationWarning()).toMatch(/Discard your unsaved class changes/);
   });
@@ -144,22 +152,22 @@ describe("Classes remote draft safety", () => {
     const user = userEvent.setup();
     const state = classState();
     const view = renderClasses(state);
-    const absent = await markAnaAbsent(user);
+    const present = await markAnaPresent(user);
 
     view.rerenderState(withRemoteGrade(state));
     expect(await screen.findByRole("alert")).toHaveTextContent("Newer class data is available");
-    expect(absent).toHaveAttribute("aria-pressed", "true");
+    expect(present).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "Save class" })).toBeDisabled();
 
     await user.click(screen.getByRole("button", { name: "Keep my draft" }));
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    expect(absent).toHaveAttribute("aria-pressed", "true");
+    expect(present).toHaveAttribute("aria-pressed", "true");
     expect(view.navigationWarning()).toMatch(/Discard your unsaved class changes/);
 
     view.rerenderState({ ...withRemoteGrade(state), grades: [] });
     expect(await screen.findByRole("alert")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Reload remote version" }));
-    expect(within(screen.getByRole("group", { name: "Attendance for Ana" })).getByTitle("Present")).toHaveAttribute(
+    expect(within(screen.getByRole("group", { name: "Attendance for Ana" })).getByTitle("Absent")).toHaveAttribute(
       "aria-pressed",
       "true",
     );
@@ -170,13 +178,13 @@ describe("Classes remote draft safety", () => {
     const user = userEvent.setup();
     const state = classState();
     const view = renderClasses(state);
-    await markAnaAbsent(user);
+    await markAnaPresent(user);
 
     view.rerenderState(withRemoteGrade(state));
     expect(await screen.findByRole("alert")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Rebase my draft" }));
 
-    expect(within(screen.getByRole("group", { name: "Attendance for Ana" })).getByTitle("Absent")).toHaveAttribute(
+    expect(within(screen.getByRole("group", { name: "Attendance for Ana" })).getByTitle("Present")).toHaveAttribute(
       "aria-pressed",
       "true",
     );
@@ -190,7 +198,7 @@ describe("Classes remote draft safety", () => {
     const user = userEvent.setup();
     const state = classState();
     const view = renderClasses(state);
-    await markAnaAbsent(user);
+    await markAnaPresent(user);
     await user.click(
       within(screen.getByRole("group", { name: "Payment for Ana" })).getByRole("button", { name: "Paid" }),
     );
@@ -202,7 +210,7 @@ describe("Classes remote draft safety", () => {
     await waitFor(() => expect(view.actions.saveProgress).toHaveBeenCalledOnce());
     expect(view.actions.saveProgress).toHaveBeenCalledWith({
       classRecords: [
-        expect.objectContaining({ studentId: "s1", attendance: "A", paymentState: "Paid", amountPaid: 200 }),
+        expect.objectContaining({ studentId: "s1", attendance: "P", paymentState: "Paid", amountPaid: 200 }),
       ],
       gradeRecords: [
         expect.objectContaining({
@@ -221,11 +229,11 @@ describe("Classes remote draft safety", () => {
     const user = userEvent.setup();
     const confirm = vi.spyOn(globalThis, "confirm").mockReturnValueOnce(false).mockReturnValue(true);
     const view = renderClasses();
-    await markAnaAbsent(user);
+    await markAnaPresent(user);
 
     await user.click(screen.getByRole("tab", { name: "Calendar" }));
     expect(screen.getByRole("tab", { name: "Next class" })).toHaveAttribute("aria-selected", "true");
-    expect(within(screen.getByRole("group", { name: "Attendance for Ana" })).getByTitle("Absent")).toHaveAttribute(
+    expect(within(screen.getByRole("group", { name: "Attendance for Ana" })).getByTitle("Present")).toHaveAttribute(
       "aria-pressed",
       "true",
     );
@@ -252,7 +260,7 @@ describe("Classes remote draft safety", () => {
     await user.click(within(agenda).getByRole("button", { name: "Open class" }));
 
     expect(screen.getByRole("tab", { name: "Next class" })).toHaveAttribute("aria-selected", "true");
-    expect(within(screen.getByRole("group", { name: "Attendance for Ana" })).getByTitle("Present")).toHaveAttribute(
+    expect(within(screen.getByRole("group", { name: "Attendance for Ana" })).getByTitle("Absent")).toHaveAttribute(
       "aria-pressed",
       "true",
     );

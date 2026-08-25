@@ -79,7 +79,7 @@ export function createClassLogRow(overrides = {}) {
     scheduleSlotId: "",
     scheduleOccurrenceDate: "",
     classStatus: "Completed",
-    attendance: "P",
+    attendance: "A",
     hours: null,
     appliedHourlyRate: null,
     appliedCharge: null,

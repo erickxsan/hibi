@@ -46,10 +46,19 @@ describe("classes workspace model", () => {
     expect(selectPrimaryClassSession(sessions, "2026-07-16", "11:00")?.classDate).toBe("2026-07-22");
   });
 
-  it("prefers the next class today before an earlier unregistered class today", () => {
+  it("keeps the current class selected until its scheduled end", () => {
     const sessions = [
-      { key: "earlier", classDate: "2026-07-15", startTime: "09:00", statusLabel: "Pending" },
-      { key: "next", classDate: "2026-07-15", startTime: "13:00", statusLabel: "Scheduled" },
+      { key: "current", classDate: "2026-07-15", startTime: "10:00", durationHours: 2, statusLabel: "Scheduled" },
+      { key: "next", classDate: "2026-07-15", startTime: "12:00", durationHours: 2, statusLabel: "Scheduled" },
+    ];
+    expect(selectPrimaryClassSession(sessions, "2026-07-15", "10:20")?.key).toBe("current");
+    expect(selectPrimaryClassSession(sessions, "2026-07-15", "12:00")?.key).toBe("next");
+  });
+
+  it("prefers the next class today after an earlier unregistered class has ended", () => {
+    const sessions = [
+      { key: "earlier", classDate: "2026-07-15", startTime: "09:00", durationHours: 1, statusLabel: "Pending" },
+      { key: "next", classDate: "2026-07-15", startTime: "13:00", durationHours: 2, statusLabel: "Scheduled" },
     ];
     expect(selectPrimaryClassSession(sessions, "2026-07-15", "11:00")?.key).toBe("next");
   });

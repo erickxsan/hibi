@@ -35,7 +35,7 @@ export function buildClassDraft(state = {}, session = null) {
         return [
           student.id,
           {
-            attendance: row?.attendance === "A" || row?.attendance === "E" ? "A" : "P",
+            attendance: row?.attendance === "P" || row?.attendance === "L" ? "P" : "A",
             paymentState: paymentRecordState(row, charge),
             paymentTouched: false,
             score: grade?.score == null ? "" : String(grade.score),

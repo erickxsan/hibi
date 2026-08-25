@@ -923,7 +923,7 @@ function SessionEditor({
                 {assessmentOn ? <span role="columnheader">Grade</span> : null}
               </div>
               {roster.map((student) => {
-                const entry = entries[student.id] || { attendance: "P", paymentState: "Pending", score: "" };
+                const entry = entries[student.id] || { attendance: "A", paymentState: "Pending", score: "" };
                 return (
                   <div className="class-roster-row" role="row" key={student.id}>
                     <div className="class-roster-student" role="rowheader">
@@ -1627,9 +1627,17 @@ export default function Classes({
 }) {
   const currentDate = asOfDate || state.settings?.asOfDate || todayDateOnly();
   const sessions = useMemo(() => buildClassWorkspaceSessions(state, currentDate), [currentDate, state]);
+  const [currentTime, setCurrentTime] = useState(() => currentTimeForDate(currentDate));
+  useEffect(() => {
+    const updateCurrentTime = () => setCurrentTime(currentTimeForDate(currentDate));
+    updateCurrentTime();
+    if (currentDate !== todayDateOnly()) return undefined;
+    const intervalId = window.setInterval(updateCurrentTime, 60_000);
+    return () => window.clearInterval(intervalId);
+  }, [currentDate]);
   const primary = useMemo(
-    () => selectPrimaryClassSession(sessions, currentDate, currentTimeForDate(currentDate)),
-    [currentDate, sessions],
+    () => selectPrimaryClassSession(sessions, currentDate, currentTime),
+    [currentDate, currentTime, sessions],
   );
   const [tab, setTab] = useState("next");
   const [selectedKey, setSelectedKey] = useState("");
@@ -1808,7 +1816,7 @@ export default function Classes({
         scheduleSlotId: activeSession.scheduleSlotId || "",
         scheduleOccurrenceDate: activeSession.occurrenceDate || activeSession.classDate,
         classStatus,
-        attendance: classStatus === "Completed" ? entry.attendance || "P" : "",
+        attendance: classStatus === "Completed" ? entry.attendance || "A" : "",
         hours,
         amountPaid: payment === "Paid" ? charge : payment ? 0 : (existing?.amountPaid ?? 0),
         paymentDate:
