@@ -173,9 +173,9 @@ describe("recovery keys", () => {
   it("round-trips a formatted key and rejects a checksum change", async () => {
     const recovery = await generateRecoveryKey();
     await expect(parseRecoveryKey(recovery.formatted)).resolves.toEqual(recovery.secret);
-    const last = recovery.formatted.at(-1);
-    await expect(parseRecoveryKey(`${recovery.formatted.slice(0, -1)}${last === "0" ? "1" : "0"}`)).rejects.toThrow(
-      /checksum/u,
-    );
+    const checksumIndex = recovery.formatted.length - 2;
+    const checksumCharacter = recovery.formatted[checksumIndex];
+    const corrupted = `${recovery.formatted.slice(0, checksumIndex)}${checksumCharacter === "0" ? "1" : "0"}${recovery.formatted.slice(checksumIndex + 1)}`;
+    await expect(parseRecoveryKey(corrupted)).rejects.toThrow(/checksum/u);
   });
 });
