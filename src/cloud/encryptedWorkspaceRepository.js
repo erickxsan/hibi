@@ -23,7 +23,13 @@ import {
   WorkspaceCryptoError,
 } from "../crypto/index.js";
 import { applyWorkspacePatch, buildWorkspacePatch } from "./normalizedWorkspace.js";
-import { CloudAuthenticationError, cloudWritesEnabled, requireCloudClient, supabase } from "./client.js";
+import {
+  CloudAuthenticationError,
+  cloudWritesEnabled,
+  requireCloudClient,
+  retryJwtClockSkew,
+  supabase,
+} from "./client.js";
 import { deviceRecoveryStore } from "./deviceRecoveryStore.js";
 import { flushWorkspaceOutbox } from "./workspaceOutbox.js";
 import {
@@ -225,7 +231,7 @@ export function createEncryptedWorkspaceRepository(
     return data.user;
   }
 
-  async function loadBootstrap(expectedOwnerId) {
+  async function loadBootstrapOnce(expectedOwnerId) {
     const user = await requireUser(expectedOwnerId);
     const ownerId = expectedOwnerId || user.id;
     const [profileResult, wrappersResult, rolloutResult] = await Promise.all([
@@ -244,6 +250,18 @@ export function createEncryptedWorkspaceRepository(
       rolloutEnabled: Boolean(rollout?.enabled || profileResult.data),
       rolloutMode: rollout?.rollout_mode || "disabled",
     };
+  }
+
+  async function loadBootstrap(expectedOwnerId) {
+    return retryJwtClockSkew(() => loadBootstrapOnce(expectedOwnerId), {
+      refreshSession: async () => {
+        const { error } = await cloud().auth.refreshSession();
+        if (error)
+          throw new CloudAuthenticationError(error.message || "The secure session could not be renewed.", {
+            cause: error,
+          });
+      },
+    });
   }
 
   async function workspaceFromRpcRow(row, session, { minimumRevision = 0, expectedPreviousRoot } = {}) {

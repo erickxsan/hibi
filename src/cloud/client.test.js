@@ -3,7 +3,9 @@ import {
   CloudAuthenticationError,
   CloudConfigurationError,
   createAuthService,
+  isJwtIssuedAtFutureError,
   isCloudWriteLocationAllowed,
+  retryJwtClockSkew,
 } from "./client.js";
 
 describe("cloud write origin guard", () => {
@@ -153,5 +155,41 @@ describe("cloud auth service", () => {
 
     expect(listener).toHaveBeenCalledWith("SIGNED_IN", { user: { id: "user-1" } });
     expect(unsubscribe).toHaveBeenCalledOnce();
+  });
+});
+
+describe("Supabase JWT clock-skew recovery", () => {
+  it("recognizes the PostgREST future-issued JWT error through wrapped causes", () => {
+    const providerError = { code: "PGRST303", message: "JWT issued at future" };
+    const wrapped = new CloudAuthenticationError("Encryption status could not be loaded.", { cause: providerError });
+
+    expect(isJwtIssuedAtFutureError(wrapped)).toBe(true);
+    expect(isJwtIssuedAtFutureError(new Error("Network unavailable"))).toBe(false);
+  });
+
+  it("refreshes the session, waits briefly, and retries exactly once", async () => {
+    const operation = vi.fn().mockRejectedValueOnce(new Error("JWT issued at future")).mockResolvedValueOnce("ready");
+    const refreshSession = vi.fn(async () => {});
+    const wait = vi.fn(async () => {});
+
+    await expect(retryJwtClockSkew(operation, { refreshSession, wait })).resolves.toBe("ready");
+
+    expect(refreshSession).toHaveBeenCalledOnce();
+    expect(wait).toHaveBeenCalledWith(2_000);
+    expect(operation).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not refresh or retry unrelated failures", async () => {
+    const failure = new Error("Network unavailable");
+    const operation = vi.fn(async () => {
+      throw failure;
+    });
+    const refreshSession = vi.fn(async () => {});
+    const wait = vi.fn(async () => {});
+
+    await expect(retryJwtClockSkew(operation, { refreshSession, wait })).rejects.toBe(failure);
+    expect(refreshSession).not.toHaveBeenCalled();
+    expect(wait).not.toHaveBeenCalled();
+    expect(operation).toHaveBeenCalledOnce();
   });
 });
