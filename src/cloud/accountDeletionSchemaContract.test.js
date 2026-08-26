@@ -19,6 +19,9 @@ describe("account deletion schema contract", () => {
     expect(migration).toContain("current_account_is_deletion_pending");
     expect(migration).toContain("hibi_block_pending_account_storage");
     expect(migration).toContain("unregistered_account_data_table");
+    expect(migration).toContain("alter table private.account_erasure_targets enable row level security");
+    expect(migration).toContain("legacy_normalized_workspace_parity_failed");
+    expect(migration).toContain("legacy_only_entity");
     expect(migration).toContain("hibi-purge-expired-workspace-snapshots");
     expect(migration).toContain("hibi-purge-expired-account-deletion-receipts");
     expect(migration).toContain("interval '90 days'");

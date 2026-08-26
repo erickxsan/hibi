@@ -20,6 +20,7 @@
     "test:components": "vitest run .component.test.jsx",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
+    "test:e2ee-performance": "node scripts/e2ee-performance.mjs",
     "test:db": "supabase db reset --local && supabase db lint --local --level warning --fail-on warning && supabase test db",
     "quality": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test:coverage && pnpm build"
   },

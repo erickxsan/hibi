@@ -1,4 +1,5 @@
 import { REAL_ROSTER_BACKUP_KEY, REAL_ROSTER_MIGRATION_KEY, STORAGE_KEY } from "../domain/index.js";
+import { deviceKeyStore } from "../crypto/index.js";
 import { requireCloudClient, supabase } from "./client.js";
 import { deviceRecoveryStore } from "./deviceRecoveryStore.js";
 import { createOperationId } from "./workspaceRepository.js";
@@ -127,12 +128,17 @@ export function createAccountDeletionService(client = supabase, cryptoApi = glob
 
 export async function purgeLocalAccountData(
   ownerId,
-  { storage = globalThis.localStorage, recoveryStore = deviceRecoveryStore } = {},
+  { storage = globalThis.localStorage, recoveryStore = deviceRecoveryStore, workspaceKeyStore = deviceKeyStore } = {},
 ) {
   if (!ownerId) throw new TypeError("An account ID is required for local purging.");
   const failures = [];
   try {
     await recoveryStore.purgeAccount(ownerId);
+  } catch (error) {
+    failures.push(error);
+  }
+  try {
+    await workspaceKeyStore.forget(ownerId);
   } catch (error) {
     failures.push(error);
   }

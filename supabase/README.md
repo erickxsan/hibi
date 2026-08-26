@@ -1,6 +1,18 @@
 # Supabase backend
 
-The canonical cloud model is normalized. Settings, groups, students, memberships, grades, schedules, exceptions, class records, and payments live in owner-scoped tables with foreign keys, typed search columns, and indexes. JSON remains the stable import/export and recovery format; it is reconstructed only when the app first loads or when an explicit full backup operation needs it.
+## Encrypted workspace v2
+
+`202608250001_end_to_end_encryption_v2.sql` is the active content model for migrated accounts. Supabase stores
+owner-scoped AES-GCM envelopes, passkey/recovery wrappers, authenticated manifests, encrypted change events, encrypted
+snapshots, and idempotency receipts. It does not store readable names, contact details, academic values, class/payment
+dates, notes, relationships, or amounts.
+
+The normalized model described below remains only as a transactional migration source for accounts whose owners have
+not returned. `migration_started` blocks its writes, staging is downloaded and verified by the browser, and the final
+RPC removes readable normalized rows only after exact canonical parity. Active E2EE profiles make legacy clients fail
+with `encryption_required`. See [`docs/E2EE_ARCHITECTURE.md`](../docs/E2EE_ARCHITECTURE.md).
+
+Before E2EE activation, the migration source is normalized. Settings, groups, students, memberships, grades, schedules, exceptions, class records, and payments live in owner-scoped tables with foreign keys, typed search columns, and indexes. JSON remains a legacy import/export boundary, not the active encrypted storage model.
 
 Ordinary edits call `apply_workspace_patch` with only the changed entities and their expected entity revisions. Two devices changing different records do not conflict. A stale update to the same record fails with `workspace_entity_conflict` (`SQLSTATE 40001`) and the client reloads and reapplies the edit.
 

@@ -5,7 +5,7 @@ The recommended free stack is Supabase for authentication/database and Cloudflar
 ## 1. Create and configure Supabase
 
 1. Create a Supabase project.
-2. Apply every file in `supabase/migrations/` in filename order, preferably by linking the Supabase CLI and running `supabase db push`. The `202608120001_normalized_workspace_entities.sql` migration backfills existing JSON workspaces into normalized tables. Deploy it before the matching frontend; old open tabs will fail closed on save until refreshed.
+2. Apply every file in `supabase/migrations/` in filename order, preferably by linking the Supabase CLI and running `supabase db push`. The `202608250001_end_to_end_encryption_v2.sql` migration adds the encrypted v2 model beside legacy storage. Deploy the database migration before the matching frontend. Accounts migrate only after their owner returns, creates a production passkey, and the browser verifies staged ciphertext; old open clients fail closed once migration begins.
 3. In **Authentication → URL Configuration**, set the production Site URL to `https://usehibi.pages.dev/` and add these redirect URLs:
    - `http://127.0.0.1:4173/`
    - `https://usehibi.pages.dev/`
@@ -43,6 +43,10 @@ Restart the Vite server after changing environment variables.
 
 Follow the two-account procedure in `supabase/README.md`. With Docker Desktop and the Supabase CLI running, execute `pnpm test:db`. Do not publish until both accounts can only read their own workspace, direct table writes are denied, and the revision-conflict test succeeds.
 
+Also complete the real WebAuthn PRF and migration release matrix in
+[`docs/E2EE_ARCHITECTURE.md`](./docs/E2EE_ARCHITECTURE.md). Cloudflare previews and localhost intentionally cannot
+register credentials for the production RP. Test production passkeys only at `https://usehibi.pages.dev`.
+
 ## 3. Deploy to Cloudflare Pages
 
 Use these project settings:
@@ -69,8 +73,8 @@ Because `localStorage` is tied to an exact origin, use this safe sequence:
 ## Operational notes
 
 - Supabase Free projects may pause after inactivity; monitor the project before a scheduled class.
-- Realtime replays small entity patches; per-entity revision checks protect same-record edits without rejecting unrelated concurrent changes.
-- Export periodic backups and keep them in protected storage.
+- Realtime replays encrypted entity envelopes; per-entity revision checks protect same-record edits without rejecting unrelated concurrent changes.
+- Export periodic encrypted `.hibi` backups. A readable JSON/Excel export is outside E2EE once it leaves Hibi and must be protected by the user.
 - Do not remove Auth users from the dashboard. The protective `RESTRICT` constraints are intentional. Hibi's
   authenticated **Delete account and data** flow tombstones the account, removes owned Storage objects through the
   Storage API, erases every registered owner table, hard-deletes Auth in the Edge Function, and retains a minimal

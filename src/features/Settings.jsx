@@ -3,8 +3,10 @@ import {
   Clock3,
   Download,
   FilePlus2,
+  Fingerprint,
   Globe2,
   History,
+  KeyRound,
   LockKeyhole,
   RotateCcw,
   ShieldCheck,
@@ -28,7 +30,14 @@ async function sha256(text) {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export default function Settings({ state, actions, persistenceMode, registerNavigationBlocker, onDeleteAccount }) {
+export default function Settings({
+  state,
+  actions,
+  persistenceMode,
+  encryption,
+  registerNavigationBlocker,
+  onDeleteAccount,
+}) {
   const { t } = useI18n();
   const [draft, setDraft] = useState(() => settingsDraft(state.settings));
   const [saving, setSaving] = useState(false);
@@ -50,6 +59,13 @@ export default function Settings({ state, actions, persistenceMode, registerNavi
   const [recoveryPoints, setRecoveryPoints] = useState([]);
   const [pendingRecovery, setPendingRecovery] = useState(null);
   const [soundsEnabled, setSoundsEnabled] = useState(getHibiSoundsEnabled);
+  const [securityBusy, setSecurityBusy] = useState(false);
+  const [securityError, setSecurityError] = useState("");
+  const [recoveryReveal, setRecoveryReveal] = useState("");
+  const [rotationOpen, setRotationOpen] = useState(false);
+  const [rotationProgress, setRotationProgress] = useState("");
+  const [backupSourceRecovery, setBackupSourceRecovery] = useState(null);
+  const [backupSourceRecoveryKey, setBackupSourceRecoveryKey] = useState("");
   const fileRef = useRef(null);
   const recordsFileRef = useRef(null);
   const baselineRef = useRef(settingsDraft(state.settings));
@@ -73,38 +89,51 @@ export default function Settings({ state, actions, persistenceMode, registerNavi
     }
   };
 
+  const stageFullRestore = (parsed, { name, text, encrypted, sourceRecoveryKey = "", sourcePasskey = false }) => {
+    const counts = {
+      students: parsed.students.length,
+      groups: parsed.groups.length,
+      grades: parsed.grades.length,
+      classes: parsed.classLog.length,
+    };
+    const currentCounts = {
+      students: state.students.length,
+      groups: state.groups.length,
+      grades: state.grades.length,
+      classes: state.classLog.length,
+    };
+    const removals = Object.keys(counts).filter((key) => counts[key] < currentCounts[key]);
+    setPendingImport({ name, text, counts, currentCounts, removals, encrypted, sourceRecoveryKey, sourcePasskey });
+    setImportConfirmation("");
+  };
+
   const importFile = async (event) => {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-    if (file.size > MAX_BACKUP_BYTES) {
-      actions.notify("That backup is larger than the 5 MB safety limit.", "error");
+    const encryptedFile = file.name.toLowerCase().endsWith(".hibi");
+    if (file.size > (encryptedFile ? MAX_BACKUP_BYTES * 5 : MAX_BACKUP_BYTES)) {
+      actions.notify(
+        encryptedFile ? "That encrypted backup is larger than 25 MB." : "That backup is larger than 5 MB.",
+        "error",
+      );
       return;
     }
     try {
       const text = await file.text();
-      const parsed = importState(text);
-      const counts = {
-        students: parsed.students.length,
-        groups: parsed.groups.length,
-        grades: parsed.grades.length,
-        classes: parsed.classLog.length,
-      };
-      const currentCounts = {
-        students: state.students.length,
-        groups: state.groups.length,
-        grades: state.grades.length,
-        classes: state.classLog.length,
-      };
-      const removals = Object.keys(counts).filter((key) => counts[key] < currentCounts[key]);
-      setPendingImport({
-        name: file.name,
-        text,
-        counts,
-        currentCounts,
-        removals,
-      });
-      setImportConfirmation("");
+      const outer = JSON.parse(text);
+      const isEncrypted = outer?.format === "hibi-encrypted-backup";
+      if (isEncrypted && outer.workspaceCryptoId !== encryption?.profile?.workspaceCryptoId) {
+        setBackupSourceRecovery({
+          name: file.name,
+          text,
+          passkeyAvailable: (outer.wrappers || []).some((wrapper) => wrapper.type === "passkey" && !wrapper.revokedAt),
+        });
+        setBackupSourceRecoveryKey("");
+        return;
+      }
+      const parsed = isEncrypted ? await actions.previewEncryptedBackup(text) : importState(text);
+      stageFullRestore(parsed, { name: file.name, text, encrypted: isEncrypted });
     } catch (error) {
       actions.notify(error?.message || "The selected file is not a valid Hibi backup.", "error");
     }
@@ -314,8 +343,13 @@ export default function Settings({ state, actions, persistenceMode, registerNavi
                   <small>Download everything, or intentionally replace the workspace from a trusted full backup.</small>
                 </span>
                 <div className="button-cluster">
+                  {encryption?.enabled ? (
+                    <Button variant="primary" icon={LockKeyhole} onClick={actions.exportEncryptedBackup}>
+                      Download encrypted .hibi
+                    </Button>
+                  ) : null}
                   <Button icon={Download} onClick={actions.exportJson}>
-                    Download backup
+                    {encryption?.enabled ? "Export readable JSON" : "Download backup"}
                   </Button>
                   <Button icon={Upload} onClick={() => fileRef.current?.click()}>
                     Restore full backup
@@ -335,16 +369,195 @@ export default function Settings({ state, actions, persistenceMode, registerNavi
               hidden
               onChange={previewRecordImport}
             />
-            <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={importFile} />
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".hibi,.json,application/json,application/vnd.hibi.encrypted+json"
+              hidden
+              onChange={importFile}
+            />
+            {encryption?.enabled ? (
+              <p className="settings-inline-warning">
+                <strong>.hibi is recommended.</strong> JSON exports are readable files intended only for advanced local
+                use; Hibi never uploads their plaintext during import.
+              </p>
+            ) : null}
           </div>
         </article>
+        {encryption?.enabled ? (
+          <article className="settings-card encryption-settings-card">
+            <div className="settings-icon sage">
+              <Fingerprint size={22} />
+            </div>
+            <div className="settings-content">
+              <h2>Workspace encryption & access</h2>
+              <p>
+                E2EE protocol v{encryption.profile?.protocolVersion}; unlocked with {encryption.method || "a local key"}
+                . Passkeys wrap the same stable master key, so adding one does not re-encrypt your records.
+              </p>
+              <div className="workspace-key-list" aria-label="Workspace key wrappers">
+                {encryption.wrappers
+                  .filter((wrapper) => !wrapper.revokedAt)
+                  .map((wrapper) => (
+                    <div className="workspace-key-row" key={wrapper.wrapperId}>
+                      <span>
+                        <strong>{wrapper.label}</strong>
+                        <small>
+                          {wrapper.type === "passkey" ? "Passkey with WebAuthn PRF" : "Recovery key"} · added{" "}
+                          {new Date(wrapper.createdAt).toLocaleDateString()}
+                          {wrapper.lastUsedAt
+                            ? ` · last used ${new Date(wrapper.lastUsedAt).toLocaleDateString()}`
+                            : " · not used yet"}
+                        </small>
+                      </span>
+                      <Button
+                        disabled={securityBusy || encryption.wrappers.filter((item) => !item.revokedAt).length <= 1}
+                        onClick={async () => {
+                          setSecurityBusy(true);
+                          setSecurityError("");
+                          try {
+                            await encryption.revokeWrapper(wrapper.wrapperId);
+                          } catch (error) {
+                            setSecurityError(error?.message || "That workspace key could not be revoked.");
+                          } finally {
+                            setSecurityBusy(false);
+                          }
+                        }}
+                      >
+                        Revoke
+                      </Button>
+                    </div>
+                  ))}
+              </div>
+              {encryption.rememberedDevices?.length ? (
+                <div className="workspace-key-list" aria-label="Remembered devices">
+                  {encryption.rememberedDevices.map((device) => (
+                    <div className="workspace-key-row" key={device.deviceId}>
+                      <span>
+                        <strong>This remembered browser</strong>
+                        <small>
+                          Added {new Date(device.createdAt).toLocaleDateString()} · last used{" "}
+                          {new Date(device.lastUsedAt).toLocaleDateString()}
+                        </small>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              <div className="button-cluster workspace-key-actions">
+                <Button
+                  icon={Fingerprint}
+                  disabled={securityBusy || !encryption.passkeyPrfAvailable}
+                  onClick={async () => {
+                    setSecurityBusy(true);
+                    setSecurityError("");
+                    try {
+                      await encryption.addPasskey();
+                      actions.notify("Passkey added");
+                    } catch (error) {
+                      setSecurityError(error?.message || "A passkey could not be added.");
+                    } finally {
+                      setSecurityBusy(false);
+                    }
+                  }}
+                >
+                  Add passkey
+                </Button>
+                <Button
+                  icon={KeyRound}
+                  disabled={securityBusy}
+                  onClick={async () => {
+                    setSecurityBusy(true);
+                    setSecurityError("");
+                    try {
+                      setRecoveryReveal(await encryption.createRecoveryKey());
+                    } catch (error) {
+                      setSecurityError(error?.message || "A recovery key could not be created.");
+                    } finally {
+                      setSecurityBusy(false);
+                    }
+                  }}
+                >
+                  Create recovery key
+                </Button>
+                <Button
+                  disabled={securityBusy}
+                  onClick={async () => {
+                    setSecurityBusy(true);
+                    setSecurityError("");
+                    try {
+                      await encryption.rememberDevice();
+                      actions.notify("This device will remember the workspace key");
+                    } catch (error) {
+                      setSecurityError(error?.message || "This device could not be remembered.");
+                    } finally {
+                      setSecurityBusy(false);
+                    }
+                  }}
+                >
+                  Remember this device
+                </Button>
+                <Button
+                  disabled={securityBusy}
+                  onClick={async () => {
+                    setSecurityBusy(true);
+                    setSecurityError("");
+                    try {
+                      await encryption.forgetDevice();
+                      actions.notify("Remembered-device access removed");
+                    } catch (error) {
+                      setSecurityError(error?.message || "Remembered-device access could not be removed.");
+                    } finally {
+                      setSecurityBusy(false);
+                    }
+                  }}
+                >
+                  Forget this device
+                </Button>
+                <Button
+                  variant="danger"
+                  icon={RotateCcw}
+                  disabled={securityBusy}
+                  onClick={() => {
+                    setRotationProgress("");
+                    setRotationOpen(true);
+                  }}
+                >
+                  Emergency key rotation
+                </Button>
+              </div>
+              {recoveryReveal ? (
+                <div className="recovery-key-reveal" role="status">
+                  <strong>Save this recovery key now. Hibi support cannot reconstruct it.</strong>
+                  <code>{recoveryReveal}</code>
+                  <Button
+                    onClick={() =>
+                      navigator.clipboard?.writeText(recoveryReveal).then(() => actions.notify("Recovery key copied"))
+                    }
+                  >
+                    Copy key
+                  </Button>
+                </div>
+              ) : null}
+              {securityError ? (
+                <p className="field-error" role="alert">
+                  {securityError}
+                </p>
+              ) : null}
+            </div>
+          </article>
+        ) : null}
         <article className="settings-card">
           <div className="settings-icon lilac">
             <LockKeyhole size={22} />
           </div>
           <div className="settings-content">
             <h2>Data & privacy</h2>
-            <p>Backups include student, parent, grade, attendance, and payment data. Store them privately.</p>
+            <p>
+              {encryption?.enabled
+                ? "Cloud records and snapshots are end-to-end encrypted. Files you export remain under your control."
+                : "Backups include student, parent, grade, attendance, and payment data. Store them privately."}
+            </p>
             {persistenceMode === "cloud" ? (
               <div className="privacy-actions">
                 <div className="danger-line secondary-danger">
@@ -531,7 +744,12 @@ export default function Settings({ state, actions, persistenceMode, registerNavi
               variant="danger"
               disabled={Boolean(pendingImport?.removals.length) && importConfirmation !== "RESTORE"}
               onClick={async () => {
-                if (await actions.importJson(pendingImport.text)) setPendingImport(null);
+                const restored = pendingImport.sourcePasskey
+                  ? await actions.importEncryptedBackupWithPasskey(pendingImport.text)
+                  : pendingImport.encrypted
+                    ? await actions.importEncryptedBackup(pendingImport.text, pendingImport.sourceRecoveryKey)
+                    : await actions.importJson(pendingImport.text);
+                if (restored) setPendingImport(null);
               }}
             >
               Restore backup
@@ -580,6 +798,99 @@ export default function Settings({ state, actions, persistenceMode, registerNavi
         ) : null}
       </Drawer>
       <Drawer
+        open={Boolean(backupSourceRecovery)}
+        onClose={() => {
+          if (!recordImportBusy) {
+            setBackupSourceRecovery(null);
+            setBackupSourceRecoveryKey("");
+          }
+        }}
+        title="Unlock the source backup"
+        description="This .hibi file belongs to another workspace. Its recovery key will be used only in this browser to decrypt and validate the source, then Hibi will re-encrypt every record for the current account."
+        size="compact"
+        footer={
+          <>
+            <Button
+              disabled={recordImportBusy}
+              onClick={() => {
+                setBackupSourceRecovery(null);
+                setBackupSourceRecoveryKey("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              icon={KeyRound}
+              disabled={recordImportBusy || !backupSourceRecoveryKey.trim()}
+              onClick={async () => {
+                setRecordImportBusy(true);
+                try {
+                  const parsed = await actions.previewEncryptedBackup(
+                    backupSourceRecovery.text,
+                    backupSourceRecoveryKey,
+                  );
+                  stageFullRestore(parsed, {
+                    name: backupSourceRecovery.name,
+                    text: backupSourceRecovery.text,
+                    encrypted: true,
+                    sourceRecoveryKey: backupSourceRecoveryKey,
+                  });
+                  setBackupSourceRecovery(null);
+                  setBackupSourceRecoveryKey("");
+                } catch (error) {
+                  actions.notify(error?.message || "That recovery key could not unlock the backup.", "error");
+                } finally {
+                  setRecordImportBusy(false);
+                }
+              }}
+            >
+              {recordImportBusy ? "Unlocking…" : "Unlock and review"}
+            </Button>
+          </>
+        }
+      >
+        <Field label="Source workspace recovery key">
+          <Input
+            value={backupSourceRecoveryKey}
+            onChange={(event) => setBackupSourceRecoveryKey(event.target.value)}
+            placeholder="HIBI1-…"
+            autoComplete="off"
+            spellCheck="false"
+          />
+        </Field>
+        {backupSourceRecovery?.passkeyAvailable ? (
+          <div className="backup-passkey-unlock">
+            <span>or</span>
+            <Button
+              variant="primary"
+              icon={Fingerprint}
+              disabled={recordImportBusy || !encryption?.passkeyPrfAvailable}
+              onClick={async () => {
+                setRecordImportBusy(true);
+                try {
+                  const parsed = await actions.previewEncryptedBackupWithPasskey(backupSourceRecovery.text);
+                  stageFullRestore(parsed, {
+                    name: backupSourceRecovery.name,
+                    text: backupSourceRecovery.text,
+                    encrypted: true,
+                    sourcePasskey: true,
+                  });
+                  setBackupSourceRecovery(null);
+                  setBackupSourceRecoveryKey("");
+                } catch (error) {
+                  actions.notify(error?.message || "The source passkey could not unlock this backup.", "error");
+                } finally {
+                  setRecordImportBusy(false);
+                }
+              }}
+            >
+              Unlock source with passkey
+            </Button>
+          </div>
+        ) : null}
+      </Drawer>
+      <Drawer
         open={recoveryOpen}
         onClose={() => setRecoveryOpen(false)}
         title="Recovery history"
@@ -615,6 +926,31 @@ export default function Settings({ state, actions, persistenceMode, registerNavi
           <p>No recovery copies are available yet. Hibi creates them automatically as you use the app.</p>
         )}
       </Drawer>
+      <ConfirmDialog
+        open={rotationOpen}
+        title="Rotate the account master key?"
+        description="Hibi will request every active passkey, generate a new master key, and re-encrypt active records, snapshots, device cache, and key wrappers. Existing recovery keys will be revoked; create a new one afterward. A lost device cannot decrypt future revisions."
+        confirmLabel={rotationProgress || "Rotate master key"}
+        busy={securityBusy}
+        onClose={() => {
+          if (!securityBusy) setRotationOpen(false);
+        }}
+        onConfirm={async () => {
+          setSecurityBusy(true);
+          setSecurityError("");
+          try {
+            await encryption.rotateKey(setRotationProgress);
+            setRotationOpen(false);
+            setRecoveryReveal("");
+            actions.notify("Workspace master key rotated");
+          } catch (error) {
+            setSecurityError(error?.message || "The workspace key could not be rotated.");
+          } finally {
+            setRotationProgress("");
+            setSecurityBusy(false);
+          }
+        }}
+      />
       <ConfirmDialog
         open={Boolean(pendingRecovery)}
         title="Restore this recovery copy?"

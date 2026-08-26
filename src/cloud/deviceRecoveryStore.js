@@ -30,6 +30,10 @@ function canonicalWorkspace(workspace) {
     versions: workspace?.versions && typeof workspace.versions === "object" ? workspace.versions : {},
     revision: Number.isSafeInteger(Number(workspace?.revision)) ? Number(workspace.revision) : 0,
     updatedAt: workspace?.updatedAt ?? null,
+    ...(Array.isArray(workspace?.envelopes) ? { envelopes: workspace.envelopes } : {}),
+    ...(workspace?.manifest && typeof workspace.manifest === "object" ? { manifest: workspace.manifest } : {}),
+    ...(workspace?.workspaceCryptoId ? { workspaceCryptoId: workspace.workspaceCryptoId } : {}),
+    ...(workspace?.keyVersion ? { keyVersion: Number(workspace.keyVersion) } : {}),
   };
 }
 

@@ -177,6 +177,12 @@ where ranked.duplicate_rank > 1
   and grade.owner_id = ranked.owner_id
   and grade.id = ranked.id;
 
+-- Production tables can have deferred foreign-key trigger events after the
+-- projection updates and duplicate cleanup above. Flush and validate them
+-- before PostgreSQL builds indexes on either affected table. Any violation
+-- still aborts this transaction before the migration version is recorded.
+set constraints all immediate;
+
 create unique index class_records_owner_student_session_unique
   on public.class_records (owner_id, student_id, class_date, start_time)
   where start_time is not null;

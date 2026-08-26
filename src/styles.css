@@ -1655,6 +1655,67 @@ body,
   border-color: #cfe2c8;
   background: #f5faf2;
 }
+.settings-inline-warning {
+  margin: 12px 0 0;
+  padding: 12px 14px;
+  border-radius: 11px;
+  background: #fff7dc;
+  color: #6f5a1e;
+  line-height: 1.45;
+}
+.workspace-key-list {
+  display: grid;
+  margin-bottom: 14px;
+  border: 1px solid var(--hibi-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.workspace-key-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  background: #fffdf9;
+}
+.workspace-key-row + .workspace-key-row {
+  border-top: 1px solid var(--hibi-border);
+}
+.workspace-key-row span {
+  display: grid;
+  gap: 2px;
+}
+.workspace-key-row small {
+  color: var(--hibi-muted);
+}
+.workspace-key-actions {
+  margin-top: 8px;
+}
+.recovery-key-reveal {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid #c7d9bc;
+  border-radius: 12px;
+  background: #f2f8ee;
+}
+.recovery-key-reveal code {
+  overflow-wrap: anywhere;
+  color: var(--hibi-forest);
+  font-size: 13px;
+  line-height: 1.6;
+  user-select: all;
+}
+.backup-passkey-unlock {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--hibi-border);
+  color: var(--hibi-muted);
+}
 .record-import-review {
   display: grid;
   gap: 16px;

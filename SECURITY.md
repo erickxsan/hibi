@@ -20,3 +20,12 @@ You should receive an acknowledgement within 5 business days. Details will remai
 ## Scope priorities
 
 Reports involving cross-account access, Row Level Security bypasses, credential exposure, destructive imports, offline outbox replay, or unauthorized recovery snapshots receive the highest priority.
+
+## End-to-end encryption
+
+Cloud workspace content uses the versioned protocol described in
+[`docs/E2EE_ARCHITECTURE.md`](./docs/E2EE_ARCHITECTURE.md). Supabase authentication and cryptographic unlock are
+separate. Report any path that sends plaintext workspace content, an Account Master Key, a WebAuthn PRF result, or a
+recovery secret over the network or stores it in logs/database as a critical vulnerability. Ciphertext substitution,
+manifest bypass, rollback-witness bypass, legacy-client plaintext writes, and incomplete account erasure are also
+critical.

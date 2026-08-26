@@ -27,7 +27,7 @@ Hibi es un compañero de trabajo sereno para quienes dan clases por su cuenta. R
 - **Seguimiento sin hojas dispersas:** registra el avance de un grupo completo desde una sola pantalla.
 - **Cobros más claros:** conoce lo cobrado, lo pendiente, lo vencido y la proyección del mes.
 - **Listo donde das clase:** diseño adaptable para computadora y dispositivos móviles.
-- **Tus datos, bajo control:** espacio privado por cuenta, sincronización en la nube y copias de seguridad en JSON.
+- **Tus datos, bajo control:** cifrado de extremo a extremo por cuenta, sincronización en la nube y respaldos `.hibi`.
 
 ## Funciones
 
@@ -79,7 +79,7 @@ La navegación se adapta a pantallas pequeñas para consultar la jornada y regis
 
 Hibi puede operar de dos maneras:
 
-- **Modo nube:** autenticación con Supabase, registros privados normalizados, actualizaciones pequeñas entre dispositivos y revisiones por entidad que preservan cambios independientes.
+- **Modo nube:** Supabase autentica la cuenta, pero una passkey desbloquea por separado el contenido. El navegador cifra cada entidad antes de sincronizarla; Supabase conserva sólo ciphertext, revisiones y manifiestos de integridad.
 - **Modo local:** si no se configuran credenciales de nube, Hibi puede conservar la información en el `localStorage` del navegador para uso privado u offline.
 
 El repositorio y la compilación de producción no incluyen información real de alumnos o tutores. Las capturas de esta página usan datos ficticios de demostración.
@@ -110,7 +110,9 @@ La base de datos se define en [`supabase/migrations`](./supabase/migrations). Co
 
 Antes de cambiar de la dirección local a un dominio publicado, descarga un respaldo JSON desde **Configuración → Preferencias → Respaldo y reinicio**. El almacenamiento del navegador está aislado por dominio, por lo que el sitio publicado no puede leer automáticamente los registros guardados en `127.0.0.1`.
 
-Después de iniciar sesión en la versión publicada, restaura el archivo desde la misma pantalla. Los respaldos JSON son texto sin cifrar y pueden contener información de alumnos, tutores, asistencia, calificaciones y pagos: guárdalos de forma privada.
+Después de iniciar sesión en la versión publicada, restaura el archivo desde la misma pantalla. Hibi cifra localmente un JSON antiguo antes de subir cualquier cambio. Los respaldos nuevos `.hibi` son cifrados y recomendados; JSON sigue disponible como exportación avanzada legible y debe guardarse de forma privada.
+
+La arquitectura, el modelo de amenazas, el protocolo de claves, la migración transaccional y las compuertas de rollout se documentan en [E2EE_ARCHITECTURE.md](./docs/E2EE_ARCHITECTURE.md).
 
 La opción **Importar registros** añade información sin borrar lo existente: muestra una vista previa de registros nuevos, duplicados exactos y posibles conflictos antes de guardar. **Restaurar respaldo completo** es una operación de recuperación separada que reemplaza el espacio de trabajo únicamente después de una confirmación explícita.
 

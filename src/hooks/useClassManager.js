@@ -919,6 +919,71 @@ export function useClassManager({ persistence } = {}) {
     notify("Backup downloaded");
   }, [notify, operationalDate]);
 
+  const exportEncryptedBackup = useCallback(async () => {
+    const createBackup = persistenceRef.current?.downloadEncryptedBackup;
+    if (typeof createBackup !== "function") return false;
+    try {
+      const encrypted = await createBackup();
+      downloadText(
+        createExportFilename(operationalDate).replace(/\.json$/u, ".hibi"),
+        encrypted,
+        "application/vnd.hibi.encrypted+json",
+      );
+      notify("Encrypted backup downloaded");
+      return true;
+    } catch (error) {
+      notify(messageForError(error), "error");
+      return false;
+    }
+  }, [notify, operationalDate]);
+
+  const previewEncryptedBackup = useCallback(async (text, recoveryKey, withPasskey = false) => {
+    const preview = withPasskey
+      ? persistenceRef.current?.previewEncryptedBackupWithPasskey
+      : persistenceRef.current?.previewEncryptedBackup;
+    if (typeof preview !== "function") throw new Error("Encrypted backups require an unlocked E2EE workspace.");
+    return preview(text, recoveryKey);
+  }, []);
+
+  const importEncryptedBackup = useCallback(
+    (text, recoveryKey, withPasskey = false) => {
+      const operation = async () => {
+        const restore = withPasskey
+          ? persistenceRef.current?.importEncryptedBackupWithPasskey
+          : persistenceRef.current?.importEncryptedBackup;
+        if (typeof restore !== "function") return false;
+        pendingWrites.current += 1;
+        setSyncStatus("saving");
+        try {
+          const result = await restore(text, recoveryKey);
+          const restored = importState(serializeState(result?.state ?? result));
+          if (!mountedRef.current) return false;
+          stateRef.current = restored;
+          persistedSnapshot.current = serializeState(restored);
+          setCanonicalState(restored);
+          setSyncStatus("saved");
+          notify("Encrypted backup restored");
+          return true;
+        } catch (error) {
+          if (mountedRef.current) {
+            setSyncStatus("error");
+            notify(messageForError(error), "error");
+          }
+          return false;
+        } finally {
+          pendingWrites.current = Math.max(0, pendingWrites.current - 1);
+        }
+      };
+      const queued = operationQueue.current.then(operation, operation);
+      operationQueue.current = queued.then(
+        () => undefined,
+        () => undefined,
+      );
+      return queued;
+    },
+    [notify],
+  );
+
   const importJson = useCallback(
     (text) => {
       try {
@@ -1116,6 +1181,11 @@ export function useClassManager({ persistence } = {}) {
       upsertScheduleException,
       upsertScheduleChange,
       exportJson,
+      exportEncryptedBackup,
+      previewEncryptedBackup,
+      importEncryptedBackup,
+      previewEncryptedBackupWithPasskey: (text) => previewEncryptedBackup(text, "", true),
+      importEncryptedBackupWithPasskey: (text) => importEncryptedBackup(text, "", true),
       importJson,
       previewImportRecords,
       importRecords,
@@ -1137,12 +1207,15 @@ export function useClassManager({ persistence } = {}) {
       deleteStudent,
       editScheduledClass,
       exportJson,
+      exportEncryptedBackup,
+      importEncryptedBackup,
       exportRecoveryPoint,
       importJson,
       importRecords,
       listRecoveryPoints,
       notify,
       previewImportRecords,
+      previewEncryptedBackup,
       removeScheduledClass,
       restoreRecoveryPoint,
       resetWorkspace,
@@ -1167,6 +1240,7 @@ export function useClassManager({ persistence } = {}) {
       syncStatus,
       syncMessage: persistence?.syncMessage || "",
       persistenceMode: persistence?.mode || "local",
+      encryption: persistence?.encryption || null,
       actions,
       toasts,
       dismissToast,
@@ -1177,6 +1251,7 @@ export function useClassManager({ persistence } = {}) {
       dismissToast,
       operationalDate,
       persistence?.mode,
+      persistence?.encryption,
       persistence?.syncMessage,
       syncStatus,
       toasts,

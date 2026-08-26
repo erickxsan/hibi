@@ -24,6 +24,85 @@
   text-align: center;
 }
 
+.encryption-gate-card {
+  width: min(620px, calc(100vw - 32px));
+}
+
+.encryption-gate-icon {
+  color: var(--primary, #31584b);
+}
+
+.encryption-progress,
+.encryption-error,
+.remember-device-choice {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  width: 100%;
+  padding: 14px;
+  border-radius: 14px;
+  text-align: left;
+}
+
+.encryption-progress {
+  align-items: center;
+  background: color-mix(in srgb, var(--primary, #31584b) 9%, white);
+}
+
+.encryption-progress .cloud-state-spinner {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+}
+
+.encryption-error {
+  flex-direction: column;
+  gap: 3px;
+  color: var(--danger, #a53b32);
+  background: color-mix(in srgb, var(--danger, #a53b32) 8%, white);
+}
+
+.remember-device-choice {
+  cursor: pointer;
+  background: var(--surface-subtle, #f6f5f0);
+}
+
+.remember-device-choice input {
+  margin-top: 3px;
+}
+
+.remember-device-choice span {
+  display: grid;
+  gap: 3px;
+}
+
+.remember-device-choice small,
+.encryption-compatibility-note {
+  color: var(--muted, #6b706d);
+}
+
+.encryption-primary-actions,
+.encryption-unlock-options,
+.recovery-unlock-form {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+}
+
+.encryption-unlock-options > .button,
+.encryption-primary-actions > .button {
+  width: 100%;
+}
+
+.recovery-unlock-form {
+  padding-top: 12px;
+  border-top: 1px solid var(--border, #deded8);
+}
+
+.encryption-secondary-actions {
+  margin-top: 4px;
+}
+
 .cloud-state-card .brand-mark {
   width: 58px;
   height: 58px;

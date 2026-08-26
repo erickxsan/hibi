@@ -49,6 +49,11 @@ create table private.account_erasure_targets (
 comment on table private.account_erasure_targets is
   'Mandatory registry for owner_id tables erased before Auth deletion. New owner-scoped tables must be registered.';
 
+-- This registry is not exposed through PostgREST, but RLS remains enabled as
+-- defense in depth. It is intentionally not forced: the postgres-owned
+-- security-definer erasure functions below are the only readers/writers.
+alter table private.account_erasure_targets enable row level security;
+
 insert into private.account_erasure_targets (table_schema, table_name, delete_order)
 values
   ('public', 'schedule_exceptions', 10),
@@ -245,7 +250,78 @@ revoke all on function private.archive_workspace_snapshot(uuid, jsonb, bigint, t
 -- was retained only to migrate older installations, so it cannot become an
 -- undeclared, indefinitely retained copy of class records.
 do $$
+declare
+  unsafe_workspace record;
 begin
+  -- Fail closed if the normalized copy is missing, older than the legacy row,
+  -- or lacks an entity that still exists in that row. Newer normalized-only
+  -- entities are expected after clients have switched to entity persistence.
+  select workspace.owner_id
+  into unsafe_workspace
+  from public.workspaces as workspace
+  left join public.workspace_sync_cursors as cursor
+    on cursor.owner_id = workspace.owner_id
+  where cursor.owner_id is null
+    or cursor.updated_at < workspace.updated_at
+  order by workspace.owner_id
+  limit 1;
+
+  if found then
+    raise exception using
+      errcode = '55000',
+      message = 'legacy_normalized_workspace_parity_failed',
+      detail = 'missing_or_older_normalized_workspace';
+  end if;
+
+  with workspace_states as (
+    select
+      workspace.owner_id,
+      workspace.state as legacy_state,
+      private.normalized_workspace_state(workspace.owner_id) as normalized_state
+    from public.workspaces as workspace
+  ),
+  collections(collection) as (
+    values
+      ('groups'),
+      ('students'),
+      ('grades'),
+      ('classLog'),
+      ('classSchedules'),
+      ('scheduleExceptions'),
+      ('scheduleChanges')
+  )
+  select
+    workspace.owner_id,
+    collections.collection,
+    legacy_item.value ->> 'id' as item_id
+  into unsafe_workspace
+  from workspace_states as workspace
+  cross join collections
+  cross join lateral jsonb_array_elements(
+    coalesce(workspace.legacy_state -> collections.collection, '[]'::jsonb)
+  ) as legacy_item
+  where nullif(btrim(legacy_item.value ->> 'id'), '') is null
+    or not exists (
+      select 1
+      from jsonb_array_elements(
+        coalesce(workspace.normalized_state -> collections.collection, '[]'::jsonb)
+      ) as normalized_item
+      where normalized_item.value ->> 'id' = legacy_item.value ->> 'id'
+    )
+  order by workspace.owner_id, collections.collection, legacy_item.value ->> 'id'
+  limit 1;
+
+  if found then
+    raise exception using
+      errcode = '55000',
+      message = 'legacy_normalized_workspace_parity_failed',
+      detail = format(
+        'legacy_only_entity:%s:%s',
+        unsafe_workspace.collection,
+        coalesce(unsafe_workspace.item_id, '<missing-id>')
+      );
+  end if;
+
   perform pg_catalog.set_config('hibi.workspace_write_authorized', 'yes', true);
   update public.workspaces as workspace
   set state = private.initial_workspace_state()

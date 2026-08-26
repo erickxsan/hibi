@@ -15,6 +15,7 @@ describe("semantic entity identity migration", () => {
   });
 
   it("enforces one class and one session grade per semantic identity", () => {
+    expect(migration).toContain("set constraints all immediate");
     expect(migration).toContain("class_records_owner_student_session_unique");
     expect(migration).toContain("(owner_id, student_id, class_date, start_time)");
     expect(migration).toContain("grades_owner_student_session_unique");

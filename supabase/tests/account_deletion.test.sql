@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(52);
+select plan(54);
 
 insert into auth.users (
   id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -279,6 +279,15 @@ select is((
 select is((select confdeltype::text from pg_constraint where conname = 'workspaces_owner_id_fkey'), 'r', 'workspace Auth FK remains RESTRICT');
 select is((select confdeltype::text from pg_constraint where conname = 'workspace_recovery_snapshots_owner_id_fkey'), 'r', 'snapshot Auth FK remains RESTRICT');
 select is((select confdeltype::text from pg_constraint where conname = 'workspace_import_jobs_owner_id_fkey'), 'r', 'import Auth FK remains RESTRICT');
+select ok(
+  (select relrowsecurity from pg_class where oid = 'private.account_erasure_targets'::regclass),
+  'the private erasure registry has row-level security enabled'
+);
+select ok(
+  not has_schema_privilege('anon', 'private', 'USAGE')
+    and not has_schema_privilege('authenticated', 'private', 'USAGE'),
+  'browser roles cannot use the private schema'
+);
 select ok(
   exists (
     select 1 from cron.job
