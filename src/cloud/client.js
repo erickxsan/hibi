@@ -70,6 +70,36 @@ function throwAuthError(error, fallback) {
   if (error) throw new CloudAuthenticationError(error.message || fallback, { cause: error });
 }
 
+const JWT_CLOCK_SKEW_RETRY_DELAY_MS = 2_000;
+
+export function isJwtIssuedAtFutureError(error) {
+  let current = error;
+  for (let depth = 0; current && depth < 5; depth += 1) {
+    const providerText = `${current.code || ""} ${current.message || ""} ${current.details || ""}`.toLowerCase();
+    if (providerText.includes("pgrst303") || providerText.includes("jwt issued at future")) return true;
+    current = current.cause;
+  }
+  return false;
+}
+
+export async function retryJwtClockSkew(
+  operation,
+  {
+    refreshSession,
+    wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+    delayMs = JWT_CLOCK_SKEW_RETRY_DELAY_MS,
+  },
+) {
+  try {
+    return await operation();
+  } catch (error) {
+    if (!isJwtIssuedAtFutureError(error)) throw error;
+    await refreshSession();
+    await wait(delayMs);
+    return operation();
+  }
+}
+
 /** Create an injectable Auth facade so repository tests never need live credentials. */
 export function createAuthService(client = supabase) {
   const cloud = () => requireCloudClient(client);
