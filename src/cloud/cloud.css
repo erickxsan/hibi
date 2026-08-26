@@ -99,6 +99,16 @@
   border-top: 1px solid var(--border, #deded8);
 }
 
+.encryption-password-form {
+  padding-top: 4px;
+  border-top: 0;
+  text-align: left;
+}
+
+.encryption-password-form > .button {
+  width: 100%;
+}
+
 .encryption-secondary-actions {
   margin-top: 4px;
 }

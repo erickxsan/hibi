@@ -1,6 +1,14 @@
 export { canonicalBytes, canonicalStringify } from "./canonical.js";
 export { deviceKeyStore, createDeviceKeyStore } from "./deviceKeyStore.js";
-export { fromBase64Url, toBase64Url, wipeBytes } from "./encoding.js";
+export { equalBytes, fromBase64Url, toBase64Url, wipeBytes } from "./encoding.js";
+export {
+  createPasswordWrapper,
+  derivePasswordSecret,
+  PASSWORD_KDF_ALGORITHM,
+  PASSWORD_KDF_ITERATIONS,
+  rewrapPassword,
+  unlockWithPassword,
+} from "./passwords.js";
 export {
   canAttemptPasskeyPrf,
   HIBI_PRODUCTION_ORIGIN,

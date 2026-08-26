@@ -510,9 +510,8 @@ function CloudWorkspaceApplication({ session, onDeletionCompleted }) {
         busy={encryption.busy}
         error={encryption.error}
         progress={encryption.progress}
-        passkeyPrfAvailable={encryption.security.passkeyPrfAvailable}
         onActivate={encryption.activate}
-        onUnlockPasskey={encryption.unlockPasskey}
+        onUnlockPassword={encryption.unlockPassword}
         onUnlockRecovery={encryption.unlockRecovery}
         onRetry={encryption.retry}
         onSignOut={async () => {

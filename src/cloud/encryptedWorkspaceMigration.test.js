@@ -95,7 +95,7 @@ describe("encrypted workspace migration cleanup", () => {
         user,
         masterKey: generateAccountMasterKey(),
         workspaceCryptoId: generateWorkspaceCryptoId(),
-        passkeyWrapper: { type: "passkey" },
+        keyWrapper: { type: "password" },
       }),
     ).rejects.toThrow("staging failed");
 

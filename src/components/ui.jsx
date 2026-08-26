@@ -260,6 +260,8 @@ export function ConfirmDialog({
   onClose,
   tone = "danger",
   busy = false,
+  confirmDisabled = false,
+  children,
 }) {
   if (!open) return null;
   return (
@@ -274,7 +276,7 @@ export function ConfirmDialog({
           <Button onClick={onClose} disabled={busy}>
             Cancel
           </Button>
-          <Button variant={tone} onClick={onConfirm} disabled={busy}>
+          <Button variant={tone} onClick={onConfirm} disabled={busy || confirmDisabled}>
             {busy ? "Saving…" : confirmLabel}
           </Button>
         </>
@@ -284,6 +286,7 @@ export function ConfirmDialog({
         <AlertCircle aria-hidden="true" />
         <p>This action changes saved data immediately.</p>
       </div>
+      {children}
     </Drawer>
   );
 }

@@ -53,6 +53,7 @@ const LOAD_STAGING_RPC = "load_workspace_e2ee_migration_staging";
 const FINALIZE_MIGRATION_RPC = "finalize_workspace_e2ee_migration";
 const ABORT_MIGRATION_RPC = "abort_workspace_e2ee_migration";
 const ADD_WRAPPER_RPC = "add_workspace_key_wrapper";
+const REPLACE_PASSWORD_WRAPPER_RPC = "replace_workspace_password_wrapper";
 const REVOKE_WRAPPER_RPC = "revoke_workspace_key_wrapper";
 const TOUCH_WRAPPER_RPC = "touch_workspace_key_wrapper";
 const BEGIN_STAGED_ROTATION_RPC = "begin_staged_workspace_key_rotation";
@@ -101,13 +102,22 @@ function normalizeEnvelope(value) {
 }
 
 function normalizeWrapper(row) {
+  const defaultLabel =
+    row.wrapper_type === "password"
+      ? "Encryption password"
+      : row.wrapper_type === "passkey"
+        ? "Passkey"
+        : "Recovery key";
   return {
     wrapperId: row.wrapper_id,
     type: row.wrapper_type,
-    label: row.label || (row.wrapper_type === "passkey" ? "Passkey" : "Recovery key"),
+    label: row.label || defaultLabel,
     credentialId: row.credential_id,
     prfSalt: row.prf_salt,
     transports: row.transports || [],
+    kdfAlgorithm: row.kdf_algorithm,
+    kdfIterations: Number(row.kdf_iterations || 0),
+    kdfSalt: row.kdf_salt,
     recoveryFingerprint: row.recovery_fingerprint,
     wrapperVersion: Number(row.wrapper_version),
     keyVersion: Number(row.key_version),
@@ -685,6 +695,16 @@ export function createEncryptedWorkspaceRepository(
     if (error) throw persistenceFailure("The workspace key could not be revoked.", error);
   }
 
+  async function replacePasswordWrapper(currentWrapperId, wrapper, expectedOwnerId) {
+    const user = await requireUser(expectedOwnerId);
+    const { error } = await cloud().rpc(REPLACE_PASSWORD_WRAPPER_RPC, {
+      p_expected_owner_id: expectedOwnerId || user.id,
+      p_current_wrapper_id: currentWrapperId,
+      p_wrapper: wrapper,
+    });
+    if (error) throw persistenceFailure("The encryption password could not be changed.", error);
+  }
+
   async function touchWrapper(wrapperId, expectedOwnerId) {
     const user = await requireUser(expectedOwnerId);
     const { error } = await cloud().rpc(TOUCH_WRAPPER_RPC, {
@@ -694,7 +714,14 @@ export function createEncryptedWorkspaceRepository(
     if (error) throw persistenceFailure("The workspace key usage date could not be updated.", error);
   }
 
-  async function migrateLegacyWorkspace({ user, masterKey, workspaceCryptoId, passkeyWrapper, onProgress }) {
+  async function abortMigration(expectedOwnerId) {
+    const user = await requireUser(expectedOwnerId);
+    const { error } = await cloud().rpc(ABORT_MIGRATION_RPC, { p_expected_owner_id: expectedOwnerId || user.id });
+    if (error) throw persistenceFailure("The interrupted encrypted migration could not be reset.", error);
+    cache = null;
+  }
+
+  async function migrateLegacyWorkspace({ user, masterKey, workspaceCryptoId, keyWrapper, onProgress }) {
     requireWritesEnabled();
     const queued = await deviceStore.listMutations(user.id);
     if (queued.length) {
@@ -771,7 +798,7 @@ export function createEncryptedWorkspaceRepository(
       p_workspace_crypto_id: workspaceCryptoId,
       p_protocol_version: CRYPTO_PROTOCOL_VERSION,
       p_schema_version: CRYPTO_SCHEMA_VERSION,
-      p_wrapper: passkeyWrapper,
+      p_wrapper: keyWrapper,
     });
     if (beginError) throw persistenceFailure("Encrypted migration could not start.", beginError);
     try {
@@ -1076,7 +1103,7 @@ export function createEncryptedWorkspaceRepository(
         p_operation_id: operationId,
         p_wrappers: wrappers,
       });
-      if (wrapperError) throw persistenceFailure("Rotated passkey wrappers could not be staged.", wrapperError);
+      if (wrapperError) throw persistenceFailure("Rotated password wrappers could not be staged.", wrapperError);
 
       onProgress?.("Publishing the rotated key and encrypted history atomically…");
       const { data: finalized, error } = await cloud().rpc(FINALIZE_STAGED_ROTATION_RPC, {
@@ -1086,9 +1113,11 @@ export function createEncryptedWorkspaceRepository(
       if (error) throw persistenceFailure("Emergency workspace key rotation could not be completed.", error);
       data = finalized;
     } catch (error) {
-      await cloud()
-        .rpc(ABORT_STAGED_ROTATION_RPC, { p_expected_owner_id: ownerId, p_operation_id: operationId })
-        .catch(() => {});
+      try {
+        await cloud().rpc(ABORT_STAGED_ROTATION_RPC, { p_expected_owner_id: ownerId, p_operation_id: operationId });
+      } catch {
+        // Cleanup is best-effort. Preserve the primary rotation error.
+      }
       throw error;
     }
     const row = firstRow(data);
@@ -1283,8 +1312,10 @@ export function createEncryptedWorkspaceRepository(
     listSnapshots,
     loadSnapshot,
     addWrapper,
+    replacePasswordWrapper,
     revokeWrapper,
     touchWrapper,
+    abortMigration,
     migrateLegacyWorkspace,
     rotateWorkspaceKey,
     subscribe,

@@ -3,7 +3,6 @@ import {
   Clock3,
   Download,
   FilePlus2,
-  Fingerprint,
   Globe2,
   History,
   KeyRound,
@@ -64,8 +63,14 @@ export default function Settings({
   const [recoveryReveal, setRecoveryReveal] = useState("");
   const [rotationOpen, setRotationOpen] = useState(false);
   const [rotationProgress, setRotationProgress] = useState("");
+  const [rotationPassword, setRotationPassword] = useState("");
+  const [passwordChangeOpen, setPasswordChangeOpen] = useState(false);
+  const [currentEncryptionPassword, setCurrentEncryptionPassword] = useState("");
+  const [newEncryptionPassword, setNewEncryptionPassword] = useState("");
+  const [newEncryptionPasswordConfirmation, setNewEncryptionPasswordConfirmation] = useState("");
   const [backupSourceRecovery, setBackupSourceRecovery] = useState(null);
   const [backupSourceRecoveryKey, setBackupSourceRecoveryKey] = useState("");
+  const [backupSourcePassword, setBackupSourcePassword] = useState("");
   const fileRef = useRef(null);
   const recordsFileRef = useRef(null);
   const baselineRef = useRef(settingsDraft(state.settings));
@@ -89,7 +94,7 @@ export default function Settings({
     }
   };
 
-  const stageFullRestore = (parsed, { name, text, encrypted, sourceRecoveryKey = "", sourcePasskey = false }) => {
+  const stageFullRestore = (parsed, { name, text, encrypted, sourceRecoveryKey = "", sourcePassword = "" }) => {
     const counts = {
       students: parsed.students.length,
       groups: parsed.groups.length,
@@ -103,7 +108,7 @@ export default function Settings({
       classes: state.classLog.length,
     };
     const removals = Object.keys(counts).filter((key) => counts[key] < currentCounts[key]);
-    setPendingImport({ name, text, counts, currentCounts, removals, encrypted, sourceRecoveryKey, sourcePasskey });
+    setPendingImport({ name, text, counts, currentCounts, removals, encrypted, sourceRecoveryKey, sourcePassword });
     setImportConfirmation("");
   };
 
@@ -127,9 +132,12 @@ export default function Settings({
         setBackupSourceRecovery({
           name: file.name,
           text,
-          passkeyAvailable: (outer.wrappers || []).some((wrapper) => wrapper.type === "passkey" && !wrapper.revokedAt),
+          passwordAvailable: (outer.wrappers || []).some(
+            (wrapper) => wrapper.type === "password" && !wrapper.revokedAt,
+          ),
         });
         setBackupSourceRecoveryKey("");
+        setBackupSourcePassword("");
         return;
       }
       const parsed = isEncrypted ? await actions.previewEncryptedBackup(text) : importState(text);
@@ -387,13 +395,13 @@ export default function Settings({
         {encryption?.enabled ? (
           <article className="settings-card encryption-settings-card">
             <div className="settings-icon sage">
-              <Fingerprint size={22} />
+              <KeyRound size={22} />
             </div>
             <div className="settings-content">
               <h2>Workspace encryption & access</h2>
               <p>
                 E2EE protocol v{encryption.profile?.protocolVersion}; unlocked with {encryption.method || "a local key"}
-                . Passkeys wrap the same stable master key, so adding one does not re-encrypt your records.
+                . Your password wraps the same stable master key, so changing it does not re-encrypt your records.
               </p>
               <div className="workspace-key-list" aria-label="Workspace key wrappers">
                 {encryption.wrappers
@@ -403,7 +411,7 @@ export default function Settings({
                       <span>
                         <strong>{wrapper.label}</strong>
                         <small>
-                          {wrapper.type === "passkey" ? "Passkey with WebAuthn PRF" : "Recovery key"} · added{" "}
+                          {wrapper.type === "password" ? "Password-derived key" : "Recovery key"} · added{" "}
                           {new Date(wrapper.createdAt).toLocaleDateString()}
                           {wrapper.lastUsedAt
                             ? ` · last used ${new Date(wrapper.lastUsedAt).toLocaleDateString()}`
@@ -411,7 +419,11 @@ export default function Settings({
                         </small>
                       </span>
                       <Button
-                        disabled={securityBusy || encryption.wrappers.filter((item) => !item.revokedAt).length <= 1}
+                        disabled={
+                          securityBusy ||
+                          wrapper.type === "password" ||
+                          encryption.wrappers.filter((item) => !item.revokedAt).length <= 1
+                        }
                         onClick={async () => {
                           setSecurityBusy(true);
                           setSecurityError("");
@@ -446,22 +458,17 @@ export default function Settings({
               ) : null}
               <div className="button-cluster workspace-key-actions">
                 <Button
-                  icon={Fingerprint}
-                  disabled={securityBusy || !encryption.passkeyPrfAvailable}
-                  onClick={async () => {
-                    setSecurityBusy(true);
+                  icon={KeyRound}
+                  disabled={securityBusy}
+                  onClick={() => {
                     setSecurityError("");
-                    try {
-                      await encryption.addPasskey();
-                      actions.notify("Passkey added");
-                    } catch (error) {
-                      setSecurityError(error?.message || "A passkey could not be added.");
-                    } finally {
-                      setSecurityBusy(false);
-                    }
+                    setCurrentEncryptionPassword("");
+                    setNewEncryptionPassword("");
+                    setNewEncryptionPasswordConfirmation("");
+                    setPasswordChangeOpen(true);
                   }}
                 >
-                  Add passkey
+                  Change encryption password
                 </Button>
                 <Button
                   icon={KeyRound}
@@ -744,8 +751,8 @@ export default function Settings({
               variant="danger"
               disabled={Boolean(pendingImport?.removals.length) && importConfirmation !== "RESTORE"}
               onClick={async () => {
-                const restored = pendingImport.sourcePasskey
-                  ? await actions.importEncryptedBackupWithPasskey(pendingImport.text)
+                const restored = pendingImport.sourcePassword
+                  ? await actions.importEncryptedBackupWithPassword(pendingImport.text, pendingImport.sourcePassword)
                   : pendingImport.encrypted
                     ? await actions.importEncryptedBackup(pendingImport.text, pendingImport.sourceRecoveryKey)
                     : await actions.importJson(pendingImport.text);
@@ -815,6 +822,7 @@ export default function Settings({
               onClick={() => {
                 setBackupSourceRecovery(null);
                 setBackupSourceRecoveryKey("");
+                setBackupSourcePassword("");
               }}
             >
               Cancel
@@ -859,33 +867,46 @@ export default function Settings({
             spellCheck="false"
           />
         </Field>
-        {backupSourceRecovery?.passkeyAvailable ? (
-          <div className="backup-passkey-unlock">
+        {backupSourceRecovery?.passwordAvailable ? (
+          <div className="backup-password-unlock">
             <span>or</span>
+            <Field label="Source workspace encryption password">
+              <Input
+                type="password"
+                value={backupSourcePassword}
+                onChange={(event) => setBackupSourcePassword(event.target.value)}
+                autoComplete="off"
+                spellCheck="false"
+              />
+            </Field>
             <Button
               variant="primary"
-              icon={Fingerprint}
-              disabled={recordImportBusy || !encryption?.passkeyPrfAvailable}
+              icon={KeyRound}
+              disabled={recordImportBusy || !backupSourcePassword}
               onClick={async () => {
                 setRecordImportBusy(true);
                 try {
-                  const parsed = await actions.previewEncryptedBackupWithPasskey(backupSourceRecovery.text);
+                  const parsed = await actions.previewEncryptedBackupWithPassword(
+                    backupSourceRecovery.text,
+                    backupSourcePassword,
+                  );
                   stageFullRestore(parsed, {
                     name: backupSourceRecovery.name,
                     text: backupSourceRecovery.text,
                     encrypted: true,
-                    sourcePasskey: true,
+                    sourcePassword: backupSourcePassword,
                   });
                   setBackupSourceRecovery(null);
                   setBackupSourceRecoveryKey("");
+                  setBackupSourcePassword("");
                 } catch (error) {
-                  actions.notify(error?.message || "The source passkey could not unlock this backup.", "error");
+                  actions.notify(error?.message || "The source password could not unlock this backup.", "error");
                 } finally {
                   setRecordImportBusy(false);
                 }
               }}
             >
-              Unlock source with passkey
+              Unlock source with password
             </Button>
           </div>
         ) : null}
@@ -926,21 +947,102 @@ export default function Settings({
           <p>No recovery copies are available yet. Hibi creates them automatically as you use the app.</p>
         )}
       </Drawer>
+      <Drawer
+        open={passwordChangeOpen}
+        onClose={() => {
+          if (!securityBusy) setPasswordChangeOpen(false);
+        }}
+        title="Change encryption password"
+        description="This replaces only the password wrapper around your account master key. Your encrypted records do not need to be re-encrypted."
+        size="compact"
+        footer={
+          <>
+            <Button onClick={() => setPasswordChangeOpen(false)} disabled={securityBusy}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              icon={KeyRound}
+              disabled={
+                securityBusy ||
+                !currentEncryptionPassword ||
+                !newEncryptionPassword ||
+                !newEncryptionPasswordConfirmation
+              }
+              onClick={async () => {
+                if (newEncryptionPassword !== newEncryptionPasswordConfirmation) {
+                  setSecurityError("The new password confirmation does not match.");
+                  return;
+                }
+                setSecurityBusy(true);
+                setSecurityError("");
+                try {
+                  await encryption.changePassword(currentEncryptionPassword, newEncryptionPassword);
+                  setPasswordChangeOpen(false);
+                  setCurrentEncryptionPassword("");
+                  setNewEncryptionPassword("");
+                  setNewEncryptionPasswordConfirmation("");
+                  actions.notify("Encryption password changed");
+                } catch (error) {
+                  setSecurityError(error?.message || "The encryption password could not be changed.");
+                } finally {
+                  setSecurityBusy(false);
+                }
+              }}
+            >
+              Save new password
+            </Button>
+          </>
+        }
+      >
+        <div className="settings-controls settings-controls-expanded">
+          <Field label="Current encryption password">
+            <Input
+              type="password"
+              value={currentEncryptionPassword}
+              onChange={(event) => setCurrentEncryptionPassword(event.target.value)}
+              autoComplete="current-password"
+            />
+          </Field>
+          <Field label="New encryption password">
+            <Input
+              type="password"
+              value={newEncryptionPassword}
+              onChange={(event) => setNewEncryptionPassword(event.target.value)}
+              autoComplete="new-password"
+            />
+          </Field>
+          <Field label="Confirm new encryption password">
+            <Input
+              type="password"
+              value={newEncryptionPasswordConfirmation}
+              onChange={(event) => setNewEncryptionPasswordConfirmation(event.target.value)}
+              autoComplete="new-password"
+            />
+          </Field>
+          {securityError ? <p className="settings-inline-warning">{securityError}</p> : null}
+        </div>
+      </Drawer>
       <ConfirmDialog
         open={rotationOpen}
         title="Rotate the account master key?"
-        description="Hibi will request every active passkey, generate a new master key, and re-encrypt active records, snapshots, device cache, and key wrappers. Existing recovery keys will be revoked; create a new one afterward. A lost device cannot decrypt future revisions."
+        description="Hibi will verify your encryption password, generate a new master key, and re-encrypt active records, snapshots, device cache, and the password wrapper. Existing recovery keys will be revoked; create a new one afterward. A lost device cannot decrypt future revisions."
         confirmLabel={rotationProgress || "Rotate master key"}
         busy={securityBusy}
+        confirmDisabled={!rotationPassword}
         onClose={() => {
-          if (!securityBusy) setRotationOpen(false);
+          if (!securityBusy) {
+            setRotationOpen(false);
+            setRotationPassword("");
+          }
         }}
         onConfirm={async () => {
           setSecurityBusy(true);
           setSecurityError("");
           try {
-            await encryption.rotateKey(setRotationProgress);
+            await encryption.rotateKey(rotationPassword, setRotationProgress);
             setRotationOpen(false);
+            setRotationPassword("");
             setRecoveryReveal("");
             actions.notify("Workspace master key rotated");
           } catch (error) {
@@ -950,7 +1052,17 @@ export default function Settings({
             setSecurityBusy(false);
           }
         }}
-      />
+      >
+        <Field label="Encryption password">
+          <Input
+            type="password"
+            value={rotationPassword}
+            onChange={(event) => setRotationPassword(event.target.value)}
+            autoComplete="current-password"
+            disabled={securityBusy}
+          />
+        </Field>
+      </ConfirmDialog>
       <ConfirmDialog
         open={Boolean(pendingRecovery)}
         title="Restore this recovery copy?"
