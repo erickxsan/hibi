@@ -413,8 +413,8 @@ select is((select count(*) from public.workspace_encryption_profiles), 0::bigint
 select is((select count(*) from public.encrypted_workspace_import_receipts), 0::bigint, 'another account cannot see encrypted import history');
 select is(
   (select enabled from public.workspace_e2ee_rollout_status('44444444-4444-4444-8444-444444444444')),
-  false,
-  'a non-canary legacy account continues on the legacy repository'
+  true,
+  'every legacy account must activate E2EE before continuing'
 );
 select throws_ok(
   $$select * from public.load_encrypted_workspace('33333333-3333-4333-8333-333333333333')$$,
@@ -425,7 +425,7 @@ select throws_ok(
 
 reset role;
 select is((select count(*) from public.workspace_e2ee_rotation_staging), 0::bigint, 'successful rotation removes all staging through cascade');
-select is((select mode from public.workspace_e2ee_rollout_config where singleton = 1), 'canary', 'E2EE starts in canary mode');
+select is((select mode from public.workspace_e2ee_rollout_config where singleton = 1), 'required', 'E2EE is mandatory after the rollout migration');
 select ok(has_function_privilege('authenticated', 'public.workspace_e2ee_rollout_status(uuid)', 'EXECUTE'), 'authenticated clients can read their rollout decision');
 select ok(not has_table_privilege('authenticated', 'public.workspace_e2ee_rollout_config', 'SELECT'), 'clients cannot alter or enumerate rollout configuration');
 select ok(not has_table_privilege('authenticated', 'public.encrypted_workspace_entities', 'INSERT'), 'authenticated clients cannot insert encrypted rows directly');

@@ -7,6 +7,10 @@ owner-scoped AES-GCM envelopes, passkey/recovery wrappers, authenticated manifes
 snapshots, and idempotency receipts. It does not store readable names, contact details, academic values, class/payment
 dates, notes, relationships, or amounts.
 
+`202608260002_require_end_to_end_encryption.sql` completes the rollout. After it is applied, every authenticated legacy
+workspace is gated on passkey activation and verified migration; the application no longer selects the legacy
+repository as a usable fallback.
+
 The normalized model described below remains only as a transactional migration source for accounts whose owners have
 not returned. `migration_started` blocks its writes, staging is downloaded and verified by the browser, and the final
 RPC removes readable normalized rows only after exact canonical parity. Active E2EE profiles make legacy clients fail
