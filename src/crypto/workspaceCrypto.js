@@ -11,7 +11,7 @@ import {
 } from "./encoding.js";
 
 export const CRYPTO_PROTOCOL_VERSION = 1;
-export const CRYPTO_SCHEMA_VERSION = 1;
+export const CRYPTO_SCHEMA_VERSION = 2;
 export const MASTER_KEY_BYTES = 32;
 export const NONCE_BYTES = 12;
 export const ENCRYPTED_COLLECTIONS = Object.freeze([
@@ -178,7 +178,7 @@ export async function decryptEntity({ masterKey, workspaceCryptoId, envelope, cr
   }
 }
 
-function workspaceEntries(state) {
+function workspaceEntries(state, schemaVersion) {
   const entries = [
     {
       collection: SETTINGS_COLLECTION,
@@ -187,7 +187,13 @@ function workspaceEntries(state) {
     },
   ];
   for (const collection of ENCRYPTED_COLLECTIONS) {
-    for (const item of state[collection] || []) entries.push({ collection, entityId: String(item.id), value: item });
+    (state[collection] || []).forEach((item, position) => {
+      entries.push({
+        collection,
+        entityId: String(item.id),
+        value: schemaVersion >= 2 ? { data: item, position } : item,
+      });
+    });
   }
   return entries;
 }
@@ -197,17 +203,19 @@ export async function encryptWorkspace({
   workspaceCryptoId,
   state,
   versions = {},
+  schemaVersion = CRYPTO_SCHEMA_VERSION,
   keyVersion = 1,
   cryptoApi = globalThis.crypto,
 }) {
   return Promise.all(
-    workspaceEntries(state).map(({ collection, entityId, value }) =>
+    workspaceEntries(state, schemaVersion).map(({ collection, entityId, value }) =>
       encryptEntity({
         masterKey,
         workspaceCryptoId,
         collection,
         entityId,
         entityRevision: Number(versions?.[collection]?.[entityId] || 1),
+        schemaVersion,
         keyVersion,
         value,
         cryptoApi,
@@ -218,6 +226,8 @@ export async function encryptWorkspace({
 
 export async function decryptWorkspace({ masterKey, workspaceCryptoId, envelopes, cryptoApi = globalThis.crypto }) {
   const state = Object.fromEntries(ENCRYPTED_COLLECTIONS.map((collection) => [collection, []]));
+  const positions = Object.fromEntries(ENCRYPTED_COLLECTIONS.map((collection) => [collection, new Map()]));
+  const occupiedPositions = Object.fromEntries(ENCRYPTED_COLLECTIONS.map((collection) => [collection, new Set()]));
   const versions = Object.fromEntries(
     [SETTINGS_COLLECTION, ...ENCRYPTED_COLLECTIONS].map((collection) => [collection, {}]),
   );
@@ -236,13 +246,42 @@ export async function decryptWorkspace({ masterKey, workspaceCryptoId, envelopes
       state.settings = value?.settings || value;
       if (Number.isSafeInteger(value?.workspaceVersion)) state.version = value.workspaceVersion;
     } else {
-      if (String(value?.id) !== envelope.entityId) {
+      let item = value;
+      if (Number(envelope.schemaVersion) >= 2) {
+        if (
+          !value ||
+          typeof value !== "object" ||
+          !Number.isSafeInteger(value.position) ||
+          value.position < 0 ||
+          !value.data ||
+          typeof value.data !== "object"
+        ) {
+          throw new WorkspaceCryptoError("An encrypted entity has invalid ordering metadata.");
+        }
+        if (occupiedPositions[envelope.collection].has(value.position)) {
+          throw new WorkspaceCryptoError("Encrypted workspace ordering contains a duplicate position.");
+        }
+        occupiedPositions[envelope.collection].add(value.position);
+        positions[envelope.collection].set(envelope.entityId, value.position);
+        item = value.data;
+      }
+      if (String(item?.id) !== envelope.entityId) {
         throw new WorkspaceCryptoError("An encrypted entity does not match its authenticated identifier.");
       }
-      state[envelope.collection].push(value);
+      state[envelope.collection].push(item);
     }
   }
   if (!state.settings) throw new WorkspaceCryptoError("The encrypted workspace is missing its settings envelope.");
+  for (const collection of ENCRYPTED_COLLECTIONS) {
+    state[collection].sort((left, right) => {
+      const leftPosition = positions[collection].get(String(left.id));
+      const rightPosition = positions[collection].get(String(right.id));
+      if (leftPosition === undefined && rightPosition === undefined) return 0;
+      if (leftPosition === undefined) return 1;
+      if (rightPosition === undefined) return -1;
+      return leftPosition - rightPosition || String(left.id).localeCompare(String(right.id));
+    });
+  }
   return { state, versions };
 }
 

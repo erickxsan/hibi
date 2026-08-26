@@ -375,7 +375,7 @@ export function createEncryptedWorkspaceRepository(
       );
     }
     for (const collection of ENCRYPTED_COLLECTIONS) {
-      for (const { data } of patch[collection]?.upserts || []) {
+      for (const { data, position } of patch[collection]?.upserts || []) {
         upserts.push(
           await encryptEntity({
             masterKey: session.masterKey,
@@ -384,7 +384,7 @@ export function createEncryptedWorkspaceRepository(
             entityId: String(data.id),
             entityRevision: Number(workspace.versions[collection]?.[data.id] || 0) + 1,
             keyVersion: session.keyVersion,
-            value: data,
+            value: { data, position },
           }),
         );
       }

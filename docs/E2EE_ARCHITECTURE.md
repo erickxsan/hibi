@@ -1,6 +1,6 @@
 # Hibi end-to-end encryption protocol
 
-Status: protocol v1, schema v1. This document is the implementation contract for `src/crypto`,
+Status: protocol v1, schema v2. This document is the implementation contract for `src/crypto`,
 `src/cloud/encryptedWorkspaceRepository.js`, and
 `supabase/migrations/202608250001_end_to_end_encryption_v2.sql`.
 
@@ -68,13 +68,19 @@ with AES-256-GCM and a new random 96-bit nonce on every write. The authenticated
   "collection": "students",
   "entityId": "…",
   "entityRevision": 4,
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "keyVersion": 1
 }
 ```
 
 The server stores only those exterior fields, nonce, ciphertext, owner ID, and timestamps. It has no columns for names,
 contacts, class dates, grades, attendance, amounts, or payment dates.
+
+Schema v2 includes each non-settings entity's collection position inside the authenticated ciphertext. The browser uses
+that private position to reconstruct arrays after the server returns envelopes in collection/entity-ID order. Position
+changes are encrypted upserts, so migration verification, later loads, offline replay, and conflict merges preserve the
+original workspace order without exposing it as queryable server metadata. Schema v1 envelopes remain readable for
+compatibility but do not carry this ordering guarantee.
 
 ## Global integrity and rollback witnesses
 
