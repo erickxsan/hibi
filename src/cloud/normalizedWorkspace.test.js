@@ -48,6 +48,23 @@ describe("normalized workspace patches", () => {
     expect(next.students).toBe(state.students);
   });
 
+  it("detects and reapplies entity order changes", () => {
+    const previous = createStarterState();
+    previous.students = [
+      { id: "s1", fullName: "Ana" },
+      { id: "s2", fullName: "Luis" },
+    ];
+    const next = { ...previous, students: [previous.students[1], previous.students[0]] };
+
+    const { patch } = buildWorkspacePatch(previous, next, { students: { s1: 2, s2: 3 } });
+
+    expect(patch.students.upserts).toEqual([
+      { data: previous.students[1], position: 0 },
+      { data: previous.students[0], position: 1 },
+    ]);
+    expect(applyWorkspacePatch(previous, patch).students).toEqual(next.students);
+  });
+
   it("tracks revisions per entity instead of using one write revision", () => {
     const versions = { groups: { g1: 2 }, students: { s1: 5 } };
     const patch = {

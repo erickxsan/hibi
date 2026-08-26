@@ -85,6 +85,23 @@ describe("workspace encryption protocol", () => {
     expect(deriveAll(decrypted, state.settings.asOfDate)).toEqual(deriveAll(state, state.settings.asOfDate));
   });
 
+  it("preserves collection order when the server returns envelopes sorted by identity", async () => {
+    const state = privateFixture();
+    state.students.unshift({ ...state.students[0], id: "student-z", code: "PRIVATE-Z" });
+    state.students.push({ ...state.students[1], id: "student-a", code: "PRIVATE-A" });
+    const masterKey = generateAccountMasterKey();
+    const workspaceCryptoId = generateWorkspaceCryptoId();
+    const envelopes = await encryptWorkspace({ masterKey, workspaceCryptoId, state });
+    const serverOrdered = [...envelopes].sort(
+      (left, right) => left.collection.localeCompare(right.collection) || left.entityId.localeCompare(right.entityId),
+    );
+
+    expect(envelopes.every((envelope) => envelope.schemaVersion === 2)).toBe(true);
+    await expect(decryptWorkspace({ masterKey, workspaceCryptoId, envelopes: serverOrdered })).resolves.toMatchObject({
+      state,
+    });
+  });
+
   it("detects omitted entities, tampering, rollback, and chain changes", async () => {
     const state = privateFixture();
     const masterKey = generateAccountMasterKey();

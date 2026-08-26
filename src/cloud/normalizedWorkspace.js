@@ -15,12 +15,15 @@ function sameEntity(left, right) {
 }
 
 function collectionPatch(previousItems, nextItems) {
-  const previousById = new Map(previousItems.map((item) => [item.id, item]));
+  const previousById = new Map(previousItems.map((item, position) => [item.id, { item, position }]));
   const nextIds = new Set(nextItems.map((item) => item.id));
   const upserts = [];
 
   nextItems.forEach((item, position) => {
-    if (!sameEntity(previousById.get(item.id), item)) upserts.push({ data: item, position });
+    const previous = previousById.get(item.id);
+    if (!previous || previous.position !== position || !sameEntity(previous.item, item)) {
+      upserts.push({ data: item, position });
+    }
   });
 
   return {
@@ -70,18 +73,25 @@ export function applyWorkspacePatch(state, patch) {
     const changes = patch?.[collection];
     if (!changes) continue;
     const deletedIds = new Set(changes.deletes || []);
-    const upsertsById = new Map((changes.upserts || []).map(({ data }) => [data.id, data]));
+    const upsertsById = new Map((changes.upserts || []).map((upsert) => [upsert.data.id, upsert]));
     const existingIds = new Set((state[collection] || []).map((item) => item.id));
     const items = (state[collection] || [])
       .filter((item) => !deletedIds.has(item.id))
-      .map((item) => upsertsById.get(item.id) || item);
+      .map((item, position) => {
+        const upsert = upsertsById.get(item.id);
+        return { data: upsert?.data || item, position: upsert?.position ?? position };
+      });
     const additions = (changes.upserts || [])
       .filter(({ data }) => !existingIds.has(data.id))
-      .sort((left, right) => left.position - right.position);
-    for (const addition of additions) {
-      items.splice(Math.min(addition.position, items.length), 0, addition.data);
-    }
-    next = { ...next, [collection]: items };
+      .map((upsert) => ({ data: upsert.data, position: upsert.position }));
+    next = {
+      ...next,
+      [collection]: [...items, ...additions]
+        .sort(
+          (left, right) => left.position - right.position || String(left.data.id).localeCompare(String(right.data.id)),
+        )
+        .map(({ data }) => data),
+    };
   }
 
   return next;
