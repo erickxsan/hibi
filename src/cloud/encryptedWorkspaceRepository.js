@@ -908,9 +908,11 @@ export function createEncryptedWorkspaceRepository(
     } catch (error) {
       const bootstrap = await loadBootstrap(user.id).catch(() => null);
       if (bootstrap?.profile?.migrationStatus !== "active") {
-        await cloud()
-          .rpc(ABORT_MIGRATION_RPC, { p_expected_owner_id: user.id })
-          .catch(() => {});
+        try {
+          await cloud().rpc(ABORT_MIGRATION_RPC, { p_expected_owner_id: user.id });
+        } catch {
+          // Cleanup is best-effort. Preserve the migration error that explains why activation failed.
+        }
       }
       throw error;
     }
