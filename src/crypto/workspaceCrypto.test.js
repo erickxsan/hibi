@@ -173,6 +173,7 @@ describe("recovery keys", () => {
   it("round-trips a formatted key and rejects a checksum change", async () => {
     const recovery = await generateRecoveryKey();
     await expect(parseRecoveryKey(recovery.formatted)).resolves.toEqual(recovery.secret);
+    // The final Base32 character contains padding bits, so corrupt the preceding checksum character.
     const checksumIndex = recovery.formatted.length - 2;
     const checksumCharacter = recovery.formatted[checksumIndex];
     const corrupted = `${recovery.formatted.slice(0, checksumIndex)}${checksumCharacter === "0" ? "1" : "0"}${recovery.formatted.slice(checksumIndex + 1)}`;
