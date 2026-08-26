@@ -15,6 +15,10 @@ const migration = readFileSync(
   new URL("../../supabase/migrations/202608250001_end_to_end_encryption_v2.sql", import.meta.url),
   "utf8",
 ).toLowerCase();
+const passwordMigration = readFileSync(
+  new URL("../../supabase/migrations/202608260003_password_key_wrappers.sql", import.meta.url),
+  "utf8",
+).toLowerCase();
 
 describe("mandatory E2EE v2 schema contract", () => {
   it("matches the encrypted tables and RPCs used by the browser", () => {
@@ -64,6 +68,16 @@ describe("mandatory E2EE v2 schema contract", () => {
     expect(migration).toContain("abort_workspace_e2ee_migration");
     expect(migration).toContain("migration_entity_count_mismatch");
     expect(migration).toContain("migration_settings_missing");
+  });
+
+  it("stores versioned password KDF parameters without storing the password or derived key", () => {
+    expect(passwordMigration).toContain("kdf_algorithm");
+    expect(passwordMigration).toContain("kdf_iterations");
+    expect(passwordMigration).toContain("kdf_salt");
+    expect(passwordMigration).toContain("pbkdf2-sha256");
+    expect(passwordMigration).toContain("array['password']");
+    expect(passwordMigration).toContain("replace_workspace_password_wrapper");
+    expect(passwordMigration).not.toMatch(/password_hash|derived_key|plaintext_password/u);
   });
 
   it("blocks old clients and registers every encrypted owner table for verified erasure", () => {

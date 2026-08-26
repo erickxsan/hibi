@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createStarterState } from "../domain/index.js";
-import { deviceKeyStore, unlockWithPasskey, wipeBytes } from "../crypto/index.js";
+import { deviceKeyStore, unlockWithPassword, wipeBytes } from "../crypto/index.js";
 import { deviceRecoveryStore } from "./deviceRecoveryStore.js";
 import { encryptedWorkspaceRepository } from "./encryptedWorkspaceRepository.js";
 import { statusForOutbox } from "./workspaceOutbox.js";
@@ -324,12 +324,18 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
     [cryptoSession, replace],
   );
 
-  const decryptBackupWithPasskey = useCallback(
-    async (text) => {
+  const decryptBackupWithPassword = useCallback(
+    async (text, password) => {
       const backup = JSON.parse(text);
-      const wrapper = (backup.wrappers || []).find((candidate) => candidate.type === "passkey" && !candidate.revokedAt);
-      if (!wrapper) throw new Error("This backup does not contain a compatible passkey wrapper.");
-      const sourceMasterKey = await unlockWithPasskey({ wrapper, workspaceCryptoId: backup.workspaceCryptoId });
+      const wrapper = (backup.wrappers || []).find(
+        (candidate) => candidate.type === "password" && !candidate.revokedAt,
+      );
+      if (!wrapper) throw new Error("This backup does not contain a compatible password wrapper.");
+      const sourceMasterKey = await unlockWithPassword({
+        wrapper,
+        password,
+        workspaceCryptoId: backup.workspaceCryptoId,
+      });
       try {
         return await encryptedWorkspaceRepository.decryptBackup(text, cryptoSession, { sourceMasterKey });
       } finally {
@@ -339,11 +345,11 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
     [cryptoSession],
   );
 
-  const previewEncryptedBackupWithPasskey = decryptBackupWithPasskey;
+  const previewEncryptedBackupWithPassword = decryptBackupWithPassword;
 
-  const importEncryptedBackupWithPasskey = useCallback(
-    async (text) => ({ state: await replace(await decryptBackupWithPasskey(text), "restore") }),
-    [decryptBackupWithPasskey, replace],
+  const importEncryptedBackupWithPassword = useCallback(
+    async (text, password) => ({ state: await replace(await decryptBackupWithPassword(text, password), "restore") }),
+    [decryptBackupWithPassword, replace],
   );
 
   const persistence = useMemo(
@@ -369,21 +375,21 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
             downloadEncryptedBackup,
             previewEncryptedBackup,
             importEncryptedBackup,
-            previewEncryptedBackupWithPasskey,
-            importEncryptedBackupWithPasskey,
+            previewEncryptedBackupWithPassword,
+            importEncryptedBackupWithPassword,
           }
         : null,
     [
       downloadEncryptedBackup,
       findImportJob,
       importEncryptedBackup,
-      importEncryptedBackupWithPasskey,
+      importEncryptedBackupWithPassword,
       importRecords,
       listRecoveryPoints,
       loadRecoveryPoint,
       replace,
       previewEncryptedBackup,
-      previewEncryptedBackupWithPasskey,
+      previewEncryptedBackupWithPassword,
       resetWorkspace,
       restoreRecoveryPoint,
       save,

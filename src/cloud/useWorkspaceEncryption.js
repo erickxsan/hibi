@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  canAttemptPasskeyPrf,
+  createPasswordWrapper,
   createCryptoSession,
   deviceKeyStore,
+  equalBytes,
   generateAccountMasterKey,
   generateRecoveryKey,
   generateWorkspaceCryptoId,
   parseRecoveryKey,
   recoveryKeyFingerprint,
-  registerPasskey,
-  rewrapPasskey,
-  unlockWithPasskey,
+  rewrapPassword,
+  unlockWithPassword,
   unwrapMasterKey,
   wipeBytes,
   wrapMasterKey,
@@ -101,33 +101,37 @@ export function useWorkspaceEncryption(user) {
   );
 
   const activate = useCallback(
-    async ({ rememberDevice = true } = {}) => {
+    async ({ password, rememberDevice = true } = {}) => {
       if (busy) return;
       setBusy(true);
       setError(null);
       let masterKey = null;
       try {
         await runExclusiveWorkspaceMigration(user.id, async () => {
+          if (bootstrap?.profile?.migrationStatus === "migration_started") {
+            setProgress("Resetting the incomplete passkey migration…");
+            await encryptedWorkspaceRepository.abortMigration(user.id);
+          }
           masterKey = generateAccountMasterKey();
           const workspaceCryptoId = generateWorkspaceCryptoId();
-          const passkeyWrapper = await registerPasskey({
-            user,
+          const passwordWrapper = await createPasswordWrapper({
             masterKey,
+            password,
             workspaceCryptoId,
-            label: "Primary passkey",
+            label: "Encryption password",
           });
           await encryptedWorkspaceRepository.migrateLegacyWorkspace({
             user,
             masterKey,
             workspaceCryptoId,
-            passkeyWrapper,
+            keyWrapper: passwordWrapper,
             onProgress: (stage, details) => setProgress(progressMessage(stage, details)),
           });
           if (rememberDevice)
             await deviceKeyStore.remember({ ownerId: user.id, workspaceCryptoId, masterKey, keyVersion: 1 });
           setRememberedDevice(await deviceKeyStore.describe(user.id).catch(() => null));
           adoptSession(
-            createCryptoSession({ ownerId: user.id, workspaceCryptoId, masterKey, keyVersion: 1, method: "passkey" }),
+            createCryptoSession({ ownerId: user.id, workspaceCryptoId, masterKey, keyVersion: 1, method: "password" }),
           );
           masterKey = null;
           await refresh();
@@ -140,23 +144,21 @@ export function useWorkspaceEncryption(user) {
         setBusy(false);
       }
     },
-    [adoptSession, busy, refresh, user],
+    [adoptSession, bootstrap?.profile?.migrationStatus, busy, refresh, user],
   );
 
-  const unlockPasskey = useCallback(
-    async ({ wrapperId, rememberDevice = true } = {}) => {
+  const unlockPassword = useCallback(
+    async (password, { rememberDevice = true } = {}) => {
       if (busy || !bootstrap?.profile) return;
       setBusy(true);
       setError(null);
       try {
-        const wrapper = bootstrap.wrappers.find(
-          (candidate) =>
-            candidate.type === "passkey" && !candidate.revokedAt && (!wrapperId || candidate.wrapperId === wrapperId),
-        );
-        if (!wrapper) throw new Error("No active passkey is registered for this workspace.");
+        const wrapper = bootstrap.wrappers.find((candidate) => candidate.type === "password" && !candidate.revokedAt);
+        if (!wrapper) throw new Error("No encryption password is registered for this workspace.");
         const unlock = async () => {
-          const masterKey = await unlockWithPasskey({
+          const masterKey = await unlockWithPassword({
             wrapper,
+            password,
             workspaceCryptoId: bootstrap.profile.workspaceCryptoId,
           });
           try {
@@ -166,7 +168,7 @@ export function useWorkspaceEncryption(user) {
                 user,
                 masterKey,
                 workspaceCryptoId: bootstrap.profile.workspaceCryptoId,
-                passkeyWrapper: wrapper,
+                keyWrapper: wrapper,
                 onProgress: (stage, details) => setProgress(progressMessage(stage, details)),
               });
               await refresh();
@@ -187,7 +189,7 @@ export function useWorkspaceEncryption(user) {
                 workspaceCryptoId: bootstrap.profile.workspaceCryptoId,
                 masterKey,
                 keyVersion: bootstrap.profile.activeKeyVersion,
-                method: "passkey",
+                method: "password",
               }),
             );
             await refresh();
@@ -260,17 +262,33 @@ export function useWorkspaceEncryption(user) {
     [adoptSession, bootstrap, busy, refresh, user.id],
   );
 
-  const addPasskey = useCallback(
-    async (label = "Additional passkey") => {
+  const changePassword = useCallback(
+    async (currentPassword, newPassword) => {
       if (!sessionRef.current || !bootstrap?.profile) throw new Error("Unlock the workspace first.");
-      const wrapper = await registerPasskey({
-        user,
-        masterKey: sessionRef.current.masterKey,
+      const currentWrapper = bootstrap.wrappers.find(
+        (candidate) => candidate.type === "password" && !candidate.revokedAt,
+      );
+      if (!currentWrapper) throw new Error("No encryption password is registered for this workspace.");
+      const verifiedMasterKey = await unlockWithPassword({
+        wrapper: currentWrapper,
+        password: currentPassword,
         workspaceCryptoId: sessionRef.current.workspaceCryptoId,
-        existingCredentialIds: bootstrap.wrappers.filter((item) => item.credentialId).map((item) => item.credentialId),
-        label,
       });
-      await encryptedWorkspaceRepository.addWrapper(wrapper, user.id);
+      try {
+        if (!equalBytes(verifiedMasterKey, sessionRef.current.masterKey)) {
+          throw new Error("That encryption password is incorrect.");
+        }
+      } finally {
+        wipeBytes(verifiedMasterKey);
+      }
+      const wrapper = await createPasswordWrapper({
+        masterKey: sessionRef.current.masterKey,
+        password: newPassword,
+        workspaceCryptoId: sessionRef.current.workspaceCryptoId,
+        keyVersion: sessionRef.current.keyVersion,
+        label: "Encryption password",
+      });
+      await encryptedWorkspaceRepository.replacePasswordWrapper(currentWrapper.wrapperId, wrapper, user.id);
       await refresh();
       return wrapper;
     },
@@ -313,7 +331,7 @@ export function useWorkspaceEncryption(user) {
   );
 
   const rotateKey = useCallback(
-    async (onProgress) => {
+    async (password, onProgress) => {
       if (!sessionRef.current || !bootstrap?.profile) throw new Error("Unlock the workspace first.");
       const queued = await deviceRecoveryStore.listMutations(user.id);
       if (queued.length) throw new Error("Sync every encrypted offline change before rotating the master key.");
@@ -321,20 +339,30 @@ export function useWorkspaceEncryption(user) {
       let newMasterKey = generateAccountMasterKey();
       const nextKeyVersion = currentSession.keyVersion + 1;
       try {
-        const activePasskeys = bootstrap.wrappers.filter((wrapper) => wrapper.type === "passkey" && !wrapper.revokedAt);
-        if (!activePasskeys.length) throw new Error("At least one active passkey is required for emergency rotation.");
-        const wrappers = [];
-        for (let index = 0; index < activePasskeys.length; index += 1) {
-          onProgress?.(`Authorizing passkey ${index + 1}/${activePasskeys.length} for the new master key…`);
-          wrappers.push(
-            await rewrapPasskey({
-              wrapper: activePasskeys[index],
+        const activePasswords = bootstrap.wrappers.filter(
+          (wrapper) => wrapper.type === "password" && !wrapper.revokedAt,
+        );
+        if (!activePasswords.length)
+          throw new Error("An active encryption password is required for emergency rotation.");
+        onProgress?.("Verifying the encryption password for the new master key…");
+        let rotatedWrapper = null;
+        for (const wrapper of activePasswords) {
+          try {
+            rotatedWrapper = await rewrapPassword({
+              wrapper,
+              password,
+              currentMasterKey: currentSession.masterKey,
               newMasterKey,
               workspaceCryptoId: currentSession.workspaceCryptoId,
               keyVersion: nextKeyVersion,
-            }),
-          );
+            });
+            break;
+          } catch (error) {
+            if (error?.code !== "invalid_password") throw error;
+          }
         }
+        if (!rotatedWrapper) throw new Error("That encryption password is incorrect.");
+        const wrappers = [rotatedWrapper];
         const rotated = await encryptedWorkspaceRepository.rotateWorkspaceKey({
           oldSession: currentSession,
           newMasterKey,
@@ -363,7 +391,7 @@ export function useWorkspaceEncryption(user) {
             workspaceCryptoId: currentSession.workspaceCryptoId,
             masterKey: newMasterKey,
             keyVersion: nextKeyVersion,
-            method: "rotated-passkey",
+            method: "rotated-password",
           }),
         );
         newMasterKey = null;
@@ -413,8 +441,7 @@ export function useWorkspaceEncryption(user) {
       wrappers: bootstrap?.wrappers || [],
       rememberedDevices: rememberedDevice ? [rememberedDevice] : [],
       method: session?.method || null,
-      passkeyPrfAvailable: canAttemptPasskeyPrf(),
-      addPasskey,
+      changePassword,
       createRecoveryKey,
       revokeWrapper,
       rotateKey,
@@ -423,8 +450,8 @@ export function useWorkspaceEncryption(user) {
       lock,
     }),
     [
-      addPasskey,
       bootstrap,
+      changePassword,
       createRecoveryKey,
       forgetDevice,
       lock,
@@ -445,7 +472,7 @@ export function useWorkspaceEncryption(user) {
     error,
     progress,
     activate,
-    unlockPasskey,
+    unlockPassword,
     unlockRecovery,
     lock,
     retry: refresh,

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Fingerprint, KeyRound, LockKeyhole, LogOut, RefreshCw, ShieldCheck } from "lucide-react";
+import { KeyRound, LockKeyhole, LogOut, RefreshCw, ShieldCheck } from "lucide-react";
 import { BrandMark } from "../components/BrandMark";
 import { Button, Field, Input } from "../components/ui";
 import { LanguageToggle } from "../i18n";
@@ -12,20 +12,43 @@ export function WorkspaceEncryptionGate({
   busy,
   error,
   progress,
-  passkeyPrfAvailable,
   onActivate,
-  onUnlockPasskey,
+  onUnlockPassword,
   onUnlockRecovery,
   onRetry,
   onSignOut,
 }) {
   const [rememberDevice, setRememberDevice] = useState(true);
+  const [password, setPassword] = useState("");
+  const [passwordConfirmation, setPasswordConfirmation] = useState("");
+  const [formError, setFormError] = useState("");
   const [recoveryKey, setRecoveryKey] = useState("");
   const profile = bootstrap?.profile;
-  const passkeys = (bootstrap?.wrappers || []).filter((wrapper) => wrapper.type === "passkey" && !wrapper.revokedAt);
+  const passwordWrapper = (bootstrap?.wrappers || []).find(
+    (wrapper) => wrapper.type === "password" && !wrapper.revokedAt,
+  );
+  const needsPasswordCreation = !profile || (profile.migrationStatus === "migration_started" && !passwordWrapper);
   const recoveryAvailable = (bootstrap?.wrappers || []).some(
     (wrapper) => wrapper.type === "recovery" && !wrapper.revokedAt,
   );
+
+  const submitPassword = async (event) => {
+    event.preventDefault();
+    setFormError("");
+    if (!password) {
+      setFormError("Enter your encryption password.");
+      return;
+    }
+    if (needsPasswordCreation) {
+      if (password !== passwordConfirmation) {
+        setFormError("The password confirmation does not match.");
+        return;
+      }
+      await onActivate({ password, rememberDevice });
+      return;
+    }
+    await onUnlockPassword(password, { rememberDevice });
+  };
 
   return (
     <main className="cloud-state-screen encryption-gate-screen" aria-busy={busy || loading}>
@@ -39,29 +62,38 @@ export function WorkspaceEncryptionGate({
         <h1 id="encryption-gate-title">
           {loading
             ? "Checking workspace protection…"
-            : !profile
+            : needsPasswordCreation && !profile
               ? "Protect your workspace before continuing"
-              : profile.migrationStatus === "migration_started"
-                ? "Resume the encrypted migration"
-                : "Unlock your private workspace"}
+              : needsPasswordCreation
+                ? "Restart encryption with a password"
+                : profile.migrationStatus === "migration_started"
+                  ? "Resume the encrypted migration"
+                  : "Unlock your private workspace"}
         </h1>
 
-        {!loading && !profile ? (
+        {!loading && needsPasswordCreation && !profile ? (
           <p>
-            Hibi will create an account master key protected by your passkey, encrypt every record and recovery snapshot
-            locally, verify the result, and only then remove readable cloud records for <strong>{accountEmail}</strong>.
+            Choose a separate encryption password. Hibi will derive a wrapping key locally, encrypt every record and
+            recovery snapshot, verify the result, and only then remove readable cloud records for{" "}
+            <strong>{accountEmail}</strong>.
           </p>
         ) : null}
-        {!loading && profile?.migrationStatus === "migration_started" ? (
+        {!loading && needsPasswordCreation && profile?.migrationStatus === "migration_started" ? (
           <p>
-            The original records are still intact and legacy writes are paused. Use the passkey created for this
-            migration so Hibi can verify and finish it safely.
+            The previous passkey setup did not finish. Your original records are still intact. Hibi will remove only
+            that incomplete encrypted staging and restart safely with the password you choose.
+          </p>
+        ) : null}
+        {!loading && !needsPasswordCreation && profile?.migrationStatus === "migration_started" ? (
+          <p>
+            The original records are still intact and legacy writes are paused. Enter the encryption password created
+            for this migration so Hibi can verify and finish it safely.
           </p>
         ) : null}
         {!loading && profile?.migrationStatus === "active" ? (
           <p>
-            Signing in identifies your account. Your passkey or recovery key separately unlocks the content on this
-            device; Supabase never receives the decrypted key or records.
+            Signing in identifies your account. Your encryption password or recovery key separately unlocks the content
+            on this device; Supabase never receives the password, decrypted key, or records.
           </p>
         ) : null}
 
@@ -71,10 +103,10 @@ export function WorkspaceEncryptionGate({
             <span>{progress}</span>
           </div>
         ) : null}
-        {error ? (
+        {error || formError ? (
           <div className="encryption-error" role="alert">
             <strong>Workspace remains safe.</strong>
-            <span>{error.message || "The workspace could not be unlocked."}</span>
+            <span>{formError || error?.message || "The workspace could not be unlocked."}</span>
           </div>
         ) : null}
 
@@ -88,68 +120,90 @@ export function WorkspaceEncryptionGate({
             />
             <span>
               <strong>Remember this device</strong>
-              <small>Store a non-extractable local device key so future openings do not require biometrics.</small>
+              <small>Store a non-extractable local device key so future openings do not require the password.</small>
             </span>
           </label>
         ) : null}
 
-        {!loading && !profile ? (
-          <div className="cloud-state-actions encryption-primary-actions">
+        {!loading ? (
+          <form className="recovery-unlock-form encryption-password-form" onSubmit={submitPassword}>
+            <Field label={needsPasswordCreation ? "Create encryption password" : "Encryption password"}>
+              <Input
+                type="password"
+                value={password}
+                onChange={(event) => {
+                  setPassword(event.target.value);
+                  setFormError("");
+                }}
+                autoComplete={needsPasswordCreation ? "new-password" : "current-password"}
+                spellCheck="false"
+                disabled={busy}
+              />
+            </Field>
+            {needsPasswordCreation ? (
+              <Field label="Confirm encryption password">
+                <Input
+                  type="password"
+                  value={passwordConfirmation}
+                  onChange={(event) => {
+                    setPasswordConfirmation(event.target.value);
+                    setFormError("");
+                  }}
+                  autoComplete="new-password"
+                  spellCheck="false"
+                  disabled={busy}
+                />
+              </Field>
+            ) : null}
             <Button
+              type="submit"
               variant="primary"
-              icon={Fingerprint}
-              disabled={busy || !passkeyPrfAvailable}
-              onClick={() => onActivate({ rememberDevice })}
+              icon={KeyRound}
+              disabled={busy || !password || (needsPasswordCreation && !passwordConfirmation)}
             >
-              {busy ? "Protecting workspace…" : "Create passkey and encrypt workspace"}
+              {busy
+                ? "Protecting workspace…"
+                : needsPasswordCreation
+                  ? profile
+                    ? "Restart and encrypt workspace"
+                    : "Set password and encrypt workspace"
+                  : profile?.migrationStatus === "migration_started"
+                    ? "Resume encrypted migration"
+                    : "Unlock workspace"}
             </Button>
-            {!passkeyPrfAvailable ? (
+            {needsPasswordCreation ? (
               <p className="encryption-compatibility-note">
-                This browser/origin cannot create the required WebAuthn PRF passkey. Open the official Hibi site in a
-                compatible browser; no migration has started.
+                This password is used only in this browser to unlock encryption. Hibi cannot recover it if it is lost.
               </p>
             ) : null}
-          </div>
+          </form>
         ) : null}
 
-        {!loading && profile ? (
+        {!loading && profile && recoveryAvailable ? (
           <div className="encryption-unlock-options">
-            {passkeys.map((wrapper) => (
+            <div className="recovery-unlock-form">
+              <Field label="Recovery key">
+                <Input
+                  value={recoveryKey}
+                  onChange={(event) => setRecoveryKey(event.target.value)}
+                  placeholder="HIBI1-…"
+                  autoComplete="off"
+                  spellCheck="false"
+                />
+              </Field>
               <Button
-                key={wrapper.wrapperId}
-                variant="primary"
-                icon={Fingerprint}
-                disabled={busy || !passkeyPrfAvailable}
-                onClick={() => onUnlockPasskey({ wrapperId: wrapper.wrapperId, rememberDevice })}
+                icon={KeyRound}
+                disabled={busy || !recoveryKey.trim()}
+                onClick={() => onUnlockRecovery(recoveryKey, { rememberDevice })}
               >
-                Unlock with {wrapper.label || "passkey"}
+                Unlock with recovery key
               </Button>
-            ))}
-            {recoveryAvailable ? (
-              <div className="recovery-unlock-form">
-                <Field label="Recovery key">
-                  <Input
-                    value={recoveryKey}
-                    onChange={(event) => setRecoveryKey(event.target.value)}
-                    placeholder="HIBI1-…"
-                    autoComplete="off"
-                    spellCheck="false"
-                  />
-                </Field>
-                <Button
-                  icon={KeyRound}
-                  disabled={busy || !recoveryKey.trim()}
-                  onClick={() => onUnlockRecovery(recoveryKey, { rememberDevice })}
-                >
-                  Unlock with recovery key
-                </Button>
-              </div>
-            ) : null}
+            </div>
           </div>
         ) : null}
 
         <div className="cloud-state-actions encryption-secondary-actions">
-          {error ? (
+          {error || formError ? (
             <Button icon={RefreshCw} onClick={onRetry} disabled={busy}>
               Check again
             </Button>

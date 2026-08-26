@@ -937,19 +937,19 @@ export function useClassManager({ persistence } = {}) {
     }
   }, [notify, operationalDate]);
 
-  const previewEncryptedBackup = useCallback(async (text, recoveryKey, withPasskey = false) => {
-    const preview = withPasskey
-      ? persistenceRef.current?.previewEncryptedBackupWithPasskey
+  const previewEncryptedBackup = useCallback(async (text, recoveryKey, withPassword = false) => {
+    const preview = withPassword
+      ? persistenceRef.current?.previewEncryptedBackupWithPassword
       : persistenceRef.current?.previewEncryptedBackup;
     if (typeof preview !== "function") throw new Error("Encrypted backups require an unlocked E2EE workspace.");
     return preview(text, recoveryKey);
   }, []);
 
   const importEncryptedBackup = useCallback(
-    (text, recoveryKey, withPasskey = false) => {
+    (text, recoveryKey, withPassword = false) => {
       const operation = async () => {
-        const restore = withPasskey
-          ? persistenceRef.current?.importEncryptedBackupWithPasskey
+        const restore = withPassword
+          ? persistenceRef.current?.importEncryptedBackupWithPassword
           : persistenceRef.current?.importEncryptedBackup;
         if (typeof restore !== "function") return false;
         pendingWrites.current += 1;
@@ -1184,8 +1184,8 @@ export function useClassManager({ persistence } = {}) {
       exportEncryptedBackup,
       previewEncryptedBackup,
       importEncryptedBackup,
-      previewEncryptedBackupWithPasskey: (text) => previewEncryptedBackup(text, "", true),
-      importEncryptedBackupWithPasskey: (text) => importEncryptedBackup(text, "", true),
+      previewEncryptedBackupWithPassword: (text, password) => previewEncryptedBackup(text, password, true),
+      importEncryptedBackupWithPassword: (text, password) => importEncryptedBackup(text, password, true),
       importJson,
       previewImportRecords,
       importRecords,

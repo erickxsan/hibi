@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(54);
+select plan(56);
 
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data)
 values
@@ -27,18 +27,18 @@ select lives_ok($$
     1::integer,
     jsonb_build_object(
       'wrapperId', '30000000-0000-4000-8000-000000000001',
-      'type', 'passkey',
-      'label', 'Primary passkey',
-      'credentialId', 'credential-A',
-      'prfSalt', repeat('S', 43),
-      'transports', '[]'::jsonb,
+      'type', 'password',
+      'label', 'Encryption password',
+      'kdfAlgorithm', 'pbkdf2-sha256',
+      'kdfIterations', 600000,
+      'kdfSalt', repeat('S', 43),
       'wrapperVersion', 1,
       'keyVersion', 1,
       'nonce', repeat('N', 16),
       'wrappedKey', repeat('W', 48)
     )
   )
-$$, 'a passkey starts mandatory encryption migration');
+$$, 'a password wrapper starts mandatory encryption migration');
 
 select is(
   (select migration_status from public.workspace_encryption_profiles),
@@ -174,6 +174,24 @@ select lives_ok($$
   )
 $$, 'an owner can record successful use of an active wrapper');
 select ok((select last_used_at is not null from public.workspace_key_wrappers), 'wrapper inventory records last use');
+
+select lives_ok($$
+  select public.replace_workspace_password_wrapper(
+    '33333333-3333-4333-8333-333333333333',
+    '30000000-0000-4000-8000-000000000001',
+    jsonb_build_object(
+      'wrapperId', '30000000-0000-4000-8000-000000000010',
+      'type', 'password', 'label', 'Encryption password',
+      'kdfAlgorithm', 'pbkdf2-sha256', 'kdfIterations', 600000, 'kdfSalt', repeat('T', 43),
+      'wrapperVersion', 1, 'keyVersion', 1, 'nonce', repeat('N', 16), 'wrappedKey', repeat('W', 48)
+    )
+  )
+$$, 'the password wrapper can be replaced atomically');
+select is(
+  (select count(*) from public.workspace_key_wrappers where revoked_at is null),
+  1::bigint,
+  'password replacement leaves exactly one active wrapper'
+);
 
 select throws_ok($$
   insert into public.encrypted_workspace_entities (
@@ -387,13 +405,13 @@ select lives_ok($$
     '33333333-3333-4333-8333-333333333333',
     '30000000-0000-4000-8000-000000000010',
     jsonb_build_array(jsonb_build_object(
-      'wrapperId', '30000000-0000-4000-8000-000000000001', 'type', 'passkey',
-      'label', 'Primary passkey', 'credentialId', 'credential-A', 'prfSalt', repeat('S', 43),
-      'transports', '[]'::jsonb, 'wrapperVersion', 1, 'keyVersion', 2,
+      'wrapperId', '30000000-0000-4000-8000-000000000001', 'type', 'password',
+      'label', 'Encryption password', 'kdfAlgorithm', 'pbkdf2-sha256',
+      'kdfIterations', 600000, 'kdfSalt', repeat('S', 43), 'wrapperVersion', 1, 'keyVersion', 2,
       'nonce', repeat('N', 16), 'wrappedKey', repeat('Z', 48)
     ))
   )
-$$, 'the new passkey wrapper is staged');
+$$, 'the new password wrapper is staged');
 
 select lives_ok($$
   select * from public.finalize_staged_workspace_key_rotation(

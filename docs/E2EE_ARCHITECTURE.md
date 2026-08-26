@@ -8,24 +8,15 @@ Status: protocol v1, schema v1. This document is the implementation contract for
 
 Supabase authentication identifies the account. It does not unlock content. After authentication, Hibi requires one of:
 
-- a passkey that returns a WebAuthn PRF result;
+- an encryption password processed locally with PBKDF2-HMAC-SHA-256;
 - a remembered-device AES key stored as a non-extractable `CryptoKey` in IndexedDB; or
 - an optional recovery key with an offline checksum.
 
 The browser then holds the Account Master Key (AMK) only for the unlocked session. Domain components receive the same
 plain JavaScript state as before. Encryption and integrity checks happen below the domain layer, immediately before
 persistence and immediately after loading. Network requests contain ciphertext, nonces, stable entity IDs, revisions,
-version fields, manifests, and key wrappers, but never an AMK, PRF result, recovery secret, or domain value.
-
-Production passkeys are bound to:
-
-```text
-Origin: https://usehibi.pages.dev
-RP ID:  usehibi.pages.dev
-```
-
-The client rejects passkey registration and use from localhost, Cloudflare previews, and other origins. Development
-builds can exercise the cryptographic and UI tests with mocked WebAuthn, but cannot create production credentials.
+version fields, manifests, and key wrappers, but never a password, derived password key, AMK, recovery secret, or domain
+value.
 
 ## Threat model
 
@@ -49,13 +40,14 @@ password material. HKDF-SHA-256 derives independent 256-bit material using versi
 
 - `entity`: collection/entity encryption;
 - `manifest`: global integrity MAC; and
-- `amk-wrapper`: passkey and recovery-key wrappers.
+- `amk-wrapper`: password and recovery-key wrappers.
 
 Entity derivation includes `workspaceCryptoId`, collection, entity ID, and key version. Wrapper derivation includes
-`workspaceCryptoId`, wrapper ID, and key version. Changing a passkey adds a wrapper around the same AMK. Emergency
-rotation creates a new AMK and key version, re-encrypts active entities and every retained snapshot, asks every active
-passkey to wrap the new AMK, revokes old recovery wrappers, clears old device caches, and publishes the change in one
-database transaction.
+`workspaceCryptoId`, wrapper ID, and key version. The password is processed with PBKDF2-HMAC-SHA-256 using a random
+256-bit salt and a versioned work factor before it wraps the AMK. Changing the password replaces only that wrapper
+around the same AMK. Emergency rotation creates a new AMK and key version, re-encrypts active entities and every
+retained snapshot, verifies the current password, replaces its wrapper, revokes old recovery wrappers, clears old
+device caches, and publishes the change in one database transaction.
 
 A remembered device generates its own non-extractable AES-256-GCM key. It wraps the AMK with account and workspace IDs
 as authenticated data. The same key encrypts the device's last verified revision/root witness. Explicit sign-out,
@@ -109,8 +101,9 @@ the browser; it never asks the server to inspect content.
 
 ## Transactional legacy migration
 
-Migration begins only after the authenticated browser has loaded a valid legacy workspace and successfully created a
-PRF passkey. `migration_started` blocks every old write path while preserving all original rows.
+Migration begins only after the authenticated browser has loaded a valid legacy workspace and derived a wrapping key
+from the user's confirmed encryption password. `migration_started` blocks every old write path while preserving all
+original rows.
 
 The browser encrypts active entities and each retained server snapshot, uploads them to owner-scoped staging tables,
 downloads staging again, verifies every tag and manifest, reconstructs canonical state, and compares it byte-for-byte
@@ -126,7 +119,7 @@ The readable source remains untouched and writable again. After activation, trig
 `.hibi` is the recommended backup. It contains encrypted envelopes, manifest, workspace crypto ID, and compatible
 wrappers. Import verifies and decrypts locally, validates domain state, archives the current encrypted state, then
 re-encrypts the selected state with fresh nonces. A different account can restore the file by supplying the source
-recovery key or a compatible source passkey locally; Hibi unlocks the source wrapper in memory and re-encrypts the
+recovery key or the source encryption password locally; Hibi unlocks the source wrapper in memory and re-encrypts the
 validated state to the destination workspace without uploading source plaintext.
 
 Readable JSON remains an explicitly labeled advanced export. Legacy JSON import is parsed, compared, and validated in
@@ -142,9 +135,10 @@ Before production rollout:
 
 1. Run `pnpm quality` and `pnpm test:e2e`.
 2. Run `pnpm test:db` against a clean local Supabase database with Docker active.
-3. Test real PRF creation/unlock, remembered-device unlock, recovery unlock, migration interruption, multiple tabs,
+3. Test password creation/unlock/change, remembered-device unlock, recovery unlock, migration interruption, multiple tabs,
    offline replay, same-entity conflict, snapshot restore, rotation, and deletion on the target browser/authenticator
    matrix.
 4. Inspect Supabase as an administrator and confirm that no readable domain values remain after migration.
 5. Inspect browser network/log output and confirm that AMK, PRF results, recovery secrets, and plaintext are absent.
-6. Do not activate rollout for a major browser/platform combination that supports neither PRF nor secure recovery.
+6. Benchmark the versioned password work factor on the supported browser/device matrix and keep derivation under one
+   second on the slowest supported device.

@@ -1707,7 +1707,7 @@ body,
   line-height: 1.6;
   user-select: all;
 }
-.backup-passkey-unlock {
+.backup-password-unlock {
   display: grid;
   justify-items: center;
   gap: 10px;
