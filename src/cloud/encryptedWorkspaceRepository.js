@@ -70,6 +70,9 @@ const STAGE_ROTATION_WRAPPERS_RPC = "stage_workspace_key_rotation_wrappers";
 const FINALIZE_STAGED_ROTATION_RPC = "finalize_staged_workspace_key_rotation";
 const ABORT_STAGED_ROTATION_RPC = "abort_staged_workspace_key_rotation";
 const MAX_MUTATION_BYTES = 5 * 1024 * 1024;
+const LIVE_REFRESH_RETRY_INITIAL_MS = 2_000;
+const LIVE_REFRESH_RETRY_MAX_MS = 30_000;
+const LIVE_REFRESH_FALLBACK_MS = 30_000;
 
 function firstRow(data) {
   return Array.isArray(data) ? data[0] : data;
@@ -231,6 +234,18 @@ export function createEncryptedWorkspaceRepository(
     return data.user;
   }
 
+  async function retryAuthenticated(operation) {
+    return retryJwtClockSkew(operation, {
+      refreshSession: async () => {
+        const { error } = await cloud().auth.refreshSession();
+        if (error)
+          throw new CloudAuthenticationError(error.message || "The secure session could not be renewed.", {
+            cause: error,
+          });
+      },
+    });
+  }
+
   async function loadBootstrapOnce(expectedOwnerId) {
     const user = await requireUser(expectedOwnerId);
     const ownerId = expectedOwnerId || user.id;
@@ -253,15 +268,7 @@ export function createEncryptedWorkspaceRepository(
   }
 
   async function loadBootstrap(expectedOwnerId) {
-    return retryJwtClockSkew(() => loadBootstrapOnce(expectedOwnerId), {
-      refreshSession: async () => {
-        const { error } = await cloud().auth.refreshSession();
-        if (error)
-          throw new CloudAuthenticationError(error.message || "The secure session could not be renewed.", {
-            cause: error,
-          });
-      },
-    });
+    return retryAuthenticated(() => loadBootstrapOnce(expectedOwnerId));
   }
 
   async function workspaceFromRpcRow(row, session, { minimumRevision = 0, expectedPreviousRoot } = {}) {
@@ -299,10 +306,13 @@ export function createEncryptedWorkspaceRepository(
 
   async function loadWorkspace(session, expectedOwnerId, integrity = {}) {
     const user = await requireUser(expectedOwnerId);
-    const { data, error } = await cloud().rpc(LOAD_E2EE_WORKSPACE_RPC, {
-      p_expected_owner_id: expectedOwnerId || user.id,
+    const { data } = await retryAuthenticated(async () => {
+      const result = await cloud().rpc(LOAD_E2EE_WORKSPACE_RPC, {
+        p_expected_owner_id: expectedOwnerId || user.id,
+      });
+      if (result.error) throw persistenceFailure("Encrypted cloud records could not be loaded.", result.error);
+      return result;
     });
-    if (error) throw persistenceFailure("Encrypted cloud records could not be loaded.", error);
     const row = firstRow(data);
     if (!row) return null;
     if (row.migration_status !== "active") {
@@ -317,15 +327,18 @@ export function createEncryptedWorkspaceRepository(
       });
     }
     if (integrity.revision > 0 && integrity.revision < workspace.revision) {
-      const { data: events, error: chainError } = await cloud()
-        .from(E2EE_EVENTS_TABLE)
-        .select("workspace_revision, manifest")
-        .eq("owner_id", expectedOwnerId || user.id)
-        .gt("workspace_revision", integrity.revision)
-        .lte("workspace_revision", workspace.revision)
-        .order("workspace_revision", { ascending: true })
-        .limit(101);
-      if (chainError) throw persistenceFailure("The encrypted revision chain could not be checked.", chainError);
+      const { data: events } = await retryAuthenticated(async () => {
+        const result = await cloud()
+          .from(E2EE_EVENTS_TABLE)
+          .select("workspace_revision, manifest")
+          .eq("owner_id", expectedOwnerId || user.id)
+          .gt("workspace_revision", integrity.revision)
+          .lte("workspace_revision", workspace.revision)
+          .order("workspace_revision", { ascending: true })
+          .limit(101);
+        if (result.error) throw persistenceFailure("The encrypted revision chain could not be checked.", result.error);
+        return result;
+      });
       let expectedRevision = integrity.revision + 1;
       let previousRoot = integrity.root;
       for (const event of events || []) {
@@ -1155,14 +1168,17 @@ export function createEncryptedWorkspaceRepository(
 
   async function loadMissedEvents(session, ownerId) {
     if (!cache) return loadWorkspace(session, ownerId);
-    const { data, error } = await cloud()
-      .from(E2EE_EVENTS_TABLE)
-      .select("workspace_revision, owner_id, upserts, deleted_entities, manifest, created_at")
-      .eq("owner_id", ownerId)
-      .gt("workspace_revision", cache.revision)
-      .order("workspace_revision", { ascending: true })
-      .limit(101);
-    if (error) throw persistenceFailure("Encrypted live updates could not be loaded.", error);
+    const { data } = await retryAuthenticated(async () => {
+      const result = await cloud()
+        .from(E2EE_EVENTS_TABLE)
+        .select("workspace_revision, owner_id, upserts, deleted_entities, manifest, created_at")
+        .eq("owner_id", ownerId)
+        .gt("workspace_revision", cache.revision)
+        .order("workspace_revision", { ascending: true })
+        .limit(101);
+      if (result.error) throw persistenceFailure("Encrypted live updates could not be loaded.", result.error);
+      return result;
+    });
     if ((data || []).length > 100) return loadWorkspace(session, ownerId, { minimumRevision: cache.revision });
     for (const event of data || []) {
       const upserts = (event.upserts || []).map(normalizeEnvelope);
@@ -1201,13 +1217,32 @@ export function createEncryptedWorkspaceRepository(
     const ownerId = (await requireUser(userId)).id;
     let active = true;
     let refreshTask;
+    let refreshRetryTimer;
+    let fallbackTimer;
+    let refreshRetryDelay = LIVE_REFRESH_RETRY_INITIAL_MS;
+    const scheduleRefresh = () => {
+      if (!active || refreshRetryTimer) return;
+      const delay = refreshRetryDelay;
+      refreshRetryDelay = Math.min(refreshRetryDelay * 2, LIVE_REFRESH_RETRY_MAX_MS);
+      refreshRetryTimer = globalThis.setTimeout?.(() => {
+        refreshRetryTimer = undefined;
+        void refresh();
+      }, delay);
+    };
     const refresh = () => {
       if (!active || refreshTask) return refreshTask;
       refreshTask = loadMissedEvents(session, ownerId)
         .then((latest) => {
-          if (active && latest) onChange(latest);
+          if (!active) return;
+          refreshRetryDelay = LIVE_REFRESH_RETRY_INITIAL_MS;
+          if (latest) onChange(latest);
+          onStatus?.("SYNCED");
         })
-        .catch((error) => active && onError?.(error))
+        .catch((error) => {
+          if (!active) return;
+          onError?.(error);
+          scheduleRefresh();
+        })
         .finally(() => {
           refreshTask = null;
         });
@@ -1221,12 +1256,20 @@ export function createEncryptedWorkspaceRepository(
         () => void refresh(),
       )
       .subscribe((status, error) => {
+        if (!active) return;
         onStatus?.(status);
         if (status === "SUBSCRIBED") void refresh();
-        if (error) onError?.(persistenceFailure("Encrypted live updates disconnected.", error));
+        if (["CHANNEL_ERROR", "TIMED_OUT", "CLOSED"].includes(status)) scheduleRefresh();
+        if (error) {
+          onError?.(persistenceFailure("Encrypted live updates disconnected.", error));
+          scheduleRefresh();
+        }
       });
+    fallbackTimer = globalThis.setInterval?.(() => void refresh(), LIVE_REFRESH_FALLBACK_MS);
     return async () => {
       active = false;
+      if (refreshRetryTimer) globalThis.clearTimeout?.(refreshRetryTimer);
+      if (fallbackTimer) globalThis.clearInterval?.(fallbackTimer);
       await cloud().removeChannel(channel);
     };
   }

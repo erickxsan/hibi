@@ -206,7 +206,11 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "Signed in as": "Sesión iniciada como",
   "Saved online": "Guardado en línea",
   "Saving changes…": "Guardando cambios…",
+  "Cloud reconnecting": "Reconectando con la nube",
+  "Encrypted live updates are retrying automatically.":
+    "Las actualizaciones cifradas se están reconectando automáticamente.",
   "Offline — changes pending": "Sin conexión — cambios pendientes",
+  "Offline — device copy": "Sin conexión — copia del dispositivo",
   "Sync needs attention": "La sincronización necesita atención",
   "Couldn’t sign out. Please try again.": "No se pudo cerrar la sesión. Inténtalo de nuevo.",
 

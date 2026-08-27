@@ -77,6 +77,7 @@ function hasRecords(state) {
 function syncStatusFor(manager, cloudError) {
   if (manager.syncStatus === "conflict") return "conflict";
   if (manager.syncStatus === "pending") return "offline";
+  if (manager.syncStatus === "reconnecting") return "reconnecting";
   if (manager.syncStatus === "offline") return "offline-cached";
   if (cloudError || manager.syncStatus === "error") return "error";
   if (manager.syncStatus === "saving") return "syncing";
