@@ -284,23 +284,28 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
           {
             userId: user.id,
             onStatus: (status) => {
-              if (status === "SUBSCRIBED") updateSync("saved");
-              if (["CHANNEL_ERROR", "TIMED_OUT"].includes(status)) updateSync("offline", "Live updates disconnected.");
+              if (["SUBSCRIBED", "SYNCED"].includes(status)) {
+                if (syncStatusRef.current === "pending") void flushPending();
+                else if (syncStatusRef.current !== "conflict") updateSync("saved");
+              }
+              if (["CHANNEL_ERROR", "TIMED_OUT", "CLOSED"].includes(status)) {
+                updateSync("reconnecting", "Encrypted live updates are retrying automatically.");
+              }
             },
-            onError: () => updateSync("offline", "Encrypted live updates disconnected."),
+            onError: () => updateSync("reconnecting", "Encrypted live updates are retrying automatically."),
           },
         )
         .then((unsubscribe) => {
           if (disposed) void unsubscribe();
           else cleanup = unsubscribe;
         })
-        .catch(() => updateSync("offline", "Encrypted live updates disconnected."));
+        .catch(() => updateSync("reconnecting", "Encrypted live updates are retrying automatically."));
       return () => {
         disposed = true;
         if (cleanup) void cleanup();
       };
     },
-    [applyWorkspace, cryptoSession, updateSync, user.id, writeWitness],
+    [applyWorkspace, cryptoSession, flushPending, updateSync, user.id, writeWitness],
   );
 
   const downloadEncryptedBackup = useCallback(async () => {

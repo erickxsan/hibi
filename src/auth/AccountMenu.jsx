@@ -5,6 +5,7 @@ import "./auth.css";
 const STATUS_DETAILS = {
   synced: { label: "Saved online", icon: CheckCircle2 },
   syncing: { label: "Saving changes…", icon: Cloud },
+  reconnecting: { label: "Cloud reconnecting", icon: CloudOff },
   offline: { label: "Offline — changes pending", icon: CloudOff },
   "offline-cached": { label: "Offline — device copy", icon: CloudOff },
   conflict: { label: "Sync conflict — local copy safe", icon: AlertCircle },

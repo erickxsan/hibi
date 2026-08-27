@@ -103,7 +103,9 @@ and retries. A changed touched entity remains a real conflict. Multiple offline 
 revisions and replay in order.
 
 Realtime publishes only encrypted change events. Reconnect downloads recent encrypted events and decrypts/validates in
-the browser; it never asks the server to inspect content.
+the browser; it never asks the server to inspect content. A failed live refresh retries with bounded backoff, while a
+30-second encrypted-event poll provides an automatic fallback until the Realtime channel recovers. Successful polling
+also flushes locally queued encrypted mutations.
 
 ## Transactional legacy migration
 
