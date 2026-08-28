@@ -1168,6 +1168,7 @@ export function createEncryptedWorkspaceRepository(
 
   async function loadMissedEvents(session, ownerId) {
     if (!cache) return loadWorkspace(session, ownerId);
+    const startingRevision = cache.revision;
     const { data } = await retryAuthenticated(async () => {
       const result = await cloud()
         .from(E2EE_EVENTS_TABLE)
@@ -1210,7 +1211,7 @@ export function createEncryptedWorkspaceRepository(
         manifest: event.manifest,
       };
     }
-    return cache;
+    return cache.revision > startingRevision ? cache : null;
   }
 
   async function subscribe(session, onChange, { userId, onStatus, onError } = {}) {

@@ -50,7 +50,7 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
   );
 
   const applyWorkspace = useCallback((incoming, { allowOlder = false } = {}) => {
-    if (!incoming || (!allowOlder && workspaceRef.current && incoming.revision < workspaceRef.current.revision))
+    if (!incoming || (!allowOlder && workspaceRef.current && incoming.revision <= workspaceRef.current.revision))
       return false;
     workspaceRef.current = incoming;
     setWorkspace(incoming);

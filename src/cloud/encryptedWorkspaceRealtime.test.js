@@ -15,7 +15,7 @@ async function flushMicrotasks() {
 describe("encrypted workspace live synchronization", () => {
   afterEach(() => vi.useRealTimers());
 
-  it("retries a failed live refresh and reports synchronization recovery", async () => {
+  it("retries a failed live refresh without delivering unchanged workspace data", async () => {
     vi.useFakeTimers();
     const user = { id: "44444444-4444-4444-8444-444444444444" };
     const masterKey = generateAccountMasterKey();
@@ -31,6 +31,7 @@ describe("encrypted workspace live synchronization", () => {
     });
     const eventResponses = [
       { data: null, error: { message: "temporary live query failure" } },
+      { data: [], error: null },
       { data: [], error: null },
     ];
     let eventQueryCount = 0;
@@ -106,8 +107,15 @@ describe("encrypted workspace live synchronization", () => {
     await flushMicrotasks();
 
     expect(eventQueryCount).toBe(2);
-    expect(changes).toHaveLength(1);
+    expect(changes).toHaveLength(0);
     expect(statuses).toEqual(["SUBSCRIBED", "SYNCED"]);
+
+    await vi.advanceTimersByTimeAsync(28_000);
+    await flushMicrotasks();
+
+    expect(eventQueryCount).toBe(3);
+    expect(changes).toHaveLength(0);
+    expect(statuses).toEqual(["SUBSCRIBED", "SYNCED", "SYNCED"]);
 
     await unsubscribe();
     expect(client.removeChannel).toHaveBeenCalledWith(channel);
