@@ -4,6 +4,11 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
+
+  const welcomeDialog = page.getByRole("dialog", { name: "Welcome to Hibi!" });
+  await expect(welcomeDialog).toBeVisible();
+  await welcomeDialog.getByRole("button", { name: "Explore on my own" }).click();
+  await expect(welcomeDialog).toBeHidden();
 });
 
 test("loads the local workspace and preserves a student interaction", async ({ page }) => {
