@@ -53,12 +53,13 @@ const derived = {
 describe("buildHomeDashboard", () => {
   it("builds the selected period from real class, grade, payment, student, and group records", () => {
     const dashboard = buildHomeDashboard(state, derived, "weekly");
-    expect(dashboard.generated).toBe(100);
-    expect(dashboard.generatedDelta).toBe(0.25);
+    expect(dashboard.collected).toBe(100);
+    expect(dashboard.collectedDelta).toBe(0.25);
+    expect(dashboard.collectionRecordCount).toBe(1);
     expect(dashboard.completedClassCount).toBe(1);
-    expect(dashboard.revenueSeries.find((item) => item.label === "2026-07-14").generated).toBe(100);
-    expect(dashboard.revenueGroups).toEqual([
-      expect.objectContaining({ id: "group:g1", name: "Reading", value: 100, classCount: 1 }),
+    expect(dashboard.collectionSeries.find((item) => item.label === "2026-07-14").collected).toBe(100);
+    expect(dashboard.collectionGroups).toEqual([
+      expect.objectContaining({ id: "group:g1", name: "Reading", value: 100, paymentCount: 1 }),
     ]);
     expect(dashboard.grade).toBe(0.9);
     expect(dashboard.gradeDelta).toBeCloseTo(0.1);
@@ -101,8 +102,48 @@ describe("buildHomeDashboard", () => {
       "weekly",
     );
 
-    expect(dashboard.revenueProjection).toBe(300);
+    expect(dashboard.collectionProjection).toBe(300);
     expect(dashboard.projectedClassCount).toBe(1);
+  });
+
+  it("attributes collections to the payment date instead of the class date", () => {
+    const dashboard = buildHomeDashboard(
+      {
+        ...state,
+        classLog: [
+          {
+            id: "advance",
+            studentId: "s1",
+            classDate: "2026-07-24",
+            paymentDate: "2026-07-14",
+            amountPaid: 125,
+          },
+        ],
+      },
+      {
+        ...derived,
+        classLog: [
+          {
+            id: "advance",
+            studentId: "s1",
+            studentName: "Maya",
+            classDate: "2026-07-24",
+            paymentDate: "2026-07-14",
+            amountPaid: 125,
+            charge: 125,
+            classStatus: "Scheduled",
+          },
+        ],
+      },
+      "weekly",
+    );
+
+    expect(dashboard.collected).toBe(125);
+    expect(dashboard.completedClassCount).toBe(0);
+    expect(dashboard.collectionSeries.find((item) => item.label === "2026-07-14").collected).toBe(125);
+    expect(dashboard.collectionGroups).toEqual([
+      expect.objectContaining({ id: "student:s1", name: "Maya", value: 125, paymentCount: 1 }),
+    ]);
   });
 
   it("gives each class card the stable key used by the class editor", () => {

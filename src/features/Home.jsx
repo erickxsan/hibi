@@ -265,8 +265,8 @@ export function AttendancePanel({ title, sessions, previousSessions, onOpen }) {
 }
 
 function RevenueChart({ series, period, locale }) {
-  const maximum = Math.max(...series.map((item) => item.generated), 0);
-  const peakIndex = series.findLastIndex((item) => maximum > 0 && item.generated === maximum);
+  const maximum = Math.max(...series.map((item) => item.collected), 0);
+  const peakIndex = series.findLastIndex((item) => maximum > 0 && item.collected === maximum);
   const label = (value) => {
     const date = new Date(`${value}T00:00:00Z`);
     if (period === "yearly") return new Intl.DateTimeFormat(locale, { month: "short", timeZone: "UTC" }).format(date);
@@ -275,15 +275,15 @@ function RevenueChart({ series, period, locale }) {
     return new Intl.DateTimeFormat(locale, { weekday: "short", timeZone: "UTC" }).format(date);
   };
   return (
-    <div className="home-revenue-chart" role="img" aria-label="Revenue generated over the selected period">
+    <div className="home-revenue-chart" role="img" aria-label="Payments received over the selected period">
       {series.map((item, index) => {
-        const height = maximum ? Math.max(5, Math.round((item.generated / maximum) * 88)) : 0;
+        const height = maximum ? Math.max(5, Math.round((item.collected / maximum) * 88)) : 0;
         return (
           <div className="home-revenue-bar-slot" key={item.label}>
             <span
-              className={`home-revenue-bar ${item.generated ? "has-value" : ""} ${index === peakIndex ? "peak" : ""}`}
+              className={`home-revenue-bar ${item.collected ? "has-value" : ""} ${index === peakIndex ? "peak" : ""}`}
               style={{ "--revenue-bar-height": `${height}px` }}
-              title={`${label(item.label)} · ${money(item.generated)}`}
+              title={`${label(item.label)} · ${money(item.collected)}`}
             />
             <small>{label(item.label)}</small>
           </div>
@@ -300,24 +300,24 @@ const REVENUE_VIEWS = Object.freeze([
 ]);
 
 function RevenueRhythm({ dashboard, period, locale, onOpen }) {
-  const activeSegments = dashboard.revenueSeries.filter((item) => item.generated > 0).length;
+  const activeSegments = dashboard.collectionSeries.filter((item) => item.collected > 0).length;
   return (
     <>
       <div className="home-revenue-value home-revenue-rhythm-value">
-        <strong>{money(dashboard.generated)}</strong>
-        <Delta value={dashboard.generatedDelta} />
-        <span>{`${dashboard.completedClassCount} ${dashboard.completedClassCount === 1 ? "completed class" : "completed classes"}`}</span>
+        <strong>{money(dashboard.collected)}</strong>
+        <Delta value={dashboard.collectedDelta} />
+        <span>{`${dashboard.collectionRecordCount} ${dashboard.collectionRecordCount === 1 ? "payment recorded" : "payments recorded"}`}</span>
       </div>
-      <RevenueChart series={dashboard.revenueSeries} period={period} locale={locale} />
+      <RevenueChart series={dashboard.collectionSeries} period={period} locale={locale} />
       <footer className="home-revenue-footer">
         <span>
-          <i aria-hidden="true" /> Value by taught classes
+          <i aria-hidden="true" /> Collections by payment date
         </span>
         <span className="home-revenue-insight">
           <Sparkles aria-hidden="true" size={14} />
           {activeSegments
-            ? `Value was concentrated in ${activeSegments} ${activeSegments === 1 ? "class day" : "class days"}`
-            : "Your class value will appear here"}
+            ? `Collections were concentrated in ${activeSegments} ${activeSegments === 1 ? "payment day" : "payment days"}`
+            : "Your collections will appear here"}
         </span>
         <button type="button" onClick={onOpen}>
           Explore period <ArrowRight aria-hidden="true" size={16} />
@@ -328,23 +328,23 @@ function RevenueRhythm({ dashboard, period, locale, onOpen }) {
 }
 
 function RevenueProjection({ dashboard, onOpen }) {
-  const ratio = dashboard.revenueProjection ? Math.min(1, dashboard.generated / dashboard.revenueProjection) : 0;
+  const ratio = dashboard.collectionProjection ? Math.min(1, dashboard.collected / dashboard.collectionProjection) : 0;
   return (
     <div className="home-revenue-projection">
       <div className="home-revenue-projection-values">
         <span>
-          <strong>{money(dashboard.generated)}</strong>
-          <small>Generated</small>
+          <strong>{money(dashboard.collected)}</strong>
+          <small>Collected</small>
         </span>
         <span>
-          <strong>{money(dashboard.revenueProjection)}</strong>
+          <strong>{money(dashboard.collectionProjection)}</strong>
           <small>Period projection</small>
         </span>
       </div>
       <div
         className="home-revenue-progress"
         role="progressbar"
-        aria-label="Generated value toward projection"
+        aria-label="Collected amount toward projection"
         aria-valuemin="0"
         aria-valuemax="100"
         aria-valuenow={Math.round(ratio * 100)}
@@ -354,7 +354,7 @@ function RevenueProjection({ dashboard, onOpen }) {
       <div className="home-revenue-projection-meta">
         <span>
           <i className="complete" aria-hidden="true" />
-          {`${dashboard.completedClassCount} ${dashboard.completedClassCount === 1 ? "completed class" : "completed classes"}`}
+          {`${dashboard.collectionRecordCount} ${dashboard.collectionRecordCount === 1 ? "payment recorded" : "payments recorded"}`}
         </span>
         <span>
           <i aria-hidden="true" />
@@ -364,8 +364,8 @@ function RevenueProjection({ dashboard, onOpen }) {
       <footer className="home-revenue-projection-footer">
         <span>
           <BarChart3 aria-hidden="true" size={15} />
-          {dashboard.revenueProjection
-            ? `You have generated ${Math.round(ratio * 100)}% of this period’s projection`
+          {dashboard.collectionProjection
+            ? `You have collected ${Math.round(ratio * 100)}% of this period’s projection`
             : "Add rates and scheduled classes to see a projection"}
         </span>
         <button type="button" onClick={onOpen}>
@@ -377,13 +377,13 @@ function RevenueProjection({ dashboard, onOpen }) {
 }
 
 function RevenueGroups({ dashboard, onOpen }) {
-  const visibleGroups = dashboard.revenueGroups.slice(0, 4);
+  const visibleGroups = dashboard.collectionGroups.slice(0, 4);
   const maximum = Math.max(...visibleGroups.map((item) => item.value), 0);
   return (
     <div className="home-revenue-groups">
       <div className="home-revenue-value">
-        <strong>{money(dashboard.generated)}</strong>
-        <span>Generated</span>
+        <strong>{money(dashboard.collected)}</strong>
+        <span>Collected</span>
       </div>
       {visibleGroups.length ? (
         <div className="home-revenue-group-list">
@@ -391,7 +391,7 @@ function RevenueGroups({ dashboard, onOpen }) {
             <div key={item.id}>
               <span>
                 <strong>{item.name}</strong>
-                <small>{`${item.classCount} ${item.classCount === 1 ? "class" : "classes"}`}</small>
+                <small>{`${item.paymentCount} ${item.paymentCount === 1 ? "payment" : "payments"}`}</small>
               </span>
               <i>
                 <b style={{ width: `${maximum ? Math.round((item.value / maximum) * 100) : 0}%` }} />
@@ -401,11 +401,11 @@ function RevenueGroups({ dashboard, onOpen }) {
           ))}
         </div>
       ) : (
-        <p className="home-revenue-empty">Group value will appear after completed classes.</p>
+        <p className="home-revenue-empty">Group collections will appear after payments are recorded.</p>
       )}
       <footer className="home-revenue-projection-footer">
         <span>
-          <UsersRound aria-hidden="true" size={15} /> Value generated by each teaching context
+          <UsersRound aria-hidden="true" size={15} /> Amount collected by each group or student
         </span>
         <button type="button" onClick={onOpen}>
           View breakdown <ArrowRight aria-hidden="true" size={16} />
@@ -423,7 +423,7 @@ export function RevenuePanel({ dashboard, period, locale, noun, onOpen }) {
   const menuRef = useRef(null);
   const selectedView = REVENUE_VIEWS.find((item) => item.value === view) || REVENUE_VIEWS[0];
   const ViewIcon = selectedView.Icon;
-  const title = `Value generated ${noun}`;
+  const title = `Amount collected ${noun}`;
 
   useEffect(() => {
     if (!menuOpen) return undefined;
@@ -453,7 +453,7 @@ export function RevenuePanel({ dashboard, period, locale, noun, onOpen }) {
         <span>
           <TrendingUp aria-hidden="true" size={21} />
           <strong>{title}</strong>
-          <Info aria-label="Charges generated by classes in this period" size={15} />
+          <Info aria-label="Payments recorded in this period" size={15} />
         </span>
         <div className="home-revenue-controls">
           <div className="home-revenue-view-switcher" ref={switcherRef}>
@@ -510,7 +510,7 @@ export function RevenuePanel({ dashboard, period, locale, noun, onOpen }) {
               </div>
             ) : null}
           </div>
-          <span className="home-period-label" aria-label={`Revenue period: ${PERIOD_LABELS[period]}`}>
+          <span className="home-period-label" aria-label={`Collection period: ${PERIOD_LABELS[period]}`}>
             {PERIOD_LABELS[period]} <ChevronDown aria-hidden="true" size={14} />
           </span>
         </div>

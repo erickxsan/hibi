@@ -69,16 +69,17 @@ describe("RevenuePanel", () => {
     const user = userEvent.setup();
     const onOpen = vi.fn();
     const dashboard = {
-      generated: 400,
-      generatedDelta: 0.25,
+      collected: 400,
+      collectedDelta: 0.25,
+      collectionRecordCount: 2,
       completedClassCount: 2,
       projectedClassCount: 1,
-      revenueProjection: 600,
-      revenueSeries: [
-        { label: "2026-07-13", generated: 150, value: 150 },
-        { label: "2026-07-14", generated: 250, value: 400 },
+      collectionProjection: 600,
+      collectionSeries: [
+        { label: "2026-07-13", collected: 150, value: 150 },
+        { label: "2026-07-14", collected: 250, value: 400 },
       ],
-      revenueGroups: [{ id: "group:g1", name: "Reading", value: 400, classCount: 2 }],
+      collectionGroups: [{ id: "group:g1", name: "Reading", value: 400, paymentCount: 2 }],
     };
 
     render(
@@ -87,7 +88,8 @@ describe("RevenuePanel", () => {
       </I18nProvider>,
     );
 
-    expect(screen.getByText("2 completed classes")).toBeInTheDocument();
+    expect(screen.getByText("Amount collected this week")).toBeInTheDocument();
+    expect(screen.getByText("2 payments recorded")).toBeInTheDocument();
     const rhythmTrigger = screen.getByRole("button", { name: /View: Rhythm/i });
     await user.click(rhythmTrigger);
     await waitFor(() => expect(screen.getByRole("menuitemradio", { name: "Weekly rhythm" })).toHaveFocus());
@@ -103,8 +105,8 @@ describe("RevenuePanel", () => {
     await user.click(projectionTrigger);
     await user.click(screen.getByRole("menuitemradio", { name: "By groups" }));
     expect(screen.getByText("Reading")).toBeInTheDocument();
-    expect(screen.getByText("2 classes")).toBeInTheDocument();
-    expect(screen.getByLabelText("Revenue period: Weekly")).toBeInTheDocument();
+    expect(screen.getByText("2 payments")).toBeInTheDocument();
+    expect(screen.getByLabelText("Collection period: Weekly")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "View breakdown" }));
     expect(onOpen).toHaveBeenCalledTimes(1);

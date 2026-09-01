@@ -135,13 +135,6 @@ function collectedFor(rows, range, previous = false) {
   );
 }
 
-function generatedFor(rows, range, previous = false) {
-  return sum(
-    rows.filter((row) => inRange(row.classDate, range, previous)),
-    (row) => row.charge,
-  );
-}
-
 function delta(current, previous) {
   if (!finite(current) || !finite(previous)) return null;
   if (previous === 0) return current === 0 ? 0 : null;
@@ -183,18 +176,18 @@ function chartWindows(asOf, period) {
   });
 }
 
-function revenueSeries(rows, asOf, period) {
+function collectionSeries(rows, asOf, period) {
   let running = 0;
   return chartWindows(asOf, period).map((window) => {
-    const generated =
+    const collected =
       window.start > asOf
         ? 0
         : sum(
-            rows.filter((row) => isDateInRange(row.classDate, window.start, window.end)),
-            (row) => row.charge,
+            rows.filter((row) => isDateInRange(row.paymentDate, window.start, window.end)),
+            (row) => row.amountPaid,
           );
-    running += generated;
-    return { ...window, generated, value: running };
+    running += collected;
+    return { ...window, collected, value: running };
   });
 }
 
@@ -219,9 +212,9 @@ function completedClassCount(rows, range) {
   ).size;
 }
 
-function projectedRevenue(state, asOf, period, generated) {
+function projectedCollections(state, asOf, period, collected) {
   const end = naturalPeriodEnd(asOf, period);
-  if (end <= asOf) return { value: generated, upcomingClasses: 0 };
+  if (end <= asOf) return { value: collected, upcomingClasses: 0 };
 
   const occurrences = generateScheduledOccurrences(state, addDays(asOf, 1), end).filter(
     (occurrence) => occurrence.status !== "Cancelled" && !occurrence.recorded,
@@ -238,33 +231,35 @@ function projectedRevenue(state, asOf, period, generated) {
     });
   });
 
-  return { value: generated + upcomingValue, upcomingClasses: occurrences.length };
+  return { value: collected + upcomingValue, upcomingClasses: occurrences.length };
 }
 
-function revenueByGroup(rows, range, groupsById, studentsById) {
+function collectionsByGroup(rows, range, groupsById, studentsById) {
   const aggregates = new Map();
   for (const row of rows) {
-    if (!inRange(row.classDate, range) || !finite(row.charge) || row.charge <= 0) continue;
+    if (!inRange(row.paymentDate, range) || !finite(row.amountPaid) || row.amountPaid <= 0) continue;
     const groupId = row.groupId || "";
-    const id = groupId ? `group:${groupId}` : "individual";
+    const id = groupId ? `group:${groupId}` : `student:${row.studentId || "individual"}`;
     const current = aggregates.get(id) || {
       id,
       name: groupId
         ? groupsById.get(groupId)?.name || row.groupName || "Group"
         : studentsById.get(row.studentId)?.fullName || row.studentName || "Individual classes",
       value: 0,
-      sessionKeys: new Set(),
+      paymentKeys: new Set(),
     };
-    current.value += row.charge;
-    current.sessionKeys.add(
-      classWorkspaceSessionKey({ ...row, groupId, studentId: groupId ? "" : row.studentId || "" }),
-    );
+    current.value += row.amountPaid;
+    current.paymentKeys.add(`${row.paymentDate}|${row.paymentReference || row.id || row.studentId || "payment"}`);
     aggregates.set(id, current);
   }
 
   return [...aggregates.values()]
-    .map(({ sessionKeys, ...item }) => ({ ...item, classCount: sessionKeys.size }))
+    .map(({ paymentKeys, ...item }) => ({ ...item, paymentCount: paymentKeys.size }))
     .sort((left, right) => right.value - left.value || left.name.localeCompare(right.name));
+}
+
+function collectionRecordCount(rows, range) {
+  return rows.filter((row) => inRange(row.paymentDate, range) && finite(row.amountPaid) && row.amountPaid > 0).length;
 }
 
 function todaySessions(state, derived, asOf) {
@@ -371,9 +366,9 @@ export function buildHomeDashboard(state, derived, period = "weekly") {
   const previousAttendance = attendanceFor(classRows, range, true);
   const grade = gradeFor(gradeRows, range);
   const previousGrade = gradeFor(gradeRows, range, true);
-  const generated = generatedFor(classRows, range);
-  const previousGenerated = generatedFor(classRows, range, true);
-  const projection = projectedRevenue(state, asOf, safePeriod, generated);
+  const collected = collectedFor(classRows, range);
+  const previousCollected = collectedFor(classRows, range, true);
+  const projection = projectedCollections(state, asOf, safePeriod, collected);
   const monthRange = rangeFor(asOf, "monthly");
   const monthlyCollected = collectedFor(state.classLog || [], monthRange);
   const previousMonthlyCollected = collectedFor(state.classLog || [], monthRange, true);
@@ -398,13 +393,14 @@ export function buildHomeDashboard(state, derived, period = "weekly") {
     previousAttendanceSessions,
     grade,
     gradeDelta: metricDelta(grade, previousGrade),
-    generated,
-    generatedDelta: delta(generated, previousGenerated),
+    collected,
+    collectedDelta: delta(collected, previousCollected),
+    collectionRecordCount: collectionRecordCount(classRows, range),
     completedClassCount: completedClassCount(classRows, range),
-    revenueSeries: revenueSeries(classRows, asOf, safePeriod),
-    revenueProjection: projection.value,
+    collectionSeries: collectionSeries(classRows, asOf, safePeriod),
+    collectionProjection: projection.value,
     projectedClassCount: projection.upcomingClasses,
-    revenueGroups: revenueByGroup(classRows, range, groupsById, studentsById),
+    collectionGroups: collectionsByGroup(classRows, range, groupsById, studentsById),
     monthlyCollected,
     monthlyCollectedDelta: delta(monthlyCollected, previousMonthlyCollected),
     monthlyProjection: derived.dashboard?.recentProjection || 0,
