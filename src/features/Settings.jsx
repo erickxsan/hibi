@@ -9,6 +9,7 @@ import {
   LockKeyhole,
   RotateCcw,
   ShieldCheck,
+  Sparkles,
   Trash2,
   Upload,
   Volume2,
@@ -36,6 +37,7 @@ export default function Settings({
   encryption,
   registerNavigationBlocker,
   onDeleteAccount,
+  onOpenOnboarding,
 }) {
   const { t } = useI18n();
   const [draft, setDraft] = useState(() => settingsDraft(state.settings));
@@ -87,8 +89,8 @@ export default function Settings({
     if (saving) return;
     setSaving(true);
     try {
-      await actions.updateSettings(draft);
-      baselineRef.current = draft;
+      const saved = await actions.updateSettings(draft);
+      if (saved) baselineRef.current = draft;
     } finally {
       setSaving(false);
     }
@@ -279,6 +281,27 @@ export default function Settings({
             </div>
           </div>
         </article>
+        {onOpenOnboarding ? (
+          <article className="settings-card settings-tour-card" data-onboarding-tour="settings">
+            <div className="settings-icon lilac">
+              <Sparkles size={22} />
+            </div>
+            <div className="settings-content">
+              <h2>Welcome tutorial</h2>
+              <p>Revisit Hibi’s main features whenever you want.</p>
+              <Button icon={Sparkles} onClick={onOpenOnboarding}>
+                Start tour
+              </Button>
+              <div className="settings-tour-security">
+                <LockKeyhole aria-hidden="true" size={18} />
+                <span>
+                  <strong>End-to-end encryption</strong>
+                  <small>Your tutorial progress and classroom data stay protected with E2EE.</small>
+                </span>
+              </div>
+            </div>
+          </article>
+        ) : null}
         <article className="settings-card">
           <div className="settings-icon blue">
             <Globe2 size={22} />

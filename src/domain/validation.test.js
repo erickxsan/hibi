@@ -54,6 +54,20 @@ describe("state and entity validation", () => {
     expect(normalized.students[0].id).toBe(state.students[0].id);
   });
 
+  it("preserves and validates encrypted onboarding settings", () => {
+    const state = createStarterState();
+    state.settings.onboardingVersion = "1";
+    state.settings.onboardingStep = "3";
+    state.settings.onboardingGroupId = " group-1 ";
+
+    const normalized = normalizeState(state);
+
+    expect(normalized.settings).toEqual(
+      expect.objectContaining({ onboardingVersion: 1, onboardingStep: 3, onboardingGroupId: "group-1" }),
+    );
+    expect(validateState(normalized).valid).toBe(true);
+  });
+
   it("provides CRUD-friendly entity checks", () => {
     const state = createSeedState();
     const duplicateStudent = createStudent({

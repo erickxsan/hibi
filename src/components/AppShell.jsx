@@ -3,7 +3,7 @@ import { Ellipsis, X } from "lucide-react";
 import { BrandMark } from "./BrandMark";
 import { closeOverlayHistory, pushOverlayHistory, subscribeToAppHistory } from "../navigation/appHistory";
 
-const MOBILE_PRIMARY = new Set(["home", "community", "classes"]);
+const MOBILE_PRIMARY = new Set(["home", "community", "classes", "grades"]);
 
 export function AppShell({ navItems, activePage, navigationReason, onNavigate, toolbar, children }) {
   const mainRef = useRef(null);
@@ -152,16 +152,18 @@ export function AppShell({ navItems, activePage, navigationReason, onNavigate, t
         style={{ "--mobile-nav-count": primary.length + 1 }}
       >
         {primary.map((item) => {
-          const Icon = item.icon;
+          const Icon = item.mobileIcon || item.icon;
           return (
             <a
               key={item.id}
               href={item.href}
               onClick={(event) => go(event, item.id)}
-              className={activePage === item.id ? "mobile-link active" : "mobile-link"}
+              className={`${activePage === item.id ? "mobile-link active" : "mobile-link"} ${
+                item.id === "classes" ? "mobile-record-link" : ""
+              }`.trim()}
             >
-              <Icon size={20} />
-              <span>{item.label}</span>
+              <Icon size={item.id === "classes" ? 24 : 20} />
+              <span>{item.mobileLabel || item.label}</span>
             </a>
           );
         })}

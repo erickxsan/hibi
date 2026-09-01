@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import {
   BarChart3,
   CalendarDays,
+  CirclePlus,
   CloudOff,
   Home as HomeIcon,
   Settings as SettingsIcon,
@@ -36,11 +37,25 @@ import { safeLoadStateWithMigrations } from "./domain";
 import { useClassManager } from "./hooks/useClassManager";
 import { usePageNavigation } from "./hooks/useHistoryNavigation";
 import { useI18n } from "./i18n";
+import OnboardingTutorial from "./onboarding/OnboardingTutorial";
+import {
+  onboardingStep,
+  ONBOARDING_TOUR_START_STEP,
+  shouldAutoStartOnboarding,
+  tourStep,
+} from "./onboarding/onboardingModel";
 
 const NAV_ITEMS = [
   { id: "home", label: "Home", href: "/", icon: HomeIcon },
   { id: "community", label: "Community", href: "/community", icon: UsersRound },
-  { id: "classes", label: "Classes", href: "/classes", icon: CalendarDays },
+  {
+    id: "classes",
+    label: "Classes",
+    mobileLabel: "Record",
+    href: "/classes",
+    icon: CalendarDays,
+    mobileIcon: CirclePlus,
+  },
   { id: "grades", label: "Tracking", href: "/progress", icon: BarChart3 },
   { id: "settings", label: "Settings", href: "/settings", icon: SettingsIcon },
 ];
@@ -89,6 +104,11 @@ export function ClassManagerApplication({ persistence, user, cloudError, onSignO
   const manager = useClassManager({ persistence });
   const [intent, setIntent] = useState(null);
   const [signingOut, setSigningOut] = useState(false);
+  const [onboarding, setOnboarding] = useState(() => ({
+    open: shouldAutoStartOnboarding(manager.state),
+    runId: 0,
+    step: onboardingStep(manager.state.settings),
+  }));
   const navigationBlockers = useRef(new Set());
   const registerNavigationBlocker = useCallback((blocker) => {
     if (typeof blocker !== "function") return () => {};
@@ -118,6 +138,17 @@ export function ClassManagerApplication({ persistence, user, cloudError, onSignO
     [navigate],
   );
   const clearIntent = useCallback(() => setIntent(null), []);
+  const openOnboarding = useCallback(() => {
+    if (!navigate("home")) return;
+    setIntent(null);
+    setOnboarding((current) => ({ open: true, runId: current.runId + 1, step: ONBOARDING_TOUR_START_STEP }));
+  }, [navigate]);
+  const navigateOnboarding = useCallback(
+    (nextPage) => {
+      if (navigate(nextPage, { replace: true })) setIntent(null);
+    },
+    [navigate],
+  );
 
   useEffect(() => {
     if (page !== "payments") return;
@@ -133,6 +164,7 @@ export function ClassManagerApplication({ persistence, user, cloudError, onSignO
       openPage,
       registerNavigationBlocker,
       onDeleteAccount,
+      onOpenOnboarding: openOnboarding,
     };
     if (page === "community" || page === "students" || page === "groups") {
       return (
@@ -146,7 +178,17 @@ export function ClassManagerApplication({ persistence, user, cloudError, onSignO
     if (page === "grades" || page === "payments") return <Tracking {...common} />;
     if (page === "settings") return <Settings {...common} />;
     return <Home {...common} />;
-  }, [clearIntent, intent, manager, navigate, onDeleteAccount, openPage, page, registerNavigationBlocker]);
+  }, [
+    clearIntent,
+    intent,
+    manager,
+    navigate,
+    onDeleteAccount,
+    openOnboarding,
+    openPage,
+    page,
+    registerNavigationBlocker,
+  ]);
 
   const handleSignOut = async () => {
     if (!onSignOut || signingOut) return;
@@ -158,11 +200,16 @@ export function ClassManagerApplication({ persistence, user, cloudError, onSignO
     }
   };
 
+  const tutorialPage =
+    tourStep(onboarding.step)?.page ||
+    (onboarding.step === 2 || onboarding.step === 3 ? "community" : onboarding.step === 4 ? "classes" : "home");
+  const shellPage = page === "students" || page === "groups" ? "community" : page === "payments" ? "grades" : page;
+
   return (
     <>
       <AppShell
         navItems={NAV_ITEMS}
-        activePage={page === "students" || page === "groups" ? "community" : page === "payments" ? "grades" : page}
+        activePage={onboarding.open ? tutorialPage : shellPage}
         navigationReason={navigationReason}
         onNavigate={(nextPage) => {
           if (navigate(nextPage)) setIntent(null);
@@ -192,6 +239,17 @@ export function ClassManagerApplication({ persistence, user, cloudError, onSignO
       >
         <Suspense fallback={<PageFallback />}>{pageContent}</Suspense>
       </AppShell>
+      <OnboardingTutorial
+        key={onboarding.runId}
+        open={onboarding.open}
+        state={manager.state}
+        actions={manager.actions}
+        initialStep={onboarding.step}
+        onStepChange={(step) => setOnboarding((current) => ({ ...current, step }))}
+        onNavigate={navigateOnboarding}
+        onDismiss={() => setOnboarding((current) => ({ ...current, open: false }))}
+        onComplete={() => setOnboarding((current) => ({ ...current, open: false }))}
+      />
       <ToastRegion toasts={manager.toasts} onDismiss={manager.dismissToast} />
     </>
   );

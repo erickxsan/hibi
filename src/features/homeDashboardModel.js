@@ -7,7 +7,8 @@ import {
   startOfMonth,
   startOfWeek,
 } from "../domain/dates";
-import { classWorkspaceSessionKey } from "./classesWorkspaceModel";
+import { generateScheduledOccurrences, resolveHourlyRate } from "../domain/schedule";
+import { classWorkspaceSessionKey, rosterForClassSession } from "./classesWorkspaceModel";
 
 export const HOME_PERIODS = Object.freeze(["today", "weekly", "monthly", "yearly"]);
 
@@ -78,6 +79,46 @@ function attendanceFor(rows, range, previous = false) {
   return applicable.filter((row) => row.attendance === "P" || row.attendance === "L").length / applicable.length;
 }
 
+function attendanceSessionsFor(rows, range, groupsById, studentsById, previous = false) {
+  const sessions = new Map();
+  for (const row of rows) {
+    if (
+      row.classStatus !== "Completed" ||
+      !["P", "L", "A"].includes(row.attendance) ||
+      !inRange(row.classDate, range, previous)
+    ) {
+      continue;
+    }
+
+    const groupId = row.groupId || "";
+    const studentId = groupId ? "" : row.studentId || "";
+    const key = classWorkspaceSessionKey({ ...row, groupId, studentId });
+    const group = groupsById.get(groupId);
+    const student = studentsById.get(row.studentId);
+    const current = sessions.get(key) || {
+      key,
+      classDate: row.classDate,
+      startTime: row.startTime || "",
+      groupId,
+      scopeId: groupId ? `group:${groupId}` : "individual",
+      title: group?.name || row.groupName || student?.fullName || row.studentName || "Individual class",
+      attended: 0,
+      expected: 0,
+    };
+    current.expected += 1;
+    if (row.attendance === "P" || row.attendance === "L") current.attended += 1;
+    sessions.set(key, current);
+  }
+
+  return [...sessions.values()]
+    .map((session) => ({ ...session, attendance: session.attended / session.expected }))
+    .sort((left, right) =>
+      `${left.classDate}|${left.startTime}|${left.title}`.localeCompare(
+        `${right.classDate}|${right.startTime}|${right.title}`,
+      ),
+    );
+}
+
 function gradeFor(rows, range, previous = false) {
   const values = rows
     .filter(
@@ -145,16 +186,85 @@ function chartWindows(asOf, period) {
 function revenueSeries(rows, asOf, period) {
   let running = 0;
   return chartWindows(asOf, period).map((window) => {
-    const value =
+    const generated =
       window.start > asOf
         ? 0
         : sum(
             rows.filter((row) => isDateInRange(row.classDate, window.start, window.end)),
             (row) => row.charge,
           );
-    running += value;
-    return { ...window, value: running };
+    running += generated;
+    return { ...window, generated, value: running };
   });
+}
+
+function naturalPeriodEnd(asOf, period) {
+  if (period === "today") return asOf;
+  if (period === "weekly") return addDays(startOfWeek(asOf, 1), 6);
+  if (period === "monthly") return endOfMonth(asOf);
+  return `${asOf.slice(0, 4)}-12-31`;
+}
+
+function completedClassCount(rows, range) {
+  return new Set(
+    rows
+      .filter((row) => row.classStatus === "Completed" && inRange(row.classDate, range))
+      .map((row) =>
+        classWorkspaceSessionKey({
+          ...row,
+          groupId: row.groupId || "",
+          studentId: row.groupId ? "" : row.studentId || "",
+        }),
+      ),
+  ).size;
+}
+
+function projectedRevenue(state, asOf, period, generated) {
+  const end = naturalPeriodEnd(asOf, period);
+  if (end <= asOf) return { value: generated, upcomingClasses: 0 };
+
+  const occurrences = generateScheduledOccurrences(state, addDays(asOf, 1), end).filter(
+    (occurrence) => occurrence.status !== "Cancelled" && !occurrence.recorded,
+  );
+  const upcomingValue = sum(occurrences, (occurrence) => {
+    const hours = finite(occurrence.durationHours)
+      ? occurrence.durationHours
+      : finite(state.settings?.defaultClassHours)
+        ? state.settings.defaultClassHours
+        : 0;
+    return sum(rosterForClassSession(state, occurrence), (student) => {
+      const rate = resolveHourlyRate(state, student, occurrence.groupId);
+      return finite(rate) ? hours * rate : 0;
+    });
+  });
+
+  return { value: generated + upcomingValue, upcomingClasses: occurrences.length };
+}
+
+function revenueByGroup(rows, range, groupsById, studentsById) {
+  const aggregates = new Map();
+  for (const row of rows) {
+    if (!inRange(row.classDate, range) || !finite(row.charge) || row.charge <= 0) continue;
+    const groupId = row.groupId || "";
+    const id = groupId ? `group:${groupId}` : "individual";
+    const current = aggregates.get(id) || {
+      id,
+      name: groupId
+        ? groupsById.get(groupId)?.name || row.groupName || "Group"
+        : studentsById.get(row.studentId)?.fullName || row.studentName || "Individual classes",
+      value: 0,
+      sessionKeys: new Set(),
+    };
+    current.value += row.charge;
+    current.sessionKeys.add(
+      classWorkspaceSessionKey({ ...row, groupId, studentId: groupId ? "" : row.studentId || "" }),
+    );
+    aggregates.set(id, current);
+  }
+
+  return [...aggregates.values()]
+    .map(({ sessionKeys, ...item }) => ({ ...item, classCount: sessionKeys.size }))
+    .sort((left, right) => right.value - left.value || left.name.localeCompare(right.name));
 }
 
 function todaySessions(state, derived, asOf) {
@@ -254,6 +364,8 @@ export function buildHomeDashboard(state, derived, period = "weekly") {
   const asOf = state.settings.asOfDate;
   const range = rangeFor(asOf, safePeriod);
   const classRows = derived.classLog || [];
+  const groupsById = new Map((state.groups || []).map((group) => [group.id, group]));
+  const studentsById = new Map((state.students || []).map((student) => [student.id, student]));
   const gradeRows = state.grades || [];
   const attendance = attendanceFor(classRows, range);
   const previousAttendance = attendanceFor(classRows, range, true);
@@ -261,6 +373,7 @@ export function buildHomeDashboard(state, derived, period = "weekly") {
   const previousGrade = gradeFor(gradeRows, range, true);
   const generated = generatedFor(classRows, range);
   const previousGenerated = generatedFor(classRows, range, true);
+  const projection = projectedRevenue(state, asOf, safePeriod, generated);
   const monthRange = rangeFor(asOf, "monthly");
   const monthlyCollected = collectedFor(state.classLog || [], monthRange);
   const previousMonthlyCollected = collectedFor(state.classLog || [], monthRange, true);
@@ -270,6 +383,8 @@ export function buildHomeDashboard(state, derived, period = "weekly") {
     .filter((group) => !group.isUnassigned && finite(group.attendance))
     .sort((left, right) => right.attendance - left.attendance)
     .slice(0, 3);
+  const attendanceSessions = attendanceSessionsFor(classRows, range, groupsById, studentsById);
+  const previousAttendanceSessions = attendanceSessionsFor(classRows, range, groupsById, studentsById, true);
 
   return {
     period: safePeriod,
@@ -279,11 +394,17 @@ export function buildHomeDashboard(state, derived, period = "weekly") {
     pendingSessions: sessions.filter((session) => session.status === "Pending").length,
     attendance,
     attendanceDelta: metricDelta(attendance, previousAttendance),
+    attendanceSessions,
+    previousAttendanceSessions,
     grade,
     gradeDelta: metricDelta(grade, previousGrade),
     generated,
     generatedDelta: delta(generated, previousGenerated),
+    completedClassCount: completedClassCount(classRows, range),
     revenueSeries: revenueSeries(classRows, asOf, safePeriod),
+    revenueProjection: projection.value,
+    projectedClassCount: projection.upcomingClasses,
+    revenueGroups: revenueByGroup(classRows, range, groupsById, studentsById),
     monthlyCollected,
     monthlyCollectedDelta: delta(monthlyCollected, previousMonthlyCollected),
     monthlyProjection: derived.dashboard?.recentProjection || 0,

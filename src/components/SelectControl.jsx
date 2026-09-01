@@ -221,6 +221,36 @@ function ChoiceMenu({
 }) {
   const searchRef = useRef(null);
   useEffect(() => {
+    if (!mobile) return undefined;
+    const body = document.body;
+    const shell = document.querySelector(".hibi-shell");
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+    const previous = {
+      position: body.style.position,
+      top: body.style.top,
+      left: body.style.left,
+      right: body.style.right,
+      width: body.style.width,
+      overflow: body.style.overflow,
+    };
+    const shellWasInert = shell?.hasAttribute("inert");
+    body.classList.add("select-sheet-open");
+    body.style.position = "fixed";
+    body.style.top = `${-scrollY}px`;
+    body.style.left = `${-scrollX}px`;
+    body.style.right = "0";
+    body.style.width = "100%";
+    body.style.overflow = "hidden";
+    shell?.setAttribute("inert", "");
+    return () => {
+      body.classList.remove("select-sheet-open");
+      Object.assign(body.style, previous);
+      if (!shellWasInert && !body.classList.contains("drawer-open")) shell?.removeAttribute("inert");
+      window.scrollTo({ left: scrollX, top: scrollY, behavior: "auto" });
+    };
+  }, [mobile]);
+  useEffect(() => {
     const focusMenu = () => focusWithoutPageScroll(!mobile && searchable ? searchRef.current : menuRef.current);
     focusMenu();
     const timer = window.setTimeout(focusMenu, 0);
@@ -335,7 +365,13 @@ function ChoiceMenu({
     </div>
   );
   return mobile ? (
-    <div className="select-mobile-overlay" role="presentation">
+    <div
+      className="select-mobile-overlay"
+      role="presentation"
+      onPointerDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
       {list}
     </div>
   ) : (

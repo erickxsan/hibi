@@ -13,6 +13,9 @@ describe("hibi translations", () => {
     expect(translateToSpanish("3 students")).toBe("3 alumnos");
     expect(translateToSpanish("Payment method for Ana")).toBe("Método de pago de Ana");
     expect(translateToSpanish("2 hr")).toBe("2 h");
+    expect(translateToSpanish("1 class today")).toBe("1 clase hoy");
+    expect(translateToSpanish("2 classes today")).toBe("2 clases hoy");
+    expect(translateToSpanish("Revenue period: Weekly")).toBe("Periodo del valor: Semanal");
   });
 
   it("covers the redesigned dashboard, payments, and enrollment copy", () => {

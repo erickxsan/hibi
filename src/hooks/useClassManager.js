@@ -30,6 +30,7 @@ import {
   validateGroup,
   validateStudent,
 } from "../domain";
+import { nextOnboardingStudentCodes, ONBOARDING_VERSION } from "../onboarding/onboardingModel";
 
 const UI_STORAGE_KEY = "minimal-class-manager:ui:v1";
 
@@ -610,6 +611,98 @@ export function useClassManager({ persistence } = {}) {
     [commit, notify],
   );
 
+  const setOnboardingStep = useCallback(
+    (step) =>
+      commit((current) => ({
+        ...current,
+        settings: { ...current.settings, onboardingStep: Number(step) },
+      })),
+    [commit],
+  );
+
+  const dismissOnboarding = useCallback(
+    () =>
+      commit((current) => ({
+        ...current,
+        settings: {
+          ...current.settings,
+          onboardingVersion: ONBOARDING_VERSION,
+          onboardingStep: 1,
+          onboardingGroupId: "",
+        },
+      })),
+    [commit],
+  );
+
+  const saveOnboardingGroup = useCallback(
+    async (draft) => {
+      const item = applyGeneratedId(createGroup, canonicalGroup(draft));
+      const validation = validateGroup(item, stateRef.current);
+      if (!validation.valid) {
+        notify(validation.errors[0].message, "error");
+        return false;
+      }
+      const saved = await commit(
+        (current) => ({
+          ...current,
+          groups: current.groups.some((group) => group.id === item.id)
+            ? current.groups.map((group) => (group.id === item.id ? item : group))
+            : [...current.groups, item],
+          settings: { ...current.settings, onboardingStep: 3, onboardingGroupId: item.id },
+        }),
+        "First group saved",
+      );
+      return saved ? item.id : false;
+    },
+    [commit, notify],
+  );
+
+  const saveOnboardingStudents = useCallback(
+    async (groupId, rows) => {
+      const drafts = (Array.isArray(rows) ? rows : [])
+        .map((row) => (typeof row === "string" ? { fullName: row } : row))
+        .map((row) => ({ ...row, fullName: String(row?.fullName || "").trim() }))
+        .filter((row) => row.fullName);
+      if (!drafts.length) {
+        notify("Add at least one student.", "error");
+        return false;
+      }
+      const newCount = drafts.filter((draft) => !draft.id).length;
+      const codes = nextOnboardingStudentCodes(stateRef.current.students, newCount);
+      const avatarIds = ["cat", "dog", "penguin", "fox", "rabbit", "bear", "frog", "owl"];
+      let nextCodeIndex = 0;
+      const items = drafts.map((draft, index) => {
+        const item = applyGeneratedId(
+          createStudent,
+          canonicalStudent({
+            ...draft,
+            code: draft.code || codes[nextCodeIndex],
+            avatarId: draft.avatarId || avatarIds[index % avatarIds.length],
+            groupIds: [groupId],
+          }),
+        );
+        if (!draft.id) nextCodeIndex += 1;
+        return item;
+      });
+      const proposed = { ...stateRef.current, students: upsertManyById(stateRef.current.students, items) };
+      const invalid = items.map((item) => validateStudent(item, proposed)).find((validation) => !validation.valid);
+      if (invalid) {
+        notify(invalid.errors[0].message, "error");
+        return false;
+      }
+      const saved = await commit(
+        (current) => ({
+          ...current,
+          students: upsertManyById(current.students, items),
+          settings: { ...current.settings, onboardingStep: 4, onboardingGroupId: groupId },
+        }),
+        `${items.length} student${items.length === 1 ? "" : "s"} added`,
+      );
+      return saved ? items : false;
+    },
+    [commit, notify],
+  );
+
   const deleteGroup = useCallback(
     (id) => {
       if (stateRef.current.students.some((student) => student.groupIds?.includes(id))) {
@@ -1162,6 +1255,10 @@ export function useClassManager({ persistence } = {}) {
     () => ({
       updatePreferences,
       updateSettings,
+      setOnboardingStep,
+      dismissOnboarding,
+      saveOnboardingGroup,
+      saveOnboardingStudents,
       upsertGroup,
       deleteGroup,
       upsertStudent,
@@ -1205,6 +1302,7 @@ export function useClassManager({ persistence } = {}) {
       deleteGrade,
       deleteGroup,
       deleteStudent,
+      dismissOnboarding,
       editScheduledClass,
       exportJson,
       exportEncryptedBackup,
@@ -1219,7 +1317,10 @@ export function useClassManager({ persistence } = {}) {
       removeScheduledClass,
       restoreRecoveryPoint,
       resetWorkspace,
+      saveOnboardingGroup,
+      saveOnboardingStudents,
       saveProgress,
+      setOnboardingStep,
       updatePreferences,
       updateSettings,
       upsertClassLog,

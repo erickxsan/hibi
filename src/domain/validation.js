@@ -376,6 +376,9 @@ export function normalizeState(input) {
       ),
       selectedMonth,
       asOfDate: sourceSettings.asOfDate ?? DEFAULT_SETTINGS.asOfDate,
+      onboardingVersion: normalizeNumber(sourceSettings.onboardingVersion, DEFAULT_SETTINGS.onboardingVersion),
+      onboardingStep: normalizeNumber(sourceSettings.onboardingStep, DEFAULT_SETTINGS.onboardingStep),
+      onboardingGroupId: normalizeText(sourceSettings.onboardingGroupId ?? DEFAULT_SETTINGS.onboardingGroupId),
     },
     groups: (Array.isArray(source.groups) ? source.groups : []).map((group) => ({
       id: normalizeText(group?.id),
@@ -676,6 +679,15 @@ export function validateState(input) {
       );
     }
     dateOnly(errors, input.settings.asOfDate, "settings.asOfDate", "As-of date");
+    finiteNumber(errors, input.settings.onboardingVersion, "settings.onboardingVersion", "Onboarding version", {
+      min: 0,
+      integer: true,
+    });
+    finiteNumber(errors, input.settings.onboardingStep, "settings.onboardingStep", "Onboarding step", {
+      min: 1,
+      max: 9,
+      integer: true,
+    });
   }
 
   for (const key of ["groups", "students", "grades", "classLog"]) {

@@ -823,7 +823,7 @@ function SessionEditor({
         : "Next class";
   return (
     <>
-      <section className={`class-session-card class-session-${variant}`}>
+      <section className={`class-session-card class-session-${variant}`} data-onboarding-tour="classes">
         <header className="class-session-header">
           <div className="class-session-title-row">
             <h2>{heading}</h2>
@@ -1415,7 +1415,7 @@ function CalendarWorkspace({ state, currentDate, onOpen, onAdd }) {
     [state.groups, state.students],
   );
   return (
-    <div className={`classes-calendar-view view-${view}`} role="tabpanel">
+    <div className={`classes-calendar-view view-${view}`} role="tabpanel" data-onboarding-tour="classes">
       <CalendarNavigator
         view={view}
         setView={setView}
@@ -1967,11 +1967,15 @@ export default function Classes({
         <RemoteDraftNotice onKeep={keepDraft} onReload={reloadRemoteDraft} onRebase={rebaseDraft} />
       ) : null}
       {tab === "next" ? (
-        <div className="classes-upcoming-view" role="tabpanel">
+        <div
+          className="classes-upcoming-view"
+          role="tabpanel"
+          data-onboarding-tour={activeSession ? undefined : "classes"}
+        >
           {activeSession ? (
             <>
               <div className="classes-upcoming-layout">
-                <main>
+                <div className="classes-upcoming-primary">
                   <SessionEditor
                     session={activeSession}
                     state={state}
@@ -1992,7 +1996,7 @@ export default function Classes({
                     onCancel={cancelSession}
                     onEdit={canEditActiveSession ? () => setEditingSession(activeSession) : null}
                   />
-                </main>
+                </div>
                 <ClassSummary entries={entries} roster={roster} maximum={maximum} />
               </div>
               <UpcomingClasses sessions={upcomingAfter} onSelect={selectUpcomingSession} />
@@ -2018,7 +2022,7 @@ export default function Classes({
           onAdd={() => setNewClassOpen(true)}
         />
       ) : (
-        <div className="classes-history-view" role="tabpanel">
+        <div className="classes-history-view" role="tabpanel" data-onboarding-tour="classes">
           <HistoryList
             sessions={history}
             selectedKey={selectedKey}

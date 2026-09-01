@@ -185,7 +185,7 @@ function Metric({ icon: Icon, label, value, note, tone = "green" }) {
 
 function MetricStrip({ title, children }) {
   return (
-    <section className="tracking-summary">
+    <section className="tracking-summary" data-onboarding-tour="tracking">
       <h2>{title}</h2>
       <div>{children}</div>
     </section>
@@ -1147,11 +1147,14 @@ export default function Tracking({ state = {}, derived = {}, actions = {}, openP
     if (PAYMENT_SCOPE_ITEMS.some((item) => item.value === intent.paymentScope)) {
       changePaymentScope(intent.paymentScope, { replace: true });
     }
+    if (ATTENDANCE_SCOPE_ITEMS.some((item) => item.value === intent.attendanceScope)) {
+      changeAttendanceScope(intent.attendanceScope, { replace: true });
+    }
     if (PAYMENT_CHART_ITEMS.some((item) => item.value === intent.paymentChart)) {
       changePaymentChart(intent.paymentChart, { replace: true });
     }
     clearIntent?.();
-  }, [changePaymentChart, changePaymentScope, changeTab, clearIntent, intent]);
+  }, [changeAttendanceScope, changePaymentChart, changePaymentScope, changeTab, clearIntent, intent]);
   const range = useMemo(
     () => trackingRange(reportDate, period, [...gradeRows, ...classRows]),
     [classRows, gradeRows, period, reportDate],

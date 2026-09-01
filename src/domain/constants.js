@@ -14,6 +14,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
   lowAttendanceThreshold: 0.8,
   selectedMonth: "2026-07-01",
   asOfDate: "2026-07-10",
+  onboardingVersion: 0,
+  onboardingStep: 1,
+  onboardingGroupId: "",
 });
 
 export const STUDENT_STATUSES = Object.freeze(["Active", "Inactive"]);

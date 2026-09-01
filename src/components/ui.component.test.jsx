@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -94,5 +94,55 @@ describe("interactive UI primitives", () => {
     await user.click(screen.getByRole("button", { name: "Remove Math" }));
     expect(screen.queryByRole("button", { name: "Remove Math" })).not.toBeInTheDocument();
     expect(screen.getByText("1 selected")).toBeInTheDocument();
+  });
+
+  it("locks and restores the page while a mobile choice sheet is open", async () => {
+    vi.mocked(window.matchMedia).mockImplementation((query) => ({
+      matches: query === "(max-width: 640px)",
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+    Object.defineProperty(window, "scrollX", { configurable: true, value: 12 });
+    Object.defineProperty(window, "scrollY", { configurable: true, value: 34 });
+
+    render(
+      <div className="hibi-shell">
+        <Select aria-label="Status" value="active" onChange={vi.fn()}>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </Select>
+      </div>,
+    );
+
+    fireEvent.click(screen.getByRole("combobox", { name: "Status" }));
+    const overlay = document.querySelector(".select-mobile-overlay");
+    expect(screen.getByRole("dialog", { name: "Choose an option" })).toBeInTheDocument();
+    expect(document.body).toHaveClass("select-sheet-open");
+    expect(document.body.style.position).toBe("fixed");
+    expect(document.body.style.top).toBe("-34px");
+    expect(document.querySelector(".hibi-shell")).toHaveAttribute("inert");
+
+    fireEvent.pointerDown(overlay);
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Choose an option" })).not.toBeInTheDocument());
+    expect(document.body).not.toHaveClass("select-sheet-open");
+    expect(document.body.style.position).toBe("");
+    expect(document.querySelector(".hibi-shell")).not.toHaveAttribute("inert");
+    expect(window.scrollTo).toHaveBeenCalledWith({ left: 12, top: 34, behavior: "auto" });
+
+    vi.mocked(window.matchMedia).mockImplementation((query) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
   });
 });

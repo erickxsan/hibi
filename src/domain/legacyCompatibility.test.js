@@ -112,7 +112,14 @@ describe("legacy workspace compatibility", () => {
     expect(state.students[0]).toMatchObject({ id: "student_legacy", groupIds: ["group_one"], notes: "Keep this note" });
     expect(state.grades[0]).toMatchObject({ id: "grade_legacy", feedback: "Keep feedback" });
     expect(state.classLog[0]).toMatchObject({ id: "class_legacy", groupId: "group_one", paymentReference: "LEGACY-1" });
-    expect(state.settings).toEqual(settings());
+    expect(state.settings).toEqual(
+      expect.objectContaining({
+        ...settings(),
+        onboardingVersion: 0,
+        onboardingStep: 1,
+        onboardingGroupId: "",
+      }),
+    );
     expect(validateState(state).valid).toBe(true);
   });
 

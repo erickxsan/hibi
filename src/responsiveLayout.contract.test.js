@@ -36,6 +36,13 @@ describe("mobile responsive layout contracts", () => {
     expect(appShell).toContain('event.key !== "Tab"');
   });
 
+  it("keeps the mobile Record action prominent above locked choice sheets", () => {
+    expect(appShell).toContain("item.mobileIcon || item.icon");
+    expect(appShell).toContain('item.id === "classes" ? "mobile-record-link"');
+    expect(styles).toMatch(/body\.select-sheet-open \.hibi-mobile-nav\s*\{/);
+    expect(styles).toMatch(/\.mobile-record-link\s*>\s*svg\s*\{/);
+  });
+
   it("retains compact calendar, settings, and home overrides", () => {
     expect(styles).toMatch(/\.calendar-period-controls\s*>\s*button\s*\{\s*width:\s*34px/);
     expect(styles).toMatch(/\.sound-toggle\s*\{\s*width:\s*92px/);

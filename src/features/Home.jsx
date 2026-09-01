@@ -1,15 +1,22 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowRight,
+  BarChart3,
   BookOpen,
   CalendarDays,
   Calculator,
+  Check,
+  ChevronDown,
   ChevronRight,
+  CircleArrowDown,
+  CircleArrowUp,
+  CircleMinus,
   Clock3,
   CreditCard,
   GraduationCap,
   Info,
+  LayoutGrid,
   Pencil,
   Sparkles,
   Star,
@@ -120,44 +127,402 @@ function Sparkline({ values, tone }) {
   );
 }
 
-function RevenueChart({ series, period, locale }) {
-  const width = 760;
-  const height = 210;
-  const plotHeight = 164;
-  const points = linePoints(
-    series.map((item) => item.value),
-    width,
-    plotHeight,
-    18,
+function summarizeAttendanceSessions(sessions) {
+  const totals = sessions.reduce(
+    (summary, session) => ({
+      attended: summary.attended + session.attended,
+      expected: summary.expected + session.expected,
+    }),
+    { attended: 0, expected: 0 },
   );
-  const path = points
-    .map((point, index) => `${index ? "L" : "M"}${point.x.toFixed(1)} ${point.y.toFixed(1)}`)
-    .join(" ");
-  const area = `${path} L${points.at(-1).x.toFixed(1)} ${plotHeight} L${points[0].x.toFixed(1)} ${plotHeight} Z`;
+  return {
+    ...totals,
+    value: totals.expected ? totals.attended / totals.expected : null,
+  };
+}
+
+function attendanceInsight(sessions) {
+  if (!sessions.length) return { message: "Attendance will appear after completed classes.", tone: "neutral" };
+  if (sessions.length === 1) return { message: "Your first attendance result is ready.", tone: "neutral" };
+  const latest = sessions.at(-1).attendance;
+  const previous = sessions.at(-2).attendance;
+  if (latest > previous + 0.01) return { message: "Attendance improved in the latest class", tone: "positive" };
+  if (latest < previous - 0.01) return { message: "Attendance dropped in the latest class", tone: "negative" };
+  return { message: "Attendance stayed steady in the latest class", tone: "neutral" };
+}
+
+export function AttendancePanel({ title, sessions, previousSessions, onOpen }) {
+  const [scope, setScope] = useState("all");
+  const [selectedSessionKey, setSelectedSessionKey] = useState("");
+  const scopeOptions = useMemo(() => {
+    const options = new Map();
+    [...sessions, ...previousSessions].forEach((session) => {
+      if (!options.has(session.scopeId)) {
+        options.set(session.scopeId, {
+          value: session.scopeId,
+          label: session.groupId ? session.title : "Individual classes",
+        });
+      }
+    });
+    return [{ value: "all", label: "All groups" }, ...options.values()];
+  }, [previousSessions, sessions]);
+  const activeScope = scopeOptions.some((option) => option.value === scope) ? scope : "all";
+  const matchesScope = (session) => activeScope === "all" || session.scopeId === activeScope;
+  const filteredSessions = sessions.filter(matchesScope);
+  const filteredPreviousSessions = previousSessions.filter(matchesScope);
+  const visibleSessions = filteredSessions.slice(-4);
+  const summary = summarizeAttendanceSessions(filteredSessions);
+  const previousSummary = summarizeAttendanceSessions(filteredPreviousSessions);
+  const selectedSession =
+    visibleSessions.find((session) => session.key === selectedSessionKey) || visibleSessions.at(-1) || null;
+  const delta = summary.value != null && previousSummary.value != null ? summary.value - previousSummary.value : null;
+  const insight = attendanceInsight(filteredSessions);
+  const InsightIcon =
+    insight.tone === "positive" ? CircleArrowUp : insight.tone === "negative" ? CircleArrowDown : CircleMinus;
+
+  return (
+    <article className="home-metric-panel home-attendance-panel green">
+      <header className="home-attendance-header">
+        <span className="home-panel-heading">
+          <UserRoundCheck aria-hidden="true" size={21} /> <strong>{title}</strong>
+        </span>
+        <label className="home-attendance-scope">
+          <span className="sr-only">Attendance group</span>
+          <select
+            aria-label="Attendance group"
+            value={activeScope}
+            onChange={(event) => {
+              setScope(event.target.value);
+              setSelectedSessionKey("");
+            }}
+          >
+            {scopeOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <ChevronDown aria-hidden="true" size={14} />
+        </label>
+      </header>
+
+      {visibleSessions.length ? (
+        <div className="home-attendance-content">
+          <div className="home-attendance-summary">
+            <span className="home-metric-value">
+              {percent(summary.value)} <Delta value={delta} kind="points" />
+            </span>
+            <span className="home-attendance-count">
+              {`Attendance in ${filteredSessions.length} ${filteredSessions.length === 1 ? "class" : "classes"}`}
+            </span>
+            <small>vs. previous period</small>
+          </div>
+
+          <div className="home-attendance-sessions" style={{ "--attendance-session-count": visibleSessions.length }}>
+            {visibleSessions.map((session, index) => {
+              const selected = session.key === selectedSession?.key;
+              return (
+                <button
+                  className={`home-attendance-session ${selected ? "selected" : ""}`}
+                  key={session.key}
+                  type="button"
+                  aria-pressed={selected}
+                  aria-label={`Class ${index + 1}: ${percent(session.attendance)} attendance`}
+                  onClick={() => setSelectedSessionKey(session.key)}
+                >
+                  {selected ? (
+                    <span className="home-attendance-tooltip" role="status">
+                      {`${session.title} · ${session.attended} ${session.attended === 1 ? "student" : "students"}`}
+                    </span>
+                  ) : null}
+                  <span className="home-attendance-session-label">{`Class ${index + 1}`}</span>
+                  <span className="home-attendance-bubble">{percent(session.attendance)}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className="home-attendance-empty">
+          <span>—</span>
+          <strong>No attendance in this period</strong>
+          <small>Attendance will appear after completed classes.</small>
+        </div>
+      )}
+
+      <footer className={`home-attendance-footer ${filteredSessions.length ? "" : "empty"}`}>
+        {filteredSessions.length ? (
+          <span className={insight.tone}>
+            <InsightIcon aria-hidden="true" size={15} /> {insight.message}
+          </span>
+        ) : null}
+        <button type="button" onClick={onOpen}>
+          View sessions <ArrowRight aria-hidden="true" size={16} />
+        </button>
+      </footer>
+    </article>
+  );
+}
+
+function RevenueChart({ series, period, locale }) {
+  const maximum = Math.max(...series.map((item) => item.generated), 0);
+  const peakIndex = series.findLastIndex((item) => maximum > 0 && item.generated === maximum);
   const label = (value) => {
     const date = new Date(`${value}T00:00:00Z`);
     if (period === "yearly") return new Intl.DateTimeFormat(locale, { month: "short", timeZone: "UTC" }).format(date);
-    if (period === "monthly") return new Intl.DateTimeFormat(locale, { day: "numeric", timeZone: "UTC" }).format(date);
+    if (period === "monthly")
+      return new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", timeZone: "UTC" }).format(date);
     return new Intl.DateTimeFormat(locale, { weekday: "short", timeZone: "UTC" }).format(date);
   };
   return (
     <div className="home-revenue-chart" role="img" aria-label="Revenue generated over the selected period">
-      <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
-        {[0.25, 0.5, 0.75, 1].map((ratio) => (
-          <line key={ratio} x1="18" x2={width - 18} y1={plotHeight * ratio} y2={plotHeight * ratio} />
-        ))}
-        <path className="revenue-area" d={area} />
-        <path className="revenue-line" d={path} />
-        {points.map((point, index) => (
-          <g key={`${series[index]?.label}-${index}`}>
-            <circle cx={point.x} cy={point.y} r="4" />
-            <text x={point.x} y="198" textAnchor="middle">
-              {label(series[index]?.label)}
-            </text>
-          </g>
-        ))}
-      </svg>
+      {series.map((item, index) => {
+        const height = maximum ? Math.max(5, Math.round((item.generated / maximum) * 88)) : 0;
+        return (
+          <div className="home-revenue-bar-slot" key={item.label}>
+            <span
+              className={`home-revenue-bar ${item.generated ? "has-value" : ""} ${index === peakIndex ? "peak" : ""}`}
+              style={{ "--revenue-bar-height": `${height}px` }}
+              title={`${label(item.label)} · ${money(item.generated)}`}
+            />
+            <small>{label(item.label)}</small>
+          </div>
+        );
+      })}
     </div>
+  );
+}
+
+const REVENUE_VIEWS = Object.freeze([
+  { value: "rhythm", label: "Weekly rhythm", triggerLabel: "View: Rhythm", Icon: LayoutGrid },
+  { value: "projection", label: "Projection", triggerLabel: "View: Projection", Icon: BarChart3 },
+  { value: "groups", label: "By groups", triggerLabel: "View: Groups", Icon: UsersRound },
+]);
+
+function RevenueRhythm({ dashboard, period, locale, onOpen }) {
+  const activeSegments = dashboard.revenueSeries.filter((item) => item.generated > 0).length;
+  return (
+    <>
+      <div className="home-revenue-value home-revenue-rhythm-value">
+        <strong>{money(dashboard.generated)}</strong>
+        <Delta value={dashboard.generatedDelta} />
+        <span>{`${dashboard.completedClassCount} ${dashboard.completedClassCount === 1 ? "completed class" : "completed classes"}`}</span>
+      </div>
+      <RevenueChart series={dashboard.revenueSeries} period={period} locale={locale} />
+      <footer className="home-revenue-footer">
+        <span>
+          <i aria-hidden="true" /> Value by taught classes
+        </span>
+        <span className="home-revenue-insight">
+          <Sparkles aria-hidden="true" size={14} />
+          {activeSegments
+            ? `Value was concentrated in ${activeSegments} ${activeSegments === 1 ? "class day" : "class days"}`
+            : "Your class value will appear here"}
+        </span>
+        <button type="button" onClick={onOpen}>
+          Explore period <ArrowRight aria-hidden="true" size={16} />
+        </button>
+      </footer>
+    </>
+  );
+}
+
+function RevenueProjection({ dashboard, onOpen }) {
+  const ratio = dashboard.revenueProjection ? Math.min(1, dashboard.generated / dashboard.revenueProjection) : 0;
+  return (
+    <div className="home-revenue-projection">
+      <div className="home-revenue-projection-values">
+        <span>
+          <strong>{money(dashboard.generated)}</strong>
+          <small>Generated</small>
+        </span>
+        <span>
+          <strong>{money(dashboard.revenueProjection)}</strong>
+          <small>Period projection</small>
+        </span>
+      </div>
+      <div
+        className="home-revenue-progress"
+        role="progressbar"
+        aria-label="Generated value toward projection"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow={Math.round(ratio * 100)}
+      >
+        <i style={{ width: `${Math.round(ratio * 100)}%` }} />
+      </div>
+      <div className="home-revenue-projection-meta">
+        <span>
+          <i className="complete" aria-hidden="true" />
+          {`${dashboard.completedClassCount} ${dashboard.completedClassCount === 1 ? "completed class" : "completed classes"}`}
+        </span>
+        <span>
+          <i aria-hidden="true" />
+          {`${dashboard.projectedClassCount} ${dashboard.projectedClassCount === 1 ? "class to teach" : "classes to teach"}`}
+        </span>
+      </div>
+      <footer className="home-revenue-projection-footer">
+        <span>
+          <BarChart3 aria-hidden="true" size={15} />
+          {dashboard.revenueProjection
+            ? `You have generated ${Math.round(ratio * 100)}% of this period’s projection`
+            : "Add rates and scheduled classes to see a projection"}
+        </span>
+        <button type="button" onClick={onOpen}>
+          View considered classes <ArrowRight aria-hidden="true" size={16} />
+        </button>
+      </footer>
+    </div>
+  );
+}
+
+function RevenueGroups({ dashboard, onOpen }) {
+  const visibleGroups = dashboard.revenueGroups.slice(0, 4);
+  const maximum = Math.max(...visibleGroups.map((item) => item.value), 0);
+  return (
+    <div className="home-revenue-groups">
+      <div className="home-revenue-value">
+        <strong>{money(dashboard.generated)}</strong>
+        <span>Generated</span>
+      </div>
+      {visibleGroups.length ? (
+        <div className="home-revenue-group-list">
+          {visibleGroups.map((item) => (
+            <div key={item.id}>
+              <span>
+                <strong>{item.name}</strong>
+                <small>{`${item.classCount} ${item.classCount === 1 ? "class" : "classes"}`}</small>
+              </span>
+              <i>
+                <b style={{ width: `${maximum ? Math.round((item.value / maximum) * 100) : 0}%` }} />
+              </i>
+              <em>{money(item.value)}</em>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="home-revenue-empty">Group value will appear after completed classes.</p>
+      )}
+      <footer className="home-revenue-projection-footer">
+        <span>
+          <UsersRound aria-hidden="true" size={15} /> Value generated by each teaching context
+        </span>
+        <button type="button" onClick={onOpen}>
+          View breakdown <ArrowRight aria-hidden="true" size={16} />
+        </button>
+      </footer>
+    </div>
+  );
+}
+
+export function RevenuePanel({ dashboard, period, locale, noun, onOpen }) {
+  const [view, setView] = useState("rhythm");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const switcherRef = useRef(null);
+  const triggerRef = useRef(null);
+  const menuRef = useRef(null);
+  const selectedView = REVENUE_VIEWS.find((item) => item.value === view) || REVENUE_VIEWS[0];
+  const ViewIcon = selectedView.Icon;
+  const title = `Value generated ${noun}`;
+
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const focusFrame = requestAnimationFrame(() => {
+      menuRef.current?.querySelector('[aria-checked="true"]')?.focus();
+    });
+    const closeOnOutsidePress = (event) => {
+      if (!switcherRef.current?.contains(event.target)) setMenuOpen(false);
+    };
+    const closeOnEscape = (event) => {
+      if (event.key !== "Escape") return;
+      setMenuOpen(false);
+      triggerRef.current?.focus();
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePress);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      cancelAnimationFrame(focusFrame);
+      document.removeEventListener("pointerdown", closeOnOutsidePress);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [menuOpen]);
+
+  return (
+    <article className="home-revenue-panel">
+      <header>
+        <span>
+          <TrendingUp aria-hidden="true" size={21} />
+          <strong>{title}</strong>
+          <Info aria-label="Charges generated by classes in this period" size={15} />
+        </span>
+        <div className="home-revenue-controls">
+          <div className="home-revenue-view-switcher" ref={switcherRef}>
+            <button
+              ref={triggerRef}
+              className={menuOpen ? "open" : ""}
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              aria-controls="home-revenue-view-menu"
+              onClick={() => setMenuOpen((current) => !current)}
+            >
+              <ViewIcon aria-hidden="true" size={16} />
+              <span>{selectedView.triggerLabel}</span>
+              <ChevronDown aria-hidden="true" size={15} />
+            </button>
+            {menuOpen ? (
+              <div
+                ref={menuRef}
+                id="home-revenue-view-menu"
+                className="home-revenue-view-menu"
+                role="menu"
+                onKeyDown={(event) => {
+                  if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+                  event.preventDefault();
+                  const items = [...event.currentTarget.querySelectorAll('[role="menuitemradio"]')];
+                  const currentIndex = items.indexOf(document.activeElement);
+                  const nextIndex =
+                    event.key === "Home"
+                      ? 0
+                      : event.key === "End"
+                        ? items.length - 1
+                        : (currentIndex + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+                  items[nextIndex]?.focus();
+                }}
+              >
+                {REVENUE_VIEWS.map(({ value, label, Icon }) => (
+                  <button
+                    className={view === value ? "selected" : ""}
+                    key={value}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={view === value}
+                    onClick={() => {
+                      setView(value);
+                      setMenuOpen(false);
+                    }}
+                  >
+                    <Icon aria-hidden="true" size={17} />
+                    <span>{label}</span>
+                    {view === value ? <Check aria-hidden="true" size={16} /> : null}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          <span className="home-period-label" aria-label={`Revenue period: ${PERIOD_LABELS[period]}`}>
+            {PERIOD_LABELS[period]} <ChevronDown aria-hidden="true" size={14} />
+          </span>
+        </div>
+      </header>
+      {view === "rhythm" ? (
+        <RevenueRhythm dashboard={dashboard} period={period} locale={locale} onOpen={onOpen} />
+      ) : view === "projection" ? (
+        <RevenueProjection dashboard={dashboard} onOpen={onOpen} />
+      ) : (
+        <RevenueGroups dashboard={dashboard} onOpen={onOpen} />
+      )}
+    </article>
   );
 }
 
@@ -327,14 +692,6 @@ export default function Home({ state, derived, openPage, navigate }) {
   const { locale } = useI18n();
   const [period, setPeriod] = useState("weekly");
   const dashboard = useMemo(() => buildHomeDashboard(state, derived, period), [derived, period, state]);
-  const attendanceSpark = useMemo(
-    () =>
-      (derived.students || [])
-        .map((student) => student.attendance)
-        .filter((value) => value != null)
-        .slice(-6),
-    [derived.students],
-  );
   const gradeSpark = useMemo(
     () =>
       (derived.students || [])
@@ -357,6 +714,12 @@ export default function Home({ state, derived, openPage, navigate }) {
       tab: "payments",
       paymentScope: "overview",
       paymentChart: "projection",
+    });
+  const openAttendanceOverview = () =>
+    openPage("grades", {
+      type: "open-tracking",
+      tab: "attendance",
+      attendanceScope: "overview",
     });
 
   return (
@@ -383,7 +746,7 @@ export default function Home({ state, derived, openPage, navigate }) {
         </div>
       </header>
 
-      <section className="home-today-panel" aria-labelledby="home-today-title">
+      <section className="home-today-panel" aria-labelledby="home-today-title" data-onboarding-tour="home">
         <header>
           <span>
             <CalendarDays aria-hidden="true" size={23} />
@@ -392,7 +755,7 @@ export default function Home({ state, derived, openPage, navigate }) {
           <div className="home-today-summary">
             <span>
               <CalendarDays aria-hidden="true" size={16} />
-              {dashboard.sessions.length} classes today
+              {`${dashboard.sessions.length} ${dashboard.sessions.length === 1 ? "class" : "classes"} today`}
             </span>
             <span>
               <UsersRound aria-hidden="true" size={16} />
@@ -433,18 +796,11 @@ export default function Home({ state, derived, openPage, navigate }) {
       </section>
 
       <section className="home-academic-grid" aria-label="Academic overview">
-        <MetricPanel
-          icon={UserRoundCheck}
+        <AttendancePanel
           title={`Average attendance ${noun}`}
-          value={percent(dashboard.attendance)}
-          delta={dashboard.attendanceDelta}
-          deltaKind="points"
-          caption="Compared with the previous period"
-          message="Steady progress. Keep it up!"
-          tone="green"
-          ringValue={dashboard.attendance}
-          sparkValues={attendanceSpark}
-          onClick={() => navigate("grades")}
+          sessions={dashboard.attendanceSessions}
+          previousSessions={dashboard.previousAttendanceSessions}
+          onOpen={openAttendanceOverview}
         />
         <MetricPanel
           icon={Star}
@@ -463,22 +819,7 @@ export default function Home({ state, derived, openPage, navigate }) {
       </section>
 
       <section className="home-finance-grid">
-        <article className="home-revenue-panel">
-          <header>
-            <span>
-              <TrendingUp aria-hidden="true" size={21} />
-              <strong>Value generated {noun}</strong>
-              <Info aria-label="Charges generated by classes in this period" size={15} />
-            </span>
-            <span className="home-period-label">{PERIOD_LABELS[period]}</span>
-          </header>
-          <div className="home-revenue-value">
-            <strong>{money(dashboard.generated)}</strong>
-            <Delta value={dashboard.generatedDelta} />
-            <small>vs. previous period</small>
-          </div>
-          <RevenueChart series={dashboard.revenueSeries} period={period} locale={locale} />
-        </article>
+        <RevenuePanel dashboard={dashboard} period={period} locale={locale} noun={noun} onOpen={openPaymentOverview} />
         <aside className="home-finance-side" aria-label="Financial summary">
           <FinanceSummary
             icon={Wallet}

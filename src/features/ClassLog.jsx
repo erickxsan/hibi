@@ -200,7 +200,7 @@ function classStatusTone(status) {
 
 function makeRosterDraft(classStatus = "Completed") {
   return {
-    attendance: classStatus === "Completed" ? "P" : "",
+    attendance: classStatus === "Completed" ? "A" : "",
     hours: "",
     amountPaid: "",
     paymentDate: "",
@@ -1110,7 +1110,7 @@ function EditClassDrawer({
                   setDraft((current) => ({
                     ...current,
                     classStatus: event.target.value,
-                    attendance: event.target.value === "Completed" ? current.attendance || "P" : "",
+                    attendance: event.target.value === "Completed" ? current.attendance || "A" : "",
                   }))
                 }
               >
@@ -1803,7 +1803,7 @@ export default function ClassLog({
               studentId,
               {
                 ...draft,
-                attendance: value === "Completed" ? draft.attendance || "P" : "",
+                attendance: value === "Completed" ? draft.attendance || "A" : "",
               },
             ]),
           ),
@@ -1918,7 +1918,7 @@ export default function ClassLog({
           onChange={changeMode}
           ariaLabel="Class Log views"
           items={[
-            { value: "new", label: "New class" },
+            { value: "new", label: "Record class" },
             { value: "history", label: "History" },
           ]}
         />
@@ -1940,7 +1940,7 @@ export default function ClassLog({
         />
       ) : (
         <div className="entry-layout">
-          <main className="entry-main">
+          <div className="entry-main">
             <ClassControls
               value={classDraft}
               groups={groups}
@@ -2008,7 +2008,7 @@ export default function ClassLog({
                 </div>
               </section>
             ) : null}
-          </main>
+          </div>
           <div className="entry-sidebar">
             <ReviewPanel
               classDraft={classDraft}

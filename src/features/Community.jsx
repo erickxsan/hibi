@@ -463,7 +463,7 @@ function ListPanel({
   const showStudents = view !== "groups";
   const showGroups = view !== "students";
   return (
-    <section className="community-list-panel" aria-label="Community directory">
+    <section className="community-list-panel" aria-label="Community directory" data-onboarding-tour="community">
       {showStudents ? (
         <section className="community-list-section">
           <header className="community-panel-heading">
