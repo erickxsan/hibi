@@ -245,7 +245,7 @@ export function createDeviceRecoveryStore(indexedDb = globalThis.indexedDB, cryp
     const database = await openDatabase();
     if (!database) throw new Error("Encrypted offline storage is unavailable. The change was not applied.");
     const safeWorkspace = canonicalWorkspace(workspace);
-    const createdAt = new Date().toISOString();
+    let createdAt = new Date().toISOString();
     const operationPayload = await seal(database, ownerId, { mutation, workspace: safeWorkspace });
     const cachePayload = await seal(database, ownerId, safeWorkspace);
     const backupPayload = await seal(database, ownerId, safeWorkspace.state);
@@ -254,10 +254,18 @@ export function createDeviceRecoveryStore(indexedDb = globalThis.indexedDB, cryp
     const outbox = transaction.objectStore(OUTBOX_STORE);
     const all = await requestResult(outbox.getAll());
     const pending = all.filter((item) => item.ownerId === ownerId);
+    // IndexedDB serializes these transactions. Preserve enqueue order even when
+    // two operations share a millisecond (UUID ordering is not causal ordering).
+    createdAt = new Date(Math.max(Date.now(), ...pending.map((item) => Date.parse(item.createdAt) + 1))).toISOString();
     if (pending.length >= MAX_OUTBOX_OPERATIONS) {
       transaction.abort();
       await done.catch(() => {});
-      throw new Error("Too many offline changes are waiting. Reconnect before editing more records.");
+      throw Object.assign(
+        new Error(
+          "Too many offline changes are waiting. Sync or resolve pending operations before editing more records.",
+        ),
+        { code: "outbox_limit" },
+      );
     }
     outbox.put({
       id: mutation.operationId,
@@ -345,6 +353,38 @@ export function createDeviceRecoveryStore(indexedDb = globalThis.indexedDB, cryp
     await done;
   }
 
+  async function replaceMutation(ownerId, operationId, mutation, workspace) {
+    const database = await openDatabase();
+    if (!database) throw new Error("Encrypted offline storage is unavailable.");
+    const payload =
+      mutation && !mutation.empty
+        ? await seal(database, ownerId, { mutation, workspace: canonicalWorkspace(workspace) })
+        : null;
+    const cachePayload = await seal(database, ownerId, canonicalWorkspace(workspace));
+    const transaction = database.transaction([OUTBOX_STORE, CACHE_STORE], "readwrite");
+    const done = transactionDone(transaction);
+    const store = transaction.objectStore(OUTBOX_STORE);
+    const item = await requestResult(store.get(operationId));
+    if (!item || item.ownerId !== ownerId) {
+      await done;
+      throw new Error("This pending operation no longer exists.");
+    }
+    store.delete(operationId);
+    if (payload)
+      store.put({
+        id: mutation.operationId,
+        ownerId,
+        status: "pending",
+        createdAt: item.createdAt,
+        payload,
+        encrypted: true,
+      });
+    transaction
+      .objectStore(CACHE_STORE)
+      .put({ ownerId, payload: cachePayload, cachedAt: new Date().toISOString(), encrypted: true });
+    await done;
+  }
+
   async function purgeAccount(ownerId) {
     if (!ownerId) throw new TypeError("An account ID is required for device purging.");
     keyPromises.delete(ownerId);
@@ -375,6 +415,7 @@ export function createDeviceRecoveryStore(indexedDb = globalThis.indexedDB, cryp
     markMutationConflict,
     completeMutation,
     clearMutations,
+    replaceMutation,
     purgeAccount,
   };
 }

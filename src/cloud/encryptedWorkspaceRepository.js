@@ -424,6 +424,8 @@ export function createEncryptedWorkspaceRepository(
       upserts,
       deletes,
       manifest,
+      baseRevision: workspace.revision,
+      baseRoot: workspace.manifest.root,
       state: nextState,
       previousState: baseState,
       empty: false,
@@ -468,6 +470,13 @@ export function createEncryptedWorkspaceRepository(
     if (mutation.empty) return cache;
     const base = cache || (await loadWorkspace(session, ownerId));
     try {
+      if (
+        base.revision !== (mutation.baseRevision ?? mutation.manifest.workspaceRevision - 1) ||
+        base.manifest.root !== (mutation.baseRoot ?? mutation.manifest.previousRoot)
+      ) {
+        // Enter the same verified rebase path before sending a stale manifest.
+        throw { code: "40001", message: "workspace_revision_conflict" };
+      }
       return await submitMutation(mutation, base, session, ownerId);
     } catch (error) {
       const text = `${error?.code || ""} ${error?.message || ""}`.toLowerCase();
@@ -479,6 +488,7 @@ export function createEncryptedWorkspaceRepository(
         throw persistenceFailure("Encrypted cloud records could not be saved.", error);
       }
       const latest = await loadWorkspace(session, ownerId);
+      if (latest.manifest.operationId === mutation.operationId) return latest;
       if (!touchedEntitiesStillCurrent(mutation, latest)) {
         throw new WorkspaceConflictError({
           latestState: latest.state,
@@ -517,6 +527,18 @@ export function createEncryptedWorkspaceRepository(
         throw persistenceFailure("The encrypted change conflicted again while rebasing.", retryError);
       });
     }
+  }
+
+  async function resolveMutation(mutation, latest, session) {
+    // Explicitly choosing the local operation applies only its delta, never its
+    // stale full workspace. Validation also catches deleted parent references.
+    const state = canonicalState(
+      applyWorkspacePatch(
+        latest.state,
+        buildWorkspacePatch(mutation.previousState, mutation.state, latest.versions).patch,
+      ),
+    );
+    return prepareMutation({ state, previousState: latest.state, workspace: latest, session });
   }
 
   function optimisticWorkspace(workspace, mutation, session) {
@@ -1395,6 +1417,7 @@ export function createEncryptedWorkspaceRepository(
     prepareMutation,
     optimisticWorkspace,
     applyMutation,
+    resolveMutation,
     replaceWorkspace,
     findImportJob,
     listSnapshots,

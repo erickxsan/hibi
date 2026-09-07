@@ -13527,3 +13527,21 @@ tbody .attendance-student-column {
     background: var(--hibi-forest-dark);
   }
 }
+.pending-operations {
+  margin: 1rem;
+  padding: 1rem;
+  border: 1px solid currentColor;
+  border-radius: 12px;
+}
+.pending-operations summary {
+  cursor: pointer;
+}
+.pending-operations pre {
+  max-height: 20rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.pending-operations button {
+  margin: 0.5rem 0.5rem 0.5rem 0;
+}

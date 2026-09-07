@@ -4,6 +4,22 @@ import { createStarterState } from "../domain/index.js";
 import { createDeviceRecoveryStore, workspaceCounts } from "./deviceRecoveryStore.js";
 
 describe("device recovery store", () => {
+  it("atomically replaces or discards one operation and its cached projection", async () => {
+    const indexedDb = new IDBFactory();
+    const store = createDeviceRecoveryStore(indexedDb, globalThis.crypto);
+    const workspace = { state: createStarterState(), revision: 1 };
+    await store.stageMutation({ ownerId: "owner", workspace, mutation: { operationId: "a" } });
+    await store.stageMutation({ ownerId: "owner", workspace, mutation: { operationId: "b" } });
+    await store.markMutationConflict("owner", "a", "Conflict");
+    await expect(store.replaceMutation("other", "a", null, workspace)).rejects.toThrow();
+    await store.replaceMutation("owner", "a", { operationId: "replacement" }, { ...workspace, revision: 7 });
+    const reopened = createDeviceRecoveryStore(indexedDb, globalThis.crypto);
+    expect((await reopened.listMutations("owner")).map((item) => item.id)).toEqual(["replacement", "b"]);
+    expect((await reopened.loadWorkspaceCache("owner")).revision).toBe(7);
+    await reopened.replaceMutation("owner", "replacement", null, { ...workspace, revision: 8 });
+    expect((await reopened.listMutations("owner")).map((item) => item.id)).toEqual(["b"]);
+    expect((await reopened.loadWorkspaceCache("owner")).revision).toBe(8);
+  });
   it("summarizes the records preserved in a recovery copy", () => {
     const state = createStarterState();
     state.students.push({});

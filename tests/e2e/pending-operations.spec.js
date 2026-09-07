@@ -1,0 +1,22 @@
+import { expect, test } from "@playwright/test";
+test("reviews and resolves individual operations on desktop and mobile", async ({ page }, testInfo) => {
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto("/tests/e2e/fixtures/pending-operations.html");
+  await expect(page).toHaveTitle("Pending operations review");
+  await expect(page.getByRole("heading", { name: "Pending operations review" })).toBeVisible();
+  await page.getByText("Review pending changes (2)").click();
+  await page.getByText("Review this operation", { exact: true }).first().click();
+  await expect(page.locator("pre").first()).toContainText("Local change");
+  await page.screenshot({ path: testInfo.outputPath("desktop.png") });
+  await page.getByRole("button", { name: "Keep local change" }).first().click();
+  await expect(page.getByRole("status")).toHaveText("a: local");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByText("Review pending changes (1)")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("mobile.png") });
+  await page.getByRole("button", { name: "Discard this operation" }).click();
+  await expect(page.getByRole("status")).toHaveText("b: discard");
+  await expect(page.locator(".pending-operations")).toHaveCount(0);
+  expect(errors).toEqual([]);
+  await expect(page.locator("vite-error-overlay")).toHaveCount(0);
+});

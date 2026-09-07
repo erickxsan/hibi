@@ -6,6 +6,7 @@ import {
   encryptWorkspace,
   generateAccountMasterKey,
   generateWorkspaceCryptoId,
+  verifyManifest,
 } from "../crypto/index.js";
 import {
   APPLY_E2EE_MUTATION_RPC,
@@ -40,6 +41,12 @@ async function twoDevices(state, versions = {}) {
       if (args.p_expected_workspace_revision !== row.workspace_revision) {
         return { data: null, error: { code: "40001", message: "workspace_revision_conflict" } };
       }
+      if (
+        args.p_manifest.workspaceRevision !== row.workspace_revision + 1 ||
+        args.p_manifest.previousRoot !== row.manifest.root
+      ) {
+        return { data: null, error: { code: "22023", message: "invalid_workspace_manifest" } };
+      }
       if (name === REPLACE_E2EE_WORKSPACE_RPC) {
         row = {
           ...row,
@@ -55,6 +62,12 @@ async function twoDevices(state, versions = {}) {
         expect(item.entityRevision).toBe((next.get(`${item.collection}/${item.entityId}`)?.entityRevision || 0) + 1);
         next.set(`${item.collection}/${item.entityId}`, item);
       }
+      await verifyManifest({
+        ...session,
+        envelopes: [...next.values()],
+        manifest: args.p_manifest,
+        expectedPreviousRoot: row.manifest.root,
+      });
       row = {
         ...row,
         envelopes: [...next.values()],
@@ -84,6 +97,84 @@ async function concurrentMutations(devices, firstState, secondState) {
 }
 
 describe("encrypted workspace replacements", () => {
+  it("rebases consecutive offline edits of one student after another student changes", async () => {
+    const state = { ...createStarterState(), students: [student("a"), student("b")] };
+    const devices = await twoDevices(state);
+    const one = { ...state, students: [{ ...state.students[0], notes: "One" }, state.students[1]] };
+    const first = await devices.first.prepareMutation({
+      state: one,
+      workspace: devices.firstBase,
+      session: devices.session,
+    });
+    const optimistic = devices.first.optimisticWorkspace(devices.firstBase, first, devices.session);
+    const second = await devices.first.prepareMutation({
+      state: { ...one, students: [{ ...one.students[0], notes: "Two" }, one.students[1]] },
+      workspace: optimistic,
+      session: devices.session,
+    });
+    const remote = await devices.second.prepareMutation({
+      state: { ...state, students: [state.students[0], { ...state.students[1], notes: "Remote" }] },
+      workspace: devices.secondBase,
+      session: devices.session,
+    });
+    await devices.second.applyMutation(remote, devices.session, "owner");
+    await devices.first.loadWorkspace(devices.session, "owner");
+    await devices.first.applyMutation(first, devices.session, "owner");
+    const result = await devices.first.applyMutation(second, devices.session, "owner");
+    expect(result.state.students.map((item) => item.notes)).toEqual(["Two", "Remote"]);
+  });
+  it("rebases an offline operation after downloading unrelated changes", async () => {
+    const state = { ...createStarterState(), students: [student("a"), student("b")] };
+    const devices = await twoDevices(state);
+    const mutation = await concurrentMutations(
+      devices,
+      { ...state, students: [{ ...state.students[0], notes: "Cloud A" }, state.students[1]] },
+      { ...state, students: [state.students[0], { ...state.students[1], notes: "Offline B" }] },
+    );
+    expect(mutation.baseRevision).toBe(1);
+    expect(mutation.baseRoot).toBe(devices.secondBase.manifest.root);
+    await devices.second.loadWorkspace(devices.session, "owner");
+    const result = await devices.second.applyMutation(mutation, devices.session, "owner");
+    expect(result.state.students.map((item) => item.notes)).toEqual(["Cloud A", "Offline B"]);
+    expect(result.manifest.workspaceRevision).toBe(3);
+  });
+
+  it("resolves only the chosen operation against the latest cloud state", async () => {
+    const state = { ...createStarterState(), students: [student("a"), student("b")] };
+    const devices = await twoDevices(state);
+    const mutation = await concurrentMutations(
+      devices,
+      {
+        ...state,
+        students: [
+          { ...state.students[0], notes: "Cloud A" },
+          { ...state.students[1], notes: "Cloud B" },
+        ],
+      },
+      { ...state, students: [{ ...state.students[0], notes: "Local A" }, state.students[1]] },
+    );
+    const latest = await devices.second.loadWorkspace(devices.session, "owner");
+    await expect(devices.second.applyMutation(mutation, devices.session, "owner")).rejects.toBeInstanceOf(
+      WorkspaceConflictError,
+    );
+    const replacement = await devices.second.resolveMutation(mutation, latest, devices.session);
+    expect(replacement.operationId).not.toBe(mutation.operationId);
+    const result = await devices.second.applyMutation(replacement, devices.session, "owner");
+    expect(result.state.students.map((item) => item.notes)).toEqual(["Local A", "Cloud B"]);
+  });
+
+  it("retries a committed operation without applying it twice", async () => {
+    const state = { ...createStarterState(), students: [student("a")] };
+    const devices = await twoDevices(state);
+    const mutation = await devices.first.prepareMutation({
+      state: { ...state, students: [{ ...state.students[0], notes: "Once" }] },
+      workspace: devices.firstBase,
+      session: devices.session,
+    });
+    await devices.first.applyMutation(mutation, devices.session, "owner");
+    const result = await devices.first.applyMutation(mutation, devices.session, "owner");
+    expect(result.revision).toBe(2);
+  });
   it.each(["replace", "restore", "import"])("rejects an edit prepared before a full %s", async (reason) => {
     const state = { ...createStarterState(), students: [student("student-a")] };
     const devices = await twoDevices(state);

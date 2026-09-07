@@ -32,6 +32,7 @@ import {
 import { WorkspaceEncryptionGate } from "./cloud/WorkspaceEncryptionGate";
 import { useCloudWorkspace } from "./cloud/useCloudWorkspace";
 import { useEncryptedWorkspace } from "./cloud/useEncryptedWorkspace";
+import { PendingOperations } from "./cloud/PendingOperations";
 import { useWorkspaceEncryption } from "./cloud/useWorkspaceEncryption";
 import { safeLoadStateWithMigrations } from "./domain";
 import { useClassManager } from "./hooks/useClassManager";
@@ -237,6 +238,7 @@ export function ClassManagerApplication({ persistence, user, cloudError, onSignO
           </div>
         }
       >
+        <PendingOperations persistence={persistence} />
         <Suspense fallback={<PageFallback />}>{pageContent}</Suspense>
       </AppShell>
       <OnboardingTutorial
