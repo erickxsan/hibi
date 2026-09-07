@@ -789,48 +789,9 @@ export function createEncryptedWorkspaceRepository(
         throw conflict;
       }
     }
-    const [legacy, legacySnapshots, localPoints, legacyImports] = await Promise.all([
-      legacyRepository.loadOrCreateWorkspace(user.id),
-      legacyRepository.listRecoverySnapshots(user.id),
-      deviceStore.list(user.id).catch(() => []),
-      cloud()
-        .from("workspace_import_jobs")
-        .select("file_hash, source_name, base_revision, result_revision, summary, created_at")
-        .eq("owner_id", user.id)
-        .then(({ data, error }) => {
-          if (error) throw persistenceFailure("Import history could not be prepared for encryption.", error);
-          return data || [];
-        }),
-    ]);
-    const [cloudCopies, localCopies] = await Promise.all([
-      Promise.all(legacySnapshots.map((point) => legacyRepository.loadRecoverySnapshot(point.id, user.id))),
-      Promise.all(localPoints.map((point) => deviceStore.load(user.id, point.id))),
-    ]);
-    const migrationSnapshots = [
-      ...cloudCopies.filter(Boolean),
-      ...localCopies.filter(Boolean).map((copy) => ({
-        ...copy,
-        id: createOperationId(),
-        revision: Number.isSafeInteger(copy.revision) ? copy.revision : legacy.revision,
-        reason: copy.source || "device-recovery",
-      })),
-    ];
-    const sourceHash = canonicalWorkspaceHash(legacy.state);
-    const envelopes = await encryptWorkspace({
-      masterKey,
-      workspaceCryptoId,
-      state: legacy.state,
-      versions: legacy.versions,
-    });
-    const operationId = createOperationId();
-    const manifest = await createManifest({
-      masterKey,
-      workspaceCryptoId,
-      envelopes,
-      workspaceRevision: 1,
-      previousRoot: null,
-      operationId,
-    });
+    // This first read supplies only the optimistic revision. All migration data
+    // is reloaded after the server has drained writes and frozen the source.
+    const { revision: sourceRevision } = await legacyRepository.loadOrCreateWorkspace(user.id);
     onProgress?.("starting");
     const { error: beginError } = await cloud().rpc(BEGIN_MIGRATION_RPC, {
       p_expected_owner_id: user.id,
@@ -838,9 +799,55 @@ export function createEncryptedWorkspaceRepository(
       p_protocol_version: CRYPTO_PROTOCOL_VERSION,
       p_schema_version: CRYPTO_SCHEMA_VERSION,
       p_wrapper: keyWrapper,
+      p_expected_legacy_revision: sourceRevision,
     });
     if (beginError) throw persistenceFailure("Encrypted migration could not start.", beginError);
     try {
+      const [legacy, legacySnapshots, localPoints, legacyImports] = await Promise.all([
+        legacyRepository.loadOrCreateWorkspace(user.id),
+        legacyRepository.listRecoverySnapshots(user.id),
+        deviceStore.list(user.id).catch(() => []),
+        cloud()
+          .from("workspace_import_jobs")
+          .select("file_hash, source_name, base_revision, result_revision, summary, created_at")
+          .eq("owner_id", user.id)
+          .then(({ data, error }) => {
+            if (error) throw persistenceFailure("Import history could not be prepared for encryption.", error);
+            return data || [];
+          }),
+      ]);
+      if (legacy.revision !== sourceRevision) {
+        throw new CloudPersistenceError("The frozen legacy workspace revision changed. Retry encryption.");
+      }
+      const [cloudCopies, localCopies] = await Promise.all([
+        Promise.all(legacySnapshots.map((point) => legacyRepository.loadRecoverySnapshot(point.id, user.id))),
+        Promise.all(localPoints.map((point) => deviceStore.load(user.id, point.id))),
+      ]);
+      const migrationSnapshots = [
+        ...cloudCopies.filter(Boolean),
+        ...localCopies.filter(Boolean).map((copy) => ({
+          ...copy,
+          id: createOperationId(),
+          revision: Number.isSafeInteger(copy.revision) ? copy.revision : legacy.revision,
+          reason: copy.source || "device-recovery",
+        })),
+      ];
+      const sourceHash = canonicalWorkspaceHash(legacy.state);
+      const envelopes = await encryptWorkspace({
+        masterKey,
+        workspaceCryptoId,
+        state: legacy.state,
+        versions: legacy.versions,
+      });
+      const operationId = createOperationId();
+      const manifest = await createManifest({
+        masterKey,
+        workspaceCryptoId,
+        envelopes,
+        workspaceRevision: 1,
+        previousRoot: null,
+        operationId,
+      });
       for (let index = 0; index < envelopes.length; index += 100) {
         onProgress?.("uploading", { completed: index, total: envelopes.length });
         const { error } = await cloud().rpc(STAGE_ENTITIES_RPC, {
@@ -965,6 +972,7 @@ export function createEncryptedWorkspaceRepository(
         p_expected_owner_id: user.id,
         p_workspace_crypto_id: workspaceCryptoId,
         p_expected_entity_count: envelopes.length,
+        p_expected_legacy_revision: sourceRevision,
         p_manifest: manifest,
       });
       if (finalizeError) throw persistenceFailure("Encrypted migration could not be finalized.", finalizeError);

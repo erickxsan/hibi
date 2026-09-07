@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(56);
+select plan(66);
 
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data)
 values
@@ -18,6 +18,24 @@ select throws_ok(
   'permission denied for table workspace_encryption_profiles',
   'authenticated clients cannot write encryption profiles directly'
 );
+
+-- Simulate another device committing after the client's preliminary read.
+select set_config('test.legacy_revision', (select revision::text from public.workspace_sync_cursors where owner_id = auth.uid()), true);
+select lives_ok($$
+  select public.apply_workspace_patch_idempotent(
+    auth.uid(), '30000000-0000-4000-8000-000000000099',
+    jsonb_build_object('settings', (select data || '{"hourlyRate":73}'::jsonb from public.workspace_settings where owner_id = auth.uid())),
+    jsonb_build_object('settings', jsonb_build_object('__settings__', (select revision from public.workspace_settings where owner_id = auth.uid())))
+  )
+$$, 'another legacy device commits before the migration barrier');
+select throws_ok($$
+  select public.begin_workspace_e2ee_migration(auth.uid(), 'workspace_crypto_A1', 1::smallint, 1, '{}'::jsonb, current_setting('test.legacy_revision')::bigint)
+$$, '40001', 'legacy_revision_conflict', 'begin rejects the stale revision before creating a profile');
+select is((select count(*) from public.workspace_encryption_profiles), 0::bigint, 'a stale begin leaves no write barrier or staging profile');
+select is((select data ->> 'hourlyRate' from public.workspace_settings where owner_id = auth.uid()), '73', 'the concurrent edit survives a rejected migration');
+select ok(to_regprocedure('public.begin_workspace_e2ee_migration(uuid,text,smallint,integer,jsonb)') is null
+  and to_regprocedure('public.finalize_workspace_e2ee_migration(uuid,text,integer,jsonb)') is null,
+  'unsafe old migration signatures are unavailable');
 
 select lives_ok($$
   select public.begin_workspace_e2ee_migration(
@@ -36,7 +54,8 @@ select lives_ok($$
       'keyVersion', 1,
       'nonce', repeat('N', 16),
       'wrappedKey', repeat('W', 48)
-    )
+    ),
+    (select revision from public.workspace_sync_cursors where owner_id = auth.uid())
   )
 $$, 'a password wrapper starts mandatory encryption migration');
 
@@ -46,6 +65,34 @@ select is(
   'the profile remains gated while ciphertext is staged'
 );
 select is((select count(*) from public.workspace_key_wrappers), 1::bigint, 'the initial AMK wrapper is stored');
+
+select is(
+  (select legacy_source_revision from public.workspace_encryption_profiles where owner_id = auth.uid()),
+  (select revision from public.workspace_sync_cursors where owner_id = auth.uid()),
+  'the barrier stores the frozen source revision'
+);
+select throws_ok($$
+  select public.apply_workspace_patch_idempotent(
+    auth.uid(), '30000000-0000-4000-8000-000000000098',
+    jsonb_build_object('settings', (select data || '{"hourlyRate":99}'::jsonb from public.workspace_settings where owner_id = auth.uid())),
+    jsonb_build_object('settings', jsonb_build_object('__settings__', (select revision from public.workspace_settings where owner_id = auth.uid())))
+  )
+$$, '55000', 'encryption_required', 'legacy writes are rejected after the barrier');
+select throws_ok($$
+  select public.finalize_workspace_e2ee_migration(auth.uid(), 'workspace_crypto_A1', 1, '{}'::jsonb, current_setting('test.legacy_revision')::bigint)
+$$, '40001', 'legacy_revision_conflict', 'finalize refuses a source revision different from the frozen source');
+
+-- Exercise the trigger as the database owner, as legacy security-definer RPCs do.
+reset role;
+select throws_ok($$
+  insert into public.workspace_recovery_snapshots(owner_id, state, source_revision, reason)
+  values ('33333333-3333-4333-8333-333333333333', '{}'::jsonb, 0, 'save')
+$$, '55000', 'encryption_required', 'the barrier also freezes snapshots independent of the workspace revision');
+select throws_ok($$
+  insert into public.workspace_import_jobs(owner_id, file_hash, base_revision, result_revision)
+  values ('33333333-3333-4333-8333-333333333333', repeat('a', 64), 0, 0)
+$$, '55000', 'encryption_required', 'the barrier also freezes import history');
+set local role authenticated;
 
 select throws_ok($$
   select public.stage_workspace_e2ee_entities(
@@ -155,7 +202,8 @@ select lives_ok($$
       'keyVersion', 1,
       'operationId', '30000000-0000-4000-8000-000000000004',
       'mac', repeat('M', 43)
-    )
+    ),
+    (select legacy_source_revision from public.workspace_encryption_profiles where owner_id = auth.uid())
   )
 $$, 'verified staging can be promoted atomically');
 
