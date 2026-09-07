@@ -4,6 +4,63 @@ import { createStarterState } from "../domain/index.js";
 import { createDeviceRecoveryStore, workspaceCounts } from "./deviceRecoveryStore.js";
 
 describe("device recovery store", () => {
+  it("uses the committed account key when independent instances initialize concurrently", async () => {
+    const indexedDb = new IDBFactory();
+    let generated = 0;
+    let release;
+    const barrier = new Promise((resolve) => {
+      release = resolve;
+    });
+    const cryptoApi = {
+      getRandomValues: globalThis.crypto.getRandomValues.bind(globalThis.crypto),
+      subtle: {
+        encrypt: globalThis.crypto.subtle.encrypt.bind(globalThis.crypto.subtle),
+        decrypt: globalThis.crypto.subtle.decrypt.bind(globalThis.crypto.subtle),
+        async generateKey(...args) {
+          const key = await globalThis.crypto.subtle.generateKey(...args);
+          if (++generated === 2) release();
+          await barrier;
+          return key;
+        },
+      },
+    };
+    const stores = [createDeviceRecoveryStore(indexedDb, cryptoApi), createDeviceRecoveryStore(indexedDb, cryptoApi)];
+    const states = [createStarterState(), createStarterState()];
+    states[0].settings.hourlyRate = 111;
+    states[1].settings.hourlyRate = 222;
+    const copies = await Promise.all(
+      stores.map((store, index) =>
+        store.capture({
+          ownerId: "owner",
+          state: states[index],
+          revision: index + 1,
+        }),
+      ),
+    );
+    // Both instances must keep using the winner for subsequent encrypted writes.
+    await Promise.all(
+      stores.map((store, index) =>
+        store.stageMutation({
+          ownerId: "owner",
+          workspace: { state: states[index], revision: index + 1 },
+          mutation: { operationId: `operation-${index}` },
+        }),
+      ),
+    );
+    expect(generated).toBe(2);
+    const reopened = createDeviceRecoveryStore(indexedDb, globalThis.crypto);
+    await expect(reopened.list("owner")).resolves.toHaveLength(3);
+    for (const [index, copy] of copies.entries()) {
+      await expect(reopened.load("owner", copy.id)).resolves.toMatchObject({ state: states[index] });
+    }
+    const mutations = await reopened.listMutations("owner");
+    expect(mutations).toHaveLength(2);
+    for (let index = 0; index < 2; index++) {
+      expect(mutations.find((item) => item.id === `operation-${index}`).workspace.state).toEqual(states[index]);
+    }
+    expect((await reopened.loadWorkspaceCache("owner")).state).toEqual(mutations[1].workspace.state);
+  });
+
   it("atomically replaces or discards one operation and its cached projection", async () => {
     const indexedDb = new IDBFactory();
     const store = createDeviceRecoveryStore(indexedDb, globalThis.crypto);

@@ -94,10 +94,25 @@ export function createDeviceRecoveryStore(indexedDb = globalThis.indexedDB, cryp
       const existing = await requestResult(read.objectStore(KEY_STORE).get(ownerId));
       await readDone;
       if (existing?.key) return existing.key;
-      const key = await cryptoApi.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+      const candidate = await cryptoApi.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, [
+        "encrypt",
+        "decrypt",
+      ]);
+      // Generate outside the transaction so Web Crypto cannot let it go inactive.
+      // IndexedDB serializes writes across connections/tabs: recheck the account
+      // in the same transaction that inserts its key, and use the committed winner.
       const write = database.transaction(KEY_STORE, "readwrite");
       const writeDone = transactionDone(write);
-      write.objectStore(KEY_STORE).put({ ownerId, key });
+      const keys = write.objectStore(KEY_STORE);
+      const request = keys.get(ownerId);
+      let key;
+      request.onsuccess = () => {
+        key = request.result?.key;
+        if (!key) {
+          key = candidate;
+          keys.add({ ownerId, key });
+        }
+      };
       await writeDone;
       return key;
     })();
