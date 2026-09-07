@@ -538,10 +538,20 @@ export function createEncryptedWorkspaceRepository(
     const ownerId = expectedOwnerId || user.id;
     const current = cache || (await loadWorkspace(session, ownerId));
     const nextState = canonicalState(state);
+    // A full replacement changes the synchronization baseline even for unchanged
+    // records. Advance every existing revision so pending edits cannot rebase
+    // across a restore/import using a recycled entity revision.
+    const versions = Object.fromEntries(
+      Object.entries(current.versions).map(([collection, revisions]) => [
+        collection,
+        Object.fromEntries(Object.entries(revisions).map(([entityId, revision]) => [entityId, revision + 1])),
+      ]),
+    );
     const envelopes = await encryptWorkspace({
       masterKey: session.masterKey,
       workspaceCryptoId: session.workspaceCryptoId,
       state: nextState,
+      versions,
       keyVersion: session.keyVersion,
     });
     assertBackupSize(envelopes);

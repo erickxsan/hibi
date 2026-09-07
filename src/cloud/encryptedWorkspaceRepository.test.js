@@ -10,17 +10,18 @@ import {
 import {
   APPLY_E2EE_MUTATION_RPC,
   LOAD_E2EE_WORKSPACE_RPC,
+  REPLACE_E2EE_WORKSPACE_RPC,
   createEncryptedWorkspaceRepository,
 } from "./encryptedWorkspaceRepository.js";
 import { WorkspaceConflictError } from "./workspaceRepository.js";
 
-async function twoDevices(state) {
+async function twoDevices(state, versions = {}) {
   const session = {
     masterKey: generateAccountMasterKey(),
     workspaceCryptoId: generateWorkspaceCryptoId(),
     keyVersion: 1,
   };
-  const envelopes = await encryptWorkspace({ ...session, state });
+  const envelopes = await encryptWorkspace({ ...session, state, versions });
   let row = {
     workspace_crypto_id: session.workspaceCryptoId,
     workspace_revision: 1,
@@ -33,9 +34,20 @@ async function twoDevices(state) {
     auth: { getUser: async () => ({ data: { user: { id: "owner" } }, error: null }) },
     rpc: vi.fn(async (name, args) => {
       if (name === LOAD_E2EE_WORKSPACE_RPC) return { data: [row], error: null };
-      if (name !== APPLY_E2EE_MUTATION_RPC) throw new Error(`Unexpected RPC: ${name}`);
+      if (![APPLY_E2EE_MUTATION_RPC, REPLACE_E2EE_WORKSPACE_RPC].includes(name)) {
+        throw new Error(`Unexpected RPC: ${name}`);
+      }
       if (args.p_expected_workspace_revision !== row.workspace_revision) {
         return { data: null, error: { code: "40001", message: "workspace_revision_conflict" } };
+      }
+      if (name === REPLACE_E2EE_WORKSPACE_RPC) {
+        row = {
+          ...row,
+          envelopes: args.p_envelopes,
+          manifest: args.p_manifest,
+          workspace_revision: row.workspace_revision + 1,
+        };
+        return { data: [{ result_revision: row.workspace_revision }], error: null };
       }
       const next = new Map(row.envelopes.map((item) => [`${item.collection}/${item.entityId}`, item]));
       for (const item of args.p_deletes) next.delete(`${item.collection}/${item.entityId}`);
@@ -70,6 +82,56 @@ async function concurrentMutations(devices, firstState, secondState) {
   await first.applyMutation(firstMutation, session, "owner");
   return secondMutation;
 }
+
+describe("encrypted workspace replacements", () => {
+  it.each(["replace", "restore", "import"])("rejects an edit prepared before a full %s", async (reason) => {
+    const state = { ...createStarterState(), students: [student("student-a")] };
+    const devices = await twoDevices(state);
+    const mutation = await devices.first.prepareMutation({
+      state: { ...state, students: [{ ...state.students[0], notes: "Pending notes" }] },
+      workspace: devices.firstBase,
+      session: devices.session,
+    });
+    const restored = { ...state, students: [{ ...state.students[0], fullName: "Updated name" }] };
+    await devices.second.replaceWorkspace(restored, devices.session, "owner", reason, { fileHash: "a".repeat(64) });
+
+    // The first device has not loaded the replacement before submitting its old edit.
+    await expect(devices.first.applyMutation(mutation, devices.session, "owner")).rejects.toMatchObject({
+      name: "WorkspaceConflictError",
+      latestRevision: 2,
+      latestState: { students: [{ fullName: "Updated name" }] },
+    });
+    expect(devices.client.rpc.mock.calls.filter(([name]) => name === APPLY_E2EE_MUTATION_RPC)).toHaveLength(1);
+    const reloaded = await devices.first.loadWorkspace(devices.session, "owner");
+    expect(reloaded.state).toEqual(restored);
+    expect(reloaded.versions.students["student-a"]).toBe(2);
+    expect(reloaded.revision).toBe(2);
+  });
+
+  it("advances existing revisions on every replacement, including unchanged settings and records", async () => {
+    const state = {
+      ...createStarterState(),
+      students: [student("student-a"), student("removed")],
+      groups: [createGroup({ id: "group-a", name: "Group A" })],
+    };
+    const devices = await twoDevices(state, {
+      settings: { __settings__: 7 },
+      students: { "student-a": 12, removed: 3 },
+      groups: { "group-a": 4 },
+    });
+    const replacement = { ...state, students: [state.students[0], student("new")] };
+    for (let count = 1; count <= 2; count += 1) {
+      const result = await devices.second.replaceWorkspace(replacement, devices.session, "owner");
+      expect(result.versions.settings.__settings__).toBe(7 + count);
+      expect(result.versions.students).toEqual({ "student-a": 12 + count, new: count });
+      expect(result.versions.groups["group-a"]).toBe(4 + count);
+      const reloaded = await devices.first.loadWorkspace(devices.session, "owner");
+      expect(reloaded.state).toEqual(replacement);
+      expect(reloaded.versions).toEqual(result.versions);
+      expect(reloaded.revision).toBe(1 + count);
+    }
+  });
+});
 
 describe("encrypted workspace mutation rebasing", () => {
   it.each([
