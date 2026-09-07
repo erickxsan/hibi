@@ -487,24 +487,32 @@ export function createEncryptedWorkspaceRepository(
           cause: error,
         });
       }
-      const rebasedEnvelopes = envelopesAfterMutation(latest.envelopes, mutation.upserts, mutation.deletes);
-      const rebased = {
-        ...mutation,
-        state: applyWorkspacePatch(
-          latest.state,
-          buildWorkspacePatch(mutation.previousState, mutation.state, latest.versions).patch,
-        ),
+      let combinedState;
+      try {
+        combinedState = canonicalState(
+          applyWorkspacePatch(
+            latest.state,
+            buildWorkspacePatch(mutation.previousState, mutation.state, latest.versions).patch,
+          ),
+        );
+      } catch (validationError) {
+        throw new WorkspaceConflictError({
+          latestState: latest.state,
+          latestRevision: latest.revision,
+          latestUpdatedAt: latest.updatedAt,
+          cause: validationError,
+        });
+      }
+      // Diff the validated combination against the latest state so every changed
+      // position is encrypted with a fresh nonce and the current entity revision.
+      const rebased = await prepareMutation({
+        state: combinedState,
         previousState: latest.state,
-        manifest: await createManifest({
-          masterKey: session.masterKey,
-          workspaceCryptoId: session.workspaceCryptoId,
-          envelopes: rebasedEnvelopes,
-          workspaceRevision: latest.revision + 1,
-          previousRoot: latest.manifest.root,
-          operationId: mutation.operationId,
-          keyVersion: session.keyVersion,
-        }),
-      };
+        workspace: latest,
+        session,
+        operationId: mutation.operationId,
+      });
+      if (rebased.empty) return latest;
       return submitMutation(rebased, latest, session, ownerId).catch((retryError) => {
         throw persistenceFailure("The encrypted change conflicted again while rebasing.", retryError);
       });
