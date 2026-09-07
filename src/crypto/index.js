@@ -3,6 +3,8 @@ export { deviceKeyStore, createDeviceKeyStore } from "./deviceKeyStore.js";
 export { equalBytes, fromBase64Url, toBase64Url, wipeBytes } from "./encoding.js";
 export {
   createPasswordWrapper,
+  getNewPasswordWarning,
+  NEW_PASSWORD_GUIDANCE,
   derivePasswordSecret,
   PASSWORD_KDF_ALGORITHM,
   PASSWORD_KDF_ITERATIONS,

@@ -3,6 +3,7 @@ import { KeyRound, LockKeyhole, LogOut, RefreshCw, ShieldCheck } from "lucide-re
 import { BrandMark } from "../components/BrandMark";
 import { Button, Field, Input } from "../components/ui";
 import { LanguageToggle } from "../i18n";
+import { NEW_PASSWORD_GUIDANCE, getNewPasswordWarning } from "../crypto/passwords.js";
 import "./cloud.css";
 
 export function WorkspaceEncryptionGate({
@@ -28,6 +29,7 @@ export function WorkspaceEncryptionGate({
     (wrapper) => wrapper.type === "password" && !wrapper.revokedAt,
   );
   const needsPasswordCreation = !profile || (profile.migrationStatus === "migration_started" && !passwordWrapper);
+  const passwordWarning = needsPasswordCreation ? getNewPasswordWarning(password) : "";
   const recoveryAvailable = (bootstrap?.wrappers || []).some(
     (wrapper) => wrapper.type === "recovery" && !wrapper.revokedAt,
   );
@@ -127,6 +129,7 @@ export function WorkspaceEncryptionGate({
 
         {!loading ? (
           <form className="recovery-unlock-form encryption-password-form" onSubmit={submitPassword}>
+            {needsPasswordCreation ? <p>{NEW_PASSWORD_GUIDANCE}</p> : null}
             <Field label={needsPasswordCreation ? "Create encryption password" : "Encryption password"}>
               <Input
                 type="password"
@@ -155,6 +158,7 @@ export function WorkspaceEncryptionGate({
                 />
               </Field>
             ) : null}
+            {passwordWarning ? <p role="status">{passwordWarning}</p> : null}
             <Button
               type="submit"
               variant="primary"
@@ -163,13 +167,15 @@ export function WorkspaceEncryptionGate({
             >
               {busy
                 ? "Protecting workspace…"
-                : needsPasswordCreation
-                  ? profile
-                    ? "Restart and encrypt workspace"
-                    : "Set password and encrypt workspace"
-                  : profile?.migrationStatus === "migration_started"
-                    ? "Resume encrypted migration"
-                    : "Unlock workspace"}
+                : passwordWarning
+                  ? "Use this password anyway"
+                  : needsPasswordCreation
+                    ? profile
+                      ? "Restart and encrypt workspace"
+                      : "Set password and encrypt workspace"
+                    : profile?.migrationStatus === "migration_started"
+                      ? "Resume encrypted migration"
+                      : "Unlock workspace"}
             </Button>
             {needsPasswordCreation ? (
               <p className="encryption-compatibility-note">

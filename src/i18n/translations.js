@@ -6,6 +6,11 @@ export const SUPPORTED_LANGUAGES = Object.freeze({
 });
 
 export const SPANISH_TRANSLATIONS = Object.freeze({
+  "We recommend a long phrase with several unrelated words. No special symbols are required.":
+    "Recomendamos una frase larga con varias palabras sin relación entre sí. No se requieren símbolos especiales.",
+  "This password may be easy to guess. We recommend a longer phrase with unrelated words, but you can use this password anyway.":
+    "Esta contraseña puede ser fácil de adivinar. Recomendamos una frase más larga con palabras sin relación entre sí, pero puedes usar esta contraseña de todos modos.",
+  "Use this password anyway": "Usar esta contraseña de todos modos",
   // Brand, navigation, and shared controls
   "Teaching, day by day.": "Enseñando, día a día.",
   "Teaching organized.": "Enseñanza organizada.",

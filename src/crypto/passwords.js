@@ -5,6 +5,40 @@ export const PASSWORD_KDF_ALGORITHM = "pbkdf2-sha256";
 export const PASSWORD_KDF_ITERATIONS = 600_000;
 export const PASSWORD_KDF_SALT_BYTES = 32;
 const MAX_PASSWORD_CHARACTERS = 1_024;
+const RECOMMENDED_PASSWORD_CHARACTERS = 15;
+export const NEW_PASSWORD_GUIDANCE =
+  "We recommend a long phrase with several unrelated words. No special symbols are required.";
+const WEAK_PASSWORD_WARNING =
+  "This password may be easy to guess. We recommend a longer phrase with unrelated words, but you can use this password anyway.";
+
+// Advisory only, used while choosing a new password. Never change KDF input.
+export function getNewPasswordWarning(password) {
+  if (typeof password !== "string" || !password) return "";
+  if ([...password.trim()].length < RECOMMENDED_PASSWORD_CHARACTERS) {
+    return WEAK_PASSWORD_WARNING;
+  }
+  const candidate = password
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]/gu, "");
+  const common =
+    /^(?:password|passw0rd|contraseña|contrasena|qwerty|letmein|welcome|iloveyou|admin|changeme|1234567890)+\d*$/u;
+  const sequences = ["0123456789", "1234567890", "abcdefghijklmnopqrstuvwxyz", "qwertyuiop", "asdfghjkl", "zxcvbnm"];
+  if (
+    !candidate ||
+    /^(\p{L}|\p{N})\1*$/u.test(candidate) ||
+    /^(.{1,8})\1+$/u.test(candidate) ||
+    common.test(candidate) ||
+    sequences.some((sequence) =>
+      [sequence, [...sequence].reverse().join("")].some((order) =>
+        order.repeat(Math.ceil(candidate.length / order.length) + 1).includes(candidate),
+      ),
+    )
+  ) {
+    return WEAK_PASSWORD_WARNING;
+  }
+  return "";
+}
 
 function requirePassword(password) {
   if (typeof password !== "string" || password.length === 0) {
@@ -57,6 +91,7 @@ export async function createPasswordWrapper({
   label = "Encryption password",
   cryptoApi = globalThis.crypto,
 }) {
+  requirePassword(password);
   const wrapperId = cryptoApi.randomUUID();
   const salt = cryptoApi.getRandomValues(new Uint8Array(PASSWORD_KDF_SALT_BYTES));
   const secret = await derivePasswordSecret({ password, salt, cryptoApi });

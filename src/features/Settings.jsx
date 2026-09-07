@@ -18,6 +18,7 @@ import { Button, ConfirmDialog, Drawer, Field, Input, Select } from "../componen
 import { importState, MAX_BACKUP_BYTES } from "../domain";
 import { draftChanged, useUnsavedChanges } from "../hooks/useUnsavedChanges";
 import { LanguageToggle, useI18n } from "../i18n";
+import { NEW_PASSWORD_GUIDANCE, getNewPasswordWarning } from "../crypto/passwords.js";
 import { getHibiSoundsEnabled, playHibiSound, setHibiSoundsEnabled } from "../utils/hibiSounds";
 
 function settingsDraft(settings) {
@@ -70,6 +71,7 @@ export default function Settings({
   const [currentEncryptionPassword, setCurrentEncryptionPassword] = useState("");
   const [newEncryptionPassword, setNewEncryptionPassword] = useState("");
   const [newEncryptionPasswordConfirmation, setNewEncryptionPasswordConfirmation] = useState("");
+  const newPasswordWarning = passwordChangeOpen ? getNewPasswordWarning(newEncryptionPassword) : "";
   const [backupSourceRecovery, setBackupSourceRecovery] = useState(null);
   const [backupSourceRecoveryKey, setBackupSourceRecoveryKey] = useState("");
   const [backupSourcePassword, setBackupSourcePassword] = useState("");
@@ -1013,7 +1015,7 @@ export default function Settings({
                 }
               }}
             >
-              Save new password
+              {newPasswordWarning ? "Use this password anyway" : "Save new password"}
             </Button>
           </>
         }
@@ -1035,6 +1037,8 @@ export default function Settings({
               autoComplete="new-password"
             />
           </Field>
+          <p>{NEW_PASSWORD_GUIDANCE}</p>
+          {newPasswordWarning ? <p role="status">{newPasswordWarning}</p> : null}
           <Field label="Confirm new encryption password">
             <Input
               type="password"

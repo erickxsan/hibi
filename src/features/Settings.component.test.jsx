@@ -29,6 +29,7 @@ function renderSettings(overrides = {}) {
         state={createStarterState()}
         actions={actions}
         persistenceMode="cloud"
+        encryption={overrides.encryption}
         registerNavigationBlocker={() => () => {}}
         onDeleteAccount={onDeleteAccount}
       />
@@ -38,6 +39,20 @@ function renderSettings(overrides = {}) {
 }
 
 describe("Settings privacy actions", () => {
+  it("warns only for the new password and permits a weak replacement", async () => {
+    const user = userEvent.setup();
+    const changePassword = vi.fn(async () => undefined);
+    renderSettings({ encryption: { enabled: true, wrappers: [], changePassword } });
+    await user.click(screen.getByRole("button", { name: "Change encryption password" }));
+    await user.type(screen.getByLabelText("Current encryption password"), "a");
+    expect(screen.queryByText(/easy to guess/)).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText("New encryption password"), "passwordpassword");
+    await user.type(screen.getByLabelText("Confirm new encryption password"), "passwordpassword");
+    expect(screen.getByText(/easy to guess/)).toBeInTheDocument();
+    expect(changePassword).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Use this password anyway" }));
+    expect(changePassword).toHaveBeenCalledWith("a", "passwordpassword");
+  });
   it("keeps failed cloud saves dirty so encrypted changes can be retried", async () => {
     const user = userEvent.setup();
     const { actions } = renderSettings({ actions: { updateSettings: vi.fn(async () => false) } });

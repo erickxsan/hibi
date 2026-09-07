@@ -33,16 +33,30 @@ function props(overrides = {}) {
 }
 
 describe("workspace encryption gate", () => {
+  it.each(["a", "passwordpassword", "12345678901234567890"])(
+    "warns before activation but permits weak passwords: %s",
+    async (password) => {
+      const user = userEvent.setup();
+      const values = props();
+      renderGate(values);
+      await user.type(screen.getByLabelText("Create encryption password"), password);
+      await user.type(screen.getByLabelText("Confirm encryption password"), password);
+      expect(screen.getByRole("status")).toHaveTextContent(/easy to guess/);
+      expect(values.onActivate).not.toHaveBeenCalled();
+      await user.click(screen.getByRole("button", { name: "Use this password anyway" }));
+      expect(values.onActivate).toHaveBeenCalledWith({ password, rememberDevice: true });
+    },
+  );
   it("requires password confirmation for first-time activation and honors the remembered-device choice", async () => {
     const user = userEvent.setup();
     const values = props();
     renderGate(values);
     expect(screen.getByText(/encrypt every record/iu)).toBeInTheDocument();
-    await user.type(screen.getByLabelText("Create encryption password"), "a password");
-    await user.type(screen.getByLabelText("Confirm encryption password"), "a password");
+    await user.type(screen.getByLabelText("Create encryption password"), "violet canyon paper lantern");
+    await user.type(screen.getByLabelText("Confirm encryption password"), "violet canyon paper lantern");
     await user.click(screen.getByRole("checkbox"));
     await user.click(screen.getByRole("button", { name: /set password and encrypt workspace/iu }));
-    expect(values.onActivate).toHaveBeenCalledWith({ password: "a password", rememberDevice: false });
+    expect(values.onActivate).toHaveBeenCalledWith({ password: "violet canyon paper lantern", rememberDevice: false });
   });
 
   it("unlocks an active profile with either its password or recovery key", async () => {
@@ -57,9 +71,10 @@ describe("workspace encryption gate", () => {
       },
     });
     renderGate(values);
-    await user.type(screen.getByLabelText("Encryption password"), "a password");
+    await user.type(screen.getByLabelText("Encryption password"), "a");
+    expect(screen.queryByText(/easy to guess/)).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /^unlock workspace$/iu }));
-    expect(values.onUnlockPassword).toHaveBeenCalledWith("a password", { rememberDevice: true });
+    expect(values.onUnlockPassword).toHaveBeenCalledWith("a", { rememberDevice: true });
     await user.type(screen.getByLabelText("Recovery key"), "HIBI1-TEST");
     await user.click(screen.getByRole("button", { name: /unlock with recovery key/iu }));
     expect(values.onUnlockRecovery).toHaveBeenCalledWith("HIBI1-TEST", { rememberDevice: true });

@@ -35,6 +35,14 @@ The following are explicitly outside protocol v1:
 
 ## Key hierarchy and wrappers
 
+New encryption passwords receive an advisory warning in setup and password-change forms when shorter than
+15 Unicode code points (excluding surrounding whitespace) or matching common passwords, repeated patterns,
+or simple sequences. Users can ignore the recommendation and use the password anyway. There is no mandatory
+minimum length or strength rule: the cryptographic API accepts any nonempty password up to the existing limit
+of 1,024 UTF-16 code units. The warning is shown before submission and never during unlock, backup recovery,
+or master-key rotation; existing password holders receive no prompts. Checks run locally and do not alter KDF
+input. They are a usability recommendation, not an entropy guarantee or a comprehensive breached-password list.
+
 The browser generates a uniformly random 256-bit AMK. It never derives the AMK from account, OAuth, JWT, email, or
 password material. HKDF-SHA-256 derives independent 256-bit material using versioned purpose and context values:
 
