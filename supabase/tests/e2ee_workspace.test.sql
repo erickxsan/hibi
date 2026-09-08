@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(66);
+select plan(68);
 
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data)
 values
@@ -473,6 +473,28 @@ select is((select active_key_version from public.workspace_encryption_profiles),
 select is((select count(*) from public.encrypted_workspace_entities), 2::bigint, 'rotation publishes every staged entity');
 select is((select count(*) from public.encrypted_workspace_snapshots), 1::bigint, 'rotation replaces snapshots with staged ciphertext');
 select is((select count(*) from public.encrypted_workspace_import_receipts), 2::bigint, 'rotation preserves encrypted import history');
+
+-- A reset must publish every removed identity so older clients can apply it.
+select lives_ok($test$
+  select * from public.replace_encrypted_workspace(
+    auth.uid(), 4, '30000000-0000-4000-8000-000000000090', 'reset',
+    (select jsonb_agg(value) from jsonb_array_elements((select envelopes from public.load_encrypted_workspace(auth.uid())))
+      where value ->> 'collection' = 'settings'),
+    jsonb_build_object(
+      'protocolVersion', 1, 'workspaceCryptoId', 'workspace_crypto_A1', 'workspaceRevision', 5,
+      'root', repeat('Z', 43), 'previousRoot', (select manifest_root from public.workspace_encryption_profiles),
+      'entityCount', 1, 'schemaVersion', 1, 'keyVersion', 2,
+      'operationId', '30000000-0000-4000-8000-000000000090', 'mac', repeat('M', 43)
+    ), null
+  )
+$test$, 'reset publishes a replacement with fewer entities');
+select is(
+  (select deleted_entities from public.encrypted_workspace_change_events where workspace_revision = 5),
+  (select jsonb_agg(jsonb_build_object('collection', value ->> 'collection', 'entityId', value ->> 'entityId'))
+    from public.encrypted_workspace_snapshots, jsonb_array_elements(envelopes)
+    where source_revision = 4 and value ->> 'collection' <> 'settings'),
+  'replacement event includes precisely the removed identities'
+);
 
 set local request.jwt.claim.sub = '44444444-4444-4444-8444-444444444444';
 select is((select count(*) from public.workspace_encryption_profiles), 0::bigint, 'another account cannot see the encrypted profile');

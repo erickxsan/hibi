@@ -321,7 +321,9 @@ export function createEncryptedWorkspaceRepository(
       migration.code = "migration_incomplete";
       throw migration;
     }
-    const workspace = await workspaceFromRpcRow(row, session, { minimumRevision: integrity.revision || 0 });
+    const workspace = await workspaceFromRpcRow(row, session, {
+      minimumRevision: Math.max(integrity.revision || 0, integrity.minimumRevision || 0),
+    });
     if (integrity.revision === workspace.revision && integrity.root && integrity.root !== workspace.manifest.root) {
       throw new WorkspaceCryptoError("The server returned a different root for an already verified revision.", {
         code: "rollback_detected",
@@ -1252,35 +1254,49 @@ export function createEncryptedWorkspaceRepository(
       return result;
     });
     if ((data || []).length > 100) return loadWorkspace(session, ownerId, { minimumRevision: cache.revision });
-    for (const event of data || []) {
-      const upserts = (event.upserts || []).map(normalizeEnvelope);
-      const deletes = (event.deleted_entities || []).map((item) => ({
-        collection: item.collection,
-        entityId: item.entityId,
-      }));
-      const envelopes = envelopesAfterMutation(cache.envelopes, upserts, deletes);
-      await verifyManifest({
-        masterKey: session.masterKey,
-        workspaceCryptoId: session.workspaceCryptoId,
-        envelopes,
-        manifest: event.manifest,
-        minimumRevision: cache.revision + 1,
-        expectedPreviousRoot: cache.manifest.root,
-      });
-      const decrypted = await decryptWorkspace({
-        masterKey: session.masterKey,
-        workspaceCryptoId: session.workspaceCryptoId,
-        envelopes,
-      });
-      cache = {
-        ...cache,
-        state: canonicalState(decrypted.state),
-        versions: decrypted.versions,
-        revision: normalizeRevision(event.workspace_revision),
-        updatedAt: event.created_at,
-        envelopes,
-        manifest: event.manifest,
-      };
+    // Old replacement events and pruned feeds may not apply to this cache.
+    // Recover from the current authenticated snapshot without replaying that feed.
+    const recoverSnapshot = () => loadWorkspace(session, ownerId, { minimumRevision: cache.revision + 1 });
+    try {
+      for (const event of data || []) {
+        if (
+          normalizeRevision(event.workspace_revision) !== cache.revision + 1 ||
+          event.manifest?.workspaceRevision !== normalizeRevision(event.workspace_revision)
+        ) {
+          return recoverSnapshot();
+        }
+        const upserts = (event.upserts || []).map(normalizeEnvelope);
+        const deletes = (event.deleted_entities || []).map((item) => ({
+          collection: item.collection,
+          entityId: item.entityId,
+        }));
+        const envelopes = envelopesAfterMutation(cache.envelopes, upserts, deletes);
+        await verifyManifest({
+          masterKey: session.masterKey,
+          workspaceCryptoId: session.workspaceCryptoId,
+          envelopes,
+          manifest: event.manifest,
+          minimumRevision: cache.revision + 1,
+          expectedPreviousRoot: cache.manifest.root,
+        });
+        const decrypted = await decryptWorkspace({
+          masterKey: session.masterKey,
+          workspaceCryptoId: session.workspaceCryptoId,
+          envelopes,
+        });
+        cache = {
+          ...cache,
+          state: canonicalState(decrypted.state),
+          versions: decrypted.versions,
+          revision: normalizeRevision(event.workspace_revision),
+          updatedAt: event.created_at,
+          envelopes,
+          manifest: event.manifest,
+        };
+      }
+    } catch (error) {
+      if (!["manifest_mismatch", "revision_chain_mismatch"].includes(error.code)) throw error;
+      return recoverSnapshot();
     }
     return cache.revision > startingRevision ? cache : null;
   }

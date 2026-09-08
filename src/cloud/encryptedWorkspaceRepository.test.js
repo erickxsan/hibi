@@ -33,7 +33,32 @@ async function twoDevices(state, versions = {}, transformEnvelopes = null) {
     envelopes,
     manifest: await createManifest({ ...session, envelopes, workspaceRevision: 1, operationId: "initial" }),
   };
+  const events = [];
+  let notify;
+  const channel = {
+    on: (_type, _filter, callback) => {
+      notify = callback;
+      return channel;
+    },
+    subscribe: () => channel,
+  };
   const client = {
+    channel: () => channel,
+    removeChannel: vi.fn(),
+    from: () => {
+      let revision = 0;
+      const query = {
+        select: () => query,
+        eq: () => query,
+        order: () => query,
+        gt: (_column, value) => {
+          revision = value;
+          return query;
+        },
+        limit: async () => ({ data: events.filter((event) => event.workspace_revision > revision), error: null }),
+      };
+      return query;
+    },
     auth: { getUser: async () => ({ data: { user: { id: "owner" } }, error: null }) },
     rpc: vi.fn(async (name, args) => {
       if (name === LOAD_E2EE_WORKSPACE_RPC) return { data: [row], error: null };
@@ -50,6 +75,17 @@ async function twoDevices(state, versions = {}, transformEnvelopes = null) {
         return { data: null, error: { code: "22023", message: "invalid_workspace_manifest" } };
       }
       if (name === REPLACE_E2EE_WORKSPACE_RPC) {
+        events.push({
+          workspace_revision: row.workspace_revision + 1,
+          upserts: args.p_envelopes,
+          deleted_entities: row.envelopes
+            .filter(
+              (old) =>
+                !args.p_envelopes.some((item) => item.collection === old.collection && item.entityId === old.entityId),
+            )
+            .map(({ collection, entityId }) => ({ collection, entityId })),
+          manifest: args.p_manifest,
+        });
         row = {
           ...row,
           envelopes: args.p_envelopes,
@@ -83,7 +119,7 @@ async function twoDevices(state, versions = {}, transformEnvelopes = null) {
   const second = createEncryptedWorkspaceRepository(client, { allowWrites: true });
   const firstBase = await first.loadWorkspace(session, "owner");
   const secondBase = await second.loadWorkspace(session, "owner");
-  return { first, second, firstBase, secondBase, session, client };
+  return { first, second, firstBase, secondBase, session, client, events, notify: () => notify() };
 }
 
 function student(id, code = id) {
@@ -334,5 +370,68 @@ describe("encrypted workspace mutation rebasing", () => {
     expect(reloaded.state.groups).toEqual([]);
     expect(reloaded.state.students).toEqual([]);
     expect(reloaded.revision).toBe(2);
+  });
+});
+
+describe("encrypted live replacement recovery", () => {
+  it.each(["complete", "legacy", "gap", "fork"])("syncs a reset through a %s event", async (mode) => {
+    const devices = await twoDevices({ ...createStarterState(), students: [student("removed")] });
+    const onChange = vi.fn();
+    const onError = vi.fn();
+    const unsubscribe = await devices.first.subscribe(devices.session, onChange, { userId: "owner", onError });
+    try {
+      const reset = createStarterState();
+      await devices.second.replaceWorkspace(reset, devices.session, "owner", "reset");
+      if (mode === "legacy") devices.events[0].deleted_entities = [];
+      if (mode === "gap") devices.events[0].workspace_revision += 1;
+      if (mode === "fork") devices.events[0].manifest = { ...devices.events[0].manifest, previousRoot: "fork" };
+      const loadsBefore = devices.client.rpc.mock.calls.filter(([name]) => name === LOAD_E2EE_WORKSPACE_RPC).length;
+      devices.notify();
+      await vi.waitFor(() => expect(onChange).toHaveBeenCalledTimes(1));
+      expect(onChange.mock.calls[0][0].state).toEqual(reset);
+      expect(onChange.mock.calls[0][0].revision).toBe(2);
+      expect(onError).not.toHaveBeenCalled();
+      expect(devices.client.rpc.mock.calls.filter(([name]) => name === LOAD_E2EE_WORKSPACE_RPC).length).toBe(
+        loadsBefore + (mode === "complete" ? 0 : 1),
+      );
+    } finally {
+      await unsubscribe();
+    }
+  });
+
+  it.each(["tampered", "stale"])("does not publish a %s recovery snapshot", async (mode) => {
+    const devices = await twoDevices({ ...createStarterState(), students: [student("removed")] });
+    const onChange = vi.fn();
+    const onError = vi.fn();
+    const unsubscribe = await devices.first.subscribe(devices.session, onChange, { userId: "owner", onError });
+    try {
+      await devices.second.replaceWorkspace(createStarterState(), devices.session, "owner", "reset");
+      devices.events[0].deleted_entities = [];
+      const rpc = devices.client.rpc.getMockImplementation();
+      devices.client.rpc.mockImplementation(async (name, args) => {
+        if (name !== LOAD_E2EE_WORKSPACE_RPC) return rpc(name, args);
+        if (mode === "stale")
+          return {
+            data: [
+              {
+                workspace_crypto_id: devices.session.workspaceCryptoId,
+                migration_status: "active",
+                workspace_revision: 1,
+                active_key_version: 1,
+                envelopes: devices.firstBase.envelopes,
+                manifest: devices.firstBase.manifest,
+              },
+            ],
+          };
+        const result = await rpc(name, args);
+        return { data: [{ ...result.data[0], envelopes: devices.firstBase.envelopes }] };
+      });
+      devices.notify();
+      await vi.waitFor(() => expect(onError).toHaveBeenCalled());
+      expect(onChange).not.toHaveBeenCalled();
+      expect(onError.mock.calls[0][0].code).toBe(mode === "stale" ? "rollback_detected" : "manifest_mismatch");
+    } finally {
+      await unsubscribe();
+    }
   });
 });
