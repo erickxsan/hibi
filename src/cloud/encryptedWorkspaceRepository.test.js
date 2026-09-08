@@ -3,6 +3,7 @@ import { createGroup, createStarterState, createStudent } from "../domain/index.
 import {
   createManifest,
   decryptEntity,
+  encryptEntity,
   encryptWorkspace,
   generateAccountMasterKey,
   generateWorkspaceCryptoId,
@@ -16,13 +17,14 @@ import {
 } from "./encryptedWorkspaceRepository.js";
 import { WorkspaceConflictError } from "./workspaceRepository.js";
 
-async function twoDevices(state, versions = {}) {
+async function twoDevices(state, versions = {}, transformEnvelopes = null) {
   const session = {
     masterKey: generateAccountMasterKey(),
     workspaceCryptoId: generateWorkspaceCryptoId(),
     keyVersion: 1,
   };
-  const envelopes = await encryptWorkspace({ ...session, state, versions });
+  const original = await encryptWorkspace({ ...session, state, versions });
+  const envelopes = transformEnvelopes ? await transformEnvelopes(original, session) : original;
   let row = {
     workspace_crypto_id: session.workspaceCryptoId,
     workspace_revision: 1,
@@ -225,6 +227,52 @@ describe("encrypted workspace replacements", () => {
 });
 
 describe("encrypted workspace mutation rebasing", () => {
+  it("recovers signed duplicate positions and syncs pending edits without losing records", async () => {
+    const state = { ...createStarterState(), students: [student("a"), student("b"), student("c")] };
+    const devices = await twoDevices(state, {}, async (envelopes, session) =>
+      Promise.all(
+        envelopes.map(async (envelope) => {
+          if (envelope.collection !== "students") return envelope;
+          const value = await decryptEntity({ ...session, envelope });
+          return encryptEntity({ ...session, ...envelope, value: { ...value, position: 0 } });
+        }),
+      ),
+    );
+    expect(devices.firstBase.state).toEqual(state);
+    expect(devices.firstBase.orderingRepairs).toEqual([
+      { collection: "students", entityId: "b" },
+      { collection: "students", entityId: "c" },
+    ]);
+    // Model a queued mutation created by a client that did not track repairs.
+    const nextState = {
+      ...state,
+      students: [{ ...state.students[0], notes: "Tablet edit" }, ...state.students.slice(1)],
+    };
+    const pending = await devices.first.prepareMutation({
+      state: nextState,
+      workspace: { ...devices.firstBase, orderingRepairs: [] },
+      session: devices.session,
+    });
+    expect(pending.upserts).toHaveLength(1);
+    await devices.first.applyMutation(pending, devices.session, "owner");
+    const reloaded = await devices.second.loadWorkspace(devices.session, "owner");
+    expect(reloaded.state).toEqual(nextState);
+    expect(reloaded.orderingRepairs).toEqual([]);
+    expect(reloaded.versions.students).toEqual({ a: 2, b: 2, c: 2 });
+    expect(reloaded.manifest.operationId).toBe(pending.operationId);
+  });
+
+  it("rejects altered ciphertext even when recovering duplicate positions", async () => {
+    const state = { ...createStarterState(), students: [student("a"), student("b")] };
+    await expect(
+      twoDevices(state, {}, async (envelopes) =>
+        envelopes.map((envelope) =>
+          envelope.collection === "students" ? { ...envelope, ciphertext: "AAAA" } : envelope,
+        ),
+      ),
+    ).rejects.toMatchObject({ code: "entity_authentication_failed" });
+  });
+
   it.each([
     ["student-a", "student-z"],
     ["student-z", "student-a"],
