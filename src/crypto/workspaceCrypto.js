@@ -227,7 +227,7 @@ export async function encryptWorkspace({
 export async function decryptWorkspace({ masterKey, workspaceCryptoId, envelopes, cryptoApi = globalThis.crypto }) {
   const state = Object.fromEntries(ENCRYPTED_COLLECTIONS.map((collection) => [collection, []]));
   const positions = Object.fromEntries(ENCRYPTED_COLLECTIONS.map((collection) => [collection, new Map()]));
-  const occupiedPositions = Object.fromEntries(ENCRYPTED_COLLECTIONS.map((collection) => [collection, new Set()]));
+  const orderingRepairs = [];
   const versions = Object.fromEntries(
     [SETTINGS_COLLECTION, ...ENCRYPTED_COLLECTIONS].map((collection) => [collection, {}]),
   );
@@ -258,10 +258,8 @@ export async function decryptWorkspace({ masterKey, workspaceCryptoId, envelopes
         ) {
           throw new WorkspaceCryptoError("An encrypted entity has invalid ordering metadata.");
         }
-        if (occupiedPositions[envelope.collection].has(value.position)) {
-          throw new WorkspaceCryptoError("Encrypted workspace ordering contains a duplicate position.");
-        }
-        occupiedPositions[envelope.collection].add(value.position);
+        // Older clients could sign concurrent additions with the same position.
+        // Both authenticated records are valid: retain them and break ties by ID.
         positions[envelope.collection].set(envelope.entityId, value.position);
         item = value.data;
       }
@@ -281,8 +279,14 @@ export async function decryptWorkspace({ masterKey, workspaceCryptoId, envelopes
       if (rightPosition === undefined) return -1;
       return leftPosition - rightPosition || String(left.id).localeCompare(String(right.id));
     });
+    state[collection].forEach((item, position) => {
+      const storedPosition = positions[collection].get(String(item.id));
+      if (storedPosition !== undefined && storedPosition !== position) {
+        orderingRepairs.push({ collection, entityId: String(item.id) });
+      }
+    });
   }
-  return { state, versions };
+  return { state, versions, orderingRepairs };
 }
 
 async function envelopeLeaf(envelope, cryptoApi) {

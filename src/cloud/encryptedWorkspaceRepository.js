@@ -293,6 +293,7 @@ export function createEncryptedWorkspaceRepository(
     const workspace = {
       state: canonicalState(decrypted.state),
       versions: decrypted.versions,
+      orderingRepairs: decrypted.orderingRepairs,
       revision: normalizeRevision(row.workspace_revision),
       updatedAt: row.updated_at || null,
       envelopes,
@@ -370,8 +371,18 @@ export function createEncryptedWorkspaceRepository(
   async function prepareMutation({ state, previousState, workspace, session, operationId = createOperationId() }) {
     const nextState = canonicalState(state);
     const baseState = canonicalState(previousState || workspace.state);
-    const { patch, empty } = buildWorkspacePatch(baseState, nextState, workspace.versions);
-    if (empty) return { empty: true, state: nextState };
+    const { patch } = buildWorkspacePatch(baseState, nextState, workspace.versions);
+    // A previous client may have committed authenticated but colliding positions.
+    // Repair only surviving affected records, using their current revisions.
+    for (const { collection, entityId } of workspace.orderingRepairs || []) {
+      const position = nextState[collection].findIndex((item) => String(item.id) === entityId);
+      if (position < 0) continue;
+      const changes = (patch[collection] ||= { upserts: [], deletes: [] });
+      if (!changes.upserts.some(({ data }) => String(data.id) === entityId)) {
+        changes.upserts.push({ data: nextState[collection][position], position });
+      }
+    }
+    if (!Object.keys(patch).length) return { empty: true, state: nextState };
     const upserts = [];
     const deletes = [];
     if (patch.settings) {
@@ -452,6 +463,7 @@ export function createEncryptedWorkspaceRepository(
     const next = {
       state: mutation.state,
       versions: versionsFromEnvelopes(envelopes),
+      orderingRepairs: [],
       revision: normalizeRevision(row?.result_revision),
       updatedAt: row?.updated_at || null,
       envelopes,
@@ -477,7 +489,17 @@ export function createEncryptedWorkspaceRepository(
         // Enter the same verified rebase path before sending a stale manifest.
         throw { code: "40001", message: "workspace_revision_conflict" };
       }
-      return await submitMutation(mutation, base, session, ownerId);
+      const ready = base.orderingRepairs?.length
+        ? await prepareMutation({
+            state: mutation.state,
+            previousState: base.state,
+            workspace: base,
+            session,
+            operationId: mutation.operationId,
+          })
+        : mutation;
+      if (ready.empty) return base;
+      return await submitMutation(ready, base, session, ownerId);
     } catch (error) {
       const text = `${error?.code || ""} ${error?.message || ""}`.toLowerCase();
       if (
@@ -547,6 +569,7 @@ export function createEncryptedWorkspaceRepository(
       ...workspace,
       state: mutation.state,
       versions: versionsFromEnvelopes(envelopes),
+      orderingRepairs: [],
       revision: workspace.revision + 1,
       envelopes,
       manifest: mutation.manifest,
