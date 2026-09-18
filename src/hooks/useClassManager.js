@@ -31,6 +31,7 @@ import {
   validateStudent,
 } from "../domain";
 import { nextOnboardingStudentCodes, ONBOARDING_VERSION } from "../onboarding/onboardingModel";
+import { canonicalStringify } from "../crypto/canonical.js";
 
 const UI_STORAGE_KEY = "minimal-class-manager:ui:v1";
 
@@ -446,16 +447,19 @@ export function useClassManager({ persistence } = {}) {
   useEffect(() => {
     const subscribe = persistenceRef.current?.subscribe;
     if (typeof subscribe !== "function") return undefined;
-    return subscribe((incoming) => {
+    return subscribe((incoming, { source = "remote" } = {}) => {
       if (!mountedRef.current) return;
       try {
         const next = incoming?.state ?? incoming;
+        // Reconnects and outbox acknowledgements also publish snapshots. Only a
+        // content change can be a new remote edit; object identity is not enough.
+        if (next === stateRef.current || canonicalStringify(next) === canonicalStringify(stateRef.current)) return;
         const snapshot = persistenceRef.current?.mode === "cloud" ? null : serializeState(next);
         if (snapshot !== null && snapshot === persistedSnapshot.current) return;
         stateRef.current = next;
         if (snapshot !== null) persistedSnapshot.current = snapshot;
         setCanonicalState(next);
-        notify("Records updated from another device");
+        if (source === "remote") notify("Records updated from another device");
       } catch (error) {
         notify(`Cloud synchronization returned invalid data: ${messageForError(error)}`, "error");
       }

@@ -68,12 +68,12 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
   );
 
   // Every accepted snapshot is published through this adapter, including loads and flushes.
-  const applyWorkspace = useCallback((incoming, { allowOlder = false, notify = true } = {}) => {
+  const applyWorkspace = useCallback((incoming, { allowOlder = false, notify = true, source = "remote" } = {}) => {
     if (!incoming || (!allowOlder && workspaceRef.current && incoming.revision <= workspaceRef.current.revision))
       return false;
     workspaceRef.current = incoming;
     setWorkspace(incoming);
-    if (notify) for (const listener of listenersRef.current) listener(incoming.state);
+    if (notify) for (const listener of listenersRef.current) listener(incoming.state, { source });
     return true;
   }, []);
 
@@ -99,7 +99,9 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
         const keys = [...entry.mutation.upserts, ...entry.mutation.deletes].map(
           (item) => `${item.collection}/${item.entityId}`,
         );
-        if (entry.status === "conflict" || keys.some((key) => blocked.has(key))) {
+        // Retry previously flagged operations through the same receipt/version
+        // checks. A lost acknowledgement can have been mislabeled as a conflict.
+        if (keys.some((key) => blocked.has(key))) {
           keys.forEach((key) => blocked.add(key));
           continue;
         }
@@ -130,6 +132,7 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
       }
       if (latest) {
         await deviceRecoveryStore.cacheWorkspace(user.id, latest);
+        await writeWitness(latest);
         if (generation !== mutationGenerationRef.current) {
           rerunFlushRef.current = true;
           updateSync("pending", "Encrypted changes are waiting to sync.");
@@ -318,7 +321,7 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
         }
         await deviceRecoveryStore.replaceMutation(user.id, operationId, mutation, projected);
         mutationGenerationRef.current += 1;
-        applyWorkspace(projected, { allowOlder: true, notify: true });
+        applyWorkspace(projected, { allowOlder: true, notify: true, source: "local" });
         setPendingOperations(await deviceRecoveryStore.listMutations(user.id));
       } finally {
         resolvingRef.current = false;
@@ -345,7 +348,7 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
         reason,
         importMetadata,
       );
-      applyWorkspace(replaced, { allowOlder: true });
+      applyWorkspace(replaced, { allowOlder: true, source: "local" });
       await deviceRecoveryStore.cacheWorkspace(user.id, replaced);
       await writeWitness(replaced);
       updateSync("saved");
@@ -400,7 +403,7 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
   const subscribe = useCallback(
     (onChange) => {
       listenersRef.current.add(onChange);
-      if (workspaceRef.current) onChange(workspaceRef.current.state);
+      if (workspaceRef.current) onChange(workspaceRef.current.state, { source: "initial" });
       let disposed = false;
       let cleanup;
       encryptedWorkspaceRepository

@@ -73,6 +73,8 @@ const MAX_MUTATION_BYTES = 5 * 1024 * 1024;
 const LIVE_REFRESH_RETRY_INITIAL_MS = 2_000;
 const LIVE_REFRESH_RETRY_MAX_MS = 30_000;
 const LIVE_REFRESH_FALLBACK_MS = 30_000;
+// apply_encrypted_workspace_mutation retains this many change events.
+const RETAINED_EVENT_COUNT = 100;
 
 function firstRow(data) {
   return Array.isArray(data) ? data[0] : data;
@@ -301,7 +303,11 @@ export function createEncryptedWorkspaceRepository(
       workspaceCryptoId: row.workspace_crypto_id,
       keyVersion: Number(row.active_key_version),
     };
-    cache = workspace;
+    if (workspace.revision !== row.manifest.workspaceRevision) {
+      throw new WorkspaceCryptoError("The workspace revision does not match its authenticated manifest.", {
+        code: "revision_chain_mismatch",
+      });
+    }
     return workspace;
   }
 
@@ -330,24 +336,29 @@ export function createEncryptedWorkspaceRepository(
       });
     }
     if (integrity.revision > 0 && integrity.revision < workspace.revision) {
+      // Once the device's anchor is older than server retention, recover from
+      // the authenticated, non-rollback snapshot and verify its entire retained
+      // suffix. A missing event *within* that suffix is still an integrity error.
+      const firstRevision = Math.max(integrity.revision + 1, workspace.revision - RETAINED_EVENT_COUNT + 1);
       const { data: events } = await retryAuthenticated(async () => {
         const result = await cloud()
           .from(E2EE_EVENTS_TABLE)
           .select("workspace_revision, manifest")
           .eq("owner_id", expectedOwnerId || user.id)
-          .gt("workspace_revision", integrity.revision)
+          .gt("workspace_revision", firstRevision - 1)
           .lte("workspace_revision", workspace.revision)
           .order("workspace_revision", { ascending: true })
           .limit(101);
         if (result.error) throw persistenceFailure("The encrypted revision chain could not be checked.", result.error);
         return result;
       });
-      let expectedRevision = integrity.revision + 1;
-      let previousRoot = integrity.root;
+      let expectedRevision = firstRevision;
+      let previousRoot = firstRevision === integrity.revision + 1 ? integrity.root : null;
       for (const event of events || []) {
         if (
           normalizeRevision(event.workspace_revision) !== expectedRevision ||
-          event.manifest?.previousRoot !== previousRoot
+          event.manifest?.workspaceRevision !== expectedRevision ||
+          (previousRoot !== null && event.manifest?.previousRoot !== previousRoot)
         ) {
           throw new WorkspaceCryptoError("The encrypted workspace revision chain has a gap or fork.", {
             code: "revision_chain_mismatch",
@@ -367,7 +378,11 @@ export function createEncryptedWorkspaceRepository(
         });
       }
     }
-    return workspace;
+    // Do not publish partially verified or late snapshots into the live cache.
+    if (!cache || cache.workspaceCryptoId !== workspace.workspaceCryptoId || cache.revision <= workspace.revision) {
+      cache = workspace;
+    }
+    return cache;
   }
 
   async function prepareMutation({ state, previousState, workspace, session, operationId = createOperationId() }) {
@@ -450,9 +465,10 @@ export function createEncryptedWorkspaceRepository(
   }
 
   async function submitMutation(mutation, workspace, session, ownerId) {
+    const expectedRevision = mutation.baseRevision ?? mutation.manifest.workspaceRevision - 1;
     const { data, error } = await cloud().rpc(APPLY_E2EE_MUTATION_RPC, {
       p_expected_owner_id: ownerId,
-      p_expected_workspace_revision: workspace.revision,
+      p_expected_workspace_revision: expectedRevision,
       p_operation_id: mutation.operationId,
       p_upserts: mutation.upserts,
       p_deletes: mutation.deletes,
@@ -460,7 +476,7 @@ export function createEncryptedWorkspaceRepository(
     });
     if (error) throw error;
     const row = firstRow(data);
-    if (row?.already_applied) return loadWorkspace(session, ownerId);
+    if (row?.already_applied || workspace.revision !== expectedRevision) return loadWorkspace(session, ownerId);
     const envelopes = envelopesAfterMutation(workspace.envelopes, mutation.upserts, mutation.deletes);
     const next = {
       state: mutation.state,
@@ -484,22 +500,22 @@ export function createEncryptedWorkspaceRepository(
     if (mutation.empty) return cache;
     const base = cache || (await loadWorkspace(session, ownerId));
     try {
-      if (
-        base.revision !== (mutation.baseRevision ?? mutation.manifest.workspaceRevision - 1) ||
-        base.manifest.root !== (mutation.baseRoot ?? mutation.manifest.previousRoot)
-      ) {
-        // Enter the same verified rebase path before sending a stale manifest.
-        throw { code: "40001", message: "workspace_revision_conflict" };
-      }
-      const ready = base.orderingRepairs?.length
-        ? await prepareMutation({
-            state: mutation.state,
-            previousState: base.state,
-            workspace: base,
-            session,
-            operationId: mutation.operationId,
-          })
-        : mutation;
+      const matchesBase =
+        base.revision === (mutation.baseRevision ?? mutation.manifest.workspaceRevision - 1) &&
+        base.manifest.root === (mutation.baseRoot ?? mutation.manifest.previousRoot);
+      // Always consult the server's operation receipt before treating a stale
+      // edit as a conflict. Its response may have been lost after a successful save.
+      // The original expected revision still prevents applying a stale manifest.
+      const ready =
+        matchesBase && base.orderingRepairs?.length
+          ? await prepareMutation({
+              state: mutation.state,
+              previousState: base.state,
+              workspace: base,
+              session,
+              operationId: mutation.operationId,
+            })
+          : mutation;
       if (ready.empty) return base;
       return await submitMutation(ready, base, session, ownerId);
     } catch (error) {
@@ -1247,7 +1263,7 @@ export function createEncryptedWorkspaceRepository(
         .from(E2EE_EVENTS_TABLE)
         .select("workspace_revision, owner_id, upserts, deleted_entities, manifest, created_at")
         .eq("owner_id", ownerId)
-        .gt("workspace_revision", cache.revision)
+        .gt("workspace_revision", startingRevision)
         .order("workspace_revision", { ascending: true })
         .limit(101);
       if (result.error) throw persistenceFailure("Encrypted live updates could not be loaded.", result.error);
@@ -1259,8 +1275,11 @@ export function createEncryptedWorkspaceRepository(
     const recoverSnapshot = () => loadWorkspace(session, ownerId, { minimumRevision: cache.revision + 1 });
     try {
       for (const event of data || []) {
+        const base = cache;
+        // A save or full load can advance the cache while this query is in flight.
+        if (normalizeRevision(event.workspace_revision) <= base.revision) continue;
         if (
-          normalizeRevision(event.workspace_revision) !== cache.revision + 1 ||
+          normalizeRevision(event.workspace_revision) !== base.revision + 1 ||
           event.manifest?.workspaceRevision !== normalizeRevision(event.workspace_revision)
         ) {
           return recoverSnapshot();
@@ -1270,24 +1289,26 @@ export function createEncryptedWorkspaceRepository(
           collection: item.collection,
           entityId: item.entityId,
         }));
-        const envelopes = envelopesAfterMutation(cache.envelopes, upserts, deletes);
+        const envelopes = envelopesAfterMutation(base.envelopes, upserts, deletes);
         await verifyManifest({
           masterKey: session.masterKey,
           workspaceCryptoId: session.workspaceCryptoId,
           envelopes,
           manifest: event.manifest,
-          minimumRevision: cache.revision + 1,
-          expectedPreviousRoot: cache.manifest.root,
+          minimumRevision: base.revision + 1,
+          expectedPreviousRoot: base.manifest.root,
         });
         const decrypted = await decryptWorkspace({
           masterKey: session.masterKey,
           workspaceCryptoId: session.workspaceCryptoId,
           envelopes,
         });
+        if (cache !== base) return loadMissedEvents(session, ownerId);
         cache = {
-          ...cache,
+          ...base,
           state: canonicalState(decrypted.state),
           versions: decrypted.versions,
+          orderingRepairs: decrypted.orderingRepairs,
           revision: normalizeRevision(event.workspace_revision),
           updatedAt: event.created_at,
           envelopes,

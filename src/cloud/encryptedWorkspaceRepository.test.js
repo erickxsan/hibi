@@ -34,6 +34,7 @@ async function twoDevices(state, versions = {}, transformEnvelopes = null) {
     manifest: await createManifest({ ...session, envelopes, workspaceRevision: 1, operationId: "initial" }),
   };
   const events = [];
+  const receipts = new Map();
   let notify;
   const channel = {
     on: (_type, _filter, callback) => {
@@ -47,6 +48,7 @@ async function twoDevices(state, versions = {}, transformEnvelopes = null) {
     removeChannel: vi.fn(),
     from: () => {
       let revision = 0;
+      let maximumRevision = Infinity;
       const query = {
         select: () => query,
         eq: () => query,
@@ -55,7 +57,16 @@ async function twoDevices(state, versions = {}, transformEnvelopes = null) {
           revision = value;
           return query;
         },
-        limit: async () => ({ data: events.filter((event) => event.workspace_revision > revision), error: null }),
+        lte: (_column, value) => {
+          maximumRevision = value;
+          return query;
+        },
+        limit: async (count) => ({
+          data: events
+            .filter((event) => event.workspace_revision > revision && event.workspace_revision <= maximumRevision)
+            .slice(0, count),
+          error: null,
+        }),
       };
       return query;
     },
@@ -64,6 +75,9 @@ async function twoDevices(state, versions = {}, transformEnvelopes = null) {
       if (name === LOAD_E2EE_WORKSPACE_RPC) return { data: [row], error: null };
       if (![APPLY_E2EE_MUTATION_RPC, REPLACE_E2EE_WORKSPACE_RPC].includes(name)) {
         throw new Error(`Unexpected RPC: ${name}`);
+      }
+      if (receipts.has(args.p_operation_id)) {
+        return { data: [{ result_revision: receipts.get(args.p_operation_id), already_applied: true }], error: null };
       }
       if (args.p_expected_workspace_revision !== row.workspace_revision) {
         return { data: null, error: { code: "40001", message: "workspace_revision_conflict" } };
@@ -112,6 +126,13 @@ async function twoDevices(state, versions = {}, transformEnvelopes = null) {
         manifest: args.p_manifest,
         workspace_revision: row.workspace_revision + 1,
       };
+      events.push({
+        workspace_revision: row.workspace_revision,
+        upserts: args.p_upserts,
+        deleted_entities: args.p_deletes,
+        manifest: args.p_manifest,
+      });
+      receipts.set(args.p_operation_id, row.workspace_revision);
       return { data: [{ result_revision: row.workspace_revision }], error: null };
     }),
   };
@@ -135,6 +156,28 @@ async function concurrentMutations(devices, firstState, secondState) {
 }
 
 describe("encrypted workspace replacements", () => {
+  it("acknowledges a lost response after another device has changed the same record", async () => {
+    const state = { ...createStarterState(), students: [student("a")] };
+    const devices = await twoDevices(state);
+    const mutation = await devices.first.prepareMutation({
+      state: { ...state, students: [{ ...state.students[0], notes: "First edit" }] },
+      workspace: devices.firstBase,
+      session: devices.session,
+    });
+    await devices.first.applyMutation(mutation, devices.session, "owner");
+    const latest = await devices.second.loadWorkspace(devices.session, "owner");
+    const remote = await devices.second.prepareMutation({
+      state: { ...latest.state, students: [{ ...latest.state.students[0], notes: "Later edit" }] },
+      workspace: latest,
+      session: devices.session,
+    });
+    await devices.second.applyMutation(remote, devices.session, "owner");
+    await devices.first.loadWorkspace(devices.session, "owner");
+    const result = await devices.first.applyMutation(mutation, devices.session, "owner");
+    expect(result.revision).toBe(3);
+    expect(result.state.students[0].notes).toBe("Later edit");
+  });
+
   it("rebases consecutive offline edits of one student after another student changes", async () => {
     const state = { ...createStarterState(), students: [student("a"), student("b")] };
     const devices = await twoDevices(state);
@@ -374,6 +417,95 @@ describe("encrypted workspace mutation rebasing", () => {
 });
 
 describe("encrypted live replacement recovery", () => {
+  it.each(["valid", "gap", "tampered", "stale"])(
+    "verifies a %s retained history after more than 100 offline revisions",
+    async (mode) => {
+      const devices = await twoDevices(createStarterState());
+      let manifest = devices.firstBase.manifest;
+      // Production keeps only the last 100 events, even for a long-offline device.
+      for (let revision = 4; revision <= 103; revision += 1) {
+        manifest = await createManifest({
+          ...devices.session,
+          envelopes: devices.firstBase.envelopes,
+          workspaceRevision: revision,
+          previousRoot: manifest.root,
+          operationId: `operation-${revision}`,
+        });
+        devices.events.push({ workspace_revision: revision, manifest });
+      }
+      const rpc = devices.client.rpc.getMockImplementation();
+      devices.client.rpc.mockImplementation(async (name, args) => {
+        const result = await rpc(name, args);
+        if (name !== LOAD_E2EE_WORKSPACE_RPC) return result;
+        return { data: [{ ...result.data[0], workspace_revision: 103, manifest }] };
+      });
+      if (mode === "gap") devices.events.splice(20, 1);
+      if (mode === "tampered") devices.events[20].manifest = { ...devices.events[20].manifest, mac: "AAAA" };
+      if (mode === "stale") manifest = devices.firstBase.manifest;
+      const result = devices.first.loadWorkspace(devices.session, "owner", {
+        revision: devices.firstBase.revision,
+        root: devices.firstBase.manifest.root,
+      });
+      if (mode === "valid") {
+        await expect(result).resolves.toMatchObject({ revision: 103, state: devices.firstBase.state });
+      } else {
+        await expect(result).rejects.toThrow();
+      }
+    },
+  );
+
+  it("still rejects a missing event inside the retained history", async () => {
+    const devices = await twoDevices(createStarterState());
+    await devices.second.replaceWorkspace(createStarterState(), devices.session, "owner");
+    devices.events.length = 0;
+    await expect(
+      devices.first.loadWorkspace(devices.session, "owner", {
+        revision: 1,
+        root: devices.firstBase.manifest.root,
+      }),
+    ).rejects.toMatchObject({ code: "revision_chain_mismatch" });
+    // A failed verification must not poison the cache used by later writes.
+    await expect(devices.first.applyMutation({ empty: true }, devices.session, "owner")).resolves.toMatchObject({
+      revision: 1,
+    });
+  });
+
+  it("does not demand a nonexistent newer snapshot when a refresh overlaps a completed load", async () => {
+    const devices = await twoDevices(createStarterState());
+    const onChange = vi.fn();
+    const onError = vi.fn();
+    let finishQuery;
+    const from = devices.client.from;
+    devices.client.from = (...args) => {
+      const query = from(...args);
+      const limit = query.limit;
+      query.limit = async (...limitArgs) => {
+        const result = await limit(...limitArgs);
+        return new Promise((resolve) => {
+          finishQuery = () => resolve(result);
+        });
+      };
+      return query;
+    };
+    const unsubscribe = await devices.first.subscribe(devices.session, onChange, { userId: "owner", onError });
+    try {
+      await devices.second.replaceWorkspace(
+        { ...devices.secondBase.state, settings: { ...devices.secondBase.state.settings, hourlyRate: 123 } },
+        devices.session,
+        "owner",
+      );
+      devices.notify();
+      await vi.waitFor(() => expect(finishQuery).toBeTypeOf("function"));
+      await devices.first.loadWorkspace(devices.session, "owner");
+      finishQuery();
+      await vi.waitFor(() => expect(onChange).toHaveBeenCalledOnce());
+      expect(onError).not.toHaveBeenCalled();
+      expect(onChange.mock.calls[0][0].revision).toBe(2);
+    } finally {
+      await unsubscribe();
+    }
+  });
+
   it.each(["complete", "legacy", "gap", "fork"])("syncs a reset through a %s event", async (mode) => {
     const devices = await twoDevices({ ...createStarterState(), students: [student("removed")] });
     const onChange = vi.fn();

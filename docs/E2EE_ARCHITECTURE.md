@@ -97,13 +97,22 @@ root. A manifest authenticates that root, the previous root, global revision, en
 workspace ID, and operation UUID with an HMAC key derived from the AMK.
 
 The remembered-device key encrypts the most recent verified revision and root. When a later revision is loaded, the
-client verifies every retained event manifest and root link from that witness to the downloaded state. A lower revision,
-different root for the same revision, gap, fork, invalid entity tag, invalid manifest root, or invalid MAC blocks writes.
+client verifies every retained event manifest and root link from that witness to the downloaded state. The server keeps
+the last 100 events. If the witness predates that window, the client verifies the current snapshot (manifest MAC, entity
+tags, full root, and revision at least as new as the witness), plus all 100 retained manifests and their links through the
+snapshot. Continuity across the pruned prefix cannot be proven; this is authenticated snapshot recovery, as in live-feed
+recovery, rather than evidence of a full historical chain. Within the available history, a gap or fork still blocks writes.
+A lower revision, different root for the same revision, mismatched snapshot/manifest revisions, invalid entity tag,
+invalid manifest root, or invalid MAC also blocks writes. Only fully verified snapshots enter the repository cache, and
+successful synchronization refreshes the device witness even when there were no local writes.
 
 ## Synchronization and offline operation
 
 The IndexedDB outbox is encrypted before optimistic state is exposed. Mutations carry encrypted upserts, authenticated
 deletions, expected entity revisions, an operation UUID, and a new manifest. The server retains idempotency receipts.
+Retries submit the original operation UUID and expected revision so the server can acknowledge an already committed
+write before the client considers rebasing. Losing a save response followed by another device's edit must not create a
+false conflict or replay the acknowledged change.
 
 On a global-revision conflict, the client downloads and verifies the remote envelopes. If touched entity revisions are
 unchanged, it merges the remote plaintext state locally, recalculates the manifest over the combined encrypted state,
