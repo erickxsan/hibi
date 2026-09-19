@@ -898,7 +898,10 @@ export default function Community({
   const groupBaseline = useRef(null);
   const studentEditorBaseline = useRef(null);
   const groupEditorBaseline = useRef(null);
-  const groupsById = derived.groupsById || new Map(state.groups.map((group) => [group.id, group]));
+  const groupsById = useMemo(
+    () => derived.groupsById || new Map(state.groups.map((group) => [group.id, group])),
+    [derived.groupsById, state.groups],
+  );
   const activeStudentCount = state.students.reduce(
     (count, student) => count + (student.status === "Active" ? 1 : 0),
     0,
@@ -922,13 +925,11 @@ export default function Community({
   });
 
   const needle = normalizeSearchText(query);
-  const visibleStudents = useMemo(
+  const studentSearchEntries = useMemo(
     () =>
-      state.students.filter((student) => {
-        if (status !== "all" && student.status !== status) return false;
-        if (!studentMatchesFilters(student, filters)) return false;
+      state.students.map((student) => {
         const groupNames = (student.groupIds || []).map((id) => groupsById.get(id)?.name || "");
-        return normalizeSearchText(
+        const text = normalizeSearchText(
           [
             student.fullName,
             student.code,
@@ -938,20 +939,37 @@ export default function Community({
             student.guardianContact,
             ...groupNames,
           ].join(" "),
-        ).includes(needle);
+        );
+        return { student, text };
       }),
-    [filters, groupsById, needle, state.students, status],
+    [groupsById, state.students],
   );
-  const visibleGroups = useMemo(
+  const visibleStudents = useMemo(
     () =>
-      state.groups.filter((group) =>
-        normalizeSearchText(
+      studentSearchEntries
+        .filter(({ student, text }) => {
+          if (status !== "all" && student.status !== status) return false;
+          if (!studentMatchesFilters(student, filters)) return false;
+          return text.includes(needle);
+        })
+        .map(({ student }) => student),
+    [filters, needle, studentSearchEntries, status],
+  );
+  const groupSearchEntries = useMemo(
+    () =>
+      state.groups.map((group) => ({
+        group,
+        text: normalizeSearchText(
           [group.name, group.subject, group.grade, group.schedule, formatWeeklySchedule(group.weeklySchedule)].join(
             " ",
           ),
-        ).includes(needle),
-      ),
-    [needle, state.groups],
+        ),
+      })),
+    [state.groups],
+  );
+  const visibleGroups = useMemo(
+    () => groupSearchEntries.filter(({ text }) => text.includes(needle)).map(({ group }) => group),
+    [groupSearchEntries, needle],
   );
 
   const selectedStudent = selected.type === "student" ? state.students.find((item) => item.id === selected.id) : null;

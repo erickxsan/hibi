@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { StudentAvatar } from "../components/StudentAvatar";
 import { getUiLocale, useI18n } from "../i18n";
+import { createNumberFormatter } from "../utils/numberFormatter";
 import { buildHomeDashboard, HOME_PERIODS } from "./homeDashboardModel";
 
 const PERIOD_LABELS = Object.freeze({
@@ -44,12 +45,10 @@ const PERIOD_NOUNS = Object.freeze({
   yearly: "this year",
 });
 
+const formatMoney = createNumberFormatter({ style: "currency", currency: "MXN", maximumFractionDigits: 0 });
+
 function money(value) {
-  return new Intl.NumberFormat(getUiLocale(), {
-    style: "currency",
-    currency: "MXN",
-    maximumFractionDigits: 0,
-  }).format(Number(value || 0));
+  return formatMoney(Number(value || 0), getUiLocale());
 }
 
 function percent(value, digits = 0) {

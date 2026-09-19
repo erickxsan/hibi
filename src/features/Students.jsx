@@ -21,6 +21,7 @@ import { useHistoryBackedState } from "../hooks/useHistoryNavigation";
 import { getUiLocale } from "../i18n";
 import { studentMatchesFilters } from "../domain/studentFilters";
 import { normalizeSearchText } from "../utils/searchText";
+import { createNumberFormatter } from "../utils/numberFormatter";
 
 const EMPTY = Object.freeze({
   id: "",
@@ -40,10 +41,10 @@ const EMPTY = Object.freeze({
 
 const DETAIL_TABS = Object.freeze(["overview", "attendance", "grades", "history", "payments", "notes"]);
 
+const formatMoney = createNumberFormatter({ style: "currency", currency: "MXN", maximumFractionDigits: 0 });
+
 function money(value) {
-  return new Intl.NumberFormat(getUiLocale(), { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(
-    Number(value || 0),
-  );
+  return formatMoney(Number(value || 0), getUiLocale());
 }
 
 function pct(value) {

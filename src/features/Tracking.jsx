@@ -23,6 +23,7 @@ import { Button, Drawer, EmptyState, Field, IconButton, Input, Select, StatusBad
 import { StudentAvatar } from "../components/StudentAvatar";
 import { useHistoryBackedState } from "../hooks/useHistoryNavigation";
 import { getUiLocale } from "../i18n";
+import { createNumberFormatter } from "../utils/numberFormatter";
 import {
   buildAssessmentOptions,
   buildAttendanceTracking,
@@ -83,12 +84,10 @@ function gradeValue(value, maximum) {
   return `${Number(value).toFixed(Number(value) % 1 ? 1 : 0)} / ${maximum || 10}`;
 }
 
+const formatMoney = createNumberFormatter({ style: "currency", currency: "MXN", maximumFractionDigits: 2 });
+
 function money(value) {
-  return new Intl.NumberFormat(getUiLocale(), {
-    style: "currency",
-    currency: "MXN",
-    maximumFractionDigits: 2,
-  }).format(Number(value || 0));
+  return formatMoney(Number(value || 0), getUiLocale());
 }
 
 function escapeExcel(value) {
@@ -1236,39 +1235,39 @@ export default function Tracking({ state = {}, derived = {}, actions = {}, openP
   const useStudentOwner = activeMode === "student" || (tab === "payments" && activeMode === "class" && !groups.length);
   const openRelatedClass = (key) =>
     openPage?.("classes", key ? { type: "open-history-class", sessionKey: key } : "class-history");
-  const exportRows =
-    tab === "grades"
-      ? gradeData.tableRows.map((row) => ({
-          Student: row.student?.fullName || "",
-          Assignment: row.assessment,
-          Date: row.date,
-          Grade: row.score ?? "",
-          Maximum: row.maximum,
-          Percentage: percent(row.percentage),
-          Status: row.status.label,
-        }))
-      : tab === "attendance"
-        ? attendanceData.tableRows.map((row) => ({
+  const exportVisible = () => {
+    const exportRows =
+      tab === "grades"
+        ? gradeData.tableRows.map((row) => ({
             Student: row.student?.fullName || "",
-            Group: row.groupName || "",
-            Class: row.classTitle || "",
-            Date: row.lastClass || row.classDate || "",
-            Attendance: percent(row.rate),
-            Present: row.present,
-            Absences: row.absent,
+            Assignment: row.assessment,
+            Date: row.date,
+            Grade: row.score ?? "",
+            Maximum: row.maximum,
+            Percentage: percent(row.percentage),
             Status: row.status.label,
           }))
-        : paymentData.tableRows.map((row) => ({
-            Student: row.student?.fullName || "",
-            Class: row.classTitle || "",
-            Date: row.classDate || "",
-            Charged: row.charged ?? "",
-            Paid: row.paid ?? "",
-            Pending: row.pending ?? "",
-            Status: row.status.label,
-            PaymentDate: row.lastPayment || row.paymentDate || "",
-          }));
-  const exportVisible = () => {
+        : tab === "attendance"
+          ? attendanceData.tableRows.map((row) => ({
+              Student: row.student?.fullName || "",
+              Group: row.groupName || "",
+              Class: row.classTitle || "",
+              Date: row.lastClass || row.classDate || "",
+              Attendance: percent(row.rate),
+              Present: row.present,
+              Absences: row.absent,
+              Status: row.status.label,
+            }))
+          : paymentData.tableRows.map((row) => ({
+              Student: row.student?.fullName || "",
+              Class: row.classTitle || "",
+              Date: row.classDate || "",
+              Charged: row.charged ?? "",
+              Paid: row.paid ?? "",
+              Pending: row.pending ?? "",
+              Status: row.status.label,
+              PaymentDate: row.lastPayment || row.paymentDate || "",
+            }));
     if (!exportRows.length) return actions.notify?.("There is nothing to export in this view.", "error");
     downloadExcel(
       `hibi-${tab}-${range.start}-${range.end}.xls`,
