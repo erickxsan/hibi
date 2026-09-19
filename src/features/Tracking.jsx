@@ -1209,19 +1209,30 @@ export default function Tracking({ state = {}, derived = {}, actions = {}, openP
     if (!paymentBase.sessions.some((item) => item.key === sessionKey))
       setSessionKey(paymentBase.sessions[0]?.key || "");
   }, [paymentBase.sessions, sessionKey]);
-  const paymentData = useMemo(
-    () =>
-      buildPaymentTracking(reportState, classRows, {
-        mode: activePaymentMode,
-        groupId,
-        studentId,
-        sessionKey,
-        range,
-        search,
-        projectionTotal: activePaymentMode === "overview" ? overviewProjection : undefined,
-      }),
-    [activePaymentMode, classRows, groupId, overviewProjection, range, search, sessionKey, reportState, studentId],
-  );
+  const paymentData = useMemo(() => {
+    // Only class mode changes the report when a session is selected.
+    if (activePaymentMode !== "class" || !sessionKey) return paymentBase;
+    return buildPaymentTracking(reportState, classRows, {
+      mode: activePaymentMode,
+      groupId,
+      studentId,
+      sessionKey,
+      range,
+      search,
+      projectionTotal: activePaymentMode === "overview" ? overviewProjection : undefined,
+    });
+  }, [
+    activePaymentMode,
+    classRows,
+    groupId,
+    overviewProjection,
+    paymentBase,
+    range,
+    search,
+    sessionKey,
+    reportState,
+    studentId,
+  ]);
 
   const activeMode = tab === "grades" ? gradeMode : tab === "attendance" ? activeAttendanceMode : activePaymentMode;
   const modeItems =

@@ -13,6 +13,18 @@ function sum(rows, selector) {
   return rows.reduce((total, row) => total + (finite(selector(row)) ? selector(row) : 0), 0);
 }
 
+// Keep input order for historical identities and floating-point payment sums.
+// Build this index per report so edits never reuse stale rows.
+function rowsByStudent(rows) {
+  const index = new Map();
+  for (const row of rows) {
+    const entries = index.get(row.studentId);
+    if (entries) entries.push(row);
+    else index.set(row.studentId, [row]);
+  }
+  return index;
+}
+
 function inclusiveDayCount(start, end) {
   return Math.max(1, Math.round((parseDateOnly(end) - parseDateOnly(start)) / 86_400_000) + 1);
 }
@@ -240,10 +252,11 @@ export function buildAttendanceTracking(state, classRows, { mode, groupId, stude
       inTrackingRange(row.classDate, range) &&
       (mode !== "overview" || matchesSearch([row.studentName, row.classTitle, row.groupName], search)),
   );
+  const relevantByStudent = mode === "student" ? null : rowsByStudent(relevant);
   const roster =
     mode === "overview"
-      ? [...new Set(relevant.map((row) => row.studentId).filter(Boolean))].map((id) => {
-          const historicalRow = relevant.find((row) => row.studentId === id);
+      ? [...relevantByStudent.keys()].filter(Boolean).map((id) => {
+          const historicalRow = relevantByStudent.get(id)[0];
           return (
             studentsById.get(id) || {
               id,
@@ -278,7 +291,7 @@ export function buildAttendanceTracking(state, classRows, { mode, groupId, stude
       : roster
           .filter((student) => mode === "overview" || matchesSearch([student.fullName, student.code], search))
           .map((student) => {
-            const rows = relevant.filter((row) => row.studentId === student.id);
+            const rows = relevantByStudent.get(student.id) || [];
             const recorded = rows.filter((row) => ["P", "L", "A"].includes(row.attendance));
             const present = recorded.filter((row) => attended(row.attendance)).length;
             const absent = recorded.filter((row) => row.attendance === "A").length;
@@ -318,9 +331,14 @@ export function buildAttendanceTracking(state, classRows, { mode, groupId, stude
   const sessions = new Set(
     relevant.map((row) => classWorkspaceSessionKey({ ...row, studentId: row.groupId ? "" : row.studentId })),
   ).size;
+  const weeksByDate = new Map();
+  const weekForDate = (date) => {
+    if (!weeksByDate.has(date)) weeksByDate.set(date, startOfWeek(date, 1));
+    return weeksByDate.get(date);
+  };
   const weekly = new Map();
   for (const row of recorded) {
-    const week = startOfWeek(row.classDate, 1);
+    const week = weekForDate(row.classDate);
     const current = weekly.get(week) || { label: week, present: 0, total: 0 };
     current.total += 1;
     if (attended(row.attendance)) current.present += 1;
@@ -331,7 +349,7 @@ export function buildAttendanceTracking(state, classRows, { mode, groupId, stude
     .map((item) => ({ label: item.label, value: item.total ? item.present / item.total : 0 }));
   const studentWeekly = new Map();
   for (const row of recorded) {
-    const week = startOfWeek(row.classDate, 1);
+    const week = weekForDate(row.classDate);
     const values = studentWeekly.get(row.studentId) || new Map();
     const current = values.get(week) || { present: 0, total: 0 };
     current.total += 1;
@@ -439,11 +457,12 @@ export function buildPaymentTracking(
   }
   const studentsById = new Map((state.students || []).map((student) => [student.id, student]));
   const aggregateByStudent = mode === "group" || mode === "overview";
+  const relevantByStudent = aggregateByStudent ? rowsByStudent(relevant) : null;
   const tableRows = aggregateByStudent
     ? roster
         .filter((student) => matchesSearch([student.fullName, student.code], search))
         .map((student) => {
-          const rows = relevant.filter((row) => row.studentId === student.id);
+          const rows = relevantByStudent.get(student.id) || [];
           const charged = sum(rows, (row) => row.charge);
           const paid = sum(rows, (row) => row.recognizedPaid);
           const pending = Math.max(charged - paid, 0);

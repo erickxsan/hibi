@@ -145,4 +145,43 @@ describe("Tracking attendance overview", () => {
 
     anchorClick.mockRestore();
   });
+
+  it("preserves class selection across payment modes and refreshes it after records change", async () => {
+    const user = userEvent.setup();
+    const actions = { notify: vi.fn() };
+    const earlier = classRows.map((row) => ({ ...row, classTitle: "Earlier class" }));
+    const later = {
+      ...classRows[0],
+      id: "later",
+      classDate: "2026-07-24",
+      classTitle: "Later class",
+      charge: 300,
+      recognizedPaid: 300,
+      paymentDate: "2026-07-24",
+    };
+    const view = render(<Tracking state={state} derived={{ classLogRows: [...earlier, later] }} actions={actions} />);
+    const generatedValue = () => screen.getByText("Generated value").parentElement.querySelector("strong");
+    await user.click(screen.getByRole("tab", { name: "Payments" }));
+    expect(generatedValue()).toHaveTextContent("$500");
+    await user.click(within(screen.getByRole("group", { name: "Scope" })).getByRole("button", { name: "Breakdown" }));
+    const modes = screen.getByRole("group", { name: "View by" });
+    await user.click(within(modes).getByRole("button", { name: "Class", exact: true }));
+    expect(generatedValue()).toHaveTextContent("$300");
+
+    const classSelector = screen.getByText("Class", { selector: "strong" }).closest("label");
+    await user.click(within(classSelector).getByRole("combobox"));
+    await user.click(screen.getByRole("option", { name: /Earlier class/ }));
+    expect(generatedValue()).toHaveTextContent("$200");
+    await user.click(within(modes).getByRole("button", { name: "Group", exact: true }));
+    expect(generatedValue()).toHaveTextContent("$500");
+    await user.click(within(modes).getByRole("button", { name: "Class", exact: true }));
+    expect(generatedValue()).toHaveTextContent("$200");
+
+    view.rerender(<Tracking state={state} derived={{ classLogRows: [later] }} actions={actions} />);
+    expect(generatedValue()).toHaveTextContent("$300");
+    view.rerender(<Tracking state={state} derived={{ classLogRows: [{ ...later, charge: 450 }] }} actions={actions} />);
+    expect(generatedValue()).toHaveTextContent("$450");
+    await user.click(within(screen.getByRole("group", { name: "Scope" })).getByRole("button", { name: "Overview" }));
+    expect(generatedValue()).toHaveTextContent("$450");
+  });
 });

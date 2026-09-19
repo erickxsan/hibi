@@ -278,4 +278,89 @@ describe("tracking model", () => {
     ]);
     expect(result.tableRows).toHaveLength(3);
   });
+
+  it("preserves the first historical identity and row order when attendance rates tie", () => {
+    const rows = [
+      { ...classes[0], id: "old-first", studentId: "removed", studentName: "First name", studentCode: "OLD" },
+      { ...classes[0], id: "current", studentId: "s2" },
+      { ...classes[0], id: "old-later", studentId: "removed", studentName: "Later name", studentCode: "NEW" },
+    ];
+    const original = structuredClone(rows);
+    const result = buildAttendanceTracking(state, rows, { mode: "overview", range });
+
+    expect(result.tableRows.map((row) => row.id)).toEqual(["removed", "s2"]);
+    expect(result.tableRows[0]).toMatchObject({
+      present: 2,
+      rate: 1,
+      student: { fullName: "First name", code: "OLD", status: "Inactive", groupIds: ["g1"] },
+    });
+    expect(rows).toEqual(original);
+  });
+
+  it("keeps weekly attendance and improvement correct across a year boundary", () => {
+    const rows = [
+      ["2025-12-28", "A"],
+      ["2025-12-29", "A"],
+      ["2026-01-04", "L"],
+      ["2026-01-05", "P"],
+    ].flatMap(([classDate, attendance]) =>
+      ["s1", "s2"].map((studentId) => ({
+        ...classes[0],
+        id: `${classDate}-${studentId}`,
+        classDate,
+        attendance,
+        studentId,
+      })),
+    );
+    const result = buildAttendanceTracking(state, rows, {
+      mode: "overview",
+      range: trackingRange("2026-01-05", "all", rows),
+    });
+
+    expect(result.series).toEqual([
+      { label: "2025-12-22", value: 0 },
+      { label: "2025-12-29", value: 0.5 },
+      { label: "2026-01-05", value: 1 },
+    ]);
+    expect(result).toMatchObject({ present: 4, absent: 4, total: 8, improvingStudents: 2 });
+  });
+
+  it("preserves roster order, zero-record students, and exact decimal payment sums", () => {
+    const orderedState = { ...state, students: [state.students[1], state.students[0], state.students[2]] };
+    const rows = [0.1, 0.2, 0.3].map((charge, index) => ({
+      ...classes[0],
+      id: `decimal-${index}`,
+      charge,
+      recognizedPaid: charge,
+      outstanding: 0,
+    }));
+    const original = structuredClone({ state: orderedState, rows });
+    const result = buildPaymentTracking(orderedState, rows, { mode: "overview", range });
+
+    expect(result.tableRows.map((row) => row.id)).toEqual(["s2", "s1", "s3"]);
+    expect(result.tableRows[0]).toMatchObject({ charged: 0, paid: 0, pending: 0, lastPayment: "" });
+    expect(result.tableRows[1]).toMatchObject({ charged: 0.1 + 0.2 + 0.3, paid: 0.1 + 0.2 + 0.3, pending: 0 });
+    expect(result.generated).toBe(0.1 + 0.2 + 0.3);
+    expect({ state: orderedState, rows }).toEqual(original);
+  });
+
+  it("recalculates both reports after records change without retaining previous inputs", () => {
+    const options = { mode: "group", groupId: "g1", range };
+    const rows = structuredClone(classes);
+    expect(buildAttendanceTracking(state, rows, options).present).toBe(1);
+    expect(buildPaymentTracking(state, rows, options).collected).toBe(100);
+
+    rows[1] = { ...rows[1], attendance: "P", recognizedPaid: 100, outstanding: 0, paymentDate: "2026-07-25" };
+    expect(buildAttendanceTracking(state, rows, options).present).toBe(2);
+    expect(buildPaymentTracking(state, rows, options)).toMatchObject({ collected: 200, pending: 0 });
+    expect(buildAttendanceTracking(state, [], options).total).toBe(0);
+    expect(buildPaymentTracking(state, [], options).collected).toBe(0);
+  });
+
+  it.each(["overview", "group", "student"])("ignores the selected session in %s payment reports", (mode) => {
+    const options = { mode, groupId: "g1", studentId: "s1", range };
+    expect(buildPaymentTracking(state, classes, { ...options, sessionKey: "2026-07-20|g:g1|10:00" })).toEqual(
+      buildPaymentTracking(state, classes, { ...options, sessionKey: "" }),
+    );
+  });
 });
