@@ -30,7 +30,7 @@ select lives_ok($$
 $$, 'another legacy device commits before the migration barrier');
 select throws_ok($$
   select public.begin_workspace_e2ee_migration(auth.uid(), 'workspace_crypto_A1', 1::smallint, 1, '{}'::jsonb, current_setting('test.legacy_revision')::bigint)
-$$, '40001', 'legacy_revision_conflict', 'begin rejects the stale revision before creating a profile');
+$$, 'PT409', 'legacy_revision_conflict', 'begin rejects the stale revision before creating a profile');
 select is((select count(*) from public.workspace_encryption_profiles), 0::bigint, 'a stale begin leaves no write barrier or staging profile');
 select is((select data ->> 'hourlyRate' from public.workspace_settings where owner_id = auth.uid()), '73', 'the concurrent edit survives a rejected migration');
 select ok(to_regprocedure('public.begin_workspace_e2ee_migration(uuid,text,smallint,integer,jsonb)') is null
@@ -80,7 +80,7 @@ select throws_ok($$
 $$, '55000', 'encryption_required', 'legacy writes are rejected after the barrier');
 select throws_ok($$
   select public.finalize_workspace_e2ee_migration(auth.uid(), 'workspace_crypto_A1', 1, '{}'::jsonb, current_setting('test.legacy_revision')::bigint)
-$$, '40001', 'legacy_revision_conflict', 'finalize refuses a source revision different from the frozen source');
+$$, 'PT409', 'legacy_revision_conflict', 'finalize refuses a source revision different from the frozen source');
 
 -- Exercise the trigger as the database owner, as legacy security-definer RPCs do.
 reset role;

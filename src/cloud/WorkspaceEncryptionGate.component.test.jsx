@@ -33,6 +33,31 @@ function props(overrides = {}) {
 }
 
 describe("workspace encryption gate", () => {
+  it("never offers new encryption after an unavailable bootstrap and permits a safe retry", async () => {
+    const user = userEvent.setup();
+    const values = props({
+      bootstrap: null,
+      error: new Error("Could not query the database for the schema cache. Retrying."),
+    });
+    renderGate(values);
+    expect(screen.getByRole("heading", { name: "Workspace temporarily unavailable" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Create encryption password")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Encryption password")).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.getByText(/Do not create a new password/)).toBeInTheDocument();
+    expect(screen.getByText(/Signing out also forgets this device/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Check again" }));
+    expect(values.onRetry).toHaveBeenCalledOnce();
+    expect(values.onActivate).not.toHaveBeenCalled();
+  });
+
+  it("hides setup and disables retry while a fresh profile check is running", () => {
+    renderGate(props({ bootstrap: null, loading: true, error: new Error("Unavailable") }));
+    expect(screen.getByRole("heading", { name: "Checking workspace protection…" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Check again" })).toBeDisabled();
+    expect(screen.queryByLabelText("Create encryption password")).not.toBeInTheDocument();
+  });
+
   it.each(["a", "passwordpassword", "12345678901234567890"])(
     "warns before activation but permits weak passwords: %s",
     async (password) => {

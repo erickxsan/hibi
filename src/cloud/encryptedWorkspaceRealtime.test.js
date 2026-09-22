@@ -13,10 +13,20 @@ async function flushMicrotasks() {
 }
 
 describe("encrypted workspace live synchronization", () => {
-  afterEach(() => vi.useRealTimers());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
 
   it("retries a failed live refresh without delivering unchanged workspace data", async () => {
     vi.useFakeTimers();
+    const document = Object.assign(new EventTarget(), { visibilityState: "visible" });
+    const window = new EventTarget();
+    const navigator = { onLine: true };
+    vi.stubGlobal("document", document);
+    vi.stubGlobal("navigator", navigator);
+    vi.stubGlobal("addEventListener", window.addEventListener.bind(window));
+    vi.stubGlobal("removeEventListener", window.removeEventListener.bind(window));
     const user = { id: "44444444-4444-4444-8444-444444444444" };
     const masterKey = generateAccountMasterKey();
     const workspaceCryptoId = generateWorkspaceCryptoId();
@@ -76,7 +86,7 @@ describe("encrypted workspace live synchronization", () => {
           order: () => query,
           limit: async () => {
             eventQueryCount += 1;
-            return eventResponses.shift();
+            return eventResponses.shift() || { data: [], error: null };
           },
         };
         return query;
@@ -117,7 +127,26 @@ describe("encrypted workspace live synchronization", () => {
     expect(changes).toHaveLength(0);
     expect(statuses).toEqual(["SUBSCRIBED", "SYNCED", "SYNCED"]);
 
+    document.visibilityState = "hidden";
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(eventQueryCount).toBe(3);
+    document.visibilityState = "visible";
+    document.dispatchEvent(new Event("visibilitychange"));
+    await flushMicrotasks();
+    expect(eventQueryCount).toBe(4);
+    navigator.onLine = false;
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(eventQueryCount).toBe(4);
+    navigator.onLine = true;
+    window.dispatchEvent(new Event("online"));
+    await flushMicrotasks();
+    expect(eventQueryCount).toBe(5);
+
     await unsubscribe();
     expect(client.removeChannel).toHaveBeenCalledWith(channel);
+    document.dispatchEvent(new Event("visibilitychange"));
+    window.dispatchEvent(new Event("online"));
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(eventQueryCount).toBe(5);
   });
 });

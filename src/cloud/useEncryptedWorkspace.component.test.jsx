@@ -59,6 +59,58 @@ beforeEach(() => {
   });
 });
 describe("encrypted offline queue", () => {
+  it("keeps a live integrity error that arrives during an idle outbox check", async () => {
+    const cloud = renderHook(() => useEncryptedWorkspace(user, session, security));
+    await waitFor(() => expect(cloud.result.current.syncStatus).toBe("saved"));
+    let unsubscribe;
+    await act(async () => {
+      unsubscribe = cloud.result.current.persistence.subscribe(() => {});
+    });
+    const [, , { onStatus, onError }] = mocks.repository.subscribe.mock.calls[0];
+    let finishQueue;
+    mocks.store.listMutations.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishQueue = resolve;
+      }),
+    );
+    const before = mocks.repository.loadWorkspace.mock.calls.length;
+    await act(async () => {
+      onStatus("SYNCED");
+    });
+    await act(async () => {
+      onError(new Error("invalid_workspace_manifest"));
+      finishQueue([]);
+    });
+    expect(cloud.result.current.syncStatus).toBe("error");
+    expect(mocks.repository.loadWorkspace).toHaveBeenCalledTimes(before);
+    unsubscribe();
+    cloud.unmount();
+  });
+
+  it("does not reload the full workspace for healthy idle polls but still honors an explicit retry", async () => {
+    const cloud = renderHook(() => useEncryptedWorkspace(user, session, security));
+    await waitFor(() => expect(cloud.result.current.syncStatus).toBe("saved"));
+    let unsubscribe;
+    await act(async () => {
+      unsubscribe = cloud.result.current.persistence.subscribe(() => {});
+    });
+    const [, , { onStatus }] = mocks.repository.subscribe.mock.calls[0];
+    const before = mocks.repository.loadWorkspace.mock.calls.length;
+    for (const status of ["SUBSCRIBED", "SYNCED", "SYNCED", "SYNCED"]) {
+      await act(async () => {
+        onStatus(status);
+      });
+      expect(cloud.result.current.syncStatus).toBe("saved");
+    }
+    expect(mocks.repository.loadWorkspace).toHaveBeenCalledTimes(before);
+    await act(async () => {
+      await cloud.result.current.persistence.retrySync();
+    });
+    expect(mocks.repository.loadWorkspace).toHaveBeenCalledTimes(before + 1);
+    unsubscribe();
+    cloud.unmount();
+  });
+
   it("keeps startup, unchanged polls and acknowledged local edits quiet", async () => {
     const cloud = renderHook(() => useEncryptedWorkspace(user, session, security));
     await waitFor(() => expect(cloud.result.current.loading).toBe(false));

@@ -11,6 +11,8 @@ export function encryptedSyncFailure(error) {
     };
   const cause = error?.cause || error;
   const text = `${cause?.code || ""} ${cause?.message || ""}`.toLowerCase();
+  if (cause?.code === "PT409" || /workspace_(revision|entity)_conflict/.test(text))
+    return { status: "conflict", message: "Review the pending operation to keep your change or discard it." };
   if (/network|fetch|offline|timeout|timed.out|connection|503|502|504/.test(text) || cause?.code === "40001")
     return {
       status: "pending",

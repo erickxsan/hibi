@@ -38,6 +38,7 @@ export function useWorkspaceEncryption(user) {
   const [progress, setProgress] = useState("");
   const [rememberedDevice, setRememberedDevice] = useState(null);
   const sessionRef = useRef(null);
+  const bootstrapRequestRef = useRef(0);
 
   const adoptSession = useCallback((nextSession) => {
     sessionRef.current?.lock();
@@ -51,46 +52,53 @@ export function useWorkspaceEncryption(user) {
     return next;
   }, [user.id]);
 
-  useEffect(() => {
-    let active = true;
+  const retry = useCallback(async () => {
+    const request = ++bootstrapRequestRef.current;
+    const isCurrent = () => bootstrapRequestRef.current === request;
     setLoading(true);
     setError(null);
-    (async () => {
-      try {
-        const next = await encryptedWorkspaceRepository.loadBootstrap(user.id);
-        if (!active) return;
-        setBootstrap(next);
-        setRememberedDevice(await deviceKeyStore.describe(user.id).catch(() => null));
-        if (next.profile?.migrationStatus === "active") {
-          const masterKey = await deviceKeyStore.unlock({
-            ownerId: user.id,
-            workspaceCryptoId: next.profile.workspaceCryptoId,
-            expectedKeyVersion: next.profile.activeKeyVersion,
-          });
-          if (masterKey && active) {
-            adoptSession(
-              createCryptoSession({
-                ownerId: user.id,
-                workspaceCryptoId: next.profile.workspaceCryptoId,
-                masterKey,
-                keyVersion: next.profile.activeKeyVersion,
-                method: "remembered-device",
-              }),
-            );
-            wipeBytes(masterKey);
-            setRememberedDevice(await deviceKeyStore.describe(user.id).catch(() => null));
-          }
+    // An unavailable profile must never be treated as a first-time setup.
+    setBootstrap(null);
+    let masterKey;
+    try {
+      const next = await encryptedWorkspaceRepository.loadBootstrap(user.id);
+      if (!isCurrent()) return;
+      setBootstrap(next);
+      const remembered = await deviceKeyStore.describe(user.id).catch(() => null);
+      if (!isCurrent()) return;
+      setRememberedDevice(remembered);
+      if (next.profile?.migrationStatus === "active") {
+        masterKey = await deviceKeyStore.unlock({
+          ownerId: user.id,
+          workspaceCryptoId: next.profile.workspaceCryptoId,
+          expectedKeyVersion: next.profile.activeKeyVersion,
+        });
+        if (masterKey && isCurrent()) {
+          adoptSession(
+            createCryptoSession({
+              ownerId: user.id,
+              workspaceCryptoId: next.profile.workspaceCryptoId,
+              masterKey,
+              keyVersion: next.profile.activeKeyVersion,
+              method: "remembered-device",
+            }),
+          );
         }
-      } catch (caught) {
-        if (active) setError(caught);
-      } finally {
-        if (active) setLoading(false);
       }
-    })();
-    return () => {
-      active = false;
-    };
+    } catch (caught) {
+      if (isCurrent()) setError(caught);
+    } finally {
+      if (masterKey) wipeBytes(masterKey);
+      if (isCurrent()) setLoading(false);
+    }
   }, [adoptSession, user.id]);
+
+  useEffect(() => {
+    void retry();
+    return () => {
+      bootstrapRequestRef.current += 1;
+    };
+  }, [retry]);
 
   useEffect(
     () => () => {
@@ -102,7 +110,9 @@ export function useWorkspaceEncryption(user) {
 
   const activate = useCallback(
     async ({ password, rememberDevice = true } = {}) => {
-      if (busy) return;
+      if (busy || loading || !bootstrap) return;
+      if (bootstrap.profile && bootstrap.profile.migrationStatus !== "migration_started") return;
+      if (bootstrap.wrappers.some((wrapper) => wrapper.type === "password" && !wrapper.revokedAt)) return;
       setBusy(true);
       setError(null);
       let masterKey = null;
@@ -144,7 +154,7 @@ export function useWorkspaceEncryption(user) {
         setBusy(false);
       }
     },
-    [adoptSession, bootstrap?.profile?.migrationStatus, busy, refresh, user],
+    [adoptSession, bootstrap, busy, loading, refresh, user],
   );
 
   const unlockPassword = useCallback(
@@ -423,6 +433,8 @@ export function useWorkspaceEncryption(user) {
 
   const lock = useCallback(
     async ({ forget = false } = {}) => {
+      // A late remembered-key read must not unlock again after signing out.
+      bootstrapRequestRef.current += 1;
       sessionRef.current?.lock();
       sessionRef.current = null;
       setSession(null);
@@ -475,6 +487,6 @@ export function useWorkspaceEncryption(user) {
     unlockPassword,
     unlockRecovery,
     lock,
-    retry: refresh,
+    retry,
   };
 }

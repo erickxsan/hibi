@@ -110,7 +110,7 @@ function workspaceFromRow(row, expectedOwnerId, { validate = true } = {}) {
 
 function isEntityConflict(error) {
   const text = `${error?.code ?? ""} ${error?.message ?? ""} ${error?.details ?? ""}`.toLowerCase();
-  return error?.code === "40001" || text.includes("workspace_entity_conflict");
+  return ["40001", "PT409"].includes(error?.code) || text.includes("workspace_entity_conflict");
 }
 
 function persistenceFailure(message, error) {

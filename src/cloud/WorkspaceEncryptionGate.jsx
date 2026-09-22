@@ -25,10 +25,12 @@ export function WorkspaceEncryptionGate({
   const [formError, setFormError] = useState("");
   const [recoveryKey, setRecoveryKey] = useState("");
   const profile = bootstrap?.profile;
+  const bootstrapKnown = bootstrap != null;
   const passwordWrapper = (bootstrap?.wrappers || []).find(
     (wrapper) => wrapper.type === "password" && !wrapper.revokedAt,
   );
-  const needsPasswordCreation = !profile || (profile.migrationStatus === "migration_started" && !passwordWrapper);
+  const needsPasswordCreation =
+    bootstrapKnown && (!profile || (profile.migrationStatus === "migration_started" && !passwordWrapper));
   const passwordWarning = needsPasswordCreation ? getNewPasswordWarning(password) : "";
   const recoveryAvailable = (bootstrap?.wrappers || []).some(
     (wrapper) => wrapper.type === "recovery" && !wrapper.revokedAt,
@@ -36,6 +38,7 @@ export function WorkspaceEncryptionGate({
 
   const submitPassword = async (event) => {
     event.preventDefault();
+    if (loading || busy || !bootstrapKnown) return;
     setFormError("");
     if (!password) {
       setFormError("Enter your encryption password.");
@@ -64,14 +67,23 @@ export function WorkspaceEncryptionGate({
         <h1 id="encryption-gate-title">
           {loading
             ? "Checking workspace protection…"
-            : needsPasswordCreation && !profile
-              ? "Protect your workspace before continuing"
-              : needsPasswordCreation
-                ? "Restart encryption with a password"
-                : profile.migrationStatus === "migration_started"
-                  ? "Resume the encrypted migration"
-                  : "Unlock your private workspace"}
+            : !bootstrapKnown
+              ? "Workspace temporarily unavailable"
+              : needsPasswordCreation && !profile
+                ? "Protect your workspace before continuing"
+                : needsPasswordCreation
+                  ? "Restart encryption with a password"
+                  : profile.migrationStatus === "migration_started"
+                    ? "Resume the encrypted migration"
+                    : "Unlock your private workspace"}
         </h1>
+
+        {!loading && !bootstrapKnown ? (
+          <p>
+            Hibi could not check your encryption settings. Retry when the connection recovers. Do not create a new
+            password or clear this browser's data; your remembered device key may still be available.
+          </p>
+        ) : null}
 
         {!loading && needsPasswordCreation && !profile ? (
           <p>
@@ -107,12 +119,12 @@ export function WorkspaceEncryptionGate({
         ) : null}
         {error || formError ? (
           <div className="encryption-error" role="alert">
-            <strong>Workspace remains safe.</strong>
+            <strong>{bootstrapKnown ? "Workspace remains safe." : "Encryption settings could not be checked."}</strong>
             <span>{formError || error?.message || "The workspace could not be unlocked."}</span>
           </div>
         ) : null}
 
-        {!loading ? (
+        {!loading && bootstrapKnown ? (
           <label className="remember-device-choice">
             <input
               type="checkbox"
@@ -127,7 +139,7 @@ export function WorkspaceEncryptionGate({
           </label>
         ) : null}
 
-        {!loading ? (
+        {!loading && bootstrapKnown ? (
           <form className="recovery-unlock-form encryption-password-form" onSubmit={submitPassword}>
             {needsPasswordCreation ? <p>{NEW_PASSWORD_GUIDANCE}</p> : null}
             <Field label={needsPasswordCreation ? "Create encryption password" : "Encryption password"}>
@@ -209,8 +221,8 @@ export function WorkspaceEncryptionGate({
         ) : null}
 
         <div className="cloud-state-actions encryption-secondary-actions">
-          {error || formError ? (
-            <Button icon={RefreshCw} onClick={onRetry} disabled={busy}>
+          {error || formError || (!loading && !bootstrapKnown) ? (
+            <Button icon={RefreshCw} onClick={onRetry} disabled={busy || loading}>
               Check again
             </Button>
           ) : null}
@@ -218,6 +230,9 @@ export function WorkspaceEncryptionGate({
             Sign out
           </Button>
         </div>
+        <p className="encryption-compatibility-note">
+          Signing out also forgets this device. You will need your encryption password next time.
+        </p>
       </section>
     </main>
   );
