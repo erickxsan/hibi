@@ -22,9 +22,7 @@ function CommunityHarness() {
     archiveStudent: async (id) => {
       setState((current) => ({
         ...current,
-        students: current.students.map((student) =>
-          student.id === id ? { ...student, status: "Inactive" } : student,
-        ),
+        students: current.students.map((student) => (student.id === id ? { ...student, status: "Inactive" } : student)),
       }));
       return true;
     },
@@ -36,12 +34,7 @@ function CommunityHarness() {
 
   return (
     <I18nProvider>
-      <Community
-        state={state}
-        derived={derived}
-        actions={actions}
-        registerNavigationBlocker={() => () => {}}
-      />
+      <Community state={state} derived={derived} actions={actions} registerNavigationBlocker={() => () => {}} />
     </I18nProvider>
   );
 }
