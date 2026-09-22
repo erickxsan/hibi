@@ -4,7 +4,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useMemo, useState } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { createStarterState, createStudent, deriveAll } from "../domain";
+import { createGroup, createStarterState, createStudent, deriveAll } from "../domain";
 import { I18nProvider } from "../i18n";
 import Community from "./Community";
 
@@ -15,6 +15,8 @@ function CommunityHarness() {
       createStudent({ id: "active", code: "ACTIVE-1", fullName: "Active student", status: "Active" }),
       createStudent({ id: "inactive", code: "INACTIVE-1", fullName: "Inactive student", status: "Inactive" }),
     ];
+    initial.groups = [createGroup({ id: "group", name: "Test group" })];
+    initial.students = initial.students.map((student) => ({ ...student, groupIds: ["group"] }));
     return initial;
   });
   const derived = useMemo(() => deriveAll(state, "2026-09-22"), [state]);
@@ -52,5 +54,24 @@ describe("Community active student count", () => {
     await user.click(within(dialog).getByRole("button", { name: "Deactivate student" }));
 
     expect(within(counter).getByText("0")).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Groups", exact: true }));
+    const detail = screen.getByRole("region", { name: "Test group" });
+    expect(within(detail).getByText("0 students")).toBeInTheDocument();
+    await user.click(within(detail).getByRole("button", { name: "Manage students" }));
+    const manager = screen.getByRole("region", { name: "Manage group students" });
+    expect(within(manager).getAllByRole("checkbox")).toHaveLength(2);
+    within(manager)
+      .getAllByRole("checkbox")
+      .forEach((checkbox) => expect(checkbox).toBeChecked());
+  });
+
+  it("excludes inactive students from assigned-group and group-detail counts", async () => {
+    const user = userEvent.setup();
+    render(<CommunityHarness />);
+    expect(screen.getByText("1 member")).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Groups", exact: true }));
+    const detail = screen.getByRole("region", { name: "Test group" });
+    expect(within(detail).getByText("1 student")).toBeInTheDocument();
+    expect(within(detail).queryByText("Inactive student")).not.toBeInTheDocument();
   });
 });

@@ -643,7 +643,9 @@ function StudentDetail({ student, draft, setDraft, groupsById, state, onEdit, on
               .map((id) => groupsById.get(id))
               .filter(Boolean)
               .map((group) => {
-                const memberCount = state.students.filter((item) => (item.groupIds || []).includes(group.id)).length;
+                const memberCount = state.students.filter(
+                  (item) => item.status === "Active" && (item.groupIds || []).includes(group.id),
+                ).length;
                 return (
                   <article key={group.id}>
                     <span className="community-group-emblem">
@@ -973,7 +975,11 @@ export default function Community({
   const selectedGroup = selected.type === "group" ? state.groups.find((item) => item.id === selected.id) : null;
   const groupMembers = useMemo(
     () =>
-      selectedGroup ? state.students.filter((student) => (student.groupIds || []).includes(selectedGroup.id)) : [],
+      selectedGroup
+        ? state.students.filter(
+            (student) => student.status === "Active" && (student.groupIds || []).includes(selectedGroup.id),
+          )
+        : [],
     [selectedGroup, state.students],
   );
   const membersGroup = state.groups.find((group) => group.id === membersGroupId);

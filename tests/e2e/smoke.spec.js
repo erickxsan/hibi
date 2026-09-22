@@ -41,4 +41,14 @@ test("updates the active student count after deactivation", async ({ page }) => 
   await dialog.getByRole("button", { name: "Deactivate student" }).click();
 
   await expect(counter).toHaveText("0");
+  await page.reload();
+  await expect(counter).toHaveText("0");
+
+  await page.getByRole("button", { name: "Open Active Student", exact: true }).click();
+  await page.getByRole("combobox", { name: "Status Inactive", exact: true }).click();
+  await page.getByRole("option", { name: "Active", exact: true }).click();
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(counter).toHaveText("1");
+  await page.reload();
+  await expect(counter).toHaveText("1");
 });
