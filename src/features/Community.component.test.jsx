@@ -30,7 +30,13 @@ function CommunityHarness() {
     },
     deleteStudent: vi.fn(),
     deleteGroup: vi.fn(),
-    upsertStudent: vi.fn(),
+    upsertStudent: async (updated) => {
+      setState((current) => ({
+        ...current,
+        students: current.students.map((student) => (student.id === updated.id ? updated : student)),
+      }));
+      return true;
+    },
     upsertGroup: vi.fn(),
   };
 
@@ -73,5 +79,44 @@ describe("Community active student count", () => {
     const detail = screen.getByRole("region", { name: "Test group" });
     expect(within(detail).getByText("1 student")).toBeInTheDocument();
     expect(within(detail).queryByText("Inactive student")).not.toBeInTheDocument();
+  });
+});
+
+describe("Community archived students", () => {
+  it("hides inactive students until expanded and returns reactivated students to the main list", async () => {
+    const user = userEvent.setup();
+    render(<CommunityHarness />);
+    await user.click(screen.getByRole("tab", { name: "Students", exact: true }));
+    const archive = screen.getByRole("button", { name: /Archived/ });
+    expect(archive).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Inactive student")).not.toBeInTheDocument();
+    await user.click(archive);
+    expect(archive).toHaveAttribute("aria-expanded", "true");
+    await user.click(screen.getByRole("button", { name: /Inactive student INACTIVE-1/ }));
+    expect(screen.getByDisplayValue("Inactive student")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Reactivate", exact: true }));
+    expect(screen.getByRole("button", { name: "Open Inactive student" })).toBeInTheDocument();
+    expect(archive).toHaveTextContent("0");
+    const counter = screen.getByText("Active students").closest(".community-active-count");
+    expect(counter).toHaveTextContent("2");
+    await user.click(archive);
+    expect(screen.getByRole("button", { name: "Open Inactive student" })).toBeInTheDocument();
+  });
+
+  it("moves a deactivated student into the collapsed archive", async () => {
+    const user = userEvent.setup();
+    render(<CommunityHarness />);
+    await user.click(screen.getByRole("button", { name: "Deactivate student" }));
+    const dialog = await screen.findByRole("dialog", { name: "Deactivate Active student?" });
+    await user.click(within(dialog).getByRole("button", { name: "Deactivate student" }));
+    expect(screen.queryByRole("button", { name: "Open Active student" })).not.toBeInTheDocument();
+    const archive = screen.getByRole("button", { name: /Archived/ });
+    expect(archive).toHaveAttribute("aria-expanded", "false");
+    expect(archive).toHaveTextContent("2");
+    await user.click(archive);
+    expect(screen.getByRole("button", { name: /Active student ACTIVE-1/ })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Inactive student INACTIVE-1/ }));
+    await user.click(archive);
+    expect(screen.queryByDisplayValue("Inactive student")).not.toBeInTheDocument();
   });
 });

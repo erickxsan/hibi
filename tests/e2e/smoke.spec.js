@@ -44,10 +44,12 @@ test("updates the active student count after deactivation", async ({ page }) => 
   await page.reload();
   await expect(counter).toHaveText("0");
 
-  await page.getByRole("button", { name: "Open Active Student", exact: true }).click();
-  await page.getByRole("combobox", { name: "Status Inactive", exact: true }).click();
-  await page.getByRole("option", { name: "Active", exact: true }).click();
-  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByRole("button", { name: "Open Active Student", exact: true })).toHaveCount(0);
+  const archive = page.getByRole("button", { name: /Archived/ });
+  await expect(archive).toHaveAttribute("aria-expanded", "false");
+  await page.screenshot({ path: "test-results/archive-desktop.png", fullPage: true });
+  await archive.click();
+  await page.getByRole("button", { name: "Reactivate", exact: true }).click();
   await expect(counter).toHaveText("1");
   await page.reload();
   await expect(counter).toHaveText("1");

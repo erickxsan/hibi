@@ -1934,7 +1934,7 @@ body,
   }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 780px) {
   body {
     padding-bottom: 76px;
   }
@@ -13544,4 +13544,81 @@ tbody .attendance-student-column {
 }
 .pending-operations button {
   margin: 0.5rem 0.5rem 0.5rem 0;
+}
+
+/* Quiet, collapsed archive access below the student directory. */
+.community-archive-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 8px 18px;
+  border: 0;
+  border-top: 1px solid #eee9e1;
+  background: transparent;
+  color: #707975;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.community-archive-toggle > svg:last-child {
+  margin-left: auto;
+}
+.community-archive-toggle .expanded {
+  transform: rotate(90deg);
+}
+.community-archive-toggle:hover,
+.community-reactivate:hover {
+  color: #245f4a;
+}
+.community-archive-toggle:focus-visible,
+.community-reactivate:focus-visible {
+  outline: 2px solid #245f4a;
+  outline-offset: -3px;
+}
+.community-archived-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 18px;
+  border-top: 1px solid #eee9e1;
+}
+.community-archived-row .community-row-primary {
+  min-width: 0;
+  flex: 1;
+}
+.community-archived-row .community-row-primary strong,
+.community-archived-row .community-row-primary small {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.community-reactivate {
+  border: 0;
+  background: transparent;
+  color: #707975;
+  font: inherit;
+  font-size: 12px;
+  padding: 8px 0;
+  cursor: pointer;
+}
+.community-reactivate:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+.community-archive-empty {
+  margin: 0;
+  padding: 12px 18px;
+  color: #707975;
+  font-size: 12px;
+}
+
+@media (pointer: coarse) {
+  .community-archive-toggle,
+  .community-reactivate,
+  .community-archived-row .community-row-primary {
+    min-height: 44px;
+  }
 }

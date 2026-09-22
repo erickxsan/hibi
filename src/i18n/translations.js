@@ -1297,6 +1297,9 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "No groups assigned. This student can still take individual classes.":
     "No hay grupos asignados. El alumno aún puede tomar clases individuales.",
   "Add to a group": "Agregar a un grupo",
+  Archived: "Archivados",
+  Reactivate: "Reactivar",
+  "No archived students found.": "No se encontraron alumnos archivados.",
   "Deactivate student": "Desactivar alumno",
   Students: "Alumnos",
   Groups: "Grupos",

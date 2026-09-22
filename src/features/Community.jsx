@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Archive,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -443,6 +444,11 @@ function GroupRows({ groups, summaries, selectedId, onSelect, onEdit, onDelete }
 function ListPanel({
   view,
   students,
+  archivedStudents,
+  archivesOpen,
+  onToggleArchives,
+  onReactivateStudent,
+  saving,
   groups,
   derived,
   selected,
@@ -515,6 +521,44 @@ function ListPanel({
               </button>
             </div>
           </footer>
+          <button
+            type="button"
+            className="community-archive-toggle"
+            aria-expanded={archivesOpen}
+            aria-controls="community-archived-students"
+            onClick={onToggleArchives}
+          >
+            <Archive size={15} aria-hidden="true" />
+            <span>Archived</span>
+            <span>· {archivedStudents.length}</span>
+            <ChevronRight size={16} className={archivesOpen ? "expanded" : ""} aria-hidden="true" />
+          </button>
+          <div id="community-archived-students" hidden={!archivesOpen}>
+            {archivesOpen
+              ? archivedStudents.map((student) => (
+                  <div className="community-archived-row" key={student.id}>
+                    <button type="button" className="community-row-primary" onClick={() => onSelectStudent(student.id)}>
+                      <StudentAvatar avatarId={student.avatarId} name={student.fullName} size="small" decorative />
+                      <span>
+                        <strong>{student.fullName}</strong>
+                        <small>{student.code}</small>
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="community-reactivate"
+                      disabled={saving}
+                      onClick={() => onReactivateStudent(student)}
+                    >
+                      Reactivate
+                    </button>
+                  </div>
+                ))
+              : null}
+            {archivesOpen && !archivedStudents.length ? (
+              <p className="community-archive-empty">No archived students found.</p>
+            ) : null}
+          </div>
         </section>
       ) : null}
       {showGroups ? (
@@ -885,10 +929,14 @@ export default function Community({
   registerNavigationBlocker,
 }) {
   const [view, setView] = useState(() => initialCommunityView(initialView));
+  const [archivesOpen, setArchivesOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [filters, setFilters] = useState({ groupIds: [], groupMatch: "any", enrollment: [] });
-  const [selected, setSelected] = useState({ type: "student", id: state.students[0]?.id || "" });
+  const [selected, setSelected] = useState({
+    type: "student",
+    id: state.students.find((student) => student.status === "Active")?.id || "",
+  });
   const [studentDraft, setStudentDraft] = useState(null);
   const [groupDraft, setGroupDraft] = useState(null);
   const [studentEditorDraft, setStudentEditorDraft] = useState(null);
@@ -943,7 +991,7 @@ export default function Community({
       }),
     [groupsById, state.students],
   );
-  const visibleStudents = useMemo(
+  const matchingStudents = useMemo(
     () =>
       studentSearchEntries
         .filter(({ student, text }) => {
@@ -953,6 +1001,18 @@ export default function Community({
         })
         .map(({ student }) => student),
     [filters, needle, studentSearchEntries, status],
+  );
+  const activeStudents = useMemo(
+    () => matchingStudents.filter((student) => student.status === "Active"),
+    [matchingStudents],
+  );
+  const archivedStudents = useMemo(
+    () => matchingStudents.filter((student) => student.status === "Inactive"),
+    [matchingStudents],
+  );
+  const visibleStudents = useMemo(
+    () => (archivesOpen ? [...activeStudents, ...archivedStudents] : activeStudents),
+    [activeStudents, archivedStudents, archivesOpen],
   );
   const groupSearchEntries = useMemo(
     () =>
@@ -1005,11 +1065,16 @@ export default function Community({
       setSelected({ type: "student", id: visibleStudents[0]?.id || "" });
     if (wantsGroups && (!selectedGroup || !visibleGroups.some((item) => item.id === selectedGroup.id)))
       setSelected({ type: "group", id: visibleGroups[0]?.id || "" });
-    if (view === "all" && !selectedStudent && !selectedGroup) {
+    if (
+      view === "all" &&
+      !selectedGroup &&
+      (!selectedStudent || !visibleStudents.some((item) => item.id === selectedStudent.id))
+    ) {
       if (visibleStudents[0]) setSelected({ type: "student", id: visibleStudents[0].id });
       else if (visibleGroups[0]) setSelected({ type: "group", id: visibleGroups[0].id });
+      else if (selected.id) setSelected({ type: "student", id: "" });
     }
-  }, [selectedGroup, selectedStudent, view, visibleGroups, visibleStudents]);
+  }, [selected.id, selectedGroup, selectedStudent, view, visibleGroups, visibleStudents]);
 
   const selectRecord = (type, id) => {
     if (!confirmDiscard(studentDirty || groupDirty, "Discard your unsaved community changes?")) return;
@@ -1150,7 +1215,18 @@ export default function Community({
       <div className={selectedGroup ? "community-layout community-group-directory-layout" : "community-layout"}>
         <ListPanel
           view={view}
-          students={visibleStudents}
+          students={activeStudents}
+          archivedStudents={archivedStudents}
+          archivesOpen={archivesOpen}
+          onToggleArchives={() => {
+            if (!confirmDiscard(studentDirty || groupDirty, "Discard your unsaved community changes?")) return;
+            setArchivesOpen((open) => !open);
+          }}
+          onReactivateStudent={(student) => {
+            if (!confirmDiscard(studentDirty || groupDirty, "Discard your unsaved community changes?")) return;
+            return runSave(() => actions.upsertStudent({ ...student, status: "Active" }));
+          }}
+          saving={saving}
           groups={visibleGroups}
           derived={derived}
           selected={selected}
