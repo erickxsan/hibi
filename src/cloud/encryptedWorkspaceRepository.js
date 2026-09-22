@@ -521,7 +521,7 @@ export function createEncryptedWorkspaceRepository(
     } catch (error) {
       const text = `${error?.code || ""} ${error?.message || ""}`.toLowerCase();
       if (
-        error?.code !== "40001" &&
+        !["40001", "PT409"].includes(error?.code) &&
         !text.includes("workspace_revision_conflict") &&
         !text.includes("workspace_entity_conflict")
       ) {
@@ -665,7 +665,7 @@ export function createEncryptedWorkspaceRepository(
     });
     if (error) {
       const text = `${error.code || ""} ${error.message || ""}`.toLowerCase();
-      if (error.code === "40001" || text.includes("workspace_revision_conflict")) {
+      if (["40001", "PT409"].includes(error.code) || text.includes("workspace_revision_conflict")) {
         const latest = await loadWorkspace(session, ownerId);
         throw new WorkspaceConflictError({
           latestState: latest.state,
@@ -1340,6 +1340,7 @@ export function createEncryptedWorkspaceRepository(
     };
     const refresh = () => {
       if (!active || refreshTask) return refreshTask;
+      if (globalThis.navigator?.onLine === false || globalThis.document?.visibilityState === "hidden") return;
       refreshTask = loadMissedEvents(session, ownerId)
         .then((latest) => {
           if (!active) return;
@@ -1375,10 +1376,15 @@ export function createEncryptedWorkspaceRepository(
         }
       });
     fallbackTimer = globalThis.setInterval?.(() => void refresh(), LIVE_REFRESH_FALLBACK_MS);
+    const resume = () => void refresh();
+    globalThis.addEventListener?.("online", resume);
+    globalThis.document?.addEventListener("visibilitychange", resume);
     return async () => {
       active = false;
       if (refreshRetryTimer) globalThis.clearTimeout?.(refreshRetryTimer);
       if (fallbackTimer) globalThis.clearInterval?.(fallbackTimer);
+      globalThis.removeEventListener?.("online", resume);
+      globalThis.document?.removeEventListener("visibilitychange", resume);
       await cloud().removeChannel(channel);
     };
   }

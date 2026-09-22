@@ -80,7 +80,7 @@ async function twoDevices(state, versions = {}, transformEnvelopes = null) {
         return { data: [{ result_revision: receipts.get(args.p_operation_id), already_applied: true }], error: null };
       }
       if (args.p_expected_workspace_revision !== row.workspace_revision) {
-        return { data: null, error: { code: "40001", message: "workspace_revision_conflict" } };
+        return { data: null, error: { code: "PT409", message: "workspace_revision_conflict" } };
       }
       if (
         args.p_manifest.workspaceRevision !== row.workspace_revision + 1 ||

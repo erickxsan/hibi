@@ -67,7 +67,7 @@ select throws_ok($$
     '{"groups":{"upserts":[{"position":0,"data":{"id":"g1","name":"Stale","grade":"","subject":"","schedule":"","hourlyRate":null,"weeklySchedule":[],"plannedSessionsPerMonth":8,"assistantContact":"","notes":""}}],"deletes":[]}}'::jsonb,
     '{"groups":{"g1":1}}'::jsonb
   )
-$$, '40001', 'workspace_entity_conflict', 'a stale write conflicts only on the same entity');
+$$, 'PT409', 'workspace_entity_conflict', 'a stale write conflicts only on the same entity');
 
 select lives_ok($$
   select * from public.apply_workspace_patch_idempotent(
@@ -171,7 +171,7 @@ select throws_ok($$
     '{"grades":{"upserts":[{"position":1,"data":{"id":"gr2","studentId":"s1","date":"2026-08-10","assessment":"Quiz","category":"Quiz","score":9,"maxScore":10,"workStatus":"On time","classSessionKey":"2026-08-10|g1|10:00"}}],"deletes":[]}}'::jsonb,
     '{"grades":{"gr2":0}}'::jsonb
   )
-$$, '40001', 'workspace_entity_conflict', 'competing grade UUIDs for one student session conflict');
+$$, 'PT409', 'workspace_entity_conflict', 'competing grade UUIDs for one student session conflict');
 
 select throws_ok($$
   select * from public.apply_workspace_patch_idempotent(
@@ -180,7 +180,7 @@ select throws_ok($$
     '{"classLog":{"upserts":[{"position":1,"data":{"id":"c2","studentId":"s1","groupId":"g1","classDate":"2026-08-10","startTime":"10:00","classStatus":"Completed","amountPaid":120,"paymentDate":"2026-08-10","paymentState":"Paid","paymentMethod":"Transfer","paymentReference":"R2"}}],"deletes":[]}}'::jsonb,
     '{"classLog":{"c2":0}}'::jsonb
   )
-$$, '40001', 'workspace_entity_conflict', 'competing class UUIDs for one student date and time conflict');
+$$, 'PT409', 'workspace_entity_conflict', 'competing class UUIDs for one student date and time conflict');
 
 select is((select count(*) from public.grades), 1::bigint, 'the losing grade UUID is not stored');
 select is((select count(*) from public.class_records), 1::bigint, 'the losing class UUID and charge are not stored');
