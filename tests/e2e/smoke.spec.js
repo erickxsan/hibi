@@ -25,3 +25,20 @@ test("loads the local workspace and preserves a student interaction", async ({ p
   await page.reload();
   await expect(page.getByRole("button", { name: "Open Playwright Student" })).toBeVisible();
 });
+
+test("updates the active student count after deactivation", async ({ page }) => {
+  await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "Community" }).click();
+  await page.getByRole("button", { name: "Add student" }).click();
+  await page.getByLabel("Student ID").fill("ACTIVE-1");
+  await page.getByLabel("Full name").fill("Active Student");
+  await page.getByRole("button", { name: "Save student" }).click();
+
+  const counter = page.locator(".community-active-count strong");
+  await expect(counter).toHaveText("1");
+
+  await page.getByRole("button", { name: "Deactivate student" }).click();
+  const dialog = page.getByRole("dialog", { name: /Deactivate .+\?/ });
+  await dialog.getByRole("button", { name: "Deactivate student" }).click();
+
+  await expect(counter).toHaveText("0");
+});

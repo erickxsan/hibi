@@ -43,6 +43,16 @@ describe("minimal class-manager calculations", () => {
     expect(dashboard.monthlyCollections.at(-1).collected).toBe(920);
   });
 
+  it("excludes inactive students from the active student count", () => {
+    const state = createStarterState();
+    state.students = [
+      createStudent({ id: "active", code: "ACTIVE-1", fullName: "Active student", status: "Active" }),
+      createStudent({ id: "inactive", code: "INACTIVE-1", fullName: "Inactive student", status: "Inactive" }),
+    ];
+
+    expect(deriveDashboard(state, AS_OF).activeStudents).toBe(1);
+  });
+
   it("derives student and group indicators with P/L counted, A counted against, and E excluded", () => {
     const state = createSeedState();
     const maya = deriveStudent(state, "student_demo_s001", AS_OF);

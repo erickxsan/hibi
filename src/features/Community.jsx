@@ -902,10 +902,7 @@ export default function Community({
     () => derived.groupsById || new Map(state.groups.map((group) => [group.id, group])),
     [derived.groupsById, state.groups],
   );
-  const activeStudentCount = state.students.reduce(
-    (count, student) => count + (student.status === "Active" ? 1 : 0),
-    0,
-  );
+  const activeStudentCount = derived.dashboard?.activeStudents ?? 0;
 
   const studentDirty = Boolean(studentDraft) && draftChanged(studentDraft, studentBaseline.current);
   const groupDirty = Boolean(groupDraft) && draftChanged(groupDraft, groupBaseline.current);
