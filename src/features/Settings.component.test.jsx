@@ -98,7 +98,9 @@ describe("Settings privacy actions", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Start tour" }));
-    expect(onOpenOnboarding).toHaveBeenCalledTimes(1);
+    expect(onOpenOnboarding).toHaveBeenLastCalledWith("tour");
+    await user.click(screen.getByRole("button", { name: "Guided setup" }));
+    expect(onOpenOnboarding).toHaveBeenLastCalledWith("setup");
   });
 
   it("labels reset as recoverable and requires the RESET phrase", async () => {

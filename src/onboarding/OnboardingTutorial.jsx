@@ -5,29 +5,32 @@ import {
   ArrowRight,
   CalendarDays,
   Check,
+  CircleAlert,
   Clock3,
-  LockKeyhole,
   Plus,
   Trash2,
   UsersRound,
 } from "lucide-react";
-import { Button, Field, Input, Select } from "../components/ui";
+import { Button, Field, Input } from "../components/ui";
+import { getUiLocale, useI18n } from "../i18n";
 import ContextualTour from "./ContextualTour";
 import {
   dayLabel,
-  nextDateForDay,
+  dayShortLabel,
+  formatOnboardingDate,
+  nextClassForSchedule,
   ONBOARDING_DAYS,
-  ONBOARDING_SETUP_STEPS,
+  ONBOARDING_MAX_STUDENTS,
   ONBOARDING_TOUR_START_STEP,
+  ONBOARDING_VERSION,
+  scheduleIssue,
+  splitPastedStudentNames,
+  upcomingClasses,
 } from "./onboardingModel";
 import "./onboarding.css";
 
-const MASCOTS = {
-  1: "/onboarding/hibi-welcome-transparent.png",
-  2: "/onboarding/hibi-group-transparent.png",
-  3: "/onboarding/hibi-students-transparent.png",
-  4: "/onboarding/hibi-schedule-transparent.png",
-};
+const GUIDE_MASCOT = "/onboarding/hibi-guide.png";
+const SETUP_LABELS = ["Group", "Students", "Agenda"];
 
 const DURATION_OPTIONS = Object.freeze([
   { value: 0.5, label: "30 minutes" },
@@ -70,35 +73,85 @@ function initialGroupDraft(state) {
 
 function initialStudentRows(state) {
   const groupId = state.settings.onboardingGroupId;
-  const existing = state.students.filter((student) => student.groupIds?.includes(groupId));
+  const existing = groupId ? state.students.filter((student) => student.groupIds?.includes(groupId)) : [];
   return existing.length
     ? existing.map((student) => ({ ...student, key: student.id }))
     : [{ key: nextRowKey(), fullName: "" }];
 }
 
+// The tour speaks about the group the teacher just created. Replays fall back
+// to the first scheduled group so the same hints stay concrete.
+function tourContextFor(state, groupId) {
+  const group =
+    state.groups.find((item) => item.id === groupId) ||
+    state.groups.find((item) => item.weeklySchedule?.length) ||
+    state.groups[0];
+  if (!group) return null;
+  const next = nextClassForSchedule(group.weeklySchedule);
+  return {
+    groupId: group.id,
+    groupName: group.name,
+    studentCount: state.students.filter(
+      (student) => student.status !== "Inactive" && student.groupIds?.includes(group.id),
+    ).length,
+    nextClass: next ? { date: next.date, time: next.slot.startTime } : null,
+  };
+}
+
 function StepProgress({ step }) {
   return (
-    <div className="onboarding-progress" aria-label={`Step ${step} of ${ONBOARDING_SETUP_STEPS}`}>
-      <span>{`Step ${step} of ${ONBOARDING_SETUP_STEPS}`}</span>
-      <div className="onboarding-progress-dots" aria-hidden="true">
-        {Array.from({ length: ONBOARDING_SETUP_STEPS }, (_, index) => (
-          <i className={index + 1 <= step ? "is-active" : ""} key={index} />
+    <ol className="onboarding-progress" aria-label={`Step ${step - 1} of ${SETUP_LABELS.length}`}>
+      {SETUP_LABELS.map((label, index) => (
+        <li
+          key={label}
+          className={index + 2 <= step ? "is-active" : ""}
+          aria-current={index + 2 === step ? "step" : undefined}
+        >
+          <span className="onboarding-step-number" aria-hidden="true">
+            {index + 2 < step ? <Check size={16} /> : index + 1}
+          </span>
+          <span>{label}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+// Pinned above the footer buttons so the resulting dates stay visible while the
+// teacher edits days and times. A submitted schedule issue becomes an alert.
+function SchedulePreview({ slots, submittedIssue, locale }) {
+  const issue = scheduleIssue(slots);
+  if (issue) {
+    return (
+      <p
+        className="onboarding-schedule-preview has-issue"
+        role={submittedIssue ? "alert" : undefined}
+        aria-live="polite"
+      >
+        <CircleAlert aria-hidden="true" size={16} />
+        {issue}
+      </p>
+    );
+  }
+  return (
+    <div className="onboarding-schedule-preview" aria-live="polite">
+      <strong>
+        <CalendarDays aria-hidden="true" size={16} />
+        Upcoming classes
+      </strong>
+      <ol>
+        {upcomingClasses(slots, 3).map(({ slot, date }, index) => (
+          <li key={`${slot.id}-${date}`} className={index === 0 ? "is-next" : ""}>
+            {formatOnboardingDate(date, locale)} <span>{slot.startTime}</span>
+          </li>
         ))}
-      </div>
+      </ol>
+      <small>{`${slots.length} per week · ${slots.length * 4} a month`}</small>
     </div>
   );
 }
 
-function PrivacyNote() {
-  return (
-    <p className="onboarding-privacy-note">
-      <LockKeyhole aria-hidden="true" size={15} />
-      Tutorial progress is protected with end-to-end encryption.
-    </p>
-  );
-}
-
-function ScheduleRows({ rows, setRows, error }) {
+function ScheduleRows({ rows, setRows }) {
   const addSlot = () => {
     const usedDays = new Set(rows.map((row) => Number(row.dayOfWeek)));
     const nextDay = ONBOARDING_DAYS.find((day) => !usedDays.has(day.value))?.value || 1;
@@ -108,23 +161,13 @@ function ScheduleRows({ rows, setRows, error }) {
 
   return (
     <section className="onboarding-weekly-schedule" aria-labelledby="onboarding-schedule-title">
-      <div className="onboarding-schedule-heading">
-        <span>
-          <strong id="onboarding-schedule-title">Class days</strong>
-          <small>Add every day this group meets. Each day can have its own time and duration.</small>
-        </span>
-        <Button icon={Plus} disabled={rows.length >= 7} onClick={addSlot}>
-          Add another day
-        </Button>
-      </div>
+      <h2 id="onboarding-schedule-title">Class days</h2>
       <div className="onboarding-schedule-rows">
         {rows.map((slot, index) => (
           <div className="onboarding-schedule-row" key={slot.id}>
-            <span className="onboarding-schedule-number" aria-hidden="true">
-              {index + 1}
-            </span>
             <Field label="Day">
-              <Select
+              <select
+                className="control"
                 value={String(slot.dayOfWeek)}
                 onChange={(event) =>
                   setRows(
@@ -137,11 +180,12 @@ function ScheduleRows({ rows, setRows, error }) {
                     {day.label}
                   </option>
                 ))}
-              </Select>
+              </select>
             </Field>
             <Field label="Time">
               <Input
                 type="time"
+                required
                 value={slot.startTime}
                 onChange={(event) =>
                   setRows(rows.map((row) => (row.id === slot.id ? { ...row, startTime: event.target.value } : row)))
@@ -149,7 +193,8 @@ function ScheduleRows({ rows, setRows, error }) {
               />
             </Field>
             <Field label="Duration">
-              <Select
+              <select
+                className="control"
                 value={String(slot.durationHours)}
                 onChange={(event) =>
                   setRows(
@@ -164,26 +209,23 @@ function ScheduleRows({ rows, setRows, error }) {
                     {option.label}
                   </option>
                 ))}
-              </Select>
+              </select>
             </Field>
-            {rows.length > 1 ? (
-              <button
-                className="onboarding-remove-schedule"
-                type="button"
-                aria-label={`Remove class day ${index + 1}`}
-                onClick={() => setRows(rows.filter((row) => row.id !== slot.id))}
-              >
-                <Trash2 aria-hidden="true" size={17} />
-              </button>
-            ) : null}
+            <button
+              className="onboarding-remove-schedule"
+              type="button"
+              disabled={rows.length === 1}
+              aria-label={`Remove class day ${index + 1}`}
+              onClick={() => setRows(rows.filter((row) => row.id !== slot.id))}
+            >
+              <Trash2 aria-hidden="true" size={17} />
+            </button>
           </div>
         ))}
       </div>
-      {error ? (
-        <p className="onboarding-form-error onboarding-schedule-error" role="alert">
-          {error}
-        </p>
-      ) : null}
+      <Button className="onboarding-add-day" icon={Plus} disabled={rows.length >= 7} onClick={addSlot}>
+        Add another day
+      </Button>
     </section>
   );
 }
@@ -193,31 +235,43 @@ export default function OnboardingTutorial({
   state,
   actions,
   initialStep = 1,
+  mode = "full",
   onStepChange,
   onNavigate,
   onDismiss,
   onComplete,
 }) {
+  useI18n();
   const titleId = useId();
   const panelRef = useRef(null);
   const headingRef = useRef(null);
   const previousFocusRef = useRef(null);
+  const studentInputsRef = useRef(new Map());
   const [step, setStep] = useState(initialStep);
   const [groupDraft, setGroupDraft] = useState(() => initialGroupDraft(state));
   const [studentRows, setStudentRows] = useState(() => initialStudentRows(state));
+  const [removedStudentIds, setRemovedStudentIds] = useState([]);
+  const [focusStudentKey, setFocusStudentKey] = useState(null);
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState({});
+  const [completed, setCompleted] = useState(false);
 
+  // Only an unfinished first run saves tour progress; replays leave settings untouched.
+  const firstRun = Number(state.settings.onboardingVersion) < ONBOARDING_VERSION;
+  const tourOnly = mode === "tour";
   const isSetup = step < ONBOARDING_TOUR_START_STEP;
+  const showsDialog = isSetup || completed;
   const groupId = groupDraft.id || state.settings.onboardingGroupId;
   const group = useMemo(
     () => state.groups.find((item) => item.id === groupId) || { ...groupDraft, id: groupId },
     [groupDraft, groupId, state.groups],
   );
+  const tourContext = useMemo(() => tourContextFor(state, groupId), [groupId, state]);
   const studentCount = studentRows.filter((student) => student.fullName?.trim()).length;
+  const locale = getUiLocale();
 
   useEffect(() => {
-    if (!open || !isSetup) return undefined;
+    if (!open || !showsDialog) return undefined;
     previousFocusRef.current = document.activeElement;
     document.documentElement.classList.add("onboarding-open");
     document.body.classList.add("onboarding-open");
@@ -229,15 +283,21 @@ export default function OnboardingTutorial({
       shell?.removeAttribute("inert");
       previousFocusRef.current?.focus?.();
     };
-  }, [isSetup, open]);
+  }, [showsDialog, open]);
 
   useEffect(() => {
-    if (!open || !isSetup) return;
+    if (!open || !showsDialog) return;
     requestAnimationFrame(() => headingRef.current?.focus());
-  }, [isSetup, open, step]);
+  }, [showsDialog, open, step]);
 
   useEffect(() => {
-    if (!open || !isSetup) return undefined;
+    if (!focusStudentKey) return;
+    studentInputsRef.current.get(focusStudentKey)?.focus();
+    setFocusStudentKey(null);
+  }, [focusStudentKey, studentRows]);
+
+  useEffect(() => {
+    if (!open || !showsDialog) return undefined;
     const handleKeyDown = (event) => {
       if (event.key !== "Tab" || !panelRef.current) return;
       const focusable = [
@@ -258,24 +318,52 @@ export default function OnboardingTutorial({
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isSetup, open]);
+  }, [showsDialog, open]);
 
   const moveTo = async (nextStep, persist = true) => {
-    if (persist) {
-      const saved = await actions.setOnboardingStep(nextStep);
-      if (!saved) return false;
+    if (persist && busy) return false;
+    if (persist) setBusy(true);
+    try {
+      if (persist && !(await actions.setOnboardingStep(nextStep))) return false;
+      setErrors({});
+      setStep(nextStep);
+      onStepChange?.(nextStep);
+      return true;
+    } finally {
+      if (persist) setBusy(false);
     }
-    setErrors({});
+  };
+
+  // Tour steps only change what is highlighted, so they advance immediately and
+  // save the checkpoint in the background.
+  const moveTour = (nextStep) => {
+    if (busy) return;
+    if (nextStep < ONBOARDING_TOUR_START_STEP) {
+      moveTo(nextStep);
+      return;
+    }
     setStep(nextStep);
     onStepChange?.(nextStep);
-    return true;
+    if (firstRun) actions.setOnboardingStep(nextStep);
+  };
+
+  const continueLater = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      if (await actions.setOnboardingStep(step)) onDismiss?.();
+    } finally {
+      setBusy(false);
+    }
   };
 
   const finish = async () => {
     if (busy) return;
     setBusy(true);
     try {
-      if (await actions.dismissOnboarding()) onComplete?.();
+      if (!(await actions.dismissOnboarding())) return;
+      if (tourOnly) onComplete?.();
+      else setCompleted(true);
     } finally {
       setBusy(false);
     }
@@ -291,17 +379,19 @@ export default function OnboardingTutorial({
     }
   };
 
+  const closeTour = () => {
+    if (busy) return;
+    if (firstRun) continueLater();
+    else onDismiss?.();
+  };
+
   const saveGroup = async (event) => {
     event.preventDefault();
-    const scheduleKeys = groupDraft.weeklySchedule.map((slot) => `${slot.dayOfWeek}|${slot.startTime}`);
+    if (busy) return;
     const nextErrors = {
       name: groupDraft.name.trim() ? "" : "Enter a group name.",
       subject: groupDraft.subject.trim() ? "" : "Enter a subject.",
-      schedule: groupDraft.weeklySchedule.length
-        ? new Set(scheduleKeys).size === scheduleKeys.length
-          ? ""
-          : "Each class day and time must be unique."
-        : "Add at least one class day.",
+      schedule: scheduleIssue(groupDraft.weeklySchedule),
     };
     if (nextErrors.name || nextErrors.subject || nextErrors.schedule) return setErrors(nextErrors);
     setBusy(true);
@@ -324,14 +414,16 @@ export default function OnboardingTutorial({
 
   const saveStudents = async (event) => {
     event.preventDefault();
+    if (busy) return;
     if (!studentRows.some((student) => student.fullName?.trim())) {
       setErrors({ students: "Add at least one student." });
       return;
     }
     setBusy(true);
     try {
-      const savedStudents = await actions.saveOnboardingStudents(groupId, studentRows);
+      const savedStudents = await actions.saveOnboardingStudents(groupId, studentRows, removedStudentIds);
       if (!savedStudents) return;
+      setRemovedStudentIds([]);
       setStudentRows(savedStudents.map((student) => ({ ...student, key: student.id })));
       await moveTo(4, false);
     } finally {
@@ -339,38 +431,123 @@ export default function OnboardingTutorial({
     }
   };
 
+  const updateStudent = (key, fullName) =>
+    setStudentRows((current) => current.map((row) => (row.key === key ? { ...row, fullName } : row)));
+
+  const addStudentRow = (afterKey) => {
+    if (studentRows.length >= ONBOARDING_MAX_STUDENTS) return;
+    const row = { key: nextRowKey(), fullName: "" };
+    setStudentRows((current) => {
+      const index = afterKey ? current.findIndex((item) => item.key === afterKey) : current.length - 1;
+      return [...current.slice(0, index + 1), row, ...current.slice(index + 1)];
+    });
+    setFocusStudentKey(row.key);
+  };
+
+  const removeStudentRow = (student) => {
+    if (student.id) setRemovedStudentIds((current) => [...current, student.id]);
+    setStudentRows((current) => current.filter((row) => row.key !== student.key));
+  };
+
+  // Enter moves down the list like a roster; an empty last row submits it.
+  const handleStudentKeyDown = (event, student, index) => {
+    if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+    if (index === studentRows.length - 1 && !student.fullName?.trim()) return;
+    event.preventDefault();
+    const next = studentRows[index + 1];
+    if (next) setFocusStudentKey(next.key);
+    else addStudentRow(student.key);
+  };
+
+  const handleStudentPaste = (event, student) => {
+    const names = splitPastedStudentNames(event.clipboardData?.getData("text"));
+    if (names.length < 2) return;
+    event.preventDefault();
+    const room = ONBOARDING_MAX_STUDENTS - studentRows.length + 1;
+    const [first, ...rest] = names.slice(0, room);
+    const added = rest.map((fullName) => ({ key: nextRowKey(), fullName }));
+    setStudentRows((current) => {
+      const index = current.findIndex((row) => row.key === student.key);
+      const replaced = { ...current[index], fullName: first };
+      return [...current.slice(0, index), replaced, ...added, ...current.slice(index + 1)];
+    });
+    setFocusStudentKey(added.at(-1)?.key || student.key);
+  };
+
   if (!open || typeof document === "undefined") return null;
 
-  if (!isSetup) {
+  if (!showsDialog) {
     return (
       <ContextualTour
         step={step}
         busy={busy}
-        onMove={moveTo}
-        onDismiss={dismiss}
+        canGoBackToSetup={!tourOnly}
+        context={tourContext}
+        onMove={moveTour}
+        onClose={closeTour}
+        onSkip={dismiss}
         onNavigate={onNavigate}
         onComplete={finish}
       />
     );
   }
 
-  return createPortal(
-    <div className={`onboarding-overlay onboarding-step-${step}`} role="presentation">
-      <section ref={panelRef} className="onboarding-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId}>
-        <div className="onboarding-mascot-stage" aria-hidden="true">
-          <img src={MASCOTS[step]} alt="" />
-        </div>
-        <div className="onboarding-card">
-          <StepProgress step={step} />
+  const upcomingClass = tourContext?.nextClass;
 
-          {step === 1 ? (
+  return createPortal(
+    <div className={`onboarding-overlay onboarding-step-${completed ? "done" : step}`} role="presentation">
+      <section ref={panelRef} className="onboarding-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+        <div className="onboarding-card">
+          {step > 1 && !completed ? (
+            <>
+              <button className="onboarding-defer" type="button" disabled={busy} onClick={continueLater}>
+                Continue later
+              </button>
+              <StepProgress step={step} />
+            </>
+          ) : null}
+
+          {completed ? (
+            <div className="onboarding-welcome onboarding-complete">
+              <img className="onboarding-welcome-mascot" src={GUIDE_MASCOT} alt="" />
+              <h1 id={titleId} ref={headingRef} tabIndex="-1">
+                You’re all set!
+              </h1>
+              <p>Your group, students, and agenda are ready. What would you like to do next?</p>
+              {upcomingClass ? (
+                <p className="onboarding-complete-next">
+                  <CalendarDays aria-hidden="true" size={18} />
+                  <span>Next class</span>
+                  <strong>
+                    {formatOnboardingDate(upcomingClass.date, locale)} · {upcomingClass.time}
+                  </strong>
+                </p>
+              ) : null}
+              <div className="onboarding-actions onboarding-actions-centered">
+                <Button variant="primary" icon={ArrowRight} onClick={() => onComplete?.("classes")}>
+                  Open my next class
+                </Button>
+                <Button icon={UsersRound} onClick={() => onComplete?.("community")}>
+                  Add more students
+                </Button>
+              </div>
+              <button
+                className="onboarding-defer onboarding-complete-close"
+                type="button"
+                onClick={() => onComplete?.()}
+              >
+                Close
+              </button>
+            </div>
+          ) : null}
+
+          {!completed && step === 1 ? (
             <div className="onboarding-welcome">
-              <p className="onboarding-eyebrow">A calmer way to run your classes</p>
+              <img className="onboarding-welcome-mascot" src={GUIDE_MASCOT} alt="" />
               <h1 id={titleId} ref={headingRef} tabIndex="-1">
                 Welcome to Hibi!
               </h1>
-              <p className="onboarding-lead">Set up your teaching space, then meet Hibi.</p>
-              <p>I’ll help you create a group, add students, prepare its weekly agenda, and discover the main tools.</p>
+              <p>Create a group, add your students, and let Hibi prepare your agenda.</p>
               <div className="onboarding-actions onboarding-actions-centered">
                 <Button variant="primary" icon={ArrowRight} disabled={busy} onClick={() => moveTo(2)}>
                   Start
@@ -379,20 +556,21 @@ export default function OnboardingTutorial({
                   Explore on my own
                 </Button>
               </div>
+              <p className="onboarding-welcome-note">You can start the guided setup anytime from Settings.</p>
             </div>
           ) : null}
 
-          {step === 2 ? (
-            <form className="onboarding-form onboarding-group-form" onSubmit={saveGroup}>
+          {!completed && step === 2 ? (
+            <form className="onboarding-form onboarding-group-form" onSubmit={saveGroup} noValidate>
               <header className="onboarding-copy">
-                <p className="onboarding-eyebrow">Let’s build your classroom</p>
+                <img className="onboarding-heading-mascot" src={GUIDE_MASCOT} alt="" />
                 <h1 id={titleId} ref={headingRef} tabIndex="-1">
                   Create your first group
                 </h1>
-                <p>Its weekly schedule will automatically shape your class agenda.</p>
+                <p>Set its class days and Hibi will prepare your agenda.</p>
               </header>
               <div className="onboarding-field-grid onboarding-group-fields">
-                <Field label="Group name" error={errors.name} required>
+                <Field label="Group name" error={errors.name}>
                   <Input
                     autoComplete="off"
                     placeholder="e.g. Advanced English"
@@ -400,7 +578,7 @@ export default function OnboardingTutorial({
                     onChange={(event) => setGroupDraft({ ...groupDraft, name: event.target.value })}
                   />
                 </Field>
-                <Field label="Subject" error={errors.subject} required>
+                <Field label="Subject" error={errors.subject}>
                   <Input
                     autoComplete="off"
                     placeholder="e.g. English"
@@ -412,10 +590,13 @@ export default function OnboardingTutorial({
               <ScheduleRows
                 rows={groupDraft.weeklySchedule}
                 setRows={(weeklySchedule) => setGroupDraft({ ...groupDraft, weeklySchedule })}
-                error={errors.schedule}
               />
-              <PrivacyNote />
               <div className="onboarding-actions">
+                <SchedulePreview
+                  slots={groupDraft.weeklySchedule}
+                  submittedIssue={Boolean(errors.schedule)}
+                  locale={locale}
+                />
                 <Button icon={ArrowLeft} disabled={busy} onClick={() => moveTo(1)}>
                   Back
                 </Button>
@@ -426,38 +607,41 @@ export default function OnboardingTutorial({
             </form>
           ) : null}
 
-          {step === 3 ? (
+          {!completed && step === 3 ? (
             <form className="onboarding-form" onSubmit={saveStudents}>
               <header className="onboarding-copy">
-                <p className="onboarding-eyebrow">Your group is ready</p>
+                <img className="onboarding-heading-mascot" src={GUIDE_MASCOT} alt="" />
                 <h1 id={titleId} ref={headingRef} tabIndex="-1">
                   Add your students
                 </h1>
-                <p>They’ll appear in every recurring class for this group. You can adjust membership later.</p>
+                <p>You can start with one and add more later.</p>
               </header>
               <div className="onboarding-group-chip">
                 <UsersRound aria-hidden="true" size={18} />
                 <span>
                   <strong>{group.name || groupDraft.name}</strong>
-                  <small>{groupDraft.weeklySchedule.length} class days each week</small>
+                  <small>{`${groupDraft.weeklySchedule.length} class days each week`}</small>
                 </span>
               </div>
+              <p className="onboarding-student-tip">
+                Tip: paste a list with one name per line. Press Enter to add the next student.
+              </p>
               <div className="onboarding-student-list">
                 {studentRows.map((student, index) => (
                   <div className="onboarding-student-row" key={student.key || student.id}>
                     <span aria-hidden="true">{index + 1}</span>
                     <Field label={`Student ${index + 1}`}>
                       <Input
+                        ref={(node) => {
+                          if (node) studentInputsRef.current.set(student.key, node);
+                          else studentInputsRef.current.delete(student.key);
+                        }}
                         autoComplete="off"
                         placeholder="Student name"
                         value={student.fullName}
-                        onChange={(event) =>
-                          setStudentRows((current) =>
-                            current.map((row) =>
-                              row.key === student.key ? { ...row, fullName: event.target.value } : row,
-                            ),
-                          )
-                        }
+                        onChange={(event) => updateStudent(student.key, event.target.value)}
+                        onKeyDown={(event) => handleStudentKeyDown(event, student, index)}
+                        onPaste={(event) => handleStudentPaste(event, student)}
                       />
                     </Field>
                     {studentRows.length > 1 ? (
@@ -465,7 +649,7 @@ export default function OnboardingTutorial({
                         className="onboarding-remove-student"
                         type="button"
                         aria-label={`Remove student ${index + 1}`}
-                        onClick={() => setStudentRows((current) => current.filter((row) => row.key !== student.key))}
+                        onClick={() => removeStudentRow(student)}
                       >
                         <Trash2 aria-hidden="true" size={17} />
                       </button>
@@ -477,16 +661,14 @@ export default function OnboardingTutorial({
                     {errors.students}
                   </p>
                 ) : null}
-                <Button
-                  className="onboarding-add-student"
-                  icon={Plus}
-                  disabled={studentRows.length >= 8}
-                  onClick={() => setStudentRows((current) => [...current, { key: nextRowKey(), fullName: "" }])}
-                >
-                  Add another student
-                </Button>
+                {studentRows.length >= ONBOARDING_MAX_STUDENTS ? (
+                  <p className="onboarding-student-tip">You can add more students later from Community.</p>
+                ) : (
+                  <Button className="onboarding-add-student" icon={Plus} onClick={() => addStudentRow()}>
+                    Add another student
+                  </Button>
+                )}
               </div>
-              <PrivacyNote />
               <div className="onboarding-actions">
                 <Button icon={ArrowLeft} disabled={busy} onClick={() => moveTo(2)}>
                   Back
@@ -498,10 +680,10 @@ export default function OnboardingTutorial({
             </form>
           ) : null}
 
-          {step === 4 ? (
+          {!completed && step === 4 ? (
             <div className="onboarding-form onboarding-agenda-review">
               <header className="onboarding-copy">
-                <p className="onboarding-eyebrow">Everything stays connected</p>
+                <img className="onboarding-heading-mascot" src={GUIDE_MASCOT} alt="" />
                 <h1 id={titleId} ref={headingRef} tabIndex="-1">
                   Your recurring agenda is ready
                 </h1>
@@ -515,31 +697,32 @@ export default function OnboardingTutorial({
                     <CalendarDays aria-hidden="true" size={22} />
                     <span>
                       <strong>{group.name || groupDraft.name}</strong>
-                      <small>{studentCount} students enrolled</small>
+                      <small>{`${studentCount} students enrolled`}</small>
                     </span>
                   </span>
                   <b>Weekly</b>
                 </header>
                 <div className="onboarding-agenda-list">
-                  {groupDraft.weeklySchedule.map((slot) => (
-                    <article key={slot.id}>
-                      <span className="onboarding-agenda-day">{dayLabel(slot.dayOfWeek).slice(0, 3)}</span>
-                      <span>
-                        <strong>{dayLabel(slot.dayOfWeek)}</strong>
-                        <small>
-                          <Clock3 aria-hidden="true" size={14} /> {slot.startTime} · {slot.durationHours} h
-                        </small>
-                      </span>
-                      <span>
-                        <small>Next class</small>
-                        <strong>{nextDateForDay(slot.dayOfWeek)}</strong>
-                      </span>
-                      <Check aria-hidden="true" size={18} />
-                    </article>
-                  ))}
+                  {/* One row per class day, in date order; only the first is the next class. */}
+                  {upcomingClasses(groupDraft.weeklySchedule, groupDraft.weeklySchedule.length).map(
+                    ({ slot, date }, index) => (
+                      <article key={slot.id} className={index === 0 ? "is-next" : undefined}>
+                        <span className="onboarding-agenda-day">{dayShortLabel(slot.dayOfWeek)}</span>
+                        <span>
+                          <strong>{dayLabel(slot.dayOfWeek)}</strong>
+                          <small>
+                            <Clock3 aria-hidden="true" size={14} /> {slot.startTime} · {slot.durationHours} h
+                          </small>
+                        </span>
+                        <span>
+                          {index === 0 ? <b className="onboarding-agenda-next">Next class</b> : null}
+                          <strong>{formatOnboardingDate(date, locale)}</strong>
+                        </span>
+                      </article>
+                    ),
+                  )}
                 </div>
               </section>
-              <PrivacyNote />
               <div className="onboarding-actions">
                 <Button icon={ArrowLeft} disabled={busy} onClick={() => moveTo(3)}>
                   Back

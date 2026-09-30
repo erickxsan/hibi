@@ -6,6 +6,36 @@ export const SUPPORTED_LANGUAGES = Object.freeze({
 });
 
 export const SPANISH_TRANSLATIONS = Object.freeze({
+  "Continue later": "Continuar después",
+  Agenda: "Agenda",
+  "Create a group, add your students, and let Hibi prepare your agenda.":
+    "Crea un grupo, añade a tus alumnos y deja que Hibi prepare tu agenda.",
+  "Set its class days and Hibi will prepare your agenda.": "Define sus días de clase y Hibi preparará tu agenda.",
+  "Your day starts here": "Tu día empieza aquí",
+  "See today’s classes and open each session from here.": "Consulta tus clases de hoy y abre cada sesión desde aquí.",
+  "Your groups and students": "Tus grupos y alumnos",
+  "Your class agenda": "Tu agenda de clases",
+  "See their progress": "Acompaña su progreso",
+  "Make Hibi your own": "Hibi, a tu manera",
+  "Opening this section…": "Abriendo esta sección…",
+  "Tour progress": "Avance del recorrido",
+  "Choose a time for each class day.": "Elige una hora para cada día de clase.",
+  "Classes on the same day can’t overlap.": "Las clases del mismo día no pueden coincidir.",
+  "Tip: paste a list with one name per line. Press Enter to add the next student.":
+    "Consejo: pega una lista con un nombre por línea. Pulsa Enter para añadir al siguiente alumno.",
+  "You can add more students later from Community.": "Podrás añadir más alumnos después desde Comunidad.",
+  "You can start the guided setup anytime from Settings.":
+    "Puedes iniciar la configuración guiada cuando quieras desde Ajustes.",
+  "Your group": "Tu grupo",
+  "You’re all set!": "¡Todo listo!",
+  "Your group, students, and agenda are ready. What would you like to do next?":
+    "Tu grupo, tus alumnos y tu agenda están listos. ¿Qué quieres hacer ahora?",
+  "Open my next class": "Abrir mi próxima clase",
+  "Add more students": "Añadir más alumnos",
+  "Revisit Hibi’s main features or set up another group with guidance.":
+    "Vuelve a recorrer las funciones principales de Hibi o configura otro grupo con ayuda.",
+  "Guided setup": "Configuración guiada",
+  "Resume guided setup": "Retomar configuración guiada",
   "We recommend a long phrase with several unrelated words. No special symbols are required.":
     "Recomendamos una frase larga con varias palabras sin relación entre sí. No se requieren símbolos especiales.",
   "This password may be easy to guess. We recommend a longer phrase with unrelated words, but you can use this password anyway.":
@@ -1333,14 +1363,8 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "Manage students to build this directory.": "Administra los alumnos para crear este directorio.",
   "Welcome to Hibi!": "¡Bienvenido a Hibi!",
   Start: "Empezar",
-  "A calmer way to run your classes": "Una forma más tranquila de llevar tus clases",
-  "Your first class, ready in 3 minutes.": "Tu primera clase, lista en 3 minutos.",
-  "I’ll help you create a group, add students, and schedule your first class.":
-    "Te ayudaré a crear un grupo, añadir alumnos y agendar tu primera clase.",
   "Explore on my own": "Explorar por mi cuenta",
-  "Let’s build your classroom": "Preparemos tu aula",
   "Create your first group": "Crea tu primer grupo",
-  "This will organize students, schedules, and tracking.": "Así organizaremos alumnos, horarios y seguimiento.",
   Monday: "Lunes",
   Tuesday: "Martes",
   Wednesday: "Miércoles",
@@ -1353,49 +1377,23 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "Enter a group name.": "Escribe un nombre para el grupo.",
   "Enter a subject.": "Escribe una materia.",
   "Save and continue": "Guardar y continuar",
-  "Your group is ready": "Tu grupo está listo",
   "Add your students": "Añade a tus alumnos",
   "You can start with one and add more later.": "Puedes comenzar con uno y añadir más después.",
   "Student name": "Nombre del alumno",
   "Add another student": "Añadir otro alumno",
   "Add at least one student.": "Añade al menos un alumno.",
-  "One last detail": "Un último detalle",
-  "Schedule your first class": "Agenda tu primera clase",
-  "Review the details and Hibi will prepare your home.": "Revisa los datos y Hibi preparará tu inicio.",
   "30 minutes": "30 minutos",
   "1 hour": "1 hora",
   "1.5 hours": "1.5 horas",
   "2 hours": "2 horas",
   "2.5 hours": "2.5 horas",
   "3 hours": "3 horas",
-  "Your first class": "Tu primera clase",
-  "First class summary": "Resumen de la primera clase",
-  "Choose a class date.": "Elige una fecha para la clase.",
-  "Choose a class time.": "Elige un horario para la clase.",
-  "Schedule first class": "Agendar primera clase",
   "First group saved": "Primer grupo guardado",
-  "Your first class is ready": "Tu primera clase está lista",
-  "Scheduling…": "Agendando…",
-  "Tutorial progress is protected with your workspace.":
-    "El avance del tutorial está protegido junto con tu espacio de trabajo.",
   "Welcome tutorial": "Tutorial de bienvenida",
-  "Review the guided setup for groups, students, and your first class.":
-    "Repasa la configuración guiada de grupos, alumnos y tu primera clase.",
-  "Open welcome tutorial": "Abrir tutorial de bienvenida",
-  "Set up your teaching space, then meet Hibi.": "Configura tu espacio de enseñanza y después conoce Hibi.",
-  "I’ll help you create a group, add students, prepare its weekly agenda, and discover the main tools.":
-    "Te ayudaré a crear un grupo, añadir alumnos, preparar su agenda semanal y conocer las funciones principales.",
-  "Its weekly schedule will automatically shape your class agenda.":
-    "Su horario semanal organizará automáticamente tu agenda de clases.",
   "Class days": "Días de clase",
-  "Add every day this group meets. Each day can have its own time and duration.":
-    "Añade todos los días en que se reúne el grupo. Cada día puede tener su propia hora y duración.",
   "Add another day": "Añadir otro día",
   "Each class day and time must be unique.": "Cada combinación de día y hora debe ser única.",
   "Add at least one class day.": "Añade al menos un día de clase.",
-  "They’ll appear in every recurring class for this group. You can adjust membership later.":
-    "Aparecerán en cada clase recurrente del grupo. Después podrás ajustar sus integrantes.",
-  "Everything stays connected": "Todo queda conectado",
   "Your recurring agenda is ready": "Tu agenda recurrente está lista",
   "Hibi creates upcoming classes from the group schedule. Change a specific session later from Classes.":
     "Hibi crea las próximas clases desde el horario del grupo. Después podrás cambiar una sesión específica desde Clases.",
@@ -1403,34 +1401,17 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   Weekly: "Semanal",
   "Next class": "Próxima clase",
   "Meet Hibi": "Conocer Hibi",
-  "Tutorial progress is protected with end-to-end encryption.":
-    "El avance del tutorial está protegido con cifrado de extremo a extremo.",
-  "Your day starts here.": "Tu día comienza aquí.",
-  "See today’s classes and open the next session without searching through your agenda.":
-    "Consulta las clases de hoy y abre la próxima sesión sin buscarla en toda tu agenda.",
-  "Classes and pending work for today": "Clases y pendientes de hoy",
-  "Your groups and students live together.": "Tus grupos y alumnos viven juntos.",
   "Open a group to manage its members, schedule, and contact directory.":
     "Abre un grupo para administrar sus integrantes, horario y directorio de contactos.",
-  "Groups, students, and contact details": "Grupos, alumnos y datos de contacto",
-  "Your agenda comes from each group’s schedule.": "Tu agenda nace del horario de cada grupo.",
   "Open a class to record attendance, payments, notes, and grades.":
     "Abre una clase para registrar asistencia, pagos, notas y calificaciones.",
-  "Agenda and records for every session": "Agenda y registro de cada sesión",
-  "Spot progress and pending work here.": "Aquí detectas avances y pendientes.",
   "Compare attendance, grades, and payments without reviewing students one by one.":
     "Compara asistencia, calificaciones y pagos sin revisar alumno por alumno.",
-  "Academic progress and payments": "Progreso académico y cobros",
-  "Make Hibi work your way.": "Aquí ajustas Hibi a tu forma de trabajar.",
   "You can reopen this tour and manage backups and security here.":
     "También puedes reabrir este recorrido y gestionar respaldos y seguridad.",
-  "Preferences, help, and security": "Preferencias, ayuda y seguridad",
   "Skip tour": "Omitir recorrido",
-  "Got it": "Entendido",
   "Finish tour": "Finalizar recorrido",
   Next: "Siguiente",
-  "Revisit Hibi’s main features whenever you want.":
-    "Vuelve a recorrer las funciones principales de Hibi cuando quieras.",
   "Start tour": "Iniciar recorrido",
   "End-to-end encryption": "Cifrado de extremo a extremo",
   "Your tutorial progress and classroom data stay protected with E2EE.":
@@ -1478,9 +1459,9 @@ const DYNAMIC_TRANSLATIONS = [
     (match) => `${match[1]} · ${match[2]} ${Number(match[2]) === 1 ? "alumno" : "alumnos"}`,
   ],
   [/^Step (\d+) of (\d+)$/, (match) => `Paso ${match[1]} de ${match[2]}`],
-  [/^MEET HIBI · (\d+) OF (\d+)$/, (match) => `CONOCE HIBI · ${match[1]} DE ${match[2]}`],
   [/^(\d+) class days each week$/, (match) => `${match[1]} días de clase por semana`],
   [/^(\d+) students enrolled$/, (match) => `${match[1]} alumnos inscritos`],
+  [/^(\d+) per week · (\d+) a month$/, (match) => `${match[1]} por semana · ${match[2]} al mes`],
   [/^Remove class day (\d+)$/, (match) => `Quitar día de clase ${match[1]}`],
   [/^(Home|Community|Classes|Tracking|Settings) tour$/, (match) => `Recorrido: ${translateToSpanish(match[1])}`],
   [/^Student (\d+)$/, (match) => `Alumno ${match[1]}`],

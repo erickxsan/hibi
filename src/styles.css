@@ -13462,6 +13462,12 @@ tbody .attendance-student-column {
   min-width: 0;
 }
 
+.settings-tour-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .settings-tour-security {
   display: flex;
   align-items: center;

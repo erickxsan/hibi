@@ -61,7 +61,7 @@ describe("Community active student count", () => {
 
     expect(within(counter).getByText("0")).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Groups", exact: true }));
-    const detail = screen.getByRole("region", { name: "Test group" });
+    const detail = await screen.findByRole("region", { name: "Test group" });
     expect(within(detail).getByText("0 students")).toBeInTheDocument();
     await user.click(within(detail).getByRole("button", { name: "Manage students" }));
     const manager = screen.getByRole("region", { name: "Manage group students" });
@@ -76,7 +76,7 @@ describe("Community active student count", () => {
     render(<CommunityHarness />);
     expect(screen.getByText("1 member")).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Groups", exact: true }));
-    const detail = screen.getByRole("region", { name: "Test group" });
+    const detail = await screen.findByRole("region", { name: "Test group" });
     expect(within(detail).getByText("1 student")).toBeInTheDocument();
     expect(within(detail).queryByText("Inactive student")).not.toBeInTheDocument();
   });

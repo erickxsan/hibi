@@ -30,7 +30,11 @@ import {
   validateGroup,
   validateStudent,
 } from "../domain";
-import { nextOnboardingStudentCodes, ONBOARDING_VERSION } from "../onboarding/onboardingModel";
+import {
+  nextOnboardingStudentCodes,
+  ONBOARDING_VERSION,
+  removeOnboardingStudents,
+} from "../onboarding/onboardingModel";
 import { canonicalStringify } from "../crypto/canonical.js";
 
 const UI_STORAGE_KEY = "minimal-class-manager:ui:v1";
@@ -662,7 +666,7 @@ export function useClassManager({ persistence } = {}) {
   );
 
   const saveOnboardingStudents = useCallback(
-    async (groupId, rows) => {
+    async (groupId, rows, removedIds = []) => {
       const drafts = (Array.isArray(rows) ? rows : [])
         .map((row) => (typeof row === "string" ? { fullName: row } : row))
         .map((row) => ({ ...row, fullName: String(row?.fullName || "").trim() }))
@@ -682,24 +686,29 @@ export function useClassManager({ persistence } = {}) {
             ...draft,
             code: draft.code || codes[nextCodeIndex],
             avatarId: draft.avatarId || avatarIds[index % avatarIds.length],
-            groupIds: [groupId],
+            groupIds: [...new Set([...(draft.groupIds || []), groupId])],
           }),
         );
         if (!draft.id) nextCodeIndex += 1;
         return item;
       });
-      const proposed = { ...stateRef.current, students: upsertManyById(stateRef.current.students, items) };
+      const withoutRemoved = (current) => removeOnboardingStudents(current, groupId, removedIds);
+      const proposed = withoutRemoved({
+        ...stateRef.current,
+        students: upsertManyById(stateRef.current.students, items),
+      });
       const invalid = items.map((item) => validateStudent(item, proposed)).find((validation) => !validation.valid);
       if (invalid) {
         notify(invalid.errors[0].message, "error");
         return false;
       }
       const saved = await commit(
-        (current) => ({
-          ...current,
-          students: upsertManyById(current.students, items),
-          settings: { ...current.settings, onboardingStep: 4, onboardingGroupId: groupId },
-        }),
+        (current) =>
+          withoutRemoved({
+            ...current,
+            students: upsertManyById(current.students, items),
+            settings: { ...current.settings, onboardingStep: 4, onboardingGroupId: groupId },
+          }),
         `${items.length} student${items.length === 1 ? "" : "s"} added`,
       );
       return saved ? items : false;

@@ -12,6 +12,7 @@ import {
   Sparkles,
   Trash2,
   Upload,
+  UsersRound,
   Volume2,
 } from "lucide-react";
 import { Button, ConfirmDialog, Drawer, Field, Input, Select } from "../components/ui";
@@ -20,6 +21,7 @@ import { draftChanged, useUnsavedChanges } from "../hooks/useUnsavedChanges";
 import { LanguageToggle, useI18n } from "../i18n";
 import { NEW_PASSWORD_GUIDANCE, getNewPasswordWarning } from "../crypto/passwords.js";
 import { getHibiSoundsEnabled, playHibiSound, setHibiSoundsEnabled } from "../utils/hibiSounds";
+import { setupResumeStep } from "../onboarding/onboardingModel";
 
 function settingsDraft(settings) {
   return { ...settings, hourlyRateMxn: settings.hourlyRate };
@@ -290,10 +292,15 @@ export default function Settings({
             </div>
             <div className="settings-content">
               <h2>Welcome tutorial</h2>
-              <p>Revisit Hibi’s main features whenever you want.</p>
-              <Button icon={Sparkles} onClick={onOpenOnboarding}>
-                Start tour
-              </Button>
+              <p>Revisit Hibi’s main features or set up another group with guidance.</p>
+              <div className="settings-tour-actions">
+                <Button icon={Sparkles} onClick={() => onOpenOnboarding("tour")}>
+                  Start tour
+                </Button>
+                <Button icon={UsersRound} onClick={() => onOpenOnboarding("setup")}>
+                  {setupResumeStep(state.settings) ? "Resume guided setup" : "Guided setup"}
+                </Button>
+              </div>
               <div className="settings-tour-security">
                 <LockKeyhole aria-hidden="true" size={18} />
                 <span>

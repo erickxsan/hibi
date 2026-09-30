@@ -42,8 +42,8 @@ import OnboardingTutorial from "./onboarding/OnboardingTutorial";
 import {
   onboardingStep,
   ONBOARDING_TOUR_START_STEP,
+  setupResumeStep,
   shouldAutoStartOnboarding,
-  tourStep,
 } from "./onboarding/onboardingModel";
 
 const NAV_ITEMS = [
@@ -108,6 +108,7 @@ export function ClassManagerApplication({ persistence, user, cloudError, onSignO
   const [onboarding, setOnboarding] = useState(() => ({
     open: shouldAutoStartOnboarding(manager.state),
     runId: 0,
+    mode: "full",
     step: onboardingStep(manager.state.settings),
   }));
   const navigationBlockers = useRef(new Set());
@@ -139,11 +140,24 @@ export function ClassManagerApplication({ persistence, user, cloudError, onSignO
     [navigate],
   );
   const clearIntent = useCallback(() => setIntent(null), []);
-  const openOnboarding = useCallback(() => {
-    if (!navigate("home")) return;
-    setIntent(null);
-    setOnboarding((current) => ({ open: true, runId: current.runId + 1, step: ONBOARDING_TOUR_START_STEP }));
-  }, [navigate]);
+  // Settings can replay the tour alone or reopen the guided setup where it was left.
+  const openOnboarding = useCallback(
+    (requestedMode) => {
+      if (!navigate("home")) return;
+      const mode = requestedMode === "setup" ? "setup" : "tour";
+      setIntent(null);
+      const step = mode === "setup" ? setupResumeStep(manager.state.settings) || 2 : ONBOARDING_TOUR_START_STEP;
+      setOnboarding((current) => ({ open: true, runId: current.runId + 1, mode, step }));
+    },
+    [manager.state.settings, navigate],
+  );
+  const closeOnboarding = useCallback(
+    (nextPage) => {
+      setOnboarding((current) => ({ ...current, open: false }));
+      if (nextPage && navigate(nextPage)) setIntent(null);
+    },
+    [navigate],
+  );
   const navigateOnboarding = useCallback(
     (nextPage) => {
       if (navigate(nextPage, { replace: true })) setIntent(null);
@@ -201,16 +215,14 @@ export function ClassManagerApplication({ persistence, user, cloudError, onSignO
     }
   };
 
-  const tutorialPage =
-    tourStep(onboarding.step)?.page ||
-    (onboarding.step === 2 || onboarding.step === 3 ? "community" : onboarding.step === 4 ? "classes" : "home");
   const shellPage = page === "students" || page === "groups" ? "community" : page === "payments" ? "grades" : page;
 
   return (
     <>
       <AppShell
         navItems={NAV_ITEMS}
-        activePage={onboarding.open ? tutorialPage : shellPage}
+        guidedNavigation={onboarding.open}
+        activePage={shellPage}
         navigationReason={navigationReason}
         onNavigate={(nextPage) => {
           if (navigate(nextPage)) setIntent(null);
@@ -247,10 +259,11 @@ export function ClassManagerApplication({ persistence, user, cloudError, onSignO
         state={manager.state}
         actions={manager.actions}
         initialStep={onboarding.step}
+        mode={onboarding.mode === "tour" ? "tour" : "full"}
         onStepChange={(step) => setOnboarding((current) => ({ ...current, step }))}
         onNavigate={navigateOnboarding}
-        onDismiss={() => setOnboarding((current) => ({ ...current, open: false }))}
-        onComplete={() => setOnboarding((current) => ({ ...current, open: false }))}
+        onDismiss={() => closeOnboarding()}
+        onComplete={closeOnboarding}
       />
       <ToastRegion toasts={manager.toasts} onDismiss={manager.dismissToast} />
     </>

@@ -412,6 +412,7 @@ function GroupRows({ groups, summaries, selectedId, onSelect, onEdit, onDelete }
             className={selectedId === group.id ? "community-table-row selected" : "community-table-row"}
             role="row"
             key={group.id}
+            data-onboarding-group={group.id}
           >
             <button
               type="button"

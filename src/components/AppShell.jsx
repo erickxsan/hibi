@@ -5,7 +5,15 @@ import { closeOverlayHistory, pushOverlayHistory, subscribeToAppHistory } from "
 
 const MOBILE_PRIMARY = new Set(["home", "community", "classes", "grades"]);
 
-export function AppShell({ navItems, activePage, navigationReason, onNavigate, toolbar, children }) {
+export function AppShell({
+  navItems,
+  activePage,
+  navigationReason,
+  onNavigate,
+  toolbar,
+  children,
+  guidedNavigation = false,
+}) {
   const mainRef = useRef(null);
   const moreRef = useRef(null);
   const moreButtonRef = useRef(null);
@@ -24,10 +32,11 @@ export function AppShell({ navItems, activePage, navigationReason, onNavigate, t
   };
 
   useEffect(() => {
+    if (guidedNavigation) return;
     mainRef.current?.focus({ preventScroll: true });
     if (navigationReason === "push" || navigationReason === "replace")
       window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-  }, [activePage, navigationReason]);
+  }, [activePage, navigationReason, guidedNavigation]);
 
   const closeMore = () => {
     if (!moreOpen) return;

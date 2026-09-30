@@ -1,226 +1,260 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, ArrowRight, Check } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarDays, Check, UsersRound } from "lucide-react";
 import { Button } from "../components/ui";
-import { ONBOARDING_STEPS, ONBOARDING_TOUR_START_STEP, tourStep } from "./onboardingModel";
+import { getUiLocale, useI18n } from "../i18n";
+import { formatOnboardingDate, ONBOARDING_STEPS, ONBOARDING_TOUR_START_STEP, tourStep } from "./onboardingModel";
+import { tourLayout } from "./tourLayout";
 
-const TARGET_PADDING = 8;
-
-function clamp(value, minimum, maximum) {
-  return Math.min(Math.max(value, minimum), Math.max(minimum, maximum));
-}
-
-function paddedRect(rect) {
-  if (!rect) return null;
-  const left = Math.max(0, rect.left - TARGET_PADDING);
-  const top = Math.max(0, rect.top - TARGET_PADDING);
-  const right = Math.min(window.innerWidth, rect.right + TARGET_PADDING);
-  const bottom = Math.min(window.innerHeight, rect.bottom + TARGET_PADDING);
-  return { left, top, right, bottom, width: right - left, height: bottom - top };
-}
-
-function calloutPosition(rect) {
-  const viewportWidth = window.innerWidth;
-  const viewportHeight = window.innerHeight;
-  const width = Math.min(360, viewportWidth - 32);
-  const reservedBottom = viewportWidth <= 720 ? 218 : 158;
-  let left;
-  let top;
-
-  if (rect.right + width + 26 <= viewportWidth) {
-    left = rect.right + 20;
-    top = rect.top + Math.min(32, rect.height * 0.18);
-  } else if (rect.left - width - 26 >= 0) {
-    left = rect.left - width - 20;
-    top = rect.top + Math.min(32, rect.height * 0.18);
-  } else {
-    left = clamp(rect.left, 16, viewportWidth - width - 16);
-    const below = rect.bottom + 18;
-    top = below + 210 < viewportHeight - reservedBottom ? below : rect.top - 228;
+function TourFocus({ focus, context }) {
+  if (focus === "group" && context?.groupName) {
+    return (
+      <p className="onboarding-tour-focus">
+        <UsersRound aria-hidden="true" size={17} />
+        <span>Your group</span>
+        <strong>
+          {`${context.groupName} · ${context.studentCount} ${context.studentCount === 1 ? "student" : "students"}`}
+        </strong>
+      </p>
+    );
   }
-
-  return {
-    left: clamp(left, 16, viewportWidth - width - 16),
-    top: clamp(top, 16, viewportHeight - reservedBottom - 206),
-    width,
-  };
+  if (focus === "nextClass" && context?.nextClass) {
+    return (
+      <p className="onboarding-tour-focus">
+        <CalendarDays aria-hidden="true" size={17} />
+        <span>Next class</span>
+        <strong>
+          {formatOnboardingDate(context.nextClass.date, getUiLocale())} · {context.nextClass.time}
+        </strong>
+      </p>
+    );
+  }
+  return null;
 }
 
-function mascotPosition(rect, position) {
-  const width = window.innerWidth <= 720 ? 104 : 150;
-  const presets = {
-    home: { left: rect.right - width * 0.82, top: rect.top - width * 0.72, rotate: -3 },
-    community: { left: rect.right - width * 0.5, top: rect.top + 24, rotate: 4 },
-    classes: { left: rect.left + rect.width * 0.54, top: rect.top - width * 0.7, rotate: -5 },
-    tracking: { left: rect.left - width * 0.55, top: rect.top + 22, rotate: -4 },
-    settings: { left: rect.right - width * 0.34, top: rect.top - width * 0.34, rotate: 4 },
-  };
-  const selected = presets[position] || presets.home;
-  return {
-    width,
-    left: clamp(selected.left, 8, window.innerWidth - width - 8),
-    top: clamp(selected.top, 8, window.innerHeight - width - 170),
-    transform: `rotate(${selected.rotate}deg)`,
-  };
+// Prefer the specific element for this workspace (such as its group row) and
+// fall back to the whole section while that element is not rendered.
+function findTarget(selectors) {
+  for (const selector of selectors) {
+    const element = document.querySelector(selector);
+    const rect = element?.getBoundingClientRect();
+    if (rect && rect.width > 0 && rect.height > 0) return element;
+  }
+  return document.querySelector(selectors.at(-1));
 }
 
-export default function ContextualTour({ step, busy, onMove, onDismiss, onNavigate, onComplete }) {
+export default function ContextualTour({
+  step,
+  busy,
+  canGoBackToSetup = false,
+  context = null,
+  onMove,
+  onClose,
+  onSkip,
+  onNavigate,
+  onComplete,
+}) {
+  const { t } = useI18n();
   const config = tourStep(step);
-  const panelRef = useRef(null);
+  const groupSelector = context?.groupId ? config?.groupSelector?.(context.groupId) : null;
+  const targetSelectors = [groupSelector, config?.selector].filter(Boolean);
+  const selectorKey = JSON.stringify(targetSelectors);
+  const descriptionId = useId();
+  const cardRef = useRef(null);
+  const headingRef = useRef(null);
   const previousFocusRef = useRef(null);
-  const [targetRect, setTargetRect] = useState(null);
+  const [layout, setLayout] = useState(null);
+  const [targetReady, setTargetReady] = useState(false);
 
   useEffect(() => {
     if (config) onNavigate?.(config.page);
   }, [config, onNavigate]);
 
   useLayoutEffect(() => {
-    if (!config) return undefined;
+    const selectors = JSON.parse(selectorKey);
+    if (!selectors.length) return undefined;
     let frame = 0;
     let target = null;
-    let didScroll = false;
+    let positioned = false;
+    const resizeObserver = typeof ResizeObserver === "function" ? new ResizeObserver(() => scheduleMeasure()) : null;
 
-    const measure = () => {
-      target = document.querySelector(config.selector);
-      if (!target) {
-        setTargetRect(null);
-        return;
+    function measure() {
+      frame = 0;
+      const nextTarget = findTarget(selectors);
+      if (target !== nextTarget) {
+        if (target) resizeObserver?.unobserve(target);
+        target = nextTarget;
+        positioned = false;
+        if (target) resizeObserver?.observe(target);
       }
-      if (!didScroll) {
-        didScroll = true;
-        target.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
+      const height = window.visualViewport?.height || window.innerHeight;
+      const width = document.documentElement.clientWidth || window.innerWidth;
+      const cardHeight = cardRef.current?.getBoundingClientRect().height || 256;
+      let rect = target?.getBoundingClientRect();
+      const ready = Boolean(rect && rect.width > 0 && rect.height > 0);
+      if (ready && !positioned) {
+        positioned = true;
+        if (rect.top < 16 || rect.top > height - Math.min(rect.height, 100) || rect.bottom + cardHeight + 28 > height) {
+          target.scrollIntoView({ block: "start", inline: "nearest", behavior: "instant" });
+          window.scrollBy({ top: -24, behavior: "instant" });
+          rect = target.getBoundingClientRect();
+        }
       }
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => setTargetRect(paddedRect(target.getBoundingClientRect())));
-    };
+      const nextLayout = tourLayout(ready ? rect : null, { width, height }, cardHeight);
+      setTargetReady(ready);
+      setLayout((current) => (JSON.stringify(current) === JSON.stringify(nextLayout) ? current : nextLayout));
+    }
+    function scheduleMeasure() {
+      if (!frame) frame = requestAnimationFrame(measure);
+    }
 
-    const observer = new MutationObserver(measure);
-    observer.observe(document.body, { childList: true, subtree: true });
-    window.addEventListener("resize", measure);
-    window.addEventListener("scroll", measure, true);
+    const observer = new MutationObserver(scheduleMeasure);
+    observer.observe(document.querySelector(".hibi-main") || document.body, { childList: true, subtree: true });
+    if (cardRef.current) resizeObserver?.observe(cardRef.current);
+    window.addEventListener("resize", scheduleMeasure);
+    window.addEventListener("scroll", scheduleMeasure, true);
+    window.visualViewport?.addEventListener("resize", scheduleMeasure);
     measure();
+    headingRef.current?.focus({ preventScroll: true });
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
-      window.removeEventListener("resize", measure);
-      window.removeEventListener("scroll", measure, true);
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", scheduleMeasure);
+      window.removeEventListener("scroll", scheduleMeasure, true);
+      window.visualViewport?.removeEventListener("resize", scheduleMeasure);
     };
-  }, [config]);
+  }, [selectorKey]);
 
   useEffect(() => {
     previousFocusRef.current = document.activeElement;
     document.documentElement.classList.add("onboarding-open");
     document.body.classList.add("onboarding-open");
     const shell = document.querySelector(".hibi-shell, .app-shell");
+    const wasInert = shell?.hasAttribute("inert");
     shell?.setAttribute("inert", "");
-    requestAnimationFrame(() => panelRef.current?.querySelector(".onboarding-tour-next")?.focus());
     return () => {
       document.documentElement.classList.remove("onboarding-open");
       document.body.classList.remove("onboarding-open");
-      shell?.removeAttribute("inert");
+      if (!wasInert) shell?.removeAttribute("inert");
       previousFocusRef.current?.focus?.({ preventScroll: true });
     };
   }, []);
 
   useEffect(() => {
     const handleKeyDown = (event) => {
-      if (event.key !== "Tab" || !panelRef.current) return;
-      const focusable = [...panelRef.current.querySelectorAll("button:not([disabled])")];
-      if (!focusable.length) return;
+      if (event.key === "Escape" && !busy) {
+        event.preventDefault();
+        onClose();
+      }
+      if (event.key !== "Tab" || !cardRef.current) return;
+      const focusable = [...cardRef.current.querySelectorAll("button:not([disabled])")];
       const first = focusable[0];
       const last = focusable.at(-1);
-      if (event.shiftKey && document.activeElement === first) {
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === headingRef.current)) {
         event.preventDefault();
-        last.focus();
+        last?.focus();
       } else if (!event.shiftKey && document.activeElement === last) {
         event.preventDefault();
-        first.focus();
+        first?.focus();
       }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
-  const positions = useMemo(() => {
-    if (!targetRect) return null;
-    return {
-      callout: calloutPosition(targetRect),
-      mascot: mascotPosition(targetRect, config?.mascotPosition),
-    };
-  }, [config?.mascotPosition, targetRect]);
+  }, [busy, onClose]);
 
   if (!config || typeof document === "undefined") return null;
-
   const ordinal = step - ONBOARDING_TOUR_START_STEP + 1;
   const tourLength = ONBOARDING_STEPS - ONBOARDING_TOUR_START_STEP + 1;
   const finish = step === ONBOARDING_STEPS;
-  const next = () => (finish ? onComplete() : onMove(step + 1));
+  const canGoBack = ordinal > 1 || canGoBackToSetup;
+  const highlight = layout?.highlight;
 
   return createPortal(
-    <section
-      ref={panelRef}
-      className={`onboarding-context-tour onboarding-context-${config.mascotPosition}`}
-      role="dialog"
-      aria-modal="true"
-      aria-label={`${config.label} tour`}
-    >
-      {targetRect ? (
+    <section className="onboarding-context-tour">
+      {highlight ? (
         <>
-          <div className="onboarding-tour-shade top" style={{ height: targetRect.top }} />
+          <div className="onboarding-tour-shade top" style={{ height: highlight.top }} />
           <div
             className="onboarding-tour-shade left"
-            style={{ top: targetRect.top, width: targetRect.left, height: targetRect.height }}
+            style={{ top: highlight.top, width: highlight.left, height: highlight.height }}
           />
           <div
             className="onboarding-tour-shade right"
-            style={{ top: targetRect.top, left: targetRect.right, height: targetRect.height }}
+            style={{ top: highlight.top, left: highlight.left + highlight.width, height: highlight.height }}
           />
-          <div className="onboarding-tour-shade bottom" style={{ top: targetRect.bottom }} />
-          <div className="onboarding-tour-highlight" style={targetRect} />
+          <div className="onboarding-tour-shade bottom" style={{ top: highlight.top + highlight.height }} />
+          <div className="onboarding-tour-highlight" style={highlight} />
         </>
       ) : (
         <div className="onboarding-tour-shade full" />
       )}
-
-      {positions ? (
-        <>
-          <img className="onboarding-context-mascot" src={config.mascot} alt="" style={positions.mascot} />
-          <aside className="onboarding-context-callout" style={positions.callout} aria-live="polite">
-            <strong>{config.title}</strong>
-            <p>{config.description}</p>
-            <div>
-              <button type="button" disabled={busy} onClick={onDismiss}>
-                Skip tour
-              </button>
-              <Button variant="primary" icon={finish ? Check : ArrowRight} disabled={busy} onClick={next}>
-                Got it
-              </Button>
-            </div>
-          </aside>
-        </>
-      ) : null}
-
-      <footer className="onboarding-tour-controller">
-        <span className="onboarding-tour-copy">
-          <small>{`MEET HIBI · ${ordinal} OF ${tourLength}`}</small>
-          <strong>{config.label}</strong>
-          <span>{config.helper}</span>
-        </span>
-        <span className="onboarding-tour-controls">
-          <Button icon={ArrowLeft} disabled={busy} onClick={() => onMove(step - 1)}>
-            Back
-          </Button>
+      <div
+        ref={cardRef}
+        className="onboarding-context-callout"
+        role="dialog"
+        aria-modal="true"
+        aria-label={config.label + " tour"}
+        aria-describedby={descriptionId}
+        data-placement={layout?.side || "none"}
+        style={
+          layout
+            ? { left: layout.left, top: layout.top, width: layout.width, "--tour-pointer": layout.pointer + "px" }
+            : undefined
+        }
+      >
+        <header className="onboarding-tour-heading">
+          <img src="/onboarding/hibi-guide.png" alt="" className="onboarding-tour-avatar" />
+          <div>
+            <p className="onboarding-tour-location">
+              {t(config.label) + " · " + ordinal + " " + t("of") + " " + tourLength}
+            </p>
+            <h2 ref={headingRef} tabIndex={-1}>
+              {config.title}
+            </h2>
+          </div>
+        </header>
+        <p id={descriptionId} className="onboarding-tour-description">
+          {config.description}
+        </p>
+        <TourFocus focus={config.focus} context={context} />
+        {!targetReady ? (
+          <p role="status" className="onboarding-tour-loading">
+            Opening this section…
+          </p>
+        ) : null}
+        <div
+          className="onboarding-tour-progress"
+          role="progressbar"
+          aria-label="Tour progress"
+          aria-valuemin={0}
+          aria-valuemax={tourLength}
+          aria-valuenow={ordinal}
+        >
+          {Array.from({ length: tourLength }, (_, index) => (
+            <span key={index} className={index < ordinal ? "is-active" : ""} />
+          ))}
+        </div>
+        <footer className="onboarding-tour-actions">
+          <button className="onboarding-tour-skip" type="button" disabled={busy} onClick={onSkip}>
+            Skip tour
+          </button>
+          {canGoBack ? (
+            <Button className="onboarding-tour-back" icon={ArrowLeft} disabled={busy} onClick={() => onMove(step - 1)}>
+              Back
+            </Button>
+          ) : null}
           <Button
             className="onboarding-tour-next"
             variant="primary"
             icon={finish ? Check : ArrowRight}
-            disabled={busy}
-            onClick={next}
+            disabled={busy || !targetReady}
+            onClick={() => (finish ? onComplete() : onMove(step + 1))}
           >
             {finish ? "Finish tour" : "Next"}
           </Button>
-        </span>
-      </footer>
+        </footer>
+      </div>
     </section>,
     document.body,
   );
