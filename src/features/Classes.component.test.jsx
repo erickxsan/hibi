@@ -57,7 +57,7 @@ function withRemoteGrade(state) {
   };
 }
 
-function renderClasses(state = classState()) {
+function renderClasses(state = classState(), overrides = {}) {
   let navigationBlocker = () => "";
   const registerNavigationBlocker = vi.fn((blocker) => {
     navigationBlocker = blocker;
@@ -65,6 +65,7 @@ function renderClasses(state = classState()) {
   });
   const props = {
     state,
+    ...overrides,
     actions: {
       saveProgress: vi.fn().mockResolvedValue(true),
       upsertClassSchedule: vi.fn().mockResolvedValue(true),
@@ -280,5 +281,45 @@ describe("Classes remote draft safety", () => {
     expect(view.actions.upsertClassSchedule).toHaveBeenCalledWith(
       expect.objectContaining({ recurrence: "once", format: "group", groupId: "g1", startDate: AS_OF_DATE }),
     );
+  });
+});
+
+describe("historical settlement", () => {
+  it.each([50, 200])("settles the frozen charge after the live rate becomes %s", async (rate) => {
+    const user = userEvent.setup();
+    const state = classState();
+    state.groups[0].hourlyRate = rate;
+    state.classLog = [
+      {
+        id: "historic",
+        classDate: AS_OF_DATE,
+        studentId: "s1",
+        groupId: "g1",
+        startTime: "10:00",
+        classStatus: "Completed",
+        attendance: "P",
+        hours: 2,
+        appliedHourlyRate: 100,
+        appliedCharge: 175.5,
+        amountPaid: 25,
+        paymentDate: AS_OF_DATE,
+        paymentState: "Pending",
+      },
+    ];
+    const session = buildClassWorkspaceSessions(state, AS_OF_DATE).find((item) =>
+      item.rows?.some((row) => row.id === "historic"),
+    );
+    const view = renderClasses(state, {
+      intent: { type: "open-history-class", sessionKey: session.key },
+      clearIntent: vi.fn(),
+    });
+    await screen.findByRole("button", { name: "Save changes" });
+    await user.click(
+      within(screen.getByRole("group", { name: "Payment for Ana" })).getByRole("button", { name: "Paid" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(view.actions.saveProgress).toHaveBeenCalledOnce());
+    const payload = view.actions.saveProgress.mock.calls[0][0];
+    expect(payload.classRecords[0]).toMatchObject({ appliedCharge: 175.5, appliedHourlyRate: 100, amountPaid: 175.5 });
   });
 });

@@ -3,10 +3,13 @@ import { Languages } from "lucide-react";
 import { LANGUAGE_STORAGE_KEY, SUPPORTED_LANGUAGES, translateUiText } from "./translations";
 
 const I18nContext = createContext(null);
-const TRANSLATED_ATTRIBUTES = ["aria-label", "placeholder", "title", "alt"];
-const textOriginals = new WeakMap();
-const attributeOriginals = new WeakMap();
+/** @type {"en" | "es"} */
 let activeLanguage = SUPPORTED_LANGUAGES.ENGLISH;
+const UI_PARAMETER = Symbol("ui-parameter");
+// Use only for application-owned enum/plural text. Names and notes stay plain strings.
+export function uiText(value) {
+  return { [UI_PARAMETER]: true, value: String(value) };
+}
 
 function initialLanguage() {
   try {
@@ -20,77 +23,25 @@ function initialLanguage() {
     : SUPPORTED_LANGUAGES.ENGLISH;
 }
 
-function preserveWhitespace(source, translated) {
-  const leading = source.match(/^\s*/)?.[0] ?? "";
-  const trailing = source.match(/\s*$/)?.[0] ?? "";
-  return `${leading}${translated}${trailing}`;
-}
-
-function translateTextNode(node, language) {
-  const current = node.nodeValue ?? "";
-  const stored = textOriginals.get(node);
-  let source = stored ?? current;
-  if (language === SUPPORTED_LANGUAGES.SPANISH && stored !== undefined) {
-    const storedTranslation = preserveWhitespace(stored, translateUiText(stored.trim(), language));
-    if (current !== storedTranslation) {
-      source = current;
-      textOriginals.set(node, current);
-    }
-  }
+// Only UI sources are translated. String parameters remain opaque user data.
+export function translateMessage(key, parameters = {}, language = activeLanguage) {
+  const values = [];
+  const source = String(key ?? "").replace(/\{(\w+)\}/g, (token, name) => {
+    if (!(name in parameters)) return token;
+    const value = parameters[name];
+    if (value?.[UI_PARAMETER]) return value.value;
+    if (typeof value === "number") return String(value);
+    const marker = `__HIBI_PARAM_${values.length}__`;
+    values.push([marker, String(value ?? "")]);
+    return marker;
+  });
   const trimmed = source.trim();
-  if (!trimmed) return;
-  if (language === SUPPORTED_LANGUAGES.ENGLISH) {
-    if (stored !== undefined && current !== stored) node.nodeValue = stored;
-    return;
-  }
-  const translated = translateUiText(trimmed, language);
-  if (translated === trimmed) return;
-  if (stored === undefined) textOriginals.set(node, current);
-  const next = preserveWhitespace(source, translated);
-  if (current !== next) node.nodeValue = next;
-}
-
-function translateElementAttributes(element, language) {
-  let originals = attributeOriginals.get(element);
-  for (const attribute of TRANSLATED_ATTRIBUTES) {
-    if (!element.hasAttribute(attribute)) continue;
-    const current = element.getAttribute(attribute) ?? "";
-    const stored = originals?.get(attribute);
-    let source = stored ?? current;
-    if (language === SUPPORTED_LANGUAGES.ENGLISH) {
-      if (stored !== undefined && current !== stored) element.setAttribute(attribute, stored);
-      continue;
-    }
-    if (stored !== undefined && current !== translateUiText(stored, language)) {
-      source = current;
-      originals.set(attribute, current);
-    }
-    const translated = translateUiText(source, language);
-    if (translated === source) continue;
-    if (!originals) {
-      originals = new Map();
-      attributeOriginals.set(element, originals);
-    }
-    if (!originals.has(attribute)) originals.set(attribute, current);
-    if (current !== translated) element.setAttribute(attribute, translated);
-  }
-}
-
-function translateSubtree(root, language) {
-  if (!root) return;
-  if (root.nodeType === Node.TEXT_NODE) {
-    translateTextNode(root, language);
-    return;
-  }
-  if (!(root instanceof Element || root instanceof DocumentFragment || root instanceof Document)) return;
-  if (root instanceof Element) translateElementAttributes(root, language);
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
-  let node = walker.nextNode();
-  while (node) {
-    if (node.nodeType === Node.TEXT_NODE) translateTextNode(node, language);
-    else translateElementAttributes(node, language);
-    node = walker.nextNode();
-  }
+  let result =
+    source.slice(0, source.indexOf(trimmed)) +
+    translateUiText(trimmed, language) +
+    source.slice(source.indexOf(trimmed) + trimmed.length);
+  for (const [marker, value] of values) result = result.replaceAll(marker, value);
+  return result;
 }
 
 export function getUiLanguage() {
@@ -120,34 +71,6 @@ export function I18nProvider({ children }) {
     document.documentElement.lang = language;
     document.title =
       language === SUPPORTED_LANGUAGES.SPANISH ? "hibi — Enseñando, día a día" : "hibi — Teaching, day by day";
-
-    const translate = (root = document.body) => translateSubtree(root, language);
-    translate();
-    let scheduled = false;
-    let active = true;
-    const observerOptions = {
-      subtree: true,
-      childList: true,
-      characterData: true,
-      attributes: true,
-      attributeFilter: TRANSLATED_ATTRIBUTES,
-    };
-    const observer = new MutationObserver(() => {
-      if (scheduled) return;
-      scheduled = true;
-      queueMicrotask(() => {
-        scheduled = false;
-        if (!active) return;
-        observer.disconnect();
-        translate();
-        observer.observe(document.body, observerOptions);
-      });
-    });
-    observer.observe(document.body, observerOptions);
-    return () => {
-      active = false;
-      observer.disconnect();
-    };
   }, [language]);
 
   const value = useMemo(
@@ -155,7 +78,7 @@ export function I18nProvider({ children }) {
       language,
       locale: language === SUPPORTED_LANGUAGES.SPANISH ? "es-MX" : "en-MX",
       setLanguage,
-      t: (value) => translateUiText(value, language),
+      t: (key, parameters) => translateMessage(key, parameters, language),
     }),
     [language],
   );
@@ -165,8 +88,14 @@ export function I18nProvider({ children }) {
 
 export function useI18n() {
   const value = useContext(I18nContext);
-  if (!value) throw new Error("useI18n must be used inside I18nProvider");
-  return value;
+  return (
+    value || {
+      language: "en",
+      locale: "en-MX",
+      setLanguage: () => {},
+      t: (key, parameters) => translateMessage(key, parameters, "en"),
+    }
+  );
 }
 
 export function LanguageToggle({ className = "" }) {

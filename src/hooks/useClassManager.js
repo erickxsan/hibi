@@ -1,3 +1,4 @@
+import { roundMoney } from "../domain/money.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createClassLogRow,
@@ -136,15 +137,16 @@ function canonicalGrade(draft) {
 
 function canonicalClassLog(draft, state) {
   const hours = draft.hours === "" || draft.hours == null ? null : Number(draft.hours);
+  const amountPaid = draft.amountPaid === "" || draft.amountPaid == null ? 0 : Number(draft.amountPaid);
   const appliedHourlyRate = Number.isFinite(draft.appliedHourlyRate)
     ? draft.appliedHourlyRate
     : resolveHourlyRate(state, draft.studentId, draft.groupId);
   const effectiveHours = hours === null ? state.settings.defaultClassHours : hours;
   const appliedCharge = Number.isFinite(draft.appliedCharge)
-    ? draft.appliedCharge
+    ? roundMoney(draft.appliedCharge)
     : draft.classStatus === "Cancelled"
       ? 0
-      : effectiveHours * appliedHourlyRate;
+      : roundMoney(effectiveHours * appliedHourlyRate);
   return {
     id: draft.id,
     classDate: draft.classDate,
@@ -159,7 +161,7 @@ function canonicalClassLog(draft, state) {
     hours,
     appliedHourlyRate,
     appliedCharge,
-    amountPaid: draft.amountPaid === "" || draft.amountPaid == null ? 0 : Number(draft.amountPaid),
+    amountPaid: Number.isFinite(amountPaid) ? roundMoney(amountPaid) : amountPaid,
     paymentState: draft.paymentState ?? "",
     paymentDate: draft.paymentDate || null,
     paymentMethod: draft.paymentMethod ?? draft.method ?? "",
@@ -176,6 +178,7 @@ function canonicalClassSchedule(draft) {
     groupId: draft.format === "individual" ? "" : (draft.groupId ?? ""),
     studentId: draft.format === "individual" ? (draft.studentId ?? "") : "",
     startDate: draft.startDate ?? "",
+    recurrenceAnchorDate: draft.recurrenceAnchorDate ?? "",
     endDate: draft.endDate ?? "",
     startTime: draft.startTime ?? "",
     durationHours: Number(draft.durationHours),
@@ -268,9 +271,10 @@ export async function persistRecipe({ baseState, recipe, adapter, replace = fals
   }
 }
 
+/** @param {{ persistence?: import("../contracts").PersistenceAdapter }} options */
 export function useClassManager({ persistence } = {}) {
   const uiStorageKey = persistence?.uiStorageKey || UI_STORAGE_KEY;
-  const initial = useMemo(() => {
+  const [initial] = useState(() => {
     if (!persistence?.initialState) return safeLoadStateWithMigrations();
     try {
       return {
@@ -281,7 +285,7 @@ export function useClassManager({ persistence } = {}) {
     } catch (error) {
       return { state: createStarterState(), source: "starter", error };
     }
-  }, []);
+  });
   const [canonicalState, setCanonicalState] = useState(initial.state);
   const [operationalDate, setOperationalDate] = useState(() => todayDateOnly());
   const [uiPreferences, setUiPreferences] = useState(() => loadUiPreferences(uiStorageKey));
@@ -1126,7 +1130,7 @@ export function useClassManager({ persistence } = {}) {
   }, []);
 
   const importRecords = useCallback(
-    (text, { fileHash, sourceName, decisions = {}, signature } = {}) => {
+    (text, { fileHash = undefined, sourceName = undefined, decisions = {}, signature = undefined } = {}) => {
       try {
         const imported = importState(text);
         return commit(

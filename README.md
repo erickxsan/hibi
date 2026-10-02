@@ -79,14 +79,14 @@ La navegación se adapta a pantallas pequeñas para consultar la jornada y regis
 
 Hibi puede operar de dos maneras:
 
-- **Modo nube:** Supabase autentica la cuenta, pero una passkey desbloquea por separado el contenido. El navegador cifra cada entidad antes de sincronizarla; Supabase conserva sólo ciphertext, revisiones y manifiestos de integridad.
+- **Modo nube:** Supabase autentica la cuenta y una contraseña de cifrado desbloquea por separado el contenido. También hay acceso recordado y claves de recuperación. El navegador cifra cada entidad antes de sincronizarla; Supabase conserva ciphertext, revisiones y manifiestos de integridad.
 - **Modo local:** si no se configuran credenciales de nube, Hibi puede conservar la información en el `localStorage` del navegador para uso privado u offline.
 
 El repositorio y la compilación de producción no incluyen información real de alumnos o tutores. Las capturas de esta página usan datos ficticios de demostración.
 
 ## Ejecutar localmente
 
-Requiere Node.js 22 y pnpm.
+Requiere Node.js 22–24 y pnpm 11.16.0, declarado en `packageManager`.
 
 ```powershell
 pnpm install
@@ -102,7 +102,7 @@ pnpm quality
 pnpm test:e2e
 ```
 
-`pnpm quality` ejecuta lint, comprobación de formato, revisión incremental de tipos, pruebas unitarias y de componentes renderizados con umbrales de cobertura, además del build de producción. Antes de ejecutar las pruebas E2E localmente, instala Chromium una vez con `pnpm exec playwright install chromium`.
+`pnpm quality` ejecuta lint (incluyendo dependencias de hooks), formato, revisión de tipos de todo `src`, pruebas unitarias y de componentes con umbrales de cobertura, y build con presupuesto de recursos. La revisión de tipos sigue siendo incremental: `strict` y `noImplicitAny` aún no están activados. Antes de las pruebas E2E, instala Chromium una vez con `pnpm exec playwright install chromium`.
 
 La base de datos se define en [`supabase/migrations`](./supabase/migrations). Con Docker Desktop activo, `pnpm test:db` reconstruye la base de datos aplicando todas las migraciones, revisa el esquema y ejecuta pgTAP. El procedimiento completo está documentado en [`supabase/README.md`](./supabase/README.md) y la configuración de CI y checks requeridos, en [`QUALITY.md`](./QUALITY.md).
 

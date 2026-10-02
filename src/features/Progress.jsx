@@ -1,3 +1,4 @@
+const EMPTY_ROWS = Object.freeze([]);
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarDays,
@@ -50,6 +51,7 @@ const CATEGORIES = ["Quiz", "Exam", "Project", "Homework", "Participation", "Oth
 const WORK_STATUSES = ["On time", "Late", "Missing", "Excused"];
 const ATTENDANCE_CODES = ["P", "L", "E", "A"];
 
+/** @param {string} value @param {Intl.DateTimeFormatOptions} [options] */
 function formatDate(value, options = { month: "short", day: "numeric" }) {
   if (!value) return "—";
   return new Intl.DateTimeFormat(getUiLocale(), options).format(new Date(`${value}T12:00:00`));
@@ -152,8 +154,9 @@ function comparableRecordSnapshot(context, entries) {
 }
 
 function ProgressTabs({ value, onChange }) {
+  const { t: uiT } = useI18n();
   return (
-    <div className="progress-tabs" role="tablist" aria-label="Progress views">
+    <div className="progress-tabs" role="tablist" aria-label={uiT("Progress views")}>
       {TABS.map((tab) => (
         <button
           key={tab.value}
@@ -171,11 +174,12 @@ function ProgressTabs({ value, onChange }) {
 }
 
 export default function Progress({ state, derived, actions, intent, clearIntent, registerNavigationBlocker }) {
+  const { t: uiT } = useI18n();
   const { language } = useI18n();
-  const groups = state.groups || [];
-  const students = state.students || [];
-  const gradeRows = derived.gradeRows || state.grades || [];
-  const classRows = derived.classLogRows || state.classLog || [];
+  const groups = state.groups || EMPTY_ROWS;
+  const students = state.students || EMPTY_ROWS;
+  const gradeRows = derived.gradeRows || state.grades || EMPTY_ROWS;
+  const classRows = derived.classLogRows || state.classLog || EMPTY_ROWS;
   const groupsById = derived.groupsById || new Map(groups.map((group) => [group.id, group]));
   const studentsById = derived.studentsById || new Map(students.map((student) => [student.id, student]));
   const sessions = useMemo(
@@ -211,7 +215,7 @@ export default function Progress({ state, derived, actions, intent, clearIntent,
   });
   useUnsavedChanges(registerNavigationBlocker, recordDirty, "Discard your unsaved progress changes?");
 
-  const rawClassRows = state.classLog || [];
+  const rawClassRows = state.classLog || EMPTY_ROWS;
   const hydrateRecord = useCallback(
     (nextContext) => {
       const roster = activeStudents.filter((student) => studentBelongsTo(student, nextContext.groupId));
@@ -456,8 +460,8 @@ export default function Progress({ state, derived, actions, intent, clearIntent,
     <div className="page progress-page">
       <div className="progress-heading">
         <div>
-          <h1>Progress</h1>
-          <p>Attendance and grades, together after every class.</p>
+          <h1>{uiT("Progress")}</h1>
+          <p>{uiT("Attendance and grades, together after every class.")}</p>
         </div>
       </div>
       <ProgressTabs value={tab} onChange={changeTab} />
@@ -534,6 +538,7 @@ function RecordView({
   onClearScores,
   onSave,
 }) {
+  const { t: uiT } = useI18n();
   const currentKey = classSessionKey(context);
   const selectedGroupName =
     context.groupId === INDIVIDUAL_GROUP_ID
@@ -546,9 +551,9 @@ function RecordView({
           <CalendarDays aria-hidden="true" size={20} />
         </div>
         <label>
-          <span>Class</span>
+          <span>{uiT("Class")}</span>
           <Select
-            aria-label="Class to record"
+            aria-label={uiT("Class to record")}
             value={sessions.some((session) => session.key === currentKey) ? currentKey : "custom"}
             onChange={(event) => onChooseSession(event.target.value)}
           >
@@ -562,22 +567,24 @@ function RecordView({
                 {sessionLabel(session, groupsById)}
               </option>
             ))}
-            <option value="custom">Custom class…</option>
+            <option value="custom">{uiT("Custom class…")}</option>
           </Select>
         </label>
-        <Button onClick={() => setDetailsOpen(!detailsOpen)}>{detailsOpen ? "Hide details" : "Change class"}</Button>
+        <Button onClick={() => setDetailsOpen(!detailsOpen)}>
+          {detailsOpen ? uiT("Hide details") : uiT("Change class")}
+        </Button>
       </div>
 
       {detailsOpen ? (
-        <div className="record-details" aria-label="Class details">
-          <Field label="Date" required>
+        <div className="record-details" aria-label={uiT("Class details")}>
+          <Field label={uiT("Date")} required>
             <Input
               type="date"
               value={context.classDate}
               onChange={(event) => onContextChange({ classDate: event.target.value })}
             />
           </Field>
-          <Field label="Group" required>
+          <Field label={uiT("Group")} required>
             <GroupSelect
               groups={groups}
               include={hasIndividualStudents ? [{ id: INDIVIDUAL_GROUP_ID, name: "Individual students" }] : []}
@@ -585,14 +592,14 @@ function RecordView({
               onChange={(event) => onContextChange({ groupId: event.target.value })}
             />
           </Field>
-          <Field label="Start time">
+          <Field label={uiT("Start time")}>
             <Input
               type="time"
               value={context.startTime}
               onChange={(event) => onContextChange({ startTime: event.target.value })}
             />
           </Field>
-          <Field label="Hours" required>
+          <Field label={uiT("Hours")} required>
             <Input
               type="number"
               min="0"
@@ -605,21 +612,21 @@ function RecordView({
       ) : null}
 
       <div className="record-grade-settings">
-        <Field label="Assessment (optional)">
+        <Field label={uiT("Assessment (optional)")}>
           <Input
             value={context.assessment}
             onChange={(event) => onAssessmentChange({ assessment: event.target.value })}
-            placeholder="e.g. Quiz 1"
+            placeholder={uiT("e.g. Quiz 1")}
           />
         </Field>
-        <Field label="Category">
+        <Field label={uiT("Category")}>
           <Select value={context.category} onChange={(event) => onAssessmentChange({ category: event.target.value })}>
             {CATEGORIES.map((category) => (
               <option key={category}>{category}</option>
             ))}
           </Select>
         </Field>
-        <Field label="Maximum">
+        <Field label={uiT("Maximum")}>
           <Input
             type="number"
             min="0.01"
@@ -633,32 +640,32 @@ function RecordView({
       <div className="progress-actions-row">
         <div>
           <Button variant="primary" icon={Check} onClick={onMarkAllPresent} disabled={!roster.length}>
-            Mark all present
+            {uiT("Mark all present")}
           </Button>
           <Button icon={RotateCcw} onClick={onClearScores} disabled={!roster.length}>
-            Clear scores
+            {uiT("Clear scores")}
           </Button>
         </div>
         <span>
           <Users aria-hidden="true" size={16} />
-          {roster.length} {roster.length === 1 ? "student" : "students"}
+          {roster.length} {roster.length === 1 ? uiT("student") : uiT("students")}
         </span>
       </div>
 
       {!roster.length ? (
         <EmptyState
           icon={Users}
-          title="No active students here"
-          description="Assign active students to this group, then return to record progress."
+          title={uiT("No active students here")}
+          description={uiT("Assign active students to this group, then return to record progress.")}
         />
       ) : (
         <div className="record-layout">
-          <div className="progress-roster" role="table" aria-label="Class progress roster">
+          <div className="progress-roster" role="table" aria-label={uiT("Class progress roster")}>
             <div className="progress-roster-head" role="row">
-              <span role="columnheader">Student</span>
-              <span role="columnheader">Attendance</span>
-              <span role="columnheader">Score</span>
-              <span role="columnheader">Feedback</span>
+              <span role="columnheader">{uiT("Student")}</span>
+              <span role="columnheader">{uiT("Attendance")}</span>
+              <span role="columnheader">{uiT("Score")}</span>
+              <span role="columnheader">{uiT("Feedback")}</span>
             </div>
             {roster.map((student) => {
               const entry = entries[student.id] || { attendance: "P", score: "", feedback: "" };
@@ -668,10 +675,14 @@ function RecordView({
                     <StudentAvatar avatarId={student.avatarId} name={student.fullName} size="small" decorative />
                     <span>
                       <strong>{student.fullName}</strong>
-                      <small>{student.code || "Student"}</small>
+                      <small>{student.code || uiT("Student")}</small>
                     </span>
                   </div>
-                  <div className="attendance-segments" role="group" aria-label={`Attendance for ${student.fullName}`}>
+                  <div
+                    className="attendance-segments"
+                    role="group"
+                    aria-label={uiT("Attendance for {p0}", { p0: student.fullName })}
+                  >
                     {ATTENDANCE_CODES.map((code) => {
                       const [short, label] = attendanceMeta(code, language);
                       return (
@@ -690,7 +701,10 @@ function RecordView({
                     })}
                   </div>
                   <label className="score-input">
-                    <span className="sr-only">Score for {student.fullName}</span>
+                    <span className="sr-only">
+                      {uiT("Score for ")}
+                      {student.fullName}
+                    </span>
                     <Input
                       type="number"
                       min="0"
@@ -703,10 +717,10 @@ function RecordView({
                     <small>/{context.maximum || "—"}</small>
                   </label>
                   <Input
-                    aria-label={`Feedback for ${student.fullName}`}
+                    aria-label={uiT("Feedback for {p0}", { p0: student.fullName })}
                     value={entry.feedback}
                     onChange={(event) => onEntryChange(student.id, { feedback: event.target.value })}
-                    placeholder="Optional note"
+                    placeholder={uiT("Optional note")}
                   />
                 </div>
               );
@@ -715,7 +729,7 @@ function RecordView({
           <aside className="progress-summary">
             <div className="progress-summary-head">
               <div>
-                <h2>Class summary</h2>
+                <h2>{uiT("Class summary")}</h2>
                 <p>{formatDate(context.classDate, { weekday: "long", month: "long", day: "numeric" })}</p>
               </div>
               <span className="summary-cat" aria-hidden="true">
@@ -724,7 +738,7 @@ function RecordView({
             </div>
             <dl className="summary-counts">
               <div>
-                <dt>Students</dt>
+                <dt>{uiT("Students")}</dt>
                 <dd>{roster.length}</dd>
               </div>
               {ATTENDANCE_CODES.map((code) => {
@@ -742,19 +756,21 @@ function RecordView({
             </dl>
             <div className="summary-score">
               <span>
-                <small>Average score</small>
+                <small>{uiT("Average score")}</small>
                 <strong>{summary.average == null ? "—" : `${summary.average.toFixed(1)} / ${context.maximum}`}</strong>
               </span>
               <span>
-                <small>Score missing</small>
+                <small>{uiT("Score missing")}</small>
                 <strong>{summary.missingScores}</strong>
               </span>
             </div>
             <div className="summary-note">
               <Sparkles aria-hidden="true" size={18} />
               <span>
-                <strong>{summary.attendance.P === roster.length ? "Everyone is here!" : "Almost ready to save"}</strong>
-                <small>Review the roster, then save once.</small>
+                <strong>
+                  {summary.attendance.P === roster.length ? uiT("Everyone is here!") : uiT("Almost ready to save")}
+                </strong>
+                <small>{uiT("Review the roster, then save once.")}</small>
               </span>
             </div>
           </aside>
@@ -762,9 +778,9 @@ function RecordView({
       )}
       {roster.length ? (
         <div className="progress-save-bar">
-          <span>{dirty ? "Unsaved changes" : "Everything is up to date"}</span>
+          <span>{dirty ? uiT("Unsaved changes") : uiT("Everything is up to date")}</span>
           <Button variant="primary" icon={ClipboardCheck} onClick={onSave} disabled={saving || !dirty}>
-            {saving ? "Saving…" : "Save class progress"}
+            {saving ? uiT("Saving…") : uiT("Save class progress")}
           </Button>
         </div>
       ) : null}
@@ -773,6 +789,7 @@ function RecordView({
 }
 
 function GradebookView({ state, groups, students, studentsById, gradeRows, actions }) {
+  const { t: uiT } = useI18n();
   const defaultGroup = groups[0]?.id || "all";
   const defaultMonth =
     monthKey(state.settings?.selectedMonth || state.settings?.asOfDate) || new Date().toISOString().slice(0, 7);
@@ -940,7 +957,7 @@ function GradebookView({ state, groups, students, studentsById, gradeRows, actio
   return (
     <section className="progress-view" role="tabpanel">
       <div className="gradebook-toolbar">
-        <Field label="Group">
+        <Field label={uiT("Group")}>
           <GroupSelect
             groups={groups}
             include={[{ id: "all", name: "All students" }]}
@@ -948,7 +965,7 @@ function GradebookView({ state, groups, students, studentsById, gradeRows, actio
             onChange={(event) => setFilters({ ...filters, groupId: event.target.value })}
           />
         </Field>
-        <Field label="Period">
+        <Field label={uiT("Period")}>
           <Select value={filters.month} onChange={(event) => setFilters({ ...filters, month: event.target.value })}>
             {months.map((month) => (
               <option key={month} value={month}>
@@ -957,27 +974,27 @@ function GradebookView({ state, groups, students, studentsById, gradeRows, actio
             ))}
           </Select>
         </Field>
-        <Field label="Search">
+        <Field label={uiT("Search")}>
           <label className="progress-search">
             <Search aria-hidden="true" size={17} />
             <input
               value={filters.search}
               onChange={(event) => setFilters({ ...filters, search: event.target.value })}
-              placeholder="Search students"
+              placeholder={uiT("Search students")}
             />
           </label>
         </Field>
         <Button variant="primary" icon={Plus} onClick={createBatch}>
-          Add assessment
+          {uiT("Add assessment")}
         </Button>
       </div>
       {assessments.length && visibleStudents.length ? (
-        <div className="gradebook-shell" role="region" aria-label="Gradebook" tabIndex="0">
+        <div className="gradebook-shell" role="region" aria-label={uiT("Gradebook")} tabIndex={0}>
           <table className="gradebook-table">
             <thead>
               <tr>
                 <th className="gradebook-student-column" scope="col">
-                  Student
+                  {uiT("Student")}
                 </th>
                 {assessments.map((assessment) => (
                   <th key={assessment.key} scope="col">
@@ -987,7 +1004,7 @@ function GradebookView({ state, groups, students, studentsById, gradeRows, actio
                     </small>
                   </th>
                 ))}
-                <th scope="col">Average</th>
+                <th scope="col">{uiT("Average")}</th>
               </tr>
             </thead>
             <tbody>
@@ -1005,7 +1022,7 @@ function GradebookView({ state, groups, students, studentsById, gradeRows, actio
                       <StudentAvatar avatarId={student.avatarId} name={student.fullName} size="tiny" decorative />
                       <span>
                         <strong>{student.fullName}</strong>
-                        <small>{student.code || "Student"}</small>
+                        <small>{student.code || uiT("Student")}</small>
                       </span>
                     </th>
                     {assessments.map((assessment) => {
@@ -1026,7 +1043,10 @@ function GradebookView({ state, groups, students, studentsById, gradeRows, actio
                         <td key={assessment.key} className={tone}>
                           <div className="grade-cell">
                             <input
-                              aria-label={`${assessment.assessment} score for ${student.fullName}`}
+                              aria-label={uiT("{p0} score for {p1}", {
+                                p0: assessment.assessment,
+                                p1: student.fullName,
+                              })}
                               type="number"
                               min="0"
                               max={assessment.maximum}
@@ -1044,7 +1064,7 @@ function GradebookView({ state, groups, students, studentsById, gradeRows, actio
                             <small>/{assessment.maximum}</small>
                             {grade ? (
                               <IconButton
-                                label={`Edit ${assessment.assessment} for ${student.fullName}`}
+                                label={uiT("Edit {p0} for {p1}", { p0: assessment.assessment, p1: student.fullName })}
                                 icon={Pencil}
                                 onClick={() => openEdit(grade)}
                               />
@@ -1065,11 +1085,11 @@ function GradebookView({ state, groups, students, studentsById, gradeRows, actio
       ) : (
         <EmptyState
           icon={Sparkles}
-          title="No grades for this period"
-          description="Add an assessment once, then enter scores directly in the gradebook."
+          title={uiT("No grades for this period")}
+          description={uiT("Add an assessment once, then enter scores directly in the gradebook.")}
           action={
             <Button icon={Plus} onClick={createBatch}>
-              Add assessment
+              {uiT("Add assessment")}
             </Button>
           }
         />
@@ -1081,28 +1101,28 @@ function GradebookView({ state, groups, students, studentsById, gradeRows, actio
         </span>
         <span>
           <i className="mid" />
-          On track
+          {uiT("On track")}
         </span>
         <span>
           <i className="low" />
-          Needs support
+          {uiT("Needs support")}
         </span>
-        <p>Click a score to edit it. Changes save when you leave the cell.</p>
+        <p>{uiT("Click a score to edit it. Changes save when you leave the cell.")}</p>
       </div>
 
       <Drawer
         open={Boolean(batchDraft)}
         onClose={closeBatch}
-        title="Add assessment"
-        description="Set it up once, then enter the whole roster."
+        title={uiT("Add assessment")}
+        description={uiT("Set it up once, then enter the whole roster.")}
         size="wide"
         footer={
           <>
             <Button onClick={closeBatch} disabled={saving}>
-              Cancel
+              {uiT("Cancel")}
             </Button>
             <Button variant="primary" type="submit" form="progress-batch-form" disabled={saving}>
-              {saving ? "Saving…" : "Save assessment"}
+              {saving ? uiT("Saving…") : uiT("Save assessment")}
             </Button>
           </>
         }
@@ -1110,14 +1130,14 @@ function GradebookView({ state, groups, students, studentsById, gradeRows, actio
         {batchDraft ? (
           <form id="progress-batch-form" className="drawer-form" onSubmit={saveBatch}>
             <div className="form-grid two-columns">
-              <Field label="Date" required>
+              <Field label={uiT("Date")} required>
                 <Input
                   type="date"
                   value={batchDraft.date}
                   onChange={(event) => setBatchDraft({ ...batchDraft, date: event.target.value })}
                 />
               </Field>
-              <Field label="Group" required>
+              <Field label={uiT("Group")} required>
                 <Select
                   value={batchDraft.groupId}
                   onChange={(event) => setBatchDraft({ ...batchDraft, groupId: event.target.value, entries: {} })}
@@ -1130,15 +1150,15 @@ function GradebookView({ state, groups, students, studentsById, gradeRows, actio
                 </Select>
               </Field>
             </div>
-            <Field label="Assessment" required>
+            <Field label={uiT("Assessment")} required>
               <Input
                 value={batchDraft.assessment}
                 onChange={(event) => setBatchDraft({ ...batchDraft, assessment: event.target.value })}
-                placeholder="e.g. Quiz 1"
+                placeholder={uiT("e.g. Quiz 1")}
               />
             </Field>
             <div className="form-grid two-columns">
-              <Field label="Category">
+              <Field label={uiT("Category")}>
                 <Select
                   value={batchDraft.category}
                   onChange={(event) => setBatchDraft({ ...batchDraft, category: event.target.value })}
@@ -1148,7 +1168,7 @@ function GradebookView({ state, groups, students, studentsById, gradeRows, actio
                   ))}
                 </Select>
               </Field>
-              <Field label="Maximum" required>
+              <Field label={uiT("Maximum")} required>
                 <Input
                   type="number"
                   min="0.01"
@@ -1160,9 +1180,10 @@ function GradebookView({ state, groups, students, studentsById, gradeRows, actio
             </div>
             <div className="drawer-section-heading">
               <div>
-                <h3>Enter scores</h3>
+                <h3>{uiT("Enter scores")}</h3>
                 <p>
-                  {batchRoster.length} active {batchRoster.length === 1 ? "student" : "students"}
+                  {batchRoster.length} {uiT(" active ")}
+                  {batchRoster.length === 1 ? uiT("student") : uiT("students")}
                 </p>
               </div>
             </div>
@@ -1172,7 +1193,7 @@ function GradebookView({ state, groups, students, studentsById, gradeRows, actio
                   <StudentAvatar avatarId={student.avatarId} name={student.fullName} size="tiny" decorative />
                   <span>{student.fullName}</span>
                   <Input
-                    aria-label={`Score for ${student.fullName}`}
+                    aria-label={uiT("Score for {p0}", { p0: student.fullName })}
                     type="number"
                     min="0"
                     max={batchDraft.maximum}
@@ -1191,11 +1212,11 @@ function GradebookView({ state, groups, students, studentsById, gradeRows, actio
       <Drawer
         open={Boolean(editDraft)}
         onClose={closeEdit}
-        title="Edit grade"
+        title={uiT("Edit grade")}
         footer={
           <>
             <Button onClick={closeEdit} disabled={saving}>
-              Cancel
+              {uiT("Cancel")}
             </Button>
             <Button
               variant="danger"
@@ -1205,28 +1226,28 @@ function GradebookView({ state, groups, students, studentsById, gradeRows, actio
                 setEditDraft(null);
               }}
             >
-              Delete
+              {uiT("Delete")}
             </Button>
             <Button variant="primary" type="submit" form="progress-edit-grade" disabled={saving}>
-              {saving ? "Saving…" : "Save grade"}
+              {saving ? uiT("Saving…") : uiT("Save grade")}
             </Button>
           </>
         }
       >
         {editDraft ? (
           <form id="progress-edit-grade" className="drawer-form" onSubmit={saveEdit}>
-            <Field label="Student">
+            <Field label={uiT("Student")}>
               <Input value={studentsById.get(editDraft.studentId)?.fullName || editDraft.studentName || ""} disabled />
             </Field>
             <div className="form-grid two-columns">
-              <Field label="Date" required>
+              <Field label={uiT("Date")} required>
                 <Input
                   type="date"
                   value={editDraft.date}
                   onChange={(event) => setEditDraft({ ...editDraft, date: event.target.value })}
                 />
               </Field>
-              <Field label="Category">
+              <Field label={uiT("Category")}>
                 <Select
                   value={editDraft.category}
                   onChange={(event) => setEditDraft({ ...editDraft, category: event.target.value })}
@@ -1237,14 +1258,14 @@ function GradebookView({ state, groups, students, studentsById, gradeRows, actio
                 </Select>
               </Field>
             </div>
-            <Field label="Assessment" required>
+            <Field label={uiT("Assessment")} required>
               <Input
                 value={editDraft.assessment}
                 onChange={(event) => setEditDraft({ ...editDraft, assessment: event.target.value })}
               />
             </Field>
             <div className="form-grid two-columns">
-              <Field label="Score">
+              <Field label={uiT("Score")}>
                 <Input
                   type="number"
                   min="0"
@@ -1253,7 +1274,7 @@ function GradebookView({ state, groups, students, studentsById, gradeRows, actio
                   onChange={(event) => setEditDraft({ ...editDraft, score: event.target.value })}
                 />
               </Field>
-              <Field label="Maximum" required>
+              <Field label={uiT("Maximum")} required>
                 <Input
                   type="number"
                   min="0.01"
@@ -1263,7 +1284,7 @@ function GradebookView({ state, groups, students, studentsById, gradeRows, actio
                 />
               </Field>
             </div>
-            <Field label="Work status">
+            <Field label={uiT("Work status")}>
               <Select
                 value={editDraft.workStatus}
                 onChange={(event) => setEditDraft({ ...editDraft, workStatus: event.target.value })}
@@ -1273,7 +1294,7 @@ function GradebookView({ state, groups, students, studentsById, gradeRows, actio
                 ))}
               </Select>
             </Field>
-            <Field label="Feedback">
+            <Field label={uiT("Feedback")}>
               <TextArea
                 rows="4"
                 value={editDraft.feedback || ""}
@@ -1285,8 +1306,8 @@ function GradebookView({ state, groups, students, studentsById, gradeRows, actio
       </Drawer>
       <ConfirmDialog
         open={Boolean(deleteTarget)}
-        title="Delete grade record?"
-        description={`${deleteTarget?.assessment || "This grade"} will be permanently removed.`}
+        title={uiT("Delete grade record?")}
+        description={uiT("{p0} will be permanently removed.", { p0: deleteTarget?.assessment || "This grade" })}
         onClose={() => setDeleteTarget(null)}
         onConfirm={confirmDelete}
         busy={saving}
@@ -1296,6 +1317,7 @@ function GradebookView({ state, groups, students, studentsById, gradeRows, actio
 }
 
 function AttendanceView({ state, groups, students, classRows, sessions, language, onOpenSession }) {
+  const { t: uiT } = useI18n();
   const defaultGroup = groups[0]?.id || "all";
   const defaultMonth =
     monthKey(state.settings?.selectedMonth || state.settings?.asOfDate) || new Date().toISOString().slice(0, 7);
@@ -1366,7 +1388,7 @@ function AttendanceView({ state, groups, students, classRows, sessions, language
   return (
     <section className="progress-view" role="tabpanel">
       <div className="attendance-toolbar">
-        <Field label="Group">
+        <Field label={uiT("Group")}>
           <GroupSelect
             groups={groups}
             include={[{ id: "all", name: "All students" }]}
@@ -1374,7 +1396,7 @@ function AttendanceView({ state, groups, students, classRows, sessions, language
             onChange={(event) => setFilters({ ...filters, groupId: event.target.value })}
           />
         </Field>
-        <Field label="Month">
+        <Field label={uiT("Month")}>
           <Select value={filters.month} onChange={(event) => setFilters({ ...filters, month: event.target.value })}>
             {months.map((month) => (
               <option key={month} value={month}>
@@ -1383,9 +1405,9 @@ function AttendanceView({ state, groups, students, classRows, sessions, language
             ))}
           </Select>
         </Field>
-        <Field label="Filter">
+        <Field label={uiT("Filter")}>
           <Select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}>
-            <option value="all">All attendance</option>
+            <option value="all">{uiT("All attendance")}</option>
             {ATTENDANCE_CODES.map((code) => {
               const [, label] = attendanceMeta(code, language);
               return (
@@ -1410,22 +1432,22 @@ function AttendanceView({ state, groups, students, classRows, sessions, language
         })}
       </div>
       {visibleSessions.length && roster.length ? (
-        <div className="attendance-shell" role="region" aria-label="Monthly attendance" tabIndex="0">
+        <div className="attendance-shell" role="region" aria-label={uiT("Monthly attendance")} tabIndex={0}>
           <table className="attendance-table">
             <thead>
               <tr>
                 <th className="attendance-student-column" scope="col">
-                  Student
+                  {uiT("Student")}
                 </th>
                 {visibleSessions.map((session) => (
                   <th key={session.key} scope="col">
                     <button type="button" onClick={() => onOpenSession(session)}>
                       <span>{formatDate(session.classDate, { month: "short", day: "numeric" })}</span>
-                      <small>{session.startTime || "Class"}</small>
+                      <small>{session.startTime || uiT("Class")}</small>
                     </button>
                   </th>
                 ))}
-                <th scope="col">Attendance</th>
+                <th scope="col">{uiT("Attendance")}</th>
               </tr>
             </thead>
             <tbody>
@@ -1435,7 +1457,7 @@ function AttendanceView({ state, groups, students, classRows, sessions, language
                     <StudentAvatar avatarId={student.avatarId} name={student.fullName} size="tiny" decorative />
                     <span>
                       <strong>{student.fullName}</strong>
-                      <small>{student.code || "Student"}</small>
+                      <small>{student.code || uiT("Student")}</small>
                     </span>
                   </th>
                   {visibleSessions.map((session) => {
@@ -1460,8 +1482,8 @@ function AttendanceView({ state, groups, students, classRows, sessions, language
       ) : (
         <EmptyState
           icon={CalendarDays}
-          title="No attendance for this month"
-          description="Record a completed class to build the monthly overview."
+          title={uiT("No attendance for this month")}
+          description={uiT("Record a completed class to build the monthly overview.")}
         />
       )}
       <div className="attendance-footer">
@@ -1476,7 +1498,7 @@ function AttendanceView({ state, groups, students, classRows, sessions, language
             );
           })}
         </div>
-        <p>Click any date to open that class roster and edit attendance.</p>
+        <p>{uiT("Click any date to open that class roster and edit attendance.")}</p>
       </div>
       {insight ? (
         <button
@@ -1491,9 +1513,12 @@ function AttendanceView({ state, groups, students, classRows, sessions, language
         >
           <Sparkles aria-hidden="true" size={19} />
           <span>
-            <strong>{insight.student.fullName} may need a quick check-in</strong>
+            <strong>
+              {insight.student.fullName} {uiT(" may need a quick check-in")}
+            </strong>
             <small>
-              {formatPercent(insight.rate)} attendance in {formatMonth(filters.month)}
+              {formatPercent(insight.rate)} {uiT(" attendance in ")}
+              {formatMonth(filters.month)}
             </small>
           </span>
           <ChevronRight aria-hidden="true" size={19} />

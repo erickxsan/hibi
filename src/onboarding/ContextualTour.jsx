@@ -7,11 +7,12 @@ import { formatOnboardingDate, ONBOARDING_STEPS, ONBOARDING_TOUR_START_STEP, tou
 import { tourLayout } from "./tourLayout";
 
 function TourFocus({ focus, context }) {
+  const { t: uiT } = useI18n();
   if (focus === "group" && context?.groupName) {
     return (
       <p className="onboarding-tour-focus">
         <UsersRound aria-hidden="true" size={17} />
-        <span>Your group</span>
+        <span>{uiT("Your group")}</span>
         <strong>
           {`${context.groupName} · ${context.studentCount} ${context.studentCount === 1 ? "student" : "students"}`}
         </strong>
@@ -22,7 +23,7 @@ function TourFocus({ focus, context }) {
     return (
       <p className="onboarding-tour-focus">
         <CalendarDays aria-hidden="true" size={17} />
-        <span>Next class</span>
+        <span>{uiT("Next class")}</span>
         <strong>
           {formatOnboardingDate(context.nextClass.date, getUiLocale())} · {context.nextClass.time}
         </strong>
@@ -54,6 +55,7 @@ export default function ContextualTour({
   onNavigate,
   onComplete,
 }) {
+  const { t: uiT } = useI18n();
   const { t } = useI18n();
   const config = tourStep(step);
   const groupSelector = context?.groupId ? config?.groupSelector?.(context.groupId) : null;
@@ -204,7 +206,7 @@ export default function ContextualTour({
         }
       >
         <header className="onboarding-tour-heading">
-          <img src="/onboarding/hibi-guide.png" alt="" className="onboarding-tour-avatar" />
+          <img src="/onboarding/hibi-guide.webp" alt={uiT("")} className="onboarding-tour-avatar" />
           <div>
             <p className="onboarding-tour-location">
               {t(config.label) + " · " + ordinal + " " + t("of") + " " + tourLength}
@@ -220,13 +222,13 @@ export default function ContextualTour({
         <TourFocus focus={config.focus} context={context} />
         {!targetReady ? (
           <p role="status" className="onboarding-tour-loading">
-            Opening this section…
+            {uiT("Opening this section…")}
           </p>
         ) : null}
         <div
           className="onboarding-tour-progress"
           role="progressbar"
-          aria-label="Tour progress"
+          aria-label={uiT("Tour progress")}
           aria-valuemin={0}
           aria-valuemax={tourLength}
           aria-valuenow={ordinal}
@@ -237,11 +239,11 @@ export default function ContextualTour({
         </div>
         <footer className="onboarding-tour-actions">
           <button className="onboarding-tour-skip" type="button" disabled={busy} onClick={onSkip}>
-            Skip tour
+            {uiT("Skip tour")}
           </button>
           {canGoBack ? (
             <Button className="onboarding-tour-back" icon={ArrowLeft} disabled={busy} onClick={() => onMove(step - 1)}>
-              Back
+              {uiT("Back")}
             </Button>
           ) : null}
           <Button
@@ -251,7 +253,7 @@ export default function ContextualTour({
             disabled={busy || !targetReady}
             onClick={() => (finish ? onComplete() : onMove(step + 1))}
           >
-            {finish ? "Finish tour" : "Next"}
+            {finish ? uiT("Finish tour") : uiT("Next")}
           </Button>
         </footer>
       </div>

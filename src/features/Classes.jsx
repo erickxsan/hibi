@@ -1,3 +1,5 @@
+import { useI18n } from "../i18n/index.jsx";
+import { calculateCharge } from "../domain/calculations.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BookOpenCheck,
@@ -24,7 +26,7 @@ import {
 } from "lucide-react";
 import { Button, Drawer, EmptyState, Field, Input, Select, StatusBadge } from "../components/ui";
 import { StudentAvatar } from "../components/StudentAvatar";
-import { dayOfWeekForDate, resolveHourlyRate, scheduledClassSupportsFutureScope } from "../domain";
+import { dayOfWeekForDate, scheduledClassSupportsFutureScope } from "../domain";
 import { addDays, addMonths, parseDateOnly, startOfMonth, todayDateOnly } from "../domain/dates";
 import { useHistoryBackedState } from "../hooks/useHistoryNavigation";
 import { confirmDiscard, draftChanged, draftSignature, useUnsavedChanges } from "../hooks/useUnsavedChanges";
@@ -49,6 +51,7 @@ import {
   minutesFromTime,
 } from "./classesCalendarModel";
 
+/** @type {Array<[number, string]>} */
 const DAY_OPTIONS = [
   [1, "Mon"],
   [2, "Tue"],
@@ -60,6 +63,7 @@ const DAY_OPTIONS = [
 ];
 const PAGE_SIZE = 8;
 
+/** @param {string} value @param {Intl.DateTimeFormatOptions} [options] */
 function formatDate(value, options = { day: "2-digit", month: "2-digit", year: "numeric" }) {
   if (!value) return "—";
   return new Intl.DateTimeFormat(getUiLocale(), options).format(new Date(`${value}T12:00:00`));
@@ -119,6 +123,7 @@ function initialEditDraft(session) {
 }
 
 function EditClassModal({ open, session, state, actions, asOfDate, onClose }) {
+  const { t: uiT } = useI18n();
   const [draft, setDraft] = useState(() => initialEditDraft(session));
   const [scope, setScope] = useState("occurrence");
   const [participantsOpen, setParticipantsOpen] = useState(false);
@@ -210,21 +215,21 @@ function EditClassModal({ open, session, state, actions, asOfDate, onClose }) {
     <Drawer
       open={open}
       onClose={requestClose}
-      title="Edit class"
-      description="Update the information for this class."
+      title={uiT("Edit class")}
+      description={uiT("Update the information for this class.")}
       size="modal"
       className="class-edit-modal"
       footer={
         <>
           <Button className="class-edit-delete" icon={Trash2} onClick={remove} disabled={saving}>
-            Delete class
+            {uiT("Delete class")}
           </Button>
           <span className="class-edit-footer-spacer" />
           <Button onClick={requestClose} disabled={saving}>
-            Cancel
+            {uiT("Cancel")}
           </Button>
           <Button variant="primary" onClick={save} disabled={saving}>
-            {saving ? "Saving…" : "Save changes"}
+            {saving ? uiT("Saving…") : uiT("Save changes")}
           </Button>
         </>
       }
@@ -240,17 +245,17 @@ function EditClassModal({ open, session, state, actions, asOfDate, onClose }) {
             <span>{formatDate(session.classDate, { day: "numeric", month: "short", year: "numeric" })}</span>
             <i>·</i>
             <span>{formatTime(session.startTime)}</span>
-            {futureSupported ? <StatusBadge tone="success">Recurring</StatusBadge> : null}
+            {futureSupported ? <StatusBadge tone="success">{uiT("Recurring")}</StatusBadge> : null}
           </div>
-          <Field label="Apply changes to">
-            <div className="class-edit-scope" role="group" aria-label="Apply changes to">
+          <Field label={uiT("Apply changes to")}>
+            <div className="class-edit-scope" role="group" aria-label={uiT("Apply changes to")}>
               <button
                 type="button"
                 className={scope === "occurrence" ? "active" : ""}
                 aria-pressed={scope === "occurrence"}
                 onClick={() => setScope("occurrence")}
               >
-                Only this class
+                {uiT("Only this class")}
               </button>
               <button
                 type="button"
@@ -259,18 +264,18 @@ function EditClassModal({ open, session, state, actions, asOfDate, onClose }) {
                 aria-pressed={scope === "future"}
                 onClick={() => futureSupported && setScope("future")}
               >
-                This and future classes
+                {uiT("This and future classes")}
               </button>
             </div>
           </Field>
           <p className="class-edit-scope-note">
             <CircleAlert size={15} aria-hidden="true" />
             {scope === "future"
-              ? "Past classes and saved records will remain unchanged."
-              : `The other classes in this series will keep their information.`}
+              ? uiT("Past classes and saved records will remain unchanged.")
+              : uiT("The other classes in this series will keep their information.")}
           </p>
           <div className="class-edit-grid">
-            <Field label="Date" required>
+            <Field label={uiT("Date")} required>
               <Input
                 type="date"
                 min={minimumDate}
@@ -278,27 +283,27 @@ function EditClassModal({ open, session, state, actions, asOfDate, onClose }) {
                 onChange={(event) => update({ classDate: event.target.value })}
               />
             </Field>
-            <Field label="Time" required>
+            <Field label={uiT("Time")} required>
               <Input
                 type="time"
                 value={draft.startTime}
                 onChange={(event) => update({ startTime: event.target.value })}
               />
             </Field>
-            <Field label="Duration" required>
+            <Field label={uiT("Duration")} required>
               <Select
                 value={draft.durationHours}
                 onChange={(event) => update({ durationHours: Number(event.target.value) })}
               >
                 {[0.5, 1, 1.5, 2, 2.5, 3, 4].map((hours) => (
                   <option value={hours} key={hours}>
-                    {hours} h
+                    {hours} {uiT(" h")}
                   </option>
                 ))}
               </Select>
             </Field>
-            <Field label="Format">
-              <div className="classes-choice" role="group" aria-label="Class format">
+            <Field label={uiT("Format")}>
+              <div className="classes-choice" role="group" aria-label={uiT("Class format")}>
                 <button
                   type="button"
                   className={draft.format === "group" ? "active" : ""}
@@ -313,7 +318,7 @@ function EditClassModal({ open, session, state, actions, asOfDate, onClose }) {
                     })
                   }
                 >
-                  Group
+                  {uiT("Group")}
                 </button>
                 <button
                   type="button"
@@ -329,20 +334,20 @@ function EditClassModal({ open, session, state, actions, asOfDate, onClose }) {
                     })
                   }
                 >
-                  Individual
+                  {uiT("Individual")}
                 </button>
               </div>
             </Field>
           </div>
           {draft.format === "group" ? (
-            <Field label="Group or student" required>
+            <Field label={uiT("Group or student")} required>
               <Select
                 value={draft.groupId}
                 onChange={(event) =>
                   update({ groupId: event.target.value, participantMode: "default", participantIds: [] })
                 }
               >
-                <option value="">Choose a group</option>
+                <option value="">{uiT("Choose a group")}</option>
                 {(state.groups || []).map((group) => (
                   <option key={group.id} value={group.id}>
                     {group.name}
@@ -351,9 +356,9 @@ function EditClassModal({ open, session, state, actions, asOfDate, onClose }) {
               </Select>
             </Field>
           ) : (
-            <Field label="Group or student" required>
+            <Field label={uiT("Group or student")} required>
               <Select value={draft.studentId} onChange={(event) => update({ studentId: event.target.value })}>
-                <option value="">Choose a student</option>
+                <option value="">{uiT("Choose a student")}</option>
                 {activeStudents.map((student) => (
                   <option key={student.id} value={student.id}>
                     {student.fullName}
@@ -364,15 +369,16 @@ function EditClassModal({ open, session, state, actions, asOfDate, onClose }) {
           )}
           <section className="class-edit-participants">
             <div>
-              <strong>Participants</strong>
+              <strong>{uiT("Participants")}</strong>
               <span>
-                {effectiveParticipantIds.length} {effectiveParticipantIds.length === 1 ? "student" : "students"}
-                {draft.participantMode === "custom" ? " · custom list" : ""}
+                {effectiveParticipantIds.length}{" "}
+                {effectiveParticipantIds.length === 1 ? uiT("student") : uiT("students")}
+                {draft.participantMode === "custom" ? uiT(" · custom list") : ""}
               </span>
             </div>
             {draft.format === "group" ? (
               <Button onClick={() => setParticipantsOpen((value) => !value)}>
-                {participantsOpen ? "Hide" : "Manage"}
+                {participantsOpen ? uiT("Hide") : uiT("Manage")}
               </Button>
             ) : null}
           </section>
@@ -380,11 +386,11 @@ function EditClassModal({ open, session, state, actions, asOfDate, onClose }) {
             <div className="class-edit-participant-picker">
               <label>
                 <Search size={17} aria-hidden="true" />
-                <span className="sr-only">Search students</span>
+                <span className="sr-only">{uiT("Search students")}</span>
                 <input
                   value={participantSearch}
                   onChange={(event) => setParticipantSearch(event.target.value)}
-                  placeholder="Search students"
+                  placeholder={uiT("Search students")}
                 />
               </label>
               <div>
@@ -399,7 +405,9 @@ function EditClassModal({ open, session, state, actions, asOfDate, onClose }) {
                     <span>
                       <strong>{student.fullName}</strong>
                       <small>
-                        {groupIdsForStudent(student).includes(draft.groupId) ? "Group member" : "Not in this group"}
+                        {groupIdsForStudent(student).includes(draft.groupId)
+                          ? uiT("Group member")
+                          : uiT("Not in this group")}
                       </small>
                     </span>
                   </label>
@@ -407,17 +415,17 @@ function EditClassModal({ open, session, state, actions, asOfDate, onClose }) {
               </div>
               {draft.participantMode === "custom" ? (
                 <Button variant="ghost" onClick={() => update({ participantMode: "default", participantIds: [] })}>
-                  Use the group roster
+                  {uiT("Use the group roster")}
                 </Button>
               ) : null}
             </div>
           ) : null}
           <details className="class-edit-more">
-            <summary>More options</summary>
+            <summary>{uiT("More options")}</summary>
             <p>
               {futureSupported
-                ? "This is a recurring class. Choose the scope above before saving."
-                : "This is a one-time class."}
+                ? uiT("This is a recurring class. Choose the scope above before saving.")
+                : uiT("This is a one-time class.")}
             </p>
           </details>
         </div>
@@ -427,6 +435,7 @@ function EditClassModal({ open, session, state, actions, asOfDate, onClose }) {
 }
 
 function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
+  const { t: uiT } = useI18n();
   const [draft, setDraft] = useState(() => initialScheduleDraft(asOfDate, state));
   const [saving, setSaving] = useState(false);
   useEffect(() => {
@@ -454,27 +463,27 @@ function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
     <Drawer
       open={open}
       onClose={onClose}
-      title="New class"
-      description="Assign the class to a group or one student."
+      title={uiT("New class")}
+      description={uiT("Assign the class to a group or one student.")}
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
+          <Button onClick={onClose}>{uiT("Cancel")}</Button>
           <Button variant="primary" icon={CalendarDays} disabled={!valid || saving} onClick={save}>
-            {saving ? "Creating…" : "Create class"}
+            {saving ? uiT("Creating…") : uiT("Create class")}
           </Button>
         </>
       }
     >
       <div className="classes-new-form">
-        <Field label="Frequency" hint="A recurring class appears automatically on its selected days.">
-          <div className="classes-choice" role="group" aria-label="Class frequency">
+        <Field label={uiT("Frequency")} hint={uiT("A recurring class appears automatically on its selected days.")}>
+          <div className="classes-choice" role="group" aria-label={uiT("Class frequency")}>
             <button
               type="button"
               className={draft.recurrence === "once" ? "active" : ""}
               aria-pressed={draft.recurrence === "once"}
               onClick={() => update({ recurrence: "once" })}
             >
-              One-time
+              {uiT("One-time")}
             </button>
             <button
               type="button"
@@ -482,19 +491,19 @@ function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
               aria-pressed={draft.recurrence === "weekly"}
               onClick={() => update({ recurrence: "weekly" })}
             >
-              Recurring
+              {uiT("Recurring")}
             </button>
           </div>
         </Field>
-        <Field label="Format">
-          <div className="classes-choice" role="group" aria-label="Class format">
+        <Field label={uiT("Format")}>
+          <div className="classes-choice" role="group" aria-label={uiT("Class format")}>
             <button
               type="button"
               className={draft.format === "group" ? "active" : ""}
               aria-pressed={draft.format === "group"}
               onClick={() => update({ format: "group" })}
             >
-              Group
+              {uiT("Group")}
             </button>
             <button
               type="button"
@@ -502,14 +511,14 @@ function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
               aria-pressed={draft.format === "individual"}
               onClick={() => update({ format: "individual" })}
             >
-              Individual
+              {uiT("Individual")}
             </button>
           </div>
         </Field>
         {draft.format === "group" ? (
-          <Field label="Group" required>
+          <Field label={uiT("Group")} required>
             <Select value={draft.groupId} onChange={(event) => update({ groupId: event.target.value })}>
-              <option value="">Choose a group</option>
+              <option value="">{uiT("Choose a group")}</option>
               {state.groups.map((group) => (
                 <option key={group.id} value={group.id}>
                   {group.name}
@@ -518,9 +527,9 @@ function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
             </Select>
           </Field>
         ) : (
-          <Field label="Student" required>
+          <Field label={uiT("Student")} required>
             <Select value={draft.studentId} onChange={(event) => update({ studentId: event.target.value })}>
-              <option value="">Choose a student</option>
+              <option value="">{uiT("Choose a student")}</option>
               {state.students
                 .filter((student) => student.status !== "Inactive")
                 .map((student) => (
@@ -532,7 +541,7 @@ function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
           </Field>
         )}
         <div className="classes-new-grid">
-          <Field label="Start date" required>
+          <Field label={uiT("Start date")} required>
             <Input
               type="date"
               value={draft.startDate}
@@ -548,21 +557,21 @@ function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
               }}
             />
           </Field>
-          <Field label="Time" required>
+          <Field label={uiT("Time")} required>
             <Input
               type="time"
               value={draft.startTime}
               onChange={(event) => update({ startTime: event.target.value })}
             />
           </Field>
-          <Field label="Duration" required>
+          <Field label={uiT("Duration")} required>
             <Select
               value={draft.durationHours}
               onChange={(event) => update({ durationHours: Number(event.target.value) })}
             >
               {[1, 1.5, 2, 2.5, 3].map((hours) => (
                 <option value={hours} key={hours}>
-                  {hours} h
+                  {hours} {uiT(" h")}
                 </option>
               ))}
             </Select>
@@ -570,18 +579,18 @@ function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
         </div>
         {draft.recurrence === "weekly" ? (
           <>
-            <Field label="Repeat every">
+            <Field label={uiT("Repeat every")}>
               <Select
                 value={draft.intervalWeeks}
                 onChange={(event) => update({ intervalWeeks: Number(event.target.value) })}
               >
-                <option value="1">1 week</option>
-                <option value="2">2 weeks</option>
-                <option value="3">3 weeks</option>
-                <option value="4">4 weeks</option>
+                <option value="1">{uiT("1 week")}</option>
+                <option value="2">{uiT("2 weeks")}</option>
+                <option value="3">{uiT("3 weeks")}</option>
+                <option value="4">{uiT("4 weeks")}</option>
               </Select>
             </Field>
-            <Field label="Days of the week" required>
+            <Field label={uiT("Days of the week")} required>
               <div className="weekday-picker">
                 {DAY_OPTIONS.map(([value, label]) => {
                   const active = draft.daysOfWeek.includes(value);
@@ -599,7 +608,7 @@ function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
                         })
                       }
                     >
-                      {label}
+                      {uiT(label)}
                       {active ? <Check size={12} aria-hidden="true" /> : null}
                     </button>
                   );
@@ -608,7 +617,7 @@ function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
             </Field>
             <p className="classes-repeat-note">
               <CircleAlert size={15} aria-hidden="true" />
-              This class will repeat on the selected days.
+              {uiT("This class will repeat on the selected days.")}
             </p>
           </>
         ) : null}
@@ -618,38 +627,40 @@ function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
 }
 
 function AttendanceControl({ value, name, onChange }) {
+  const { t: uiT } = useI18n();
   return (
-    <div className="class-attendance-control" role="group" aria-label={`Attendance for ${name}`}>
+    <div className="class-attendance-control" role="group" aria-label={uiT("Attendance for {p0}", { p0: name })}>
       <button
         type="button"
         className={value === "P" ? "present active" : "present"}
         aria-pressed={value === "P"}
-        title="Present"
+        title={uiT("Present")}
         onClick={() => onChange("P")}
       >
-        P
+        {uiT("P")}
       </button>
       <button
         type="button"
         className={value === "A" ? "absent active" : "absent"}
         aria-pressed={value === "A"}
-        title="Absent"
+        title={uiT("Absent")}
         onClick={() => onChange("A")}
       >
-        A
+        {uiT("A")}
       </button>
     </div>
   );
 }
 
 function PaymentControl({ value, name, onChange }) {
+  const { t: uiT } = useI18n();
   const choices = [
     { value: "Paid", label: "Paid", icon: Check },
     { value: "Pending", label: "Pending", icon: Minus },
     { value: "Unpaid", label: "Unpaid", icon: X },
   ];
   return (
-    <div className="class-payment-control" role="group" aria-label={`Payment for ${name}`}>
+    <div className="class-payment-control" role="group" aria-label={uiT("Payment for {p0}", { p0: name })}>
       {choices.map((choice) => {
         const Icon = choice.icon;
         return (
@@ -657,8 +668,8 @@ function PaymentControl({ value, name, onChange }) {
             type="button"
             key={choice.value}
             className={`${choice.value.toLowerCase()} ${value === choice.value ? "active" : ""}`}
-            aria-label={choice.label}
-            title={choice.label}
+            aria-label={uiT(choice.label)}
+            title={uiT(choice.label)}
             aria-pressed={value === choice.value}
             onClick={() => onChange(choice.value)}
           >
@@ -671,6 +682,7 @@ function PaymentControl({ value, name, onChange }) {
 }
 
 function ClassFacts({ session, rosterCount }) {
+  const { t: uiT } = useI18n();
   const facts = [
     [CalendarDays, "Date", formatDate(session.classDate)],
     [Clock3, "Time", formatTime(session.startTime)],
@@ -684,7 +696,7 @@ function ClassFacts({ session, rosterCount }) {
         <div key={label}>
           <Icon size={19} aria-hidden="true" />
           <span>
-            <small>{label}</small>
+            <small>{uiT(label)}</small>
             <strong>{value}</strong>
           </span>
         </div>
@@ -694,6 +706,7 @@ function ClassFacts({ session, rosterCount }) {
 }
 
 function ClassSummary({ entries, roster, maximum }) {
+  const { t: uiT } = useI18n();
   const values = roster.map((student) => entries[student.id] || {});
   const present = values.filter((entry) => entry.attendance !== "A").length;
   const absent = values.filter((entry) => entry.attendance === "A").length;
@@ -705,11 +718,11 @@ function ClassSummary({ entries, roster, maximum }) {
     .filter((score, index) => values[index].score !== "" && Number.isFinite(score));
   const average = scores.length ? scores.reduce((sum, score) => sum + score, 0) / scores.length : null;
   return (
-    <aside className="class-live-summary" aria-label="Class summary">
+    <aside className="class-live-summary" aria-label={uiT("Class summary")}>
       <div className="class-live-summary-title">
         <div>
-          <h2>Class summary</h2>
-          <p>Review before saving</p>
+          <h2>{uiT("Class summary")}</h2>
+          <p>{uiT("Review before saving")}</p>
         </div>
         <BookOpenCheck size={34} aria-hidden="true" />
       </div>
@@ -717,28 +730,28 @@ function ClassSummary({ entries, roster, maximum }) {
         <div className="green">
           <dt>
             <UsersRound size={17} />
-            Present
+            {uiT("Present")}
           </dt>
           <dd>{present}</dd>
         </div>
         <div className="red">
           <dt>
             <UserRound size={17} />
-            Absent
+            {uiT("Absent")}
           </dt>
           <dd>{absent}</dd>
         </div>
         <div className="orange">
           <dt>
             <CircleDollarSign size={17} />
-            Payments pending
+            {uiT("Payments pending")}
           </dt>
           <dd>{pending}</dd>
         </div>
         <div className="blue">
           <dt>
             <CircleDollarSign size={17} />
-            Payments recorded
+            {uiT("Payments recorded")}
           </dt>
           <dd>{paid}</dd>
         </div>
@@ -746,7 +759,7 @@ function ClassSummary({ entries, roster, maximum }) {
           <div className="red">
             <dt>
               <CircleAlert size={17} />
-              Unpaid
+              {uiT("Unpaid")}
             </dt>
             <dd>{unpaid}</dd>
           </div>
@@ -755,11 +768,11 @@ function ClassSummary({ entries, roster, maximum }) {
       <div className="class-average">
         <Star size={21} aria-hidden="true" />
         <span>
-          <small>Average grade</small>
+          <small>{uiT("Average grade")}</small>
           <strong>
             {average == null ? "—" : average.toFixed(1)} <em>/ {maximum || 20}</em>
           </strong>
-          <b>{scores.length ? `Based on ${scores.length} grades` : "No grades recorded"}</b>
+          <b>{scores.length ? uiT("Based on {p0} grades", { p0: scores.length }) : uiT("No grades recorded")}</b>
         </span>
       </div>
     </aside>
@@ -767,18 +780,19 @@ function ClassSummary({ entries, roster, maximum }) {
 }
 
 function RemoteDraftNotice({ onKeep, onReload, onRebase }) {
+  const { t: uiT } = useI18n();
   return (
     <section className="class-remote-update" role="alert" aria-live="assertive">
       <CircleAlert size={22} aria-hidden="true" />
       <div>
-        <strong>Newer class data is available</strong>
-        <p>Your unsaved attendance, payments, and grades are safe. Choose how to continue.</p>
+        <strong>{uiT("Newer class data is available")}</strong>
+        <p>{uiT("Your unsaved attendance, payments, and grades are safe. Choose how to continue.")}</p>
       </div>
       <div className="class-remote-update-actions">
-        <Button onClick={onKeep}>Keep my draft</Button>
-        <Button onClick={onReload}>Reload remote version</Button>
+        <Button onClick={onKeep}>{uiT("Keep my draft")}</Button>
+        <Button onClick={onReload}>{uiT("Reload remote version")}</Button>
         <Button variant="primary" onClick={onRebase}>
-          Rebase my draft
+          {uiT("Rebase my draft")}
         </Button>
       </div>
     </section>
@@ -803,16 +817,17 @@ function SessionEditor({
   onSave,
   onDiscard,
   onCancel,
-  onEdit,
+  onEdit = undefined,
   variant = "upcoming",
 }) {
+  const { t: uiT } = useI18n();
   const [detailsOpen, setDetailsOpen] = useState(false);
   if (!session)
     return (
       <EmptyState
         icon={CalendarDays}
-        title="No class selected"
-        description="Choose a class from History or create a new class."
+        title={uiT("No class selected")}
+        description={uiT("Choose a class from History or create a new class.")}
       />
     );
   const heading =
@@ -830,11 +845,11 @@ function SessionEditor({
             <div className="class-session-heading-actions">
               {onEdit ? (
                 <Button className="class-edit-trigger" icon={Pencil} onClick={onEdit}>
-                  Edit class
+                  {uiT("Edit class")}
                 </Button>
               ) : null}
               <StatusBadge tone={statusTone(session.statusLabel)}>
-                {session.statusLabel === "Pending" ? "Pending registration" : session.statusLabel}
+                {session.statusLabel === "Pending" ? uiT("Pending registration") : session.statusLabel}
               </StatusBadge>
             </div>
           </div>
@@ -844,7 +859,7 @@ function SessionEditor({
                 <UsersRound size={24} aria-hidden="true" />
               </span>
               <div>
-                <small>{session.format === "group" ? "Group" : "Student"}</small>
+                <small>{session.format === "group" ? uiT("Group") : uiT("Student")}</small>
                 <strong>{session.title}</strong>
               </div>
             </div>
@@ -854,7 +869,7 @@ function SessionEditor({
               aria-expanded={detailsOpen}
               onClick={() => setDetailsOpen((open) => !open)}
             >
-              {detailsOpen ? "Hide details" : "View details"}
+              {detailsOpen ? uiT("Hide details") : uiT("View details")}
             </button>
             <div className={detailsOpen ? "class-overview-details is-open" : "class-overview-details"}>
               <ClassFacts session={session} rosterCount={roster.length} />
@@ -864,15 +879,15 @@ function SessionEditor({
         </header>
         <div className="class-session-body">
           <div className="class-task-toggle">
-            <strong>Record assignment?</strong>
-            <div role="group" aria-label="Record assignment">
+            <strong>{uiT("Record assignment?")}</strong>
+            <div role="group" aria-label={uiT("Record assignment")}>
               <button
                 type="button"
                 className={assessmentOn ? "active" : ""}
                 aria-pressed={assessmentOn}
                 onClick={() => setAssessmentOn(true)}
               >
-                Yes
+                {uiT("Yes")}
               </button>
               <button
                 type="button"
@@ -880,7 +895,7 @@ function SessionEditor({
                 aria-pressed={!assessmentOn}
                 onClick={() => setAssessmentOn(false)}
               >
-                No
+                {uiT("No")}
               </button>
             </div>
           </div>
@@ -888,16 +903,16 @@ function SessionEditor({
             <div className="class-assessment">
               <span>
                 <BookOpenCheck size={20} aria-hidden="true" />
-                <strong>Graded activity</strong>
+                <strong>{uiT("Graded activity")}</strong>
               </span>
-              <Field label="Assignment name">
+              <Field label={uiT("Assignment name")}>
                 <Input
                   value={assessment}
                   onChange={(event) => setAssessment(event.target.value)}
-                  placeholder="e.g. Equivalent fractions"
+                  placeholder={uiT("e.g. Equivalent fractions")}
                 />
               </Field>
-              <Field label="Maximum score">
+              <Field label={uiT("Maximum score")}>
                 <Input
                   type="number"
                   min="0.01"
@@ -911,16 +926,16 @@ function SessionEditor({
           {!roster.length ? (
             <EmptyState
               icon={UsersRound}
-              title="No active students"
-              description="Add active students to this group in Community before registering the class."
+              title={uiT("No active students")}
+              description={uiT("Add active students to this group in Community before registering the class.")}
             />
           ) : (
-            <div className="class-roster" role="table" aria-label="Class student roster">
+            <div className="class-roster" role="table" aria-label={uiT("Class student roster")}>
               <div className="class-roster-head" role="row">
-                <span role="columnheader">Student</span>
-                <span role="columnheader">Attendance</span>
-                <span role="columnheader">Payment</span>
-                {assessmentOn ? <span role="columnheader">Grade</span> : null}
+                <span role="columnheader">{uiT("Student")}</span>
+                <span role="columnheader">{uiT("Attendance")}</span>
+                <span role="columnheader">{uiT("Payment")}</span>
+                {assessmentOn ? <span role="columnheader">{uiT("Grade")}</span> : null}
               </div>
               {roster.map((student) => {
                 const entry = entries[student.id] || { attendance: "A", paymentState: "Pending", score: "" };
@@ -930,7 +945,7 @@ function SessionEditor({
                       <StudentAvatar avatarId={student.avatarId} name={student.fullName} size="tiny" decorative />
                       <span>
                         <strong>{student.fullName}</strong>
-                        <small>{student.code || "Student"}</small>
+                        <small>{student.code || uiT("Student")}</small>
                       </span>
                     </div>
                     <AttendanceControl
@@ -948,7 +963,10 @@ function SessionEditor({
                     />
                     {assessmentOn ? (
                       <label className="class-grade-input">
-                        <span className="sr-only">Grade for {student.fullName}</span>
+                        <span className="sr-only">
+                          {uiT("Grade for ")}
+                          {student.fullName}
+                        </span>
                         <Input
                           type="number"
                           min="0"
@@ -970,15 +988,15 @@ function SessionEditor({
       <footer className={`class-session-actions ${variant}`}>
         {variant === "history" ? (
           <Button onClick={onDiscard} disabled={!dirty || saving}>
-            Discard changes
+            {uiT("Discard changes")}
           </Button>
         ) : (
           <Button onClick={onCancel} disabled={saving || session.statusLabel === "Cancelled"}>
-            Mark cancelled
+            {uiT("Mark cancelled")}
           </Button>
         )}
         <Button variant="primary" icon={Save} onClick={onSave} disabled={!roster.length || saving || saveBlocked}>
-          {saving ? "Saving…" : variant === "history" ? "Save changes" : "Save class"}
+          {saving ? uiT("Saving…") : variant === "history" ? uiT("Save changes") : uiT("Save class")}
         </Button>
       </footer>
     </>
@@ -986,10 +1004,11 @@ function SessionEditor({
 }
 
 function UpcomingClasses({ sessions, onSelect }) {
+  const { t: uiT } = useI18n();
   if (!sessions.length) return null;
   return (
     <section className="classes-next-list" aria-labelledby="classes-next-title">
-      <h2 id="classes-next-title">Upcoming classes</h2>
+      <h2 id="classes-next-title">{uiT("Upcoming classes")}</h2>
       <div>
         {sessions.slice(0, 3).map((session) => (
           <button type="button" key={session.key} onClick={() => onSelect(session)}>
@@ -999,13 +1018,16 @@ function UpcomingClasses({ sessions, onSelect }) {
             <span>
               <small>
                 {session.classDate === todayDateOnly()
-                  ? `Today, ${formatTime(session.startTime)}`
+                  ? uiT("Today, {p0}", { p0: formatTime(session.startTime) })
                   : `${formatDate(session.classDate, { weekday: "short", month: "short", day: "numeric" })}, ${formatTime(session.startTime)}`}
               </small>
               <strong>{session.title}</strong>
               <em>
-                {session.durationHours} h · {session.format === "group" ? "Group" : "Individual"} ·{" "}
-                {session.format === "group" ? `${session.studentCount || 0} students` : "1 student"}
+                {session.durationHours} {uiT(" h · ")}
+                {session.format === "group" ? uiT("Group") : uiT("Individual")} ·{" "}
+                {session.format === "group"
+                  ? uiT("{p0} students", { p0: session.studentCount || 0 })
+                  : uiT("1 student")}
               </em>
             </span>
           </button>
@@ -1016,6 +1038,7 @@ function UpcomingClasses({ sessions, onSelect }) {
 }
 
 function CalendarSessionCard({ session, onOpen, compact = false, selected = false, onSelect }) {
+  const { t: uiT } = useI18n();
   const tone = calendarSessionTone(session);
   const studentCount = session.studentCount || (session.format === "individual" ? 1 : 0);
   return (
@@ -1030,8 +1053,8 @@ function CalendarSessionCard({ session, onOpen, compact = false, selected = fals
         <small>{formatTime(session.startTime)}</small>
         <strong>{session.title}</strong>
         <span>
-          {session.format === "group" ? "Group" : "Individual"} · {session.durationHours || 0} h · {studentCount}{" "}
-          {studentCount === 1 ? "student" : "students"}
+          {session.format === "group" ? uiT("Group") : uiT("Individual")} · {session.durationHours || 0} {uiT(" h · ")}
+          {studentCount} {studentCount === 1 ? uiT("student") : uiT("students")}
         </span>
       </div>
       {!compact ? (
@@ -1044,13 +1067,13 @@ function CalendarSessionCard({ session, onOpen, compact = false, selected = fals
               onOpen(session);
             }}
           >
-            Open class
+            {uiT("Open class")}
           </Button>
           <button
             type="button"
             className="calendar-more-button"
-            aria-label={`More options for ${session.title}`}
-            title="Open class"
+            aria-label={uiT("More options for {p0}", { p0: session.title })}
+            title={uiT("Open class")}
             onClick={(event) => {
               event.stopPropagation();
               onOpen(session);
@@ -1079,6 +1102,7 @@ function CalendarNavigator({
   showFilters,
   setShowFilters,
 }) {
+  const { t: uiT } = useI18n();
   const monthLabel = formatDate(anchorDate, { month: "long", year: "numeric" });
   const week = calendarWeekRange(anchorDate);
   const weekLabel = `${formatDate(week.startDate, { month: "short", day: "numeric" })} – ${formatDate(week.endDate, { month: "short", day: "numeric", year: "numeric" })}`;
@@ -1096,27 +1120,31 @@ function CalendarNavigator({
       <div className="calendar-period-controls">
         <button
           type="button"
-          aria-label={view === "month" ? "Previous month" : "Previous week"}
+          aria-label={view === "month" ? uiT("Previous month") : uiT("Previous week")}
           onClick={() => move(-1)}
         >
           <ChevronLeft size={18} />
         </button>
         <strong>{view === "month" ? monthLabel : weekLabel}</strong>
-        <button type="button" aria-label={view === "month" ? "Next month" : "Next week"} onClick={() => move(1)}>
+        <button
+          type="button"
+          aria-label={view === "month" ? uiT("Next month") : uiT("Next week")}
+          onClick={() => move(1)}
+        >
           <ChevronRight size={18} />
         </button>
         <button type="button" className="calendar-today-button" onClick={goToday}>
-          Today
+          {uiT("Today")}
         </button>
       </div>
-      <div className="calendar-view-toggle" role="group" aria-label="Calendar view">
+      <div className="calendar-view-toggle" role="group" aria-label={uiT("Calendar view")}>
         <button
           type="button"
           className={view === "month" ? "active" : ""}
           aria-pressed={view === "month"}
           onClick={() => setView("month")}
         >
-          Month
+          {uiT("Month")}
         </button>
         <button
           type="button"
@@ -1124,26 +1152,26 @@ function CalendarNavigator({
           aria-pressed={view === "week"}
           onClick={() => setView("week")}
         >
-          Week
+          {uiT("Week")}
         </button>
       </div>
       <label className="calendar-search">
         <Search size={18} aria-hidden="true" />
-        <span className="sr-only">Search student or group</span>
+        <span className="sr-only">{uiT("Search student or group")}</span>
         <input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search student or group"
+          placeholder={uiT("Search student or group")}
         />
       </label>
       <label className="calendar-owner-filter">
         <UsersRound size={18} aria-hidden="true" />
         <Select
-          aria-label="Filter calendar by student or group"
+          aria-label={uiT("Filter calendar by student or group")}
           value={ownerId}
           onChange={(event) => setOwnerId(event.target.value)}
         >
-          <option value="">All classes</option>
+          <option value="">{uiT("All classes")}</option>
           {ownerOptions.map((option) => (
             <option key={option.id} value={option.id}>
               {option.label}
@@ -1154,7 +1182,7 @@ function CalendarNavigator({
       <div className="calendar-mobile-tools">
         <button
           type="button"
-          aria-label="Search calendar"
+          aria-label={uiT("Search calendar")}
           aria-expanded={showFilters}
           onClick={() => setShowFilters((open) => !open)}
         >
@@ -1162,7 +1190,7 @@ function CalendarNavigator({
         </button>
         <button
           type="button"
-          aria-label="Filter calendar"
+          aria-label={uiT("Filter calendar")}
           aria-expanded={showFilters}
           onClick={() => setShowFilters((open) => !open)}
         >
@@ -1176,15 +1204,15 @@ function CalendarNavigator({
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search student or group"
+              placeholder={uiT("Search student or group")}
             />
           </label>
           <Select
-            aria-label="Filter calendar by student or group"
+            aria-label={uiT("Filter calendar by student or group")}
             value={ownerId}
             onChange={(event) => setOwnerId(event.target.value)}
           >
-            <option value="">All classes</option>
+            <option value="">{uiT("All classes")}</option>
             {ownerOptions.map((option) => (
               <option key={option.id} value={option.id}>
                 {option.label}
@@ -1198,12 +1226,13 @@ function CalendarNavigator({
 }
 
 function MonthCalendar({ anchorDate, days, sessionsByDate, selectedDate, setSelectedDate, currentDate }) {
+  const { t: uiT } = useI18n();
   const currentMonth = startOfMonth(anchorDate).slice(0, 7);
   return (
     <section className="calendar-month-card" aria-label={formatDate(anchorDate, { month: "long", year: "numeric" })}>
       <div className="calendar-month-weekdays" aria-hidden="true">
         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-          <span key={day}>{day}</span>
+          <span key={day}>{uiT(day)}</span>
         ))}
       </div>
       <div className="calendar-month-grid">
@@ -1215,7 +1244,10 @@ function MonthCalendar({ anchorDate, days, sessionsByDate, selectedDate, setSele
               type="button"
               key={date}
               className={`${outside ? "outside" : ""} ${date === selectedDate ? "selected" : ""} ${date === currentDate ? "today" : ""}`.trim()}
-              aria-label={`${formatDate(date, { weekday: "long", month: "long", day: "numeric" })}, ${dateSessions.length} classes`}
+              aria-label={uiT("{p0}, {p1} classes", {
+                p0: formatDate(date, { weekday: "long", month: "long", day: "numeric" }),
+                p1: dateSessions.length,
+              })}
               aria-pressed={date === selectedDate}
               onClick={() => setSelectedDate(date)}
             >
@@ -1226,7 +1258,7 @@ function MonthCalendar({ anchorDate, days, sessionsByDate, selectedDate, setSele
                 ))}
                 {dateSessions.length ? (
                   <em>
-                    {dateSessions.length} {dateSessions.length === 1 ? "class" : "classes"}
+                    {dateSessions.length} {dateSessions.length === 1 ? uiT("class") : uiT("classes")}
                   </em>
                 ) : null}
               </span>
@@ -1239,10 +1271,11 @@ function MonthCalendar({ anchorDate, days, sessionsByDate, selectedDate, setSele
 }
 
 function DayAgenda({ date, sessions, selectedKey, setSelectedKey, onOpen, onAdd, layout = "side" }) {
+  const { t: uiT } = useI18n();
   return (
     <aside
       className={`calendar-day-agenda ${layout}`}
-      aria-label={`Classes on ${formatDate(date, { month: "long", day: "numeric" })}`}
+      aria-label={uiT("Classes on {p0}", { p0: formatDate(date, { month: "long", day: "numeric" }) })}
     >
       <header>
         <div>
@@ -1250,7 +1283,7 @@ function DayAgenda({ date, sessions, selectedKey, setSelectedKey, onOpen, onAdd,
           <h2>{formatDate(date, { month: "long", day: "numeric" })}</h2>
         </div>
         <strong>
-          {sessions.length} {sessions.length === 1 ? "class" : "classes"}
+          {sessions.length} {sessions.length === 1 ? uiT("class") : uiT("classes")}
         </strong>
       </header>
       <div className="calendar-day-agenda-list">
@@ -1266,13 +1299,13 @@ function DayAgenda({ date, sessions, selectedKey, setSelectedKey, onOpen, onAdd,
         {!sessions.length ? (
           <EmptyState
             icon={CalendarDays}
-            title="No classes this day"
-            description="Choose another day or add a new class."
+            title={uiT("No classes this day")}
+            description={uiT("Choose another day or add a new class.")}
           />
         ) : null}
       </div>
       <Button icon={Plus} onClick={onAdd}>
-        Add class
+        {uiT("Add class")}
       </Button>
     </aside>
   );
@@ -1290,6 +1323,7 @@ function WeekCalendar({
   showWeekends,
   setShowWeekends,
 }) {
+  const { t: uiT } = useI18n();
   const visibleDays = showWeekends ? days : days.slice(0, 5);
   const selectedSessions = sessionsByDate.get(selectedDate) || [];
   const hours = Array.from({ length: 13 }, (_, index) => index + 8);
@@ -1299,7 +1333,7 @@ function WeekCalendar({
         <label>
           <input type="checkbox" checked={showWeekends} onChange={(event) => setShowWeekends(event.target.checked)} />
           <span aria-hidden="true" />
-          Show weekends
+          {uiT("Show weekends")}
         </label>
       </div>
       <section className="calendar-week-card">
@@ -1344,7 +1378,9 @@ function WeekCalendar({
                   >
                     <small>{formatTime(session.startTime)}</small>
                     <strong>{session.title}</strong>
-                    <span>{session.durationHours} h</span>
+                    <span>
+                      {session.durationHours} {uiT(" h")}
+                    </span>
                   </button>
                 );
               })}
@@ -1365,13 +1401,13 @@ function WeekCalendar({
       </div>
       {selectedKey ? (
         <div className="calendar-week-selection">
-          <span>Selected class</span>
+          <span>{uiT("Selected class")}</span>
           <strong>{[...sessionsByDate.values()].flat().find((session) => session.key === selectedKey)?.title}</strong>
           <Button
             variant="primary"
             onClick={() => onOpen([...sessionsByDate.values()].flat().find((session) => session.key === selectedKey))}
           >
-            Open class
+            {uiT("Open class")}
           </Button>
         </div>
       ) : null}
@@ -1475,6 +1511,7 @@ function CalendarWorkspace({ state, currentDate, onOpen, onAdd }) {
 }
 
 function HistoryList({ sessions, selectedKey, onSelect, filters, setFilters }) {
+  const { t: uiT } = useI18n();
   const [page, setPage] = useState(1);
   useEffect(() => setPage(1), [filters]);
   const pages = Math.max(1, Math.ceil(sessions.length / PAGE_SIZE));
@@ -1484,23 +1521,23 @@ function HistoryList({ sessions, selectedKey, onSelect, filters, setFilters }) {
       <div className="classes-history-filters">
         <label className="classes-history-search">
           <Search size={18} aria-hidden="true" />
-          <span className="sr-only">Search by group or student</span>
+          <span className="sr-only">{uiT("Search by group or student")}</span>
           <input
             value={filters.search}
-            placeholder="Search by group or student"
+            placeholder={uiT("Search by group or student")}
             onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))}
           />
         </label>
         <label>
           <CalendarDays size={18} aria-hidden="true" />
-          <span className="sr-only">From date</span>
+          <span className="sr-only">{uiT("From date")}</span>
           <input
             type="date"
             value={filters.dateFrom}
             onChange={(event) => setFilters((current) => ({ ...current, dateFrom: event.target.value }))}
           />
           <span>—</span>
-          <span className="sr-only">To date</span>
+          <span className="sr-only">{uiT("To date")}</span>
           <input
             type="date"
             value={filters.dateTo}
@@ -1510,11 +1547,11 @@ function HistoryList({ sessions, selectedKey, onSelect, filters, setFilters }) {
         <label>
           <UsersRound size={18} aria-hidden="true" />
           <Select
-            aria-label="Filter by group or student"
+            aria-label={uiT("Filter by group or student")}
             value={filters.ownerId}
             onChange={(event) => setFilters((current) => ({ ...current, ownerId: event.target.value }))}
           >
-            <option value="">Group or student</option>
+            <option value="">{uiT("Group or student")}</option>
             {[
               ...new Map(sessions.map((session) => [session.groupId || session.studentId, session.title])).entries(),
             ].map(([id, name]) => (
@@ -1527,24 +1564,24 @@ function HistoryList({ sessions, selectedKey, onSelect, filters, setFilters }) {
         <label>
           <Filter size={18} aria-hidden="true" />
           <Select
-            aria-label="Filter by status"
+            aria-label={uiT("Filter by status")}
             value={filters.status}
             onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}
           >
-            <option value="">Status</option>
+            <option value="">{uiT("Status")}</option>
             {["Pending", "Registered", "Cancelled", "Rescheduled"].map((status) => (
               <option key={status}>{status}</option>
             ))}
           </Select>
         </label>
       </div>
-      <section className="classes-history-list" aria-label="Class history">
+      <section className="classes-history-list" aria-label={uiT("Class history")}>
         <div className="classes-history-head">
-          <span>Date</span>
-          <span>Group / Student</span>
-          <span>Type</span>
-          <span>Status</span>
-          <span>Summary</span>
+          <span>{uiT("Date")}</span>
+          <span>{uiT("Group / Student")}</span>
+          <span>{uiT("Type")}</span>
+          <span>{uiT("Status")}</span>
+          <span>{uiT("Summary")}</span>
         </div>
         {visible.map((session) => (
           <button
@@ -1560,31 +1597,39 @@ function HistoryList({ sessions, selectedKey, onSelect, filters, setFilters }) {
             </span>
             <span>
               <strong>{session.title}</strong>
-              <small>{session.format === "group" ? "Group" : session.studentName || "Individual"}</small>
+              <small>{session.format === "group" ? uiT("Group") : session.studentName || uiT("Individual")}</small>
             </span>
             <span>{session.format === "group" ? <UsersRound size={18} /> : <UserRound size={18} />}</span>
             <StatusBadge tone={statusTone(session.statusLabel)}>{session.statusLabel}</StatusBadge>
             <span>
               <b>
-                {session.studentCount || 1} {session.studentCount === 1 ? "student" : "students"}
+                {session.studentCount || 1} {session.studentCount === 1 ? uiT("student") : uiT("students")}
               </b>
-              <small>{session.durationHours} h</small>
+              <small>
+                {session.durationHours} {uiT(" h")}
+              </small>
             </span>
             <ChevronRight size={17} aria-hidden="true" />
           </button>
         ))}
         {!visible.length ? (
-          <EmptyState icon={CalendarDays} title="No matching classes" description="Try changing one or more filters." />
+          <EmptyState
+            icon={CalendarDays}
+            title={uiT("No matching classes")}
+            description={uiT("Try changing one or more filters.")}
+          />
         ) : null}
         <footer>
           <span>
-            Showing {sessions.length ? (page - 1) * PAGE_SIZE + 1 : 0} to {Math.min(page * PAGE_SIZE, sessions.length)}{" "}
-            of {sessions.length} classes
+            {uiT("Showing ")}
+            {sessions.length ? (page - 1) * PAGE_SIZE + 1 : 0} {uiT(" to ")}
+            {Math.min(page * PAGE_SIZE, sessions.length)} {uiT("of ")}
+            {sessions.length} {uiT(" classes")}
           </span>
-          <nav aria-label="History pages">
+          <nav aria-label={uiT("History pages")}>
             <button
               type="button"
-              aria-label="Previous page"
+              aria-label={uiT("Previous page")}
               disabled={page === 1}
               onClick={() => setPage((value) => value - 1)}
             >
@@ -1604,7 +1649,7 @@ function HistoryList({ sessions, selectedKey, onSelect, filters, setFilters }) {
               ))}
             <button
               type="button"
-              aria-label="Next page"
+              aria-label={uiT("Next page")}
               disabled={page === pages}
               onClick={() => setPage((value) => value + 1)}
             >
@@ -1618,13 +1663,14 @@ function HistoryList({ sessions, selectedKey, onSelect, filters, setFilters }) {
 }
 
 export default function Classes({
-  state = {},
-  actions = {},
+  state = undefined,
+  actions = undefined,
   asOfDate,
   intent,
   clearIntent,
   registerNavigationBlocker,
 }) {
+  const { t: uiT } = useI18n();
   const currentDate = asOfDate || state.settings?.asOfDate || todayDateOnly();
   const sessions = useMemo(() => buildClassWorkspaceSessions(state, currentDate), [currentDate, state]);
   const [currentTime, setCurrentTime] = useState(() => currentTimeForDate(currentDate));
@@ -1803,7 +1849,15 @@ export default function Classes({
         (activeSession.rows || []).find((row) => row.id === entry.classId) ||
         (activeSession.rows || []).find((row) => row.studentId === student.id);
       const hours = existing?.hours ?? activeSession.durationHours ?? state.settings?.defaultClassHours ?? 2;
-      const charge = hours * (resolveHourlyRate(state, student, activeSession.groupId) || 0);
+      const charge =
+        calculateCharge(state, {
+          ...existing,
+          classDate: activeSession.classDate,
+          studentId: student.id,
+          groupId: activeSession.groupId || "",
+          classStatus,
+          hours,
+        }) ?? 0;
       const payment = entry.paymentTouched ? entry.paymentState : null;
       return {
         ...existing,
@@ -1927,14 +1981,14 @@ export default function Classes({
     <div className="page classes-workspace-page">
       <header className="classes-workspace-heading">
         <div>
-          <h1>Classes</h1>
-          <p>Record the current class quickly and simply.</p>
+          <h1>{uiT("Classes")}</h1>
+          <p>{uiT("Record the current class quickly and simply.")}</p>
         </div>
         <Button icon={Plus} onClick={() => setNewClassOpen(true)}>
-          New class
+          {uiT("New class")}
         </Button>
       </header>
-      <div className="classes-workspace-tabs" role="tablist" aria-label="Class views">
+      <div className="classes-workspace-tabs" role="tablist" aria-label={uiT("Class views")}>
         <button
           type="button"
           role="tab"
@@ -1942,7 +1996,7 @@ export default function Classes({
           className={tab === "next" ? "active" : ""}
           onClick={() => changeTab("next")}
         >
-          Next class
+          {uiT("Next class")}
         </button>
         <button
           type="button"
@@ -1951,7 +2005,7 @@ export default function Classes({
           className={tab === "calendar" ? "active" : ""}
           onClick={() => changeTab("calendar")}
         >
-          Calendar
+          {uiT("Calendar")}
         </button>
         <button
           type="button"
@@ -1960,7 +2014,7 @@ export default function Classes({
           className={tab === "history" ? "active" : ""}
           onClick={() => changeTab("history")}
         >
-          History
+          {uiT("History")}
         </button>
       </div>
       {remoteUpdate ? (
@@ -2004,11 +2058,11 @@ export default function Classes({
           ) : (
             <EmptyState
               icon={CalendarDays}
-              title="No upcoming classes"
-              description="Create a one-time or recurring class to start the daily workflow."
+              title={uiT("No upcoming classes")}
+              description={uiT("Create a one-time or recurring class to start the daily workflow.")}
               action={
                 <Button icon={Plus} variant="primary" onClick={() => setNewClassOpen(true)}>
-                  New class
+                  {uiT("New class")}
                 </Button>
               }
             />

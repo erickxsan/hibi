@@ -1,3 +1,4 @@
+import { useI18n } from "../i18n/index.jsx";
 import { useMemo, useState } from "react";
 import { CalendarClock, CheckCircle2, History, TrendingUp, WalletCards } from "lucide-react";
 import { Button } from "../components/ui";
@@ -15,6 +16,7 @@ function shortDate(value) {
 }
 
 function ForecastChart({ actual, ideal, recent }) {
+  const { t: uiT } = useI18n();
   const max = Math.max(ideal, recent, actual, 1);
   const points = (target) =>
     [0, 0.14, 0.3, 0.44, 0.6, 0.76, 0.88, 1]
@@ -25,18 +27,18 @@ function ForecastChart({ actual, ideal, recent }) {
       <div className="chart-legend">
         <span>
           <i className="actual" />
-          Actual
+          {uiT("Actual")}
         </span>
         <span>
           <i className="ideal" />
-          Ideal attendance
+          {uiT("Ideal attendance")}
         </span>
         <span>
           <i className="recent" />
-          Recent collections
+          {uiT("Recent collections")}
         </span>
       </div>
-      <svg viewBox="0 0 600 200" role="img" aria-label="Revenue forecast chart">
+      <svg viewBox="0 0 600 200" role="img" aria-label={uiT("Revenue forecast chart")}>
         <g className="grid">
           <line x1="18" y1="46" x2="582" y2="46" />
           <line x1="18" y1="90" x2="582" y2="90" />
@@ -48,15 +50,16 @@ function ForecastChart({ actual, ideal, recent }) {
         <polyline className="actual-line" points={points(actual)} />
       </svg>
       <div className="chart-labels">
-        <span>Month start</span>
-        <span>Today</span>
-        <span>Month end</span>
+        <span>{uiT("Month start")}</span>
+        <span>{uiT("Today")}</span>
+        <span>{uiT("Month end")}</span>
       </div>
     </div>
   );
 }
 
 export default function Payments({ state, derived, actions, openPage }) {
+  const { t: uiT } = useI18n();
   const [range, setRange] = useState("month");
   const [payingId, setPayingId] = useState("");
   const dashboard = derived.dashboard;
@@ -119,15 +122,15 @@ export default function Payments({ state, derived, actions, openPage }) {
     <div className="page">
       <div className="page-heading">
         <div>
-          <h1>Payments & Revenue</h1>
-          <p>Track class-by-class collections, balances, advance payments, and both revenue projections.</p>
+          <h1>{uiT("Payments & Revenue")}</h1>
+          <p>{uiT("Track class-by-class collections, balances, advance payments, and both revenue projections.")}</p>
         </div>
         <div className="segmented compact">
           <button type="button" className={range === "week" ? "active" : ""} onClick={() => setRange("week")}>
-            Week
+            {uiT("Week")}
           </button>
           <button type="button" className={range === "month" ? "active" : ""} onClick={() => setRange("month")}>
-            Month
+            {uiT("Month")}
           </button>
         </div>
       </div>
@@ -145,11 +148,11 @@ export default function Payments({ state, derived, actions, openPage }) {
         <article className="payment-list-panel">
           <header>
             <div>
-              <h2>Current unpaid / pending</h2>
-              <p>Balances come directly from saved class records.</p>
+              <h2>{uiT("Current unpaid / pending")}</h2>
+              <p>{uiT("Balances come directly from saved class records.")}</p>
             </div>
             <Button icon={History} onClick={() => openPage("classes", "class-history")}>
-              Detailed history
+              {uiT("Detailed history")}
             </Button>
           </header>
           <div className="payment-list">
@@ -166,7 +169,7 @@ export default function Payments({ state, derived, actions, openPage }) {
                   <small>
                     {shortDate(row.classDate)}
                     {row.startTime ? ` · ${row.startTime}` : ""} ·{" "}
-                    {row.classTitle || row.groupName || "Individual class"}
+                    {row.classTitle || row.groupName || uiT("Individual class")}
                   </small>
                 </span>
                 <strong>{money(row.outstanding)}</strong>
@@ -175,18 +178,18 @@ export default function Payments({ state, derived, actions, openPage }) {
                     row.classDate < state.settings.asOfDate ? "record-status overdue" : "record-status pending"
                   }
                 >
-                  {row.classDate < state.settings.asOfDate ? "Overdue" : "Pending"}
+                  {row.classDate < state.settings.asOfDate ? uiT("Overdue") : uiT("Pending")}
                 </span>
                 <Button onClick={() => markPaid(row)} disabled={payingId === row.id}>
-                  {payingId === row.id ? "Saving…" : "Mark paid"}
+                  {payingId === row.id ? uiT("Saving…") : uiT("Mark paid")}
                 </Button>
               </div>
             ))}
             {!pending.length ? (
               <div className="empty-box">
                 <CheckCircle2 size={28} />
-                <h2>Everything is paid</h2>
-                <p>No outstanding class balances through today.</p>
+                <h2>{uiT("Everything is paid")}</h2>
+                <p>{uiT("No outstanding class balances through today.")}</p>
               </div>
             ) : null}
           </div>
@@ -194,8 +197,8 @@ export default function Payments({ state, derived, actions, openPage }) {
         <article className="forecast-panel">
           <header>
             <div>
-              <h2>Revenue forecast</h2>
-              <p>Actual collections vs both requested projections.</p>
+              <h2>{uiT("Revenue forecast")}</h2>
+              <p>{uiT("Actual collections vs both requested projections.")}</p>
             </div>
           </header>
           <ForecastChart
@@ -205,25 +208,25 @@ export default function Payments({ state, derived, actions, openPage }) {
           />
           <div className="forecast-totals">
             <span>
-              <small>Actual</small>
+              <small>{uiT("Actual")}</small>
               <strong>{money(dashboard.collectedSelectedMonth)}</strong>
             </span>
             <span>
-              <small>Ideal · all attend</small>
+              <small>{uiT("Ideal · all attend")}</small>
               <strong>{money(dashboard.idealRevenue)}</strong>
             </span>
             <span>
-              <small>Recent trend</small>
+              <small>{uiT("Recent trend")}</small>
               <strong>{money(dashboard.recentProjection)}</strong>
             </span>
           </div>
         </article>
       </section>
       <section className="encouragement slim">
-        <img src="/hibi-companion.png" alt="" />
+        <img src="/hibi-companion.png" alt={uiT("")} />
         <div>
-          <strong>Your collections are visible at a glance.</strong>
-          <p>Advance payments remain tied to the future class record they cover.</p>
+          <strong>{uiT("Your collections are visible at a glance.")}</strong>
+          <p>{uiT("Advance payments remain tied to the future class record they cover.")}</p>
         </div>
       </section>
     </div>

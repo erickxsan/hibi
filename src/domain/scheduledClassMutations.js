@@ -140,12 +140,20 @@ export function editScheduledClassState(state, { session, draft: rawDraft, scope
     const oldDay = dayOfWeekForDate(effectiveFrom);
     const newDay = dayOfWeekForDate(draft.classDate);
     const nextDays = [...new Set((source.daysOfWeek || [oldDay]).map((day) => (day === oldDay ? newDay : day)))].sort();
-    const { id: _sourceId, endDate: _sourceEndDate, ...sourceFields } = source;
+    if (source.endDate && draft.classDate > source.endDate)
+      throw new Error("The new date must be within the series end date.");
+    const dateChanged = draft.classDate !== effectiveFrom;
+    if (dateChanged && source.daysOfWeek.length > 1) {
+      throw new Error("Move one occurrence at a time for a series with multiple weekdays.");
+    }
+    const dayShift = Math.round((Date.parse(draft.classDate) - Date.parse(effectiveFrom)) / 86400000);
+    const { id: _sourceId, ...sourceFields } = source;
     const replacement = createClassSchedule({
       ...sourceFields,
       recurrence: "weekly",
       startDate: draft.classDate,
-      endDate: "",
+      recurrenceAnchorDate: addDays(source.recurrenceAnchorDate || source.startDate, dayShift),
+      endDate: source.endDate || "",
       startTime: draft.startTime,
       durationHours: draft.durationHours,
       daysOfWeek: nextDays,
@@ -158,12 +166,24 @@ export function editScheduledClassState(state, { session, draft: rawDraft, scope
     return {
       ...state,
       classSchedules: [
-        ...state.classSchedules.map((item) =>
-          item.id === source.id ? { ...item, endDate: addDays(effectiveFrom, -1) } : item,
-        ),
+        ...state.classSchedules.flatMap((item) => {
+          if (item.id !== source.id) return [item];
+          return effectiveFrom <= source.startDate ? [] : [{ ...item, endDate: addDays(effectiveFrom, -1) }];
+        }),
         replacement,
       ],
-      scheduleExceptions: remainingExceptions,
+      scheduleExceptions: (state.scheduleExceptions || []).flatMap((item) => {
+        if (!isExceptionFromSeries(item, session) || item.occurrenceDate < effectiveFrom) return [item];
+        if (exceptionMatchesSession(item, session)) return [];
+        return [
+          {
+            ...item,
+            classScheduleId: replacement.id,
+            scheduleSlotId: item.scheduleSlotId === source.id ? replacement.id : item.scheduleSlotId,
+            occurrenceDate: addDays(item.occurrenceDate, dayShift),
+          },
+        ];
+      }),
     };
   }
 

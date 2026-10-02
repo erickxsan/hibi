@@ -1,3 +1,5 @@
+import { uiText } from "../i18n/index.jsx";
+import { roundMoney, sumMoney } from "../domain/money.js";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
@@ -70,10 +72,6 @@ function nullableNumber(value) {
 function effectiveNumber(value, fallback = 0) {
   const number = nullableNumber(value);
   return number === null ? fallback : number;
-}
-
-function roundMoney(value) {
-  return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 }
 
 function safeToday() {
@@ -296,31 +294,32 @@ function AttendanceSelect({ value, onChange, label, disabled = false }) {
 }
 
 function ClassControls({ value, groups, hasIndividualStudents, onChange, onAdvance, onSave, saving, canSave }) {
+  const { t: uiT } = useI18n();
   return (
-    <section className="panel class-controls" aria-label="Class details">
+    <section className="panel class-controls" aria-label={uiT("Class details")}>
       <div className="form-grid class-control-grid">
-        <Field label="Class date" required>
+        <Field label={uiT("Class date")} required>
           <Input type="date" value={value.classDate} onChange={(event) => onChange("classDate", event.target.value)} />
         </Field>
-        <Field label="Start time">
+        <Field label={uiT("Start time")}>
           <Input
             type="time"
             value={value.startTime || ""}
             onChange={(event) => onChange("startTime", event.target.value)}
           />
         </Field>
-        <Field label="Group" required>
+        <Field label={uiT("Group")} required>
           <Select value={value.groupId} onChange={(event) => onChange("groupId", event.target.value)}>
-            <option value="">Choose a group</option>
+            <option value="">{uiT("Choose a group")}</option>
             {groups.map((group) => (
               <option value={group.id} key={group.id}>
                 {group.name}
               </option>
             ))}
-            {hasIndividualStudents ? <option value={UNASSIGNED_GROUP}>Individual students</option> : null}
+            {hasIndividualStudents ? <option value={UNASSIGNED_GROUP}>{uiT("Individual students")}</option> : null}
           </Select>
         </Field>
-        <Field label="Class status" required>
+        <Field label={uiT("Class status")} required>
           <Select value={value.classStatus} onChange={(event) => onChange("classStatus", event.target.value)}>
             {CLASS_STATUSES.map((status) => (
               <option value={status} key={status}>
@@ -329,7 +328,7 @@ function ClassControls({ value, groups, hasIndividualStudents, onChange, onAdvan
             ))}
           </Select>
         </Field>
-        <Field label="Hours" required>
+        <Field label={uiT("Hours")} required>
           <Input
             type="number"
             min="0"
@@ -341,10 +340,10 @@ function ClassControls({ value, groups, hasIndividualStudents, onChange, onAdvan
       </div>
       <div className="class-control-actions">
         <Button icon={CreditCard} onClick={onAdvance}>
-          Advance payment
+          {uiT("Advance payment")}
         </Button>
         <Button variant="primary" icon={Save} onClick={onSave} disabled={!canSave || saving}>
-          {saving ? "Saving…" : "Save class"}
+          {saving ? uiT("Saving…") : uiT("Save class")}
         </Button>
       </div>
     </section>
@@ -352,8 +351,9 @@ function ClassControls({ value, groups, hasIndividualStudents, onChange, onAdvan
 }
 
 function MobileRosterCards({ rows, classStatus, currency, onChange }) {
+  const { t: uiT } = useI18n();
   return (
-    <section className="mobile-roster-cards" aria-label="Class roster">
+    <section className="mobile-roster-cards" aria-label={uiT("Class roster")}>
       {rows.map((row) => {
         const attendanceDisabled = classStatus !== "Completed";
         const hasMoreDetails = Boolean(row.draft.paymentReference || row.draft.notes);
@@ -365,22 +365,22 @@ function MobileRosterCards({ rows, classStatus, currency, onChange }) {
                 <StudentAvatar avatarId={row.avatarId} name={row.studentName} size="tiny" decorative />
                 <span className="mobile-student-copy">
                   <strong>{row.studentName}</strong>
-                  <span>{row.studentCode || "No ID"}</span>
+                  <span>{row.studentCode || uiT("No ID")}</span>
                 </span>
               </div>
               <StatusBadge tone={paymentTone(row.paymentStatus)}>{row.paymentStatus || "—"}</StatusBadge>
             </header>
 
             <div className="mobile-roster-field-grid mobile-roster-attendance-grid">
-              <Field label="Attendance">
+              <Field label={uiT("Attendance")}>
                 <AttendanceSelect
                   value={row.draft.attendance}
                   onChange={(next) => onChange(row.studentId, "attendance", next)}
-                  label={`Attendance for ${row.studentName}`}
+                  label={uiT("Attendance for {p0}", { p0: row.studentName })}
                   disabled={attendanceDisabled}
                 />
               </Field>
-              <Field label="Hours">
+              <Field label={uiT("Hours")}>
                 <Input
                   type="number"
                   min="0"
@@ -389,24 +389,24 @@ function MobileRosterCards({ rows, classStatus, currency, onChange }) {
                   value={row.draft.hours}
                   placeholder={String(row.effectiveHours)}
                   onChange={(event) => onChange(row.studentId, "hours", event.target.value)}
-                  aria-label={`Hours for ${row.studentName}; blank uses the class default`}
+                  aria-label={uiT("Hours for {p0}; blank uses the class default", { p0: row.studentName })}
                 />
               </Field>
             </div>
 
             <dl className="mobile-roster-money-summary">
               <div>
-                <dt>Charge</dt>
+                <dt>{uiT("Charge")}</dt>
                 <dd>{currency(row.charge)}</dd>
               </div>
               <div className={row.outstanding ? "has-outstanding" : ""}>
-                <dt>Outstanding</dt>
+                <dt>{uiT("Outstanding")}</dt>
                 <dd>{currency(row.outstanding)}</dd>
               </div>
             </dl>
 
             <div className="mobile-roster-field-grid mobile-roster-payment-grid">
-              <Field label="Amount paid">
+              <Field label={uiT("Amount paid")}>
                 <Input
                   type="number"
                   min="0"
@@ -414,22 +414,22 @@ function MobileRosterCards({ rows, classStatus, currency, onChange }) {
                   inputMode="decimal"
                   value={row.draft.amountPaid}
                   onChange={(event) => onChange(row.studentId, "amountPaid", event.target.value)}
-                  aria-label={`Amount paid by ${row.studentName}`}
+                  aria-label={uiT("Amount paid by {p0}", { p0: row.studentName })}
                 />
               </Field>
-              <Field label="Payment date">
+              <Field label={uiT("Payment date")}>
                 <Input
                   type="date"
                   value={row.draft.paymentDate}
                   onChange={(event) => onChange(row.studentId, "paymentDate", event.target.value)}
-                  aria-label={`Payment date for ${row.studentName}`}
+                  aria-label={uiT("Payment date for {p0}", { p0: row.studentName })}
                 />
               </Field>
-              <Field label="Method" className="mobile-payment-method">
+              <Field label={uiT("Method")} className="mobile-payment-method">
                 <Select
                   value={row.draft.paymentMethod}
                   onChange={(event) => onChange(row.studentId, "paymentMethod", event.target.value)}
-                  aria-label={`Payment method for ${row.studentName}`}
+                  aria-label={uiT("Payment method for {p0}", { p0: row.studentName })}
                 >
                   <option value="">—</option>
                   {PAYMENT_METHODS.map((method) => (
@@ -443,25 +443,27 @@ function MobileRosterCards({ rows, classStatus, currency, onChange }) {
 
             <details className="mobile-roster-details">
               <summary>
-                <span>More details</span>
-                <span className="mobile-details-hint">{hasMoreDetails ? "Added" : "Reference and notes"}</span>
+                <span>{uiT("More details")}</span>
+                <span className="mobile-details-hint">
+                  {hasMoreDetails ? uiT("Added") : uiT("Reference and notes")}
+                </span>
               </summary>
               <div className="mobile-roster-detail-fields">
-                <Field label="Reference">
+                <Field label={uiT("Reference")}>
                   <Input
                     value={row.draft.paymentReference}
                     onChange={(event) => onChange(row.studentId, "paymentReference", event.target.value)}
-                    aria-label={`Payment reference for ${row.studentName}`}
-                    placeholder="Optional"
+                    aria-label={uiT("Payment reference for {p0}", { p0: row.studentName })}
+                    placeholder={uiT("Optional")}
                   />
                 </Field>
-                <Field label="Notes">
+                <Field label={uiT("Notes")}>
                   <TextArea
                     rows="2"
                     value={row.draft.notes}
                     onChange={(event) => onChange(row.studentId, "notes", event.target.value)}
-                    aria-label={`Notes for ${row.studentName}`}
-                    placeholder="Optional"
+                    aria-label={uiT("Notes for {p0}", { p0: row.studentName })}
+                    placeholder={uiT("Optional")}
                   />
                 </Field>
               </div>
@@ -474,20 +476,21 @@ function MobileRosterCards({ rows, classStatus, currency, onChange }) {
 }
 
 function RosterTable({ rows, classStatus, currency, onChange, groupSelected = false, onGoToSetup }) {
+  const { t: uiT } = useI18n();
   if (!rows.length) {
     return (
       <EmptyState
         icon={Users}
-        title={groupSelected ? "This group has no active students" : "Choose a group to load its roster"}
+        title={groupSelected ? uiT("This group has no active students") : uiT("Choose a group to load its roster")}
         description={
           groupSelected
-            ? "Add a student to this group in Students, then return here to record the class."
-            : "Only active students are included. You can manage enrollment from Students."
+            ? uiT("Add a student to this group in Students, then return here to record the class.")
+            : uiT("Only active students are included. You can manage enrollment from Students.")
         }
         action={
           groupSelected && onGoToSetup ? (
             <Button variant="primary" onClick={onGoToSetup}>
-              Go to Students
+              {uiT("Go to Students")}
             </Button>
           ) : null
         }
@@ -497,26 +500,26 @@ function RosterTable({ rows, classStatus, currency, onChange, groupSelected = fa
 
   return (
     <>
-      <TableShell label="Class roster" className="roster-table-shell">
+      <TableShell label={uiT("Class roster")} className="roster-table-shell">
         <table className="roster-table">
           <thead>
             <tr>
               <th scope="col" className="sticky-cell">
-                Student
+                {uiT("Student")}
               </th>
-              <th scope="col">Attendance</th>
+              <th scope="col">{uiT("Attendance")}</th>
               <th scope="col" className="numeric number-cell">
-                Charge
+                {uiT("Charge")}
               </th>
-              <th scope="col">Amount paid</th>
-              <th scope="col">Payment date</th>
-              <th scope="col">Method</th>
-              <th scope="col">Payment status</th>
+              <th scope="col">{uiT("Amount paid")}</th>
+              <th scope="col">{uiT("Payment date")}</th>
+              <th scope="col">{uiT("Method")}</th>
+              <th scope="col">{uiT("Payment status")}</th>
               <th scope="col" className="numeric number-cell">
-                Outstanding
+                {uiT("Outstanding")}
               </th>
-              <th scope="col">Reference</th>
-              <th scope="col">Notes</th>
+              <th scope="col">{uiT("Reference")}</th>
+              <th scope="col">{uiT("Notes")}</th>
             </tr>
           </thead>
           <tbody>
@@ -529,9 +532,9 @@ function RosterTable({ rows, classStatus, currency, onChange, groupSelected = fa
                       <StudentAvatar avatarId={row.avatarId} name={row.studentName} size="tiny" decorative />
                       <span className="student-cell-copy">
                         <strong>{row.studentName}</strong>
-                        <span>{row.studentCode || "No ID"}</span>
+                        <span>{row.studentCode || uiT("No ID")}</span>
                         <label className="hours-exception">
-                          <span>Hours</span>
+                          <span>{uiT("Hours")}</span>
                           <Input
                             type="number"
                             min="0"
@@ -539,7 +542,7 @@ function RosterTable({ rows, classStatus, currency, onChange, groupSelected = fa
                             value={row.draft.hours}
                             placeholder={String(row.effectiveHours)}
                             onChange={(event) => onChange(row.studentId, "hours", event.target.value)}
-                            aria-label={`Hours for ${row.studentName}; blank uses the class default`}
+                            aria-label={uiT("Hours for {p0}; blank uses the class default", { p0: row.studentName })}
                           />
                         </label>
                       </span>
@@ -549,7 +552,7 @@ function RosterTable({ rows, classStatus, currency, onChange, groupSelected = fa
                     <AttendanceSelect
                       value={row.draft.attendance}
                       onChange={(next) => onChange(row.studentId, "attendance", next)}
-                      label={`Attendance for ${row.studentName}`}
+                      label={uiT("Attendance for {p0}", { p0: row.studentName })}
                       disabled={attendanceDisabled}
                     />
                   </td>
@@ -562,7 +565,7 @@ function RosterTable({ rows, classStatus, currency, onChange, groupSelected = fa
                       inputMode="decimal"
                       value={row.draft.amountPaid}
                       onChange={(event) => onChange(row.studentId, "amountPaid", event.target.value)}
-                      aria-label={`Amount paid by ${row.studentName}`}
+                      aria-label={uiT("Amount paid by {p0}", { p0: row.studentName })}
                     />
                   </td>
                   <td>
@@ -570,14 +573,14 @@ function RosterTable({ rows, classStatus, currency, onChange, groupSelected = fa
                       type="date"
                       value={row.draft.paymentDate}
                       onChange={(event) => onChange(row.studentId, "paymentDate", event.target.value)}
-                      aria-label={`Payment date for ${row.studentName}`}
+                      aria-label={uiT("Payment date for {p0}", { p0: row.studentName })}
                     />
                   </td>
                   <td>
                     <Select
                       value={row.draft.paymentMethod}
                       onChange={(event) => onChange(row.studentId, "paymentMethod", event.target.value)}
-                      aria-label={`Payment method for ${row.studentName}`}
+                      aria-label={uiT("Payment method for {p0}", { p0: row.studentName })}
                     >
                       <option value="">—</option>
                       {PAYMENT_METHODS.map((method) => (
@@ -595,16 +598,16 @@ function RosterTable({ rows, classStatus, currency, onChange, groupSelected = fa
                     <Input
                       value={row.draft.paymentReference}
                       onChange={(event) => onChange(row.studentId, "paymentReference", event.target.value)}
-                      aria-label={`Payment reference for ${row.studentName}`}
-                      placeholder="Optional"
+                      aria-label={uiT("Payment reference for {p0}", { p0: row.studentName })}
+                      placeholder={uiT("Optional")}
                     />
                   </td>
                   <td>
                     <Input
                       value={row.draft.notes}
                       onChange={(event) => onChange(row.studentId, "notes", event.target.value)}
-                      aria-label={`Notes for ${row.studentName}`}
-                      placeholder="Optional"
+                      aria-label={uiT("Notes for {p0}", { p0: row.studentName })}
+                      placeholder={uiT("Optional")}
                     />
                   </td>
                 </tr>
@@ -619,30 +622,31 @@ function RosterTable({ rows, classStatus, currency, onChange, groupSelected = fa
 }
 
 function ReviewPanel({ classDraft, selectedGroup, rows, summary, issues, currency, saving, onSave }) {
+  const { t: uiT } = useI18n();
   const attendanceItems = ["P", "L", "E", "A"];
   return (
     <aside className="review-card panel" aria-labelledby="review-heading">
       <div className="panel-header">
         <div>
-          <h2 id="review-heading">Review before saving</h2>
-          <p>One row will be saved per student.</p>
+          <h2 id="review-heading">{uiT("Review before saving")}</h2>
+          <p>{uiT("One row will be saved per student.")}</p>
         </div>
       </div>
 
       <div className="review-facts">
-        <SummaryLine label="Class date" value={classDraft.classDate || "—"} />
-        <SummaryLine label="Start time" value={classDraft.startTime || "—"} />
-        <SummaryLine label="Group" value={selectedGroup?.name || "—"} />
+        <SummaryLine label={uiT("Class date")} value={classDraft.classDate || "—"} />
+        <SummaryLine label={uiT("Start time")} value={classDraft.startTime || "—"} />
+        <SummaryLine label={uiT("Group")} value={selectedGroup?.name || "—"} />
         <SummaryLine
-          label="Status"
+          label={uiT("Status")}
           value={<StatusBadge tone={classStatusTone(classDraft.classStatus)}>{classDraft.classStatus}</StatusBadge>}
         />
-        <SummaryLine label="Hours" value={`${effectiveNumber(classDraft.hours, 0)} hr`} />
-        <SummaryLine label="Students" value={rows.length} />
+        <SummaryLine label={uiT("Hours")} value={`${effectiveNumber(classDraft.hours, 0)} hr`} />
+        <SummaryLine label={uiT("Students")} value={rows.length} />
       </div>
 
       <section className="review-section" aria-labelledby="attendance-summary-heading">
-        <h3 id="attendance-summary-heading">Attendance summary</h3>
+        <h3 id="attendance-summary-heading">{uiT("Attendance summary")}</h3>
         {attendanceItems.map((code) => (
           <div className="legend-line" key={code}>
             <span>
@@ -655,21 +659,25 @@ function ReviewPanel({ classDraft, selectedGroup, rows, summary, issues, currenc
       </section>
 
       <section className="review-section" aria-labelledby="payment-summary-heading">
-        <h3 id="payment-summary-heading">Payment summary</h3>
-        <SummaryLine label="Total charges" value={currency(summary.charges)} />
-        <SummaryLine label="Cash received" value={currency(summary.cash)} />
-        <SummaryLine label="Other payments" value={currency(summary.otherPayments)} />
-        <SummaryLine label="Total paid" value={currency(summary.paid)} strong />
+        <h3 id="payment-summary-heading">{uiT("Payment summary")}</h3>
+        <SummaryLine label={uiT("Total charges")} value={currency(summary.charges)} />
+        <SummaryLine label={uiT("Cash received")} value={currency(summary.cash)} />
+        <SummaryLine label={uiT("Other payments")} value={currency(summary.otherPayments)} />
+        <SummaryLine label={uiT("Total paid")} value={currency(summary.paid)} strong />
         <SummaryLine
-          label="Outstanding"
+          label={uiT("Outstanding")}
           value={currency(summary.outstanding)}
           tone={summary.outstanding ? "danger" : ""}
         />
-        <SummaryLine label="Overpaid" value={currency(summary.overpaid)} tone={summary.overpaid ? "purple" : ""} />
+        <SummaryLine
+          label={uiT("Overpaid")}
+          value={currency(summary.overpaid)}
+          tone={summary.overpaid ? "purple" : ""}
+        />
       </section>
 
       <section className="review-section" aria-labelledby="validation-heading">
-        <h3 id="validation-heading">Validation</h3>
+        <h3 id="validation-heading">{uiT("Validation")}</h3>
         <div className="validation-list">
           {issues.length ? (
             issues.map((issue) => (
@@ -681,7 +689,7 @@ function ReviewPanel({ classDraft, selectedGroup, rows, summary, issues, currenc
           ) : (
             <div className="validation-banner validation-success">
               <Check aria-hidden="true" size={17} />
-              <span>Ready to save.</span>
+              <span>{uiT("Ready to save.")}</span>
             </div>
           )}
         </div>
@@ -694,7 +702,7 @@ function ReviewPanel({ classDraft, selectedGroup, rows, summary, issues, currenc
         onClick={onSave}
         disabled={saving || !rows.length || issues.some((issue) => issue.blocking)}
       >
-        {saving ? "Saving…" : "Save class"}
+        {saving ? uiT("Saving…") : uiT("Save class")}
       </Button>
     </aside>
   );
@@ -715,6 +723,7 @@ function AdvancePaymentDrawer({
   onSave,
   saving,
 }) {
+  const { t: uiT } = useI18n();
   const { t } = useI18n();
   const selectedStudent = students.find((student) => student.id === draft.studentId);
   const selectedGroupIds = studentGroupIds(selectedStudent);
@@ -754,7 +763,7 @@ function AdvancePaymentDrawer({
     !existingDates.length &&
     !invalidEntries.length,
   );
-  const total = draft.entries.reduce((sum, entry) => sum + effectiveNumber(entry.amountPaid, 0), 0);
+  const total = sumMoney(draft.entries, (entry) => effectiveNumber(entry.amountPaid, 0));
 
   const updateStudent = (studentId) => {
     const student = students.find((item) => item.id === studentId);
@@ -830,30 +839,33 @@ function AdvancePaymentDrawer({
     <Drawer
       open={open}
       onClose={onClose}
-      title="Record an advance payment"
-      description="Create one scheduled row per future class. Every row will share the same payment reference."
+      title={uiT("Record an advance payment")}
+      description={uiT("Create one scheduled row per future class. Every row will share the same payment reference.")}
       size="wide"
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
+          <Button onClick={onClose}>{uiT("Cancel")}</Button>
           <Button variant="primary" icon={CreditCard} onClick={onSave} disabled={!valid || saving}>
             {saving
-              ? "Saving…"
-              : `Save ${draft.entries.length} future ${draft.entries.length === 1 ? "class" : "classes"}`}
+              ? uiT("Saving…")
+              : uiT("Save {p0} future {p1}", {
+                  p0: draft.entries.length,
+                  p1: uiText(draft.entries.length === 1 ? "class" : "classes"),
+                })}
           </Button>
         </>
       }
     >
       <div className="drawer-form">
         <div className="form-grid form-grid-2 two-columns">
-          <Field label="Student" required>
+          <Field label={uiT("Student")} required>
             <Select
               variant="student"
               searchable
               value={draft.studentId}
               onChange={(event) => updateStudent(event.target.value)}
             >
-              <option value="">Choose a student</option>
+              <option value="">{uiT("Choose a student")}</option>
               {students.map((student) => (
                 <option key={student.id} value={student.id} data-avatar-id={student.avatarId} data-meta={student.code}>
                   {student.fullName}
@@ -861,7 +873,7 @@ function AdvancePaymentDrawer({
               ))}
             </Select>
           </Field>
-          <Field label="Group">
+          <Field label={uiT("Group")}>
             <Select
               value={draft.groupId || ""}
               onChange={(event) => updateGroup(event.target.value)}
@@ -880,7 +892,7 @@ function AdvancePaymentDrawer({
                 ))}
             </Select>
           </Field>
-          <Field label="Payment date" required>
+          <Field label={uiT("Payment date")} required>
             <Input
               type="date"
               max={asOfDate}
@@ -888,12 +900,12 @@ function AdvancePaymentDrawer({
               onChange={(event) => setDraft((current) => ({ ...current, paymentDate: event.target.value }))}
             />
           </Field>
-          <Field label="Method" required>
+          <Field label={uiT("Method")} required>
             <Select
               value={draft.paymentMethod}
               onChange={(event) => setDraft((current) => ({ ...current, paymentMethod: event.target.value }))}
             >
-              <option value="">Choose a method</option>
+              <option value="">{uiT("Choose a method")}</option>
               {PAYMENT_METHODS.map((method) => (
                 <option key={method} value={method}>
                   {method}
@@ -902,20 +914,20 @@ function AdvancePaymentDrawer({
             </Select>
           </Field>
           <Field
-            label="Shared payment reference"
+            label={uiT("Shared payment reference")}
             required
-            hint="Use the same receipt or transfer reference for every future class."
+            hint={uiT("Use the same receipt or transfer reference for every future class.")}
           >
             <Input
               value={draft.paymentReference}
               onChange={(event) => setDraft((current) => ({ ...current, paymentReference: event.target.value }))}
             />
           </Field>
-          <Field label="Notes">
+          <Field label={uiT("Notes")}>
             <Input
               value={draft.notes}
               onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
-              placeholder="Optional"
+              placeholder={uiT("Optional")}
             />
           </Field>
         </div>
@@ -923,25 +935,29 @@ function AdvancePaymentDrawer({
         <section className="advance-classes" aria-labelledby="future-classes-heading">
           <div className="panel-header">
             <div>
-              <h3 id="future-classes-heading">Future classes</h3>
-              <p>Dates must be after {asOfDate}. Amounts are allocated per class.</p>
+              <h3 id="future-classes-heading">{uiT("Future classes")}</h3>
+              <p>
+                {uiT("Dates must be after ")}
+                {asOfDate}
+                {uiT(". Amounts are allocated per class.")}
+              </p>
             </div>
             <Button icon={Plus} onClick={addEntry}>
-              Add class
+              {uiT("Add class")}
             </Button>
           </div>
-          <TableShell label="Future classes">
+          <TableShell label={uiT("Future classes")}>
             <table className="data-table">
               <thead>
                 <tr>
-                  <th scope="col">Class date</th>
-                  <th scope="col">Hours</th>
-                  <th scope="col">Allocated payment</th>
+                  <th scope="col">{uiT("Class date")}</th>
+                  <th scope="col">{uiT("Hours")}</th>
+                  <th scope="col">{uiT("Allocated payment")}</th>
                   <th scope="col" className="numeric number-cell">
-                    Charge
+                    {uiT("Charge")}
                   </th>
                   <th scope="col">
-                    <span className="sr-only">Remove</span>
+                    <span className="sr-only">{uiT("Remove")}</span>
                   </th>
                 </tr>
               </thead>
@@ -956,7 +972,7 @@ function AdvancePaymentDrawer({
                           min={addDays(asOfDate, 1)}
                           value={entry.classDate}
                           onChange={(event) => updateEntry(entry.key, "classDate", event.target.value)}
-                          aria-label="Future class date"
+                          aria-label={uiT("Future class date")}
                         />
                       </td>
                       <td>
@@ -966,7 +982,7 @@ function AdvancePaymentDrawer({
                           step="0.25"
                           value={entry.hours}
                           onChange={(event) => updateEntry(entry.key, "hours", event.target.value)}
-                          aria-label={`Hours for ${entry.classDate || "future class"}`}
+                          aria-label={uiT("Hours for {p0}", { p0: entry.classDate || "future class" })}
                         />
                       </td>
                       <td>
@@ -976,13 +992,13 @@ function AdvancePaymentDrawer({
                           step="0.01"
                           value={entry.amountPaid}
                           onChange={(event) => updateEntry(entry.key, "amountPaid", event.target.value)}
-                          aria-label={`Allocated payment for ${entry.classDate || "future class"}`}
+                          aria-label={uiT("Allocated payment for {p0}", { p0: entry.classDate || "future class" })}
                         />
                       </td>
                       <td className="numeric number-cell money-cell">{currency(charge)}</td>
                       <td>
                         <IconButton
-                          label="Remove future class"
+                          label={uiT("Remove future class")}
                           icon={Trash2}
                           disabled={draft.entries.length === 1}
                           onClick={() =>
@@ -1000,7 +1016,7 @@ function AdvancePaymentDrawer({
             </table>
           </TableShell>
           <div className="advance-total">
-            <span>Total received</span>
+            <span>{uiT("Total received")}</span>
             <strong>{currency(total)}</strong>
           </div>
           {!valid ? (
@@ -1008,8 +1024,10 @@ function AdvancePaymentDrawer({
               <AlertTriangle aria-hidden="true" size={17} />
               <span>
                 {existingDates.length
-                  ? "This student already has a record on one of these dates. Edit it in History instead."
-                  : "Choose a student, unique future dates, positive allocations, a payment method, and one shared reference."}
+                  ? uiT("This student already has a record on one of these dates. Edit it in History instead.")
+                  : uiT(
+                      "Choose a student, unique future dates, positive allocations, a payment method, and one shared reference.",
+                    )}
               </span>
             </div>
           ) : null}
@@ -1031,6 +1049,7 @@ function EditClassDrawer({
   onSave,
   saving,
 }) {
+  const { t: uiT } = useI18n();
   const calculated = draft ? calculateClassLogRow(draft, context) : null;
   const duplicatesAnotherRow = Boolean(
     draft &&
@@ -1055,14 +1074,14 @@ function EditClassDrawer({
     <Drawer
       open={open}
       onClose={onClose}
-      title="Edit class record"
-      description="Calculated charge, status, and outstanding balance update automatically."
+      title={uiT("Edit class record")}
+      description={uiT("Calculated charge, status, and outstanding balance update automatically.")}
       size="wide"
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
+          <Button onClick={onClose}>{uiT("Cancel")}</Button>
           <Button variant="primary" icon={Save} onClick={onSave} disabled={invalid || saving}>
-            {saving ? "Saving…" : "Save changes"}
+            {saving ? uiT("Saving…") : uiT("Save changes")}
           </Button>
         </>
       }
@@ -1070,7 +1089,7 @@ function EditClassDrawer({
       {draft ? (
         <div className="drawer-form">
           <div className="form-grid form-grid-2 two-columns">
-            <Field label="Student" required>
+            <Field label={uiT("Student")} required>
               <Select
                 variant="student"
                 searchable
@@ -1089,21 +1108,21 @@ function EditClassDrawer({
                 ))}
               </Select>
             </Field>
-            <Field label="Class date" required>
+            <Field label={uiT("Class date")} required>
               <Input
                 type="date"
                 value={draft.classDate || ""}
                 onChange={(event) => setDraft((current) => ({ ...current, classDate: event.target.value }))}
               />
             </Field>
-            <Field label="Start time">
+            <Field label={uiT("Start time")}>
               <Input
                 type="time"
                 value={draft.startTime || ""}
                 onChange={(event) => setDraft((current) => ({ ...current, startTime: event.target.value }))}
               />
             </Field>
-            <Field label="Class status" required>
+            <Field label={uiT("Class status")} required>
               <Select
                 value={draft.classStatus || "Completed"}
                 onChange={(event) =>
@@ -1121,15 +1140,15 @@ function EditClassDrawer({
                 ))}
               </Select>
             </Field>
-            <Field label="Attendance" required={draft.classStatus === "Completed"}>
+            <Field label={uiT("Attendance")} required={draft.classStatus === "Completed"}>
               <AttendanceSelect
                 value={draft.attendance}
                 onChange={(attendance) => setDraft((current) => ({ ...current, attendance }))}
-                label="Attendance"
+                label={uiT("Attendance")}
                 disabled={draft.classStatus !== "Completed"}
               />
             </Field>
-            <Field label="Hours" hint={`Blank uses the ${context.defaultHours}-hour default.`}>
+            <Field label={uiT("Hours")} hint={uiT("Blank uses the {p0}-hour default.", { p0: context.defaultHours })}>
               <Input
                 type="number"
                 min="0"
@@ -1138,7 +1157,7 @@ function EditClassDrawer({
                 onChange={(event) => setDraft((current) => ({ ...current, hours: event.target.value }))}
               />
             </Field>
-            <Field label="Amount paid">
+            <Field label={uiT("Amount paid")}>
               <Input
                 type="number"
                 min="0"
@@ -1147,14 +1166,14 @@ function EditClassDrawer({
                 onChange={(event) => setDraft((current) => ({ ...current, amountPaid: event.target.value }))}
               />
             </Field>
-            <Field label="Payment date">
+            <Field label={uiT("Payment date")}>
               <Input
                 type="date"
                 value={draft.paymentDate || ""}
                 onChange={(event) => setDraft((current) => ({ ...current, paymentDate: event.target.value }))}
               />
             </Field>
-            <Field label="Method">
+            <Field label={uiT("Method")}>
               <Select
                 value={draft.paymentMethod || ""}
                 onChange={(event) => setDraft((current) => ({ ...current, paymentMethod: event.target.value }))}
@@ -1167,13 +1186,13 @@ function EditClassDrawer({
                 ))}
               </Select>
             </Field>
-            <Field label="Payment reference">
+            <Field label={uiT("Payment reference")}>
               <Input
                 value={draft.paymentReference || ""}
                 onChange={(event) => setDraft((current) => ({ ...current, paymentReference: event.target.value }))}
               />
             </Field>
-            <Field label="Notes">
+            <Field label={uiT("Notes")}>
               <TextArea
                 rows="3"
                 value={draft.notes || ""}
@@ -1182,24 +1201,24 @@ function EditClassDrawer({
             </Field>
           </div>
           <div className="summary-grid edit-summary">
-            <SummaryLine label="Charge" value={currency(calculated.charge)} />
+            <SummaryLine label={uiT("Charge")} value={currency(calculated.charge)} />
             <SummaryLine
-              label="Payment status"
+              label={uiT("Payment status")}
               value={
                 <StatusBadge tone={paymentTone(calculated.paymentStatus)}>
                   {calculated.paymentStatus || "—"}
                 </StatusBadge>
               }
             />
-            <SummaryLine label="Outstanding" value={currency(calculated.outstanding)} />
+            <SummaryLine label={uiT("Outstanding")} value={currency(calculated.outstanding)} />
           </div>
           {invalid ? (
             <div className="validation-banner validation-error">
               <AlertTriangle aria-hidden="true" size={17} />
               <span>
                 {duplicatesAnotherRow
-                  ? "This student already has a class record on that date."
-                  : "Complete the required fields and resolve the payment warning before saving."}
+                  ? uiT("This student already has a class record on that date.")
+                  : uiT("Complete the required fields and resolve the payment warning before saving.")}
               </span>
             </div>
           ) : null}
@@ -1210,6 +1229,7 @@ function EditClassDrawer({
 }
 
 function HistoryView({ rows, groups, students, context, currency, actions, registerNavigationBlocker }) {
+  const { t: uiT } = useI18n();
   const [filters, setFilters] = useState({
     search: "",
     groupId: "",
@@ -1286,19 +1306,19 @@ function HistoryView({ rows, groups, students, context, currency, actions, regis
   return (
     <>
       <section className="panel history-panel">
-        <div className="filter-bar" aria-label="Class history filters">
+        <div className="filter-bar" aria-label={uiT("Class history filters")}>
           <SearchInput
             value={filters.search}
             onChange={(event) => updateFilter("search", event.target.value)}
-            placeholder="Search student, reference, or note"
+            placeholder={uiT("Search student, reference, or note")}
           />
           <Select
             value={filters.groupId}
             onChange={(event) => updateFilter("groupId", event.target.value)}
-            aria-label="Filter by group"
+            aria-label={uiT("Filter by group")}
           >
-            <option value="">All groups</option>
-            <option value={UNASSIGNED_GROUP}>Unassigned</option>
+            <option value="">{uiT("All groups")}</option>
+            <option value={UNASSIGNED_GROUP}>{uiT("Unassigned")}</option>
             {groups.map((group) => (
               <option value={group.id} key={group.id}>
                 {group.name}
@@ -1308,9 +1328,9 @@ function HistoryView({ rows, groups, students, context, currency, actions, regis
           <Select
             value={filters.classStatus}
             onChange={(event) => updateFilter("classStatus", event.target.value)}
-            aria-label="Filter by class status"
+            aria-label={uiT("Filter by class status")}
           >
-            <option value="">All class statuses</option>
+            <option value="">{uiT("All class statuses")}</option>
             {CLASS_STATUSES.map((status) => (
               <option value={status} key={status}>
                 {status}
@@ -1320,23 +1340,23 @@ function HistoryView({ rows, groups, students, context, currency, actions, regis
           <Select
             value={filters.paymentStatus}
             onChange={(event) => updateFilter("paymentStatus", event.target.value)}
-            aria-label="Filter by payment status"
+            aria-label={uiT("Filter by payment status")}
           >
-            <option value="">All payment statuses</option>
+            <option value="">{uiT("All payment statuses")}</option>
             {paymentStatuses.map((status) => (
               <option value={status} key={status}>
                 {status}
               </option>
             ))}
           </Select>
-          <Field label="From">
+          <Field label={uiT("From")}>
             <Input
               type="date"
               value={filters.dateFrom}
               onChange={(event) => updateFilter("dateFrom", event.target.value)}
             />
           </Field>
-          <Field label="To">
+          <Field label={uiT("To")}>
             <Input
               type="date"
               value={filters.dateTo}
@@ -1346,38 +1366,39 @@ function HistoryView({ rows, groups, students, context, currency, actions, regis
         </div>
         <div className="panel-header history-count">
           <div>
-            <h2>Class history</h2>
+            <h2>{uiT("Class history")}</h2>
             <p>
-              {filteredRows.length} of {rows.length} records
+              {filteredRows.length} {uiT(" of ")}
+              {rows.length} {uiT(" records")}
             </p>
           </div>
         </div>
         {filteredRows.length ? (
-          <TableShell label="Class history" className="history-table-shell">
+          <TableShell label={uiT("Class history")} className="history-table-shell">
             <table className="history-table">
               <thead>
                 <tr>
-                  <th scope="col">Class date</th>
-                  <th scope="col">Student</th>
-                  <th scope="col">Group</th>
-                  <th scope="col">Class</th>
-                  <th scope="col">Attendance</th>
+                  <th scope="col">{uiT("Class date")}</th>
+                  <th scope="col">{uiT("Student")}</th>
+                  <th scope="col">{uiT("Group")}</th>
+                  <th scope="col">{uiT("Class")}</th>
+                  <th scope="col">{uiT("Attendance")}</th>
                   <th scope="col" className="numeric number-cell">
-                    Hours
+                    {uiT("Hours")}
                   </th>
                   <th scope="col" className="numeric number-cell">
-                    Charge
+                    {uiT("Charge")}
                   </th>
                   <th scope="col" className="numeric number-cell">
-                    Paid
+                    {uiT("Paid")}
                   </th>
-                  <th scope="col">Payment status</th>
+                  <th scope="col">{uiT("Payment status")}</th>
                   <th scope="col" className="numeric number-cell">
-                    Outstanding
+                    {uiT("Outstanding")}
                   </th>
-                  <th scope="col">Reference</th>
+                  <th scope="col">{uiT("Reference")}</th>
                   <th scope="col">
-                    <span className="sr-only">Actions</span>
+                    <span className="sr-only">{uiT("Actions")}</span>
                   </th>
                 </tr>
               </thead>
@@ -1394,9 +1415,9 @@ function HistoryView({ rows, groups, students, context, currency, actions, regis
                         </span>
                       </div>
                     </td>
-                    <td>{row.groupName || "Unassigned"}</td>
+                    <td>{row.groupName || uiT("Unassigned")}</td>
                     <td>
-                      <StatusBadge tone={classStatusTone(row.classStatus)}>{row.classStatus}</StatusBadge>
+                      <StatusBadge tone={classStatusTone(row.classStatus)}>{uiT(row.classStatus)}</StatusBadge>
                     </td>
                     <td>
                       {row.attendance ? (
@@ -1418,12 +1439,12 @@ function HistoryView({ rows, groups, students, context, currency, actions, regis
                     <td>
                       <div className="row-actions">
                         <IconButton
-                          label={`Edit ${row.studentName}'s class on ${row.classDate}`}
+                          label={uiT("Edit {p0}'s class on {p1}", { p0: row.studentName, p1: row.classDate })}
                           icon={Pencil}
                           onClick={() => openEdit(row)}
                         />
                         <IconButton
-                          label={`Delete ${row.studentName}'s class on ${row.classDate}`}
+                          label={uiT("Delete {p0}'s class on {p1}", { p0: row.studentName, p1: row.classDate })}
                           icon={Trash2}
                           onClick={() => setDeleteRow(row)}
                         />
@@ -1437,8 +1458,8 @@ function HistoryView({ rows, groups, students, context, currency, actions, regis
         ) : (
           <EmptyState
             icon={History}
-            title="No matching class records"
-            description="Try clearing one or more filters."
+            title={uiT("No matching class records")}
+            description={uiT("Try clearing one or more filters.")}
             action={
               Object.values(filters).some(Boolean) ? (
                 <Button
@@ -1453,7 +1474,7 @@ function HistoryView({ rows, groups, students, context, currency, actions, regis
                     })
                   }
                 >
-                  Clear filters
+                  {uiT("Clear filters")}
                 </Button>
               ) : null
             }
@@ -1475,13 +1496,16 @@ function HistoryView({ rows, groups, students, context, currency, actions, regis
       />
       <ConfirmDialog
         open={Boolean(deleteRow)}
-        title="Delete class record?"
+        title={uiT("Delete class record?")}
         description={
           deleteRow
-            ? `${deleteRow.studentName} · ${deleteRow.classDate}. This removes its attendance and payment entry.`
+            ? uiT("{p0} · {p1}. This removes its attendance and payment entry.", {
+                p0: deleteRow.studentName,
+                p1: deleteRow.classDate,
+              })
             : ""
         }
-        confirmLabel="Delete record"
+        confirmLabel={uiT("Delete record")}
         onConfirm={confirmDelete}
         onClose={() => setDeleteRow(null)}
         busy={saving}
@@ -1491,10 +1515,10 @@ function HistoryView({ rows, groups, students, context, currency, actions, regis
 }
 
 export default function ClassLog({
-  state = {},
-  derived = {},
+  state = undefined,
+  derived = undefined,
   asOfDate,
-  actions = {},
+  actions = undefined,
   intent,
   clearIntent,
   navigate,
@@ -1502,6 +1526,7 @@ export default function ClassLog({
   prefill,
   onPrefillConsumed,
 }) {
+  const { t: uiT } = useI18n();
   const groups = useMemo(() => asArray(state.groups), [state.groups]);
   const students = useMemo(() => asArray(state.students), [state.students]);
   const classLogs = useMemo(() => asArray(state.classLog ?? state.classLogs), [state.classLog, state.classLogs]);
@@ -1694,11 +1719,11 @@ export default function ClassLog({
       rosterRows.reduce(
         (total, row) => {
           total.charges += row.charge;
-          total.paid += row.amountPaid;
+          total.paid = roundMoney(total.paid + row.amountPaid);
           total.outstanding += row.outstanding;
           total.overpaid += row.overpaid;
-          if (row.draft.paymentMethod === "Cash") total.cash += row.amountPaid;
-          else total.otherPayments += row.amountPaid;
+          if (row.draft.paymentMethod === "Cash") total.cash = roundMoney(total.cash + row.amountPaid);
+          else total.otherPayments = roundMoney(total.otherPayments + row.amountPaid);
           if (row.draft.attendance) total.attendance[row.draft.attendance] += 1;
           return total;
         },
@@ -1916,7 +1941,7 @@ export default function ClassLog({
         <Tabs
           value={mode}
           onChange={changeMode}
-          ariaLabel="Class Log views"
+          ariaLabel={uiT("Class Log views")}
           items={[
             { value: "new", label: "Record class" },
             { value: "history", label: "History" },
@@ -1924,7 +1949,10 @@ export default function ClassLog({
         />
         <div className="page-toolbar-meta">
           <CalendarDays aria-hidden="true" size={17} />
-          <span>Balances calculated through {currentAsOfDate}</span>
+          <span>
+            {uiT("Balances calculated through ")}
+            {currentAsOfDate}
+          </span>
         </div>
       </div>
 
@@ -1960,19 +1988,19 @@ export default function ClassLog({
                   onClick={markAllPresent}
                   disabled={!rosterRows.length || classDraft.classStatus !== "Completed"}
                 >
-                  Mark all present
+                  {uiT("Mark all present")}
                 </Button>
                 <Button
                   icon={CircleDollarSign}
                   onClick={markAllPaid}
                   disabled={!rosterRows.length || classDraft.classStatus === "Cancelled"}
                 >
-                  Mark all paid
+                  {uiT("Mark all paid")}
                 </Button>
               </div>
               <span className="roster-count">
                 <Users aria-hidden="true" size={17} />
-                {rosterRows.length} {rosterRows.length === 1 ? "student" : "students"}
+                {rosterRows.length} {rosterRows.length === 1 ? uiT("student") : uiT("students")}
               </span>
             </div>
             <RosterTable
@@ -1984,24 +2012,26 @@ export default function ClassLog({
               onGoToSetup={navigate ? () => navigate("students") : undefined}
             />
             {rosterRows.length ? (
-              <section className="panel totals-bar" aria-label="Class totals">
+              <section className="panel totals-bar" aria-label={uiT("Class totals")}>
                 <div className="pricing-note">
                   <CircleDollarSign aria-hidden="true" />
                   <span>
-                    Rates use the student override, then the group rate, then the {currency(hourlyRate)} account
-                    default. Blank student hours use the {defaultHours}-hour class default.
+                    {uiT("Rates use the student override, then the group rate, then the ")}
+                    {currency(hourlyRate)} {uiT(" account default. Blank student hours use the ")}
+                    {defaultHours}
+                    {uiT("-hour class default.")}
                   </span>
                 </div>
                 <div className="totals-values">
-                  <SummaryLine label="Charges" value={currency(summary.charges)} />
-                  <SummaryLine label="Paid" value={currency(summary.paid)} />
+                  <SummaryLine label={uiT("Charges")} value={currency(summary.charges)} />
+                  <SummaryLine label={uiT("Paid")} value={currency(summary.paid)} />
                   <SummaryLine
-                    label="Outstanding"
+                    label={uiT("Outstanding")}
                     value={currency(summary.outstanding)}
                     tone={summary.outstanding ? "danger" : ""}
                   />
                   <SummaryLine
-                    label="Overpaid"
+                    label={uiT("Overpaid")}
                     value={currency(summary.overpaid)}
                     tone={summary.overpaid ? "purple" : ""}
                   />

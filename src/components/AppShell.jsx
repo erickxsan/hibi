@@ -1,3 +1,4 @@
+import { useI18n } from "../i18n/index.jsx";
 import { useEffect, useId, useRef, useState } from "react";
 import { Ellipsis, X } from "lucide-react";
 import { BrandMark } from "./BrandMark";
@@ -14,6 +15,7 @@ export function AppShell({
   children,
   guidedNavigation = false,
 }) {
+  const { t: uiT } = useI18n();
   const mainRef = useRef(null);
   const moreRef = useRef(null);
   const moreButtonRef = useRef(null);
@@ -46,6 +48,7 @@ export function AppShell({
 
   useEffect(() => {
     if (!moreOpen) return undefined;
+    const moreButton = moreButtonRef.current;
     const historyTimer = window.setTimeout(() => {
       ownsMoreHistory.current = Boolean(pushOverlayHistory(moreHistoryId));
     }, 0);
@@ -98,7 +101,7 @@ export function AppShell({
       document.body.classList.remove("mobile-more-open");
       if (ownsMoreHistory.current) closeOverlayHistory(moreHistoryId);
       ownsMoreHistory.current = false;
-      moreButtonRef.current?.focus?.({ preventScroll: true });
+      moreButton?.focus?.({ preventScroll: true });
     };
     // `closeMore` reads only current state and the stable history id.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -111,15 +114,15 @@ export function AppShell({
   return (
     <div className={`hibi-shell page-${activePage}`}>
       <a className="skip-link" href="#main-content">
-        Skip to content
+        {uiT("Skip to content")}
       </a>
       <aside className="hibi-sidebar">
-        <a className="hibi-brand" href="/" onClick={(event) => go(event, "home")} aria-label="Hibi home">
+        <a className="hibi-brand" href="/" onClick={(event) => go(event, "home")} aria-label={uiT("Hibi home")}>
           <BrandMark />
-          <strong>Hibi</strong>
+          <strong>{uiT("Hibi")}</strong>
           <span aria-hidden="true">★</span>
         </a>
-        <nav aria-label="Primary navigation" className="sidebar-nav">
+        <nav aria-label={uiT("Primary navigation")} className="sidebar-nav">
           {navItems.map((item) => {
             const Icon = item.icon;
             return (
@@ -131,25 +134,25 @@ export function AppShell({
                 aria-current={activePage === item.id ? "page" : undefined}
               >
                 <Icon size={19} strokeWidth={1.8} />
-                <span>{item.label}</span>
+                <span>{uiT(item.label)}</span>
               </a>
             );
           })}
         </nav>
         <div className="sidebar-companion">
-          <img src="/hibi-companion.png" alt="Hibi cat reading" />
-          <p>Little by little, your students are doing amazing! 🌿</p>
+          <img src="/hibi-companion.png" alt={uiT("Hibi cat reading")} />
+          <p>{uiT("Little by little, your students are doing amazing! 🌿")}</p>
         </div>
       </aside>
       <section className="hibi-workspace">
         <header className="hibi-topbar">
           <a className="mobile-brand" href="/" onClick={(event) => go(event, "home")}>
-            <span>Hibi</span>
+            <span>{uiT("Hibi")}</span>
             <b>★</b>
           </a>
           <div className="topbar-tools">{toolbar}</div>
         </header>
-        <main id="main-content" ref={mainRef} tabIndex="-1" className="hibi-main">
+        <main id="main-content" ref={mainRef} tabIndex={-1} className="hibi-main">
           <div className="route-stage" key={activePage}>
             {children}
           </div>
@@ -157,8 +160,8 @@ export function AppShell({
       </section>
       <nav
         className="hibi-mobile-nav"
-        aria-label="Mobile navigation"
-        style={{ "--mobile-nav-count": primary.length + 1 }}
+        aria-label={uiT("Mobile navigation")}
+        style={/** @type {import("react").CSSProperties} */ ({ "--mobile-nav-count": primary.length + 1 })}
       >
         {primary.map((item) => {
           const Icon = item.mobileIcon || item.icon;
@@ -172,7 +175,7 @@ export function AppShell({
               }`.trim()}
             >
               <Icon size={item.id === "classes" ? 24 : 20} />
-              <span>{item.mobileLabel || item.label}</span>
+              <span>{uiT(item.mobileLabel || item.label)}</span>
             </a>
           );
         })}
@@ -185,7 +188,7 @@ export function AppShell({
           onClick={() => (moreOpen ? closeMore() : setMoreOpen(true))}
         >
           <Ellipsis size={21} />
-          <span>More</span>
+          <span>{uiT("More")}</span>
         </button>
       </nav>
       {moreOpen ? (
@@ -195,11 +198,11 @@ export function AppShell({
           className="mobile-more"
           role="dialog"
           aria-modal="true"
-          aria-label="More navigation"
+          aria-label={uiT("More navigation")}
         >
           <div className="mobile-more-head">
-            <strong>More</strong>
-            <button type="button" aria-label="Close menu" onClick={closeMore}>
+            <strong>{uiT("More")}</strong>
+            <button type="button" aria-label={uiT("Close menu")} onClick={closeMore}>
               <X size={18} />
             </button>
           </div>
@@ -213,7 +216,7 @@ export function AppShell({
                 className={activePage === item.id ? "sidebar-link active" : "sidebar-link"}
               >
                 <Icon size={19} />
-                {item.label}
+                {uiT(item.label)}
               </a>
             );
           })}

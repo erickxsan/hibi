@@ -7,11 +7,11 @@ export const PASSWORD_KDF_SALT_BYTES = 32;
 const MAX_PASSWORD_CHARACTERS = 1_024;
 const RECOMMENDED_PASSWORD_CHARACTERS = 15;
 export const NEW_PASSWORD_GUIDANCE =
-  "We recommend a long phrase with several unrelated words. No special symbols are required.";
+  "We recommend a long phrase with several unrelated words. Use at least 15 characters. No special symbols are required.";
 const WEAK_PASSWORD_WARNING =
-  "This password may be easy to guess. We recommend a longer phrase with unrelated words, but you can use this password anyway.";
+  "This password may be easy to guess. We recommend a longer phrase with unrelated words, choose a longer phrase before continuing.";
 
-// Advisory only, used while choosing a new password. Never change KDF input.
+// Creation/change policy only. Never alter KDF input or restrict legacy unlocks.
 export function getNewPasswordWarning(password) {
   if (typeof password !== "string" || !password) return "";
   if ([...password.trim()].length < RECOMMENDED_PASSWORD_CHARACTERS) {
@@ -47,6 +47,16 @@ function requirePassword(password) {
   if (password.length > MAX_PASSWORD_CHARACTERS) {
     throw new WorkspaceCryptoError("The encryption password is too long.", { code: "password_too_long" });
   }
+  return password;
+}
+
+export function requireNewPassword(password) {
+  requirePassword(password);
+  if (getNewPasswordWarning(password))
+    throw new WorkspaceCryptoError(
+      "Choose an encryption phrase with at least 15 characters that is not common or repetitive.",
+      { code: "password_too_weak" },
+    );
   return password;
 }
 
@@ -91,7 +101,7 @@ export async function createPasswordWrapper({
   label = "Encryption password",
   cryptoApi = globalThis.crypto,
 }) {
-  requirePassword(password);
+  requireNewPassword(password);
   const wrapperId = cryptoApi.randomUUID();
   const salt = cryptoApi.getRandomValues(new Uint8Array(PASSWORD_KDF_SALT_BYTES));
   const secret = await derivePasswordSecret({ password, salt, cryptoApi });

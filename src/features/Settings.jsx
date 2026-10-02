@@ -42,6 +42,7 @@ export default function Settings({
   onDeleteAccount,
   onOpenOnboarding,
 }) {
+  const { t: uiT } = useI18n();
   const { t } = useI18n();
   const [draft, setDraft] = useState(() => settingsDraft(state.settings));
   const [saving, setSaving] = useState(false);
@@ -63,6 +64,7 @@ export default function Settings({
   const [recoveryPoints, setRecoveryPoints] = useState([]);
   const [pendingRecovery, setPendingRecovery] = useState(null);
   const [soundsEnabled, setSoundsEnabled] = useState(getHibiSoundsEnabled);
+  const cloudSecurityReadOnly = encryption?.writesEnabled === false;
   const [securityBusy, setSecurityBusy] = useState(false);
   const [securityError, setSecurityError] = useState("");
   const [recoveryReveal, setRecoveryReveal] = useState("");
@@ -134,7 +136,7 @@ export default function Settings({
       const text = await file.text();
       const outer = JSON.parse(text);
       const isEncrypted = outer?.format === "hibi-encrypted-backup";
-      if (isEncrypted && outer.workspaceCryptoId !== encryption?.profile?.workspaceCryptoId) {
+      const requestBackupUnlock = () => {
         setBackupSourceRecovery({
           name: file.name,
           text,
@@ -144,9 +146,24 @@ export default function Settings({
         });
         setBackupSourceRecoveryKey("");
         setBackupSourcePassword("");
-        return;
-      }
-      const parsed = isEncrypted ? await actions.previewEncryptedBackup(text) : importState(text);
+      };
+      let parsed;
+      if (isEncrypted) {
+        try {
+          parsed = await actions.previewEncryptedBackup(text);
+        } catch (error) {
+          if (
+            error?.code === "backup_recovery_required" ||
+            error?.code === "backup_authentication_failed" ||
+            error?.code === "manifest_authentication_failed" ||
+            error?.name === "OperationError"
+          ) {
+            requestBackupUnlock();
+            return;
+          }
+          throw error;
+        }
+      } else parsed = importState(text);
       stageFullRestore(parsed, { name: file.name, text, encrypted: isEncrypted });
     } catch (error) {
       actions.notify(error?.message || "The selected file is not a valid Hibi backup.", "error");
@@ -214,8 +231,8 @@ export default function Settings({
     <div className="page settings-page">
       <div className="page-heading">
         <div>
-          <h1>Settings</h1>
-          <p>Manage classroom defaults, language, sounds, backup, and privacy.</p>
+          <h1>{uiT("Settings")}</h1>
+          <p>{uiT("Manage classroom defaults, language, sounds, backup, and privacy.")}</p>
         </div>
       </div>
       <section className="settings-stack">
@@ -224,10 +241,10 @@ export default function Settings({
             <Clock3 size={22} />
           </div>
           <div className="settings-content">
-            <h2>Classroom defaults</h2>
-            <p>Used when recording classes and calculating alerts and projections.</p>
+            <h2>{uiT("Classroom defaults")}</h2>
+            <p>{uiT("Used when recording classes and calculating alerts and projections.")}</p>
             <div className="settings-controls settings-controls-expanded">
-              <Field label="Default duration">
+              <Field label={uiT("Default duration")}>
                 <Input
                   type="number"
                   min="0"
@@ -235,9 +252,9 @@ export default function Settings({
                   value={draft.defaultClassHours}
                   onChange={(event) => setDraft({ ...draft, defaultClassHours: Number(event.target.value) })}
                 />
-                <small>hours</small>
+                <small>{uiT("hours")}</small>
               </Field>
-              <Field label="Hourly rate">
+              <Field label={uiT("Hourly rate")}>
                 <Input
                   type="number"
                   min="0"
@@ -245,9 +262,9 @@ export default function Settings({
                   value={draft.hourlyRateMxn}
                   onChange={(event) => setDraft({ ...draft, hourlyRateMxn: Number(event.target.value) })}
                 />
-                <small>MXN / hour</small>
+                <small>{uiT("MXN / hour")}</small>
               </Field>
-              <Field label="Projection window">
+              <Field label={uiT("Projection window")}>
                 <Input
                   type="number"
                   min="1"
@@ -255,9 +272,9 @@ export default function Settings({
                   value={draft.recentProjectionWeeks}
                   onChange={(event) => setDraft({ ...draft, recentProjectionWeeks: Number(event.target.value) })}
                 />
-                <small>weeks</small>
+                <small>{uiT("weeks")}</small>
               </Field>
-              <Field label="Low grade threshold">
+              <Field label={uiT("Low grade threshold")}>
                 <Input
                   type="number"
                   min="0"
@@ -266,9 +283,9 @@ export default function Settings({
                   value={Math.round(draft.lowGradeThreshold * 100)}
                   onChange={(event) => setDraft({ ...draft, lowGradeThreshold: Number(event.target.value) / 100 })}
                 />
-                <small>percent</small>
+                <small>{uiT("percent")}</small>
               </Field>
-              <Field label="Low attendance threshold">
+              <Field label={uiT("Low attendance threshold")}>
                 <Input
                   type="number"
                   min="0"
@@ -277,10 +294,10 @@ export default function Settings({
                   value={Math.round(draft.lowAttendanceThreshold * 100)}
                   onChange={(event) => setDraft({ ...draft, lowAttendanceThreshold: Number(event.target.value) / 100 })}
                 />
-                <small>percent</small>
+                <small>{uiT("percent")}</small>
               </Field>
               <Button variant="primary" onClick={save} disabled={!dirty || saving}>
-                {saving ? "Saving…" : "Save defaults"}
+                {saving ? uiT("Saving…") : uiT("Save defaults")}
               </Button>
             </div>
           </div>
@@ -291,21 +308,21 @@ export default function Settings({
               <Sparkles size={22} />
             </div>
             <div className="settings-content">
-              <h2>Welcome tutorial</h2>
-              <p>Revisit Hibi’s main features or set up another group with guidance.</p>
+              <h2>{uiT("Welcome tutorial")}</h2>
+              <p>{uiT("Revisit Hibi’s main features or set up another group with guidance.")}</p>
               <div className="settings-tour-actions">
                 <Button icon={Sparkles} onClick={() => onOpenOnboarding("tour")}>
-                  Start tour
+                  {uiT("Start tour")}
                 </Button>
                 <Button icon={UsersRound} onClick={() => onOpenOnboarding("setup")}>
-                  {setupResumeStep(state.settings) ? "Resume guided setup" : "Guided setup"}
+                  {setupResumeStep(state.settings) ? uiT("Resume guided setup") : uiT("Guided setup")}
                 </Button>
               </div>
               <div className="settings-tour-security">
                 <LockKeyhole aria-hidden="true" size={18} />
                 <span>
-                  <strong>End-to-end encryption</strong>
-                  <small>Your tutorial progress and classroom data stay protected with E2EE.</small>
+                  <strong>{uiT("End-to-end encryption")}</strong>
+                  <small>{uiT("Your tutorial progress and classroom data stay protected with E2EE.")}</small>
                 </span>
               </div>
             </div>
@@ -316,13 +333,13 @@ export default function Settings({
             <Globe2 size={22} />
           </div>
           <div className="settings-content">
-            <h2>Interface</h2>
-            <p>Choose the interface language and whether Hibi plays gentle feedback sounds.</p>
+            <h2>{uiT("Interface")}</h2>
+            <p>{uiT("Choose the interface language and whether Hibi plays gentle feedback sounds.")}</p>
             <div className="interface-settings">
               <div className="interface-setting">
                 <span>
-                  <strong>Language</strong>
-                  <small>Choose the interface language.</small>
+                  <strong>{uiT("Language")}</strong>
+                  <small>{uiT("Choose the interface language.")}</small>
                 </span>
                 <LanguageToggle className="settings-language" />
               </div>
@@ -330,8 +347,8 @@ export default function Settings({
                 <span className="sound-setting-copy">
                   <Volume2 aria-hidden="true" size={18} />
                   <span>
-                    <strong>Sound effects</strong>
-                    <small>A few gentle cues for saves, attendance, payments, and avatars.</small>
+                    <strong>{uiT("Sound effects")}</strong>
+                    <small>{uiT("A few gentle cues for saves, attendance, payments, and avatars.")}</small>
                   </span>
                 </span>
                 <button
@@ -339,11 +356,11 @@ export default function Settings({
                   type="button"
                   role="switch"
                   aria-checked={soundsEnabled}
-                  aria-label={soundsEnabled ? "Turn sound effects off" : "Turn sound effects on"}
+                  aria-label={soundsEnabled ? uiT("Turn sound effects off") : uiT("Turn sound effects on")}
                   onClick={toggleSounds}
                 >
                   <span aria-hidden="true" />
-                  <b>{soundsEnabled ? "On" : "Off"}</b>
+                  <b>{soundsEnabled ? uiT("On") : uiT("Off")}</b>
                 </button>
               </div>
             </div>
@@ -354,18 +371,18 @@ export default function Settings({
             <Download size={22} />
           </div>
           <div className="settings-content">
-            <h2>Records, backups & recovery</h2>
+            <h2>{uiT("Records, backups & recovery")}</h2>
             <p>
               {persistenceMode === "cloud"
-                ? "Add records safely or keep a complete recovery copy of your private cloud workspace."
-                : "Add records safely and export a backup regularly."}
+                ? uiT("Add records safely or keep a complete recovery copy of your private cloud workspace.")
+                : uiT("Add records safely and export a backup regularly.")}
             </p>
             <div className="settings-data-actions">
               <div className="settings-data-action safe-import-action">
                 <span>
-                  <strong>Import records</strong>
+                  <strong>{uiT("Import records")}</strong>
                   <small>
-                    Add records from another Hibi JSON backup. Existing records and settings are never removed.
+                    {uiT("Add records from another Hibi JSON backup. Existing records and settings are never removed.")}
                   </small>
                 </span>
                 <Button
@@ -374,29 +391,31 @@ export default function Settings({
                   disabled={recordImportBusy}
                   onClick={() => recordsFileRef.current?.click()}
                 >
-                  {recordImportBusy ? "Reading…" : "Import records"}
+                  {recordImportBusy ? uiT("Reading…") : uiT("Import records")}
                 </Button>
               </div>
               <div className="settings-data-action">
                 <span>
-                  <strong>Backup & recovery</strong>
-                  <small>Download everything, or intentionally replace the workspace from a trusted full backup.</small>
+                  <strong>{uiT("Backup & recovery")}</strong>
+                  <small>
+                    {uiT("Download everything, or intentionally replace the workspace from a trusted full backup.")}
+                  </small>
                 </span>
                 <div className="button-cluster">
                   {encryption?.enabled ? (
                     <Button variant="primary" icon={LockKeyhole} onClick={actions.exportEncryptedBackup}>
-                      Download encrypted .hibi
+                      {uiT("Download encrypted .hibi")}
                     </Button>
                   ) : null}
                   <Button icon={Download} onClick={actions.exportJson}>
-                    {encryption?.enabled ? "Export readable JSON" : "Download backup"}
+                    {encryption?.enabled ? uiT("Export readable JSON") : uiT("Download backup")}
                   </Button>
                   <Button icon={Upload} onClick={() => fileRef.current?.click()}>
-                    Restore full backup
+                    {uiT("Restore full backup")}
                   </Button>
                   {persistenceMode === "cloud" ? (
                     <Button icon={History} onClick={openRecoveryHistory}>
-                      Recovery history
+                      {uiT("Recovery history")}
                     </Button>
                   ) : null}
                 </div>
@@ -418,8 +437,10 @@ export default function Settings({
             />
             {encryption?.enabled ? (
               <p className="settings-inline-warning">
-                <strong>.hibi is recommended.</strong> JSON exports are readable files intended only for advanced local
-                use; Hibi never uploads their plaintext during import.
+                <strong>{uiT(".hibi is recommended.")}</strong>{" "}
+                {uiT(
+                  " JSON exports are readable files intended only for advanced local use; Hibi never uploads their plaintext during import.",
+                )}
               </p>
             ) : null}
           </div>
@@ -430,12 +451,17 @@ export default function Settings({
               <KeyRound size={22} />
             </div>
             <div className="settings-content">
-              <h2>Workspace encryption & access</h2>
+              <h2>{uiT("Workspace encryption & access")}</h2>
               <p>
-                E2EE protocol v{encryption.profile?.protocolVersion}; unlocked with {encryption.method || "a local key"}
-                . Your password wraps the same stable master key, so changing it does not re-encrypt your records.
+                {uiT("E2EE protocol v")}
+                {encryption.profile?.protocolVersion}
+                {uiT("; unlocked with ")}
+                {encryption.method || uiT("a local key")}
+                {uiT(
+                  ". Your password wraps the same stable master key, so changing it does not re-encrypt your records.",
+                )}
               </p>
-              <div className="workspace-key-list" aria-label="Workspace key wrappers">
+              <div className="workspace-key-list" aria-label={uiT("Workspace key wrappers")}>
                 {encryption.wrappers
                   .filter((wrapper) => !wrapper.revokedAt)
                   .map((wrapper) => (
@@ -443,16 +469,17 @@ export default function Settings({
                       <span>
                         <strong>{wrapper.label}</strong>
                         <small>
-                          {wrapper.type === "password" ? "Password-derived key" : "Recovery key"} · added{" "}
-                          {new Date(wrapper.createdAt).toLocaleDateString()}
+                          {wrapper.type === "password" ? uiT("Password-derived key") : uiT("Recovery key")}{" "}
+                          {uiT(" · added")} {new Date(wrapper.createdAt).toLocaleDateString()}
                           {wrapper.lastUsedAt
-                            ? ` · last used ${new Date(wrapper.lastUsedAt).toLocaleDateString()}`
-                            : " · not used yet"}
+                            ? uiT(" · last used {p0}", { p0: new Date(wrapper.lastUsedAt).toLocaleDateString() })
+                            : uiT(" · not used yet")}
                         </small>
                       </span>
                       <Button
                         disabled={
                           securityBusy ||
+                          cloudSecurityReadOnly ||
                           wrapper.type === "password" ||
                           encryption.wrappers.filter((item) => !item.revokedAt).length <= 1
                         }
@@ -468,19 +495,20 @@ export default function Settings({
                           }
                         }}
                       >
-                        Revoke
+                        {uiT("Revoke")}
                       </Button>
                     </div>
                   ))}
               </div>
               {encryption.rememberedDevices?.length ? (
-                <div className="workspace-key-list" aria-label="Remembered devices">
+                <div className="workspace-key-list" aria-label={uiT("Remembered devices")}>
                   {encryption.rememberedDevices.map((device) => (
                     <div className="workspace-key-row" key={device.deviceId}>
                       <span>
-                        <strong>This remembered browser</strong>
+                        <strong>{uiT("This remembered browser")}</strong>
                         <small>
-                          Added {new Date(device.createdAt).toLocaleDateString()} · last used{" "}
+                          {uiT("Added ")}
+                          {new Date(device.createdAt).toLocaleDateString()} {uiT(" · last used")}{" "}
                           {new Date(device.lastUsedAt).toLocaleDateString()}
                         </small>
                       </span>
@@ -488,10 +516,18 @@ export default function Settings({
                   ))}
                 </div>
               ) : null}
+              {cloudSecurityReadOnly ? (
+                <p role="status">{uiT("This preview is read-only. Security changes are disabled.")}</p>
+              ) : null}
+              <p>
+                {uiT(
+                  "Forget this device removes remembered access. Local backups remain encrypted in this browser. Use Clear local copies on a shared device after syncing pending changes.",
+                )}
+              </p>
               <div className="button-cluster workspace-key-actions">
                 <Button
                   icon={KeyRound}
-                  disabled={securityBusy}
+                  disabled={securityBusy || cloudSecurityReadOnly}
                   onClick={() => {
                     setSecurityError("");
                     setCurrentEncryptionPassword("");
@@ -500,11 +536,11 @@ export default function Settings({
                     setPasswordChangeOpen(true);
                   }}
                 >
-                  Change encryption password
+                  {uiT("Change encryption password")}
                 </Button>
                 <Button
                   icon={KeyRound}
-                  disabled={securityBusy}
+                  disabled={securityBusy || cloudSecurityReadOnly}
                   onClick={async () => {
                     setSecurityBusy(true);
                     setSecurityError("");
@@ -517,7 +553,7 @@ export default function Settings({
                     }
                   }}
                 >
-                  Create recovery key
+                  {uiT("Create recovery key")}
                 </Button>
                 <Button
                   disabled={securityBusy}
@@ -534,7 +570,7 @@ export default function Settings({
                     }
                   }}
                 >
-                  Remember this device
+                  {uiT("Remember this device")}
                 </Button>
                 <Button
                   disabled={securityBusy}
@@ -551,30 +587,47 @@ export default function Settings({
                     }
                   }}
                 >
-                  Forget this device
+                  {uiT("Forget this device")}
+                </Button>
+                <Button
+                  disabled={securityBusy}
+                  onClick={async () => {
+                    setSecurityBusy(true);
+                    setSecurityError("");
+                    try {
+                      await encryption.clearLocalCopies();
+                      actions.notify("Local encrypted copies and remembered access cleared");
+                    } catch (error) {
+                      setSecurityError(error?.message || "Local copies could not be cleared.");
+                    } finally {
+                      setSecurityBusy(false);
+                    }
+                  }}
+                >
+                  {uiT("Clear local copies")}
                 </Button>
                 <Button
                   variant="danger"
                   icon={RotateCcw}
-                  disabled={securityBusy}
+                  disabled={securityBusy || cloudSecurityReadOnly}
                   onClick={() => {
                     setRotationProgress("");
                     setRotationOpen(true);
                   }}
                 >
-                  Emergency key rotation
+                  {uiT("Emergency key rotation")}
                 </Button>
               </div>
               {recoveryReveal ? (
                 <div className="recovery-key-reveal" role="status">
-                  <strong>Save this recovery key now. Hibi support cannot reconstruct it.</strong>
+                  <strong>{uiT("Save this recovery key now. Hibi support cannot reconstruct it.")}</strong>
                   <code>{recoveryReveal}</code>
                   <Button
                     onClick={() =>
                       navigator.clipboard?.writeText(recoveryReveal).then(() => actions.notify("Recovery key copied"))
                     }
                   >
-                    Copy key
+                    {uiT("Copy key")}
                   </Button>
                 </div>
               ) : null}
@@ -591,28 +644,30 @@ export default function Settings({
             <LockKeyhole size={22} />
           </div>
           <div className="settings-content">
-            <h2>Data & privacy</h2>
+            <h2>{uiT("Data & privacy")}</h2>
             <p>
               {encryption?.enabled
-                ? "Cloud records and snapshots are end-to-end encrypted. Files you export remain under your control."
-                : "Backups include student, parent, grade, attendance, and payment data. Store them privately."}
+                ? uiT(
+                    "Cloud records and snapshots are end-to-end encrypted. Files you export remain under your control.",
+                  )
+                : uiT("Backups include student, parent, grade, attendance, and payment data. Store them privately.")}
             </p>
             {persistenceMode === "cloud" ? (
               <div className="privacy-actions">
                 <div className="danger-line secondary-danger">
                   <span>
-                    <strong>Remove old browser copy</strong>
-                    <small>Your signed-in cloud workspace and recovery history are not affected.</small>
+                    <strong>{uiT("Remove old browser copy")}</strong>
+                    <small>{uiT("Your signed-in cloud workspace and recovery history are not affected.")}</small>
                   </span>
-                  <Button onClick={() => setClearTarget("local")}>Remove local copy</Button>
+                  <Button onClick={() => setClearTarget("local")}>{uiT("Remove local copy")}</Button>
                 </div>
                 <div className="danger-line workspace-reset-line">
                   <span>
-                    <strong>Reset workspace</strong>
+                    <strong>{uiT("Reset workspace")}</strong>
                     <small>
-                      Clears active students, groups, grades, classes, schedules, and payments. Server snapshots and
-                      encrypted copies on this device have a 30-day recovery window. Expired device copies are purged
-                      the next time Hibi opens on that device. This is not permanent deletion.
+                      {uiT(
+                        "Clears active students, groups, grades, classes, schedules, and payments. Server snapshots and encrypted copies on this device have a 30-day recovery window. Expired device copies are purged the next time Hibi opens on that device. This is not permanent deletion.",
+                      )}
                     </small>
                   </span>
                   <Button
@@ -622,15 +677,16 @@ export default function Settings({
                       setResetOpen(true);
                     }}
                   >
-                    Reset workspace
+                    {uiT("Reset workspace")}
                   </Button>
                 </div>
                 <div className="danger-line permanent-delete-line">
                   <span>
-                    <strong>Delete account and data</strong>
+                    <strong>{uiT("Delete account and data")}</strong>
                     <small>
-                      Permanently erases active records, snapshots, imports, synchronization history, the Auth account,
-                      and this account&apos;s copies on the current device. There is no recovery.
+                      {uiT(
+                        "Permanently erases active records, snapshots, imports, synchronization history, the Auth account, and this account&apos;s copies on the current device. There is no recovery.",
+                      )}
                     </small>
                   </span>
                   <Button
@@ -642,7 +698,7 @@ export default function Settings({
                       setDeleteOpen(true);
                     }}
                   >
-                    Delete account and data
+                    {uiT("Delete account and data")}
                   </Button>
                 </div>
               </div>
@@ -654,16 +710,16 @@ export default function Settings({
       <Drawer
         open={Boolean(pendingRecordImport)}
         onClose={() => setPendingRecordImport(null)}
-        title="Review record import"
+        title={uiT("Review record import")}
         description={
           pendingRecordImport
-            ? `${pendingRecordImport.name} was compared with the records currently saved in Hibi.`
+            ? uiT("{p0} was compared with the records currently saved in Hibi.", { p0: pendingRecordImport.name })
             : ""
         }
         size="normal"
         footer={
           <>
-            <Button onClick={() => setPendingRecordImport(null)}>Cancel</Button>
+            <Button onClick={() => setPendingRecordImport(null)}>{uiT("Cancel")}</Button>
             <Button
               variant="primary"
               icon={ShieldCheck}
@@ -671,7 +727,7 @@ export default function Settings({
               onClick={applyRecordImport}
             >
               {recordImportBusy
-                ? "Importing…"
+                ? uiT("Importing…")
                 : t(
                     `Import ${pendingRecordImport ? pendingRecordImport.summary.added + Object.values(recordImportDecisions).filter((value) => value === "use-imported").length : 0} records`,
                   )}
@@ -684,36 +740,37 @@ export default function Settings({
             <div className="import-safety-note">
               <ShieldCheck size={22} aria-hidden="true" />
               <span>
-                <strong>No existing records will be deleted.</strong>
+                <strong>{uiT("No existing records will be deleted.")}</strong>
                 <small>
-                  Conflicts keep the current Hibi version unless you explicitly choose the imported version.
+                  {uiT("Conflicts keep the current Hibi version unless you explicitly choose the imported version.")}
                 </small>
               </span>
             </div>
             {pendingRecordImport.previousImport ? (
               <div className="import-repeat-warning">
-                <strong>This exact file was already imported.</strong>
+                <strong>{uiT("This exact file was already imported.")}</strong>
                 <span>
-                  Imported {new Date(pendingRecordImport.previousImport.createdAt).toLocaleString()}. Reusing it is
-                  blocked to prevent duplicate work.
+                  {uiT("Imported ")}
+                  {new Date(pendingRecordImport.previousImport.createdAt).toLocaleString()}
+                  {uiT(". Reusing it is blocked to prevent duplicate work.")}
                 </span>
               </div>
             ) : null}
             <dl className="record-import-summary">
               <div>
-                <dt>New</dt>
+                <dt>{uiT("New")}</dt>
                 <dd>{pendingRecordImport.summary.added}</dd>
               </div>
               <div>
-                <dt>Exact duplicates</dt>
+                <dt>{uiT("Exact duplicates")}</dt>
                 <dd>{pendingRecordImport.summary.duplicates}</dd>
               </div>
               <div>
-                <dt>Needs review</dt>
+                <dt>{uiT("Needs review")}</dt>
                 <dd>{pendingRecordImport.summary.conflicts}</dd>
               </div>
               <div>
-                <dt>Will be deleted</dt>
+                <dt>{uiT("Will be deleted")}</dt>
                 <dd>0</dd>
               </div>
             </dl>
@@ -735,8 +792,8 @@ export default function Settings({
             {pendingRecordImport.summary.conflicts ? (
               <section className="record-import-conflicts">
                 <div>
-                  <h3>Resolve possible duplicates</h3>
-                  <p>“Keep current” is the safest default.</p>
+                  <h3>{uiT("Resolve possible duplicates")}</h3>
+                  <p>{uiT("“Keep current” is the safest default.")}</p>
                 </div>
                 {pendingRecordImport.entries
                   .filter((entry) => entry.status === "conflict")
@@ -749,14 +806,14 @@ export default function Settings({
                         </small>
                       </span>
                       <Select
-                        aria-label={`Import choice for ${entry.label}`}
+                        aria-label={uiT("Import choice for {p0}", { p0: entry.label })}
                         value={recordImportDecisions[entry.key] || "keep-current"}
                         onChange={(event) =>
                           setRecordImportDecisions((current) => ({ ...current, [entry.key]: event.target.value }))
                         }
                       >
-                        <option value="keep-current">Keep current</option>
-                        <option value="use-imported">Use imported</option>
+                        <option value="keep-current">{uiT("Keep current")}</option>
+                        <option value="use-imported">{uiT("Use imported")}</option>
                       </Select>
                     </article>
                   ))}
@@ -769,16 +826,19 @@ export default function Settings({
       <Drawer
         open={Boolean(pendingImport)}
         onClose={() => setPendingImport(null)}
-        title="Restore this backup?"
+        title={uiT("Restore this backup?")}
         description={
           pendingImport
-            ? `${pendingImport.name} will replace the current workspace data. The current version will be kept in recovery history first.`
+            ? uiT(
+                "{p0} will replace the current workspace data. The current version will be kept in recovery history first.",
+                { p0: pendingImport.name },
+              )
             : ""
         }
         size="compact"
         footer={
           <>
-            <Button onClick={() => setPendingImport(null)}>Cancel</Button>
+            <Button onClick={() => setPendingImport(null)}>{uiT("Cancel")}</Button>
             <Button
               variant="danger"
               disabled={Boolean(pendingImport?.removals.length) && importConfirmation !== "RESTORE"}
@@ -791,7 +851,7 @@ export default function Settings({
                 if (restored) setPendingImport(null);
               }}
             >
-              Restore backup
+              {uiT("Restore backup")}
             </Button>
           </>
         }
@@ -800,32 +860,32 @@ export default function Settings({
           <>
             <dl className="import-summary">
               <div>
-                <dt>Students</dt>
+                <dt>{uiT("Students")}</dt>
                 <dd>
                   {pendingImport.currentCounts.students} → {pendingImport.counts.students}
                 </dd>
               </div>
               <div>
-                <dt>Groups</dt>
+                <dt>{uiT("Groups")}</dt>
                 <dd>
                   {pendingImport.currentCounts.groups} → {pendingImport.counts.groups}
                 </dd>
               </div>
               <div>
-                <dt>Grades</dt>
+                <dt>{uiT("Grades")}</dt>
                 <dd>
                   {pendingImport.currentCounts.grades} → {pendingImport.counts.grades}
                 </dd>
               </div>
               <div>
-                <dt>Class records</dt>
+                <dt>{uiT("Class records")}</dt>
                 <dd>
                   {pendingImport.currentCounts.classes} → {pendingImport.counts.classes}
                 </dd>
               </div>
             </dl>
             {pendingImport.removals.length ? (
-              <Field label="Type RESTORE to confirm record removal">
+              <Field label={uiT("Type RESTORE to confirm record removal")}>
                 <Input
                   value={importConfirmation}
                   onChange={(event) => setImportConfirmation(event.target.value)}
@@ -842,10 +902,13 @@ export default function Settings({
           if (!recordImportBusy) {
             setBackupSourceRecovery(null);
             setBackupSourceRecoveryKey("");
+            setBackupSourcePassword("");
           }
         }}
-        title="Unlock the source backup"
-        description="This .hibi file belongs to another workspace. Its recovery key will be used only in this browser to decrypt and validate the source, then Hibi will re-encrypt every record for the current account."
+        title={uiT("Unlock the source backup")}
+        description={uiT(
+          "This backup needs its original encryption password or recovery key. Hibi will unlock and validate it in this browser, then re-encrypt the records for the current account.",
+        )}
         size="compact"
         footer={
           <>
@@ -857,7 +920,7 @@ export default function Settings({
                 setBackupSourcePassword("");
               }}
             >
-              Cancel
+              {uiT("Cancel")}
             </Button>
             <Button
               variant="primary"
@@ -878,6 +941,7 @@ export default function Settings({
                   });
                   setBackupSourceRecovery(null);
                   setBackupSourceRecoveryKey("");
+                  setBackupSourcePassword("");
                 } catch (error) {
                   actions.notify(error?.message || "That recovery key could not unlock the backup.", "error");
                 } finally {
@@ -885,24 +949,24 @@ export default function Settings({
                 }
               }}
             >
-              {recordImportBusy ? "Unlocking…" : "Unlock and review"}
+              {recordImportBusy ? uiT("Unlocking…") : uiT("Unlock and review")}
             </Button>
           </>
         }
       >
-        <Field label="Source workspace recovery key">
+        <Field label={uiT("Source workspace recovery key")}>
           <Input
             value={backupSourceRecoveryKey}
             onChange={(event) => setBackupSourceRecoveryKey(event.target.value)}
-            placeholder="HIBI1-…"
+            placeholder={uiT("HIBI1-…")}
             autoComplete="off"
             spellCheck="false"
           />
         </Field>
         {backupSourceRecovery?.passwordAvailable ? (
           <div className="backup-password-unlock">
-            <span>or</span>
-            <Field label="Source workspace encryption password">
+            <span>{uiT("or")}</span>
+            <Field label={uiT("Source workspace encryption password")}>
               <Input
                 type="password"
                 value={backupSourcePassword}
@@ -938,7 +1002,7 @@ export default function Settings({
                 }
               }}
             >
-              Unlock source with password
+              {uiT("Unlock source with password")}
             </Button>
           </div>
         ) : null}
@@ -946,12 +1010,14 @@ export default function Settings({
       <Drawer
         open={recoveryOpen}
         onClose={() => setRecoveryOpen(false)}
-        title="Recovery history"
-        description="Recent server snapshots and encrypted copies kept independently on this device. Opening this history also verifies that device copies can be decrypted. Restoring never deletes the current version; it is archived first."
+        title={uiT("Recovery history")}
+        description={uiT(
+          "Recent server snapshots and encrypted copies kept independently on this device. Opening this history also verifies that device copies can be decrypted. Restoring never deletes the current version; it is archived first.",
+        )}
         size="normal"
       >
         {recoveryLoading ? (
-          <p>Loading recovery history…</p>
+          <p>{uiT("Loading recovery history…")}</p>
         ) : recoveryPoints.length ? (
           <div className="recovery-list">
             {recoveryPoints.map((point) => (
@@ -959,24 +1025,28 @@ export default function Settings({
                 <div>
                   <strong>{new Date(point.capturedAt).toLocaleString()}</strong>
                   <small>
-                    {point.source === "cloud-snapshot" ? "Cloud snapshot" : "Encrypted device copy"}
-                    {point.revision !== null && point.revision !== undefined ? ` · revision ${point.revision}` : ""}
-                    {point.counts ? ` · ${point.counts.students} students, ${point.counts.classes} classes` : ""}
+                    {point.source === "cloud-snapshot" ? uiT("Cloud snapshot") : uiT("Encrypted device copy")}
+                    {point.revision !== null && point.revision !== undefined
+                      ? uiT(" · revision {p0}", { p0: point.revision })
+                      : ""}
+                    {point.counts
+                      ? uiT(" · {p0} students, {p1} classes", { p0: point.counts.students, p1: point.counts.classes })
+                      : ""}
                   </small>
                 </div>
                 <div className="button-cluster">
                   <Button icon={Download} onClick={() => actions.exportRecoveryPoint(point)}>
-                    Download
+                    {uiT("Download")}
                   </Button>
                   <Button icon={RotateCcw} onClick={() => setPendingRecovery(point)}>
-                    Restore
+                    {uiT("Restore")}
                   </Button>
                 </div>
               </article>
             ))}
           </div>
         ) : (
-          <p>No recovery copies are available yet. Hibi creates them automatically as you use the app.</p>
+          <p>{uiT("No recovery copies are available yet. Hibi creates them automatically as you use the app.")}</p>
         )}
       </Drawer>
       <Drawer
@@ -984,13 +1054,15 @@ export default function Settings({
         onClose={() => {
           if (!securityBusy) setPasswordChangeOpen(false);
         }}
-        title="Change encryption password"
-        description="This replaces only the password wrapper around your account master key. Your encrypted records do not need to be re-encrypted."
+        title={uiT("Change encryption password")}
+        description={uiT(
+          "This replaces only the password wrapper around your account master key. Your encrypted records do not need to be re-encrypted.",
+        )}
         size="compact"
         footer={
           <>
-            <Button onClick={() => setPasswordChangeOpen(false)} disabled={securityBusy}>
-              Cancel
+            <Button onClick={() => setPasswordChangeOpen(false)} disabled={securityBusy || cloudSecurityReadOnly}>
+              {uiT("Cancel")}
             </Button>
             <Button
               variant="primary"
@@ -998,6 +1070,8 @@ export default function Settings({
               disabled={
                 securityBusy ||
                 !currentEncryptionPassword ||
+                Boolean(newPasswordWarning) ||
+                cloudSecurityReadOnly ||
                 !newEncryptionPassword ||
                 !newEncryptionPasswordConfirmation
               }
@@ -1022,13 +1096,13 @@ export default function Settings({
                 }
               }}
             >
-              {newPasswordWarning ? "Use this password anyway" : "Save new password"}
+              {uiT("Save new password")}
             </Button>
           </>
         }
       >
         <div className="settings-controls settings-controls-expanded">
-          <Field label="Current encryption password">
+          <Field label={uiT("Current encryption password")}>
             <Input
               type="password"
               value={currentEncryptionPassword}
@@ -1036,7 +1110,7 @@ export default function Settings({
               autoComplete="current-password"
             />
           </Field>
-          <Field label="New encryption password">
+          <Field label={uiT("New encryption password")}>
             <Input
               type="password"
               value={newEncryptionPassword}
@@ -1044,9 +1118,9 @@ export default function Settings({
               autoComplete="new-password"
             />
           </Field>
-          <p>{NEW_PASSWORD_GUIDANCE}</p>
-          {newPasswordWarning ? <p role="status">{newPasswordWarning}</p> : null}
-          <Field label="Confirm new encryption password">
+          <p>{uiT(NEW_PASSWORD_GUIDANCE)}</p>
+          {newPasswordWarning ? <p role="status">{uiT(newPasswordWarning)}</p> : null}
+          <Field label={uiT("Confirm new encryption password")}>
             <Input
               type="password"
               value={newEncryptionPasswordConfirmation}
@@ -1059,9 +1133,11 @@ export default function Settings({
       </Drawer>
       <ConfirmDialog
         open={rotationOpen}
-        title="Rotate the account master key?"
-        description="Hibi will verify your encryption password, generate a new master key, and re-encrypt active records, snapshots, device cache, and the password wrapper. Existing recovery keys will be revoked; create a new one afterward. A lost device cannot decrypt future revisions."
-        confirmLabel={rotationProgress || "Rotate master key"}
+        title={uiT("Rotate the account master key?")}
+        description={uiT(
+          "Hibi will verify your encryption password, generate a new master key, and re-encrypt active records, snapshots, device cache, and the password wrapper. Existing recovery keys will be revoked; create a new one afterward. A lost device cannot decrypt future revisions.",
+        )}
+        confirmLabel={rotationProgress || uiT("Rotate master key")}
         busy={securityBusy}
         confirmDisabled={!rotationPassword}
         onClose={() => {
@@ -1087,21 +1163,23 @@ export default function Settings({
           }
         }}
       >
-        <Field label="Encryption password">
+        <Field label={uiT("Encryption password")}>
           <Input
             type="password"
             value={rotationPassword}
             onChange={(event) => setRotationPassword(event.target.value)}
             autoComplete="current-password"
-            disabled={securityBusy}
+            disabled={securityBusy || cloudSecurityReadOnly}
           />
         </Field>
       </ConfirmDialog>
       <ConfirmDialog
         open={Boolean(pendingRecovery)}
-        title="Restore this recovery copy?"
-        description="Your current workspace will be archived first. This recovery action is revision-checked and can itself be undone from recovery history."
-        confirmLabel="Restore copy"
+        title={uiT("Restore this recovery copy?")}
+        description={uiT(
+          "Your current workspace will be archived first. This recovery action is revision-checked and can itself be undone from recovery history.",
+        )}
+        confirmLabel={uiT("Restore copy")}
         onClose={() => setPendingRecovery(null)}
         onConfirm={async () => {
           if (await actions.restoreRecoveryPoint(pendingRecovery)) {
@@ -1112,9 +1190,11 @@ export default function Settings({
       />
       <ConfirmDialog
         open={Boolean(clearTarget)}
-        title="Remove the old local copy?"
-        description="This removes only the legacy browser copy on this device. Your signed-in cloud workspace and recovery history remain available."
-        confirmLabel="Remove local copy"
+        title={uiT("Remove the old local copy?")}
+        description={uiT(
+          "This removes only the legacy browser copy on this device. Your signed-in cloud workspace and recovery history remain available.",
+        )}
+        confirmLabel={uiT("Remove local copy")}
         onClose={() => setClearTarget("")}
         onConfirm={async () => {
           const cleared = actions.clearLegacyLocalData();
@@ -1126,13 +1206,15 @@ export default function Settings({
         onClose={() => {
           if (!resetBusy) setResetOpen(false);
         }}
-        title="Reset this workspace?"
-        description="Active records will be emptied immediately. The recovery window is 30 days, so this is not permanent deletion."
+        title={uiT("Reset this workspace?")}
+        description={uiT(
+          "Active records will be emptied immediately. The recovery window is 30 days, so this is not permanent deletion.",
+        )}
         size="compact"
         footer={
           <>
             <Button onClick={() => setResetOpen(false)} disabled={resetBusy}>
-              Cancel
+              {uiT("Cancel")}
             </Button>
             <Button
               variant="danger"
@@ -1146,12 +1228,15 @@ export default function Settings({
                 }
               }}
             >
-              {resetBusy ? "Resetting…" : "Reset workspace"}
+              {resetBusy ? uiT("Resetting…") : uiT("Reset workspace")}
             </Button>
           </>
         }
       >
-        <Field label="Type RESET to confirm" hint="Your settings stay in place; active class data is emptied.">
+        <Field
+          label={uiT("Type RESET to confirm")}
+          hint={uiT("Your settings stay in place; active class data is emptied.")}
+        >
           <Input
             value={resetConfirmation}
             onChange={(event) => setResetConfirmation(event.target.value)}
@@ -1165,13 +1250,15 @@ export default function Settings({
         onClose={() => {
           if (!deleteBusy) setDeleteOpen(false);
         }}
-        title="Permanently delete account and data?"
-        description="This verified deletion has no recovery. Sign in again first if your last authentication was more than 10 minutes ago."
+        title={uiT("Permanently delete account and data?")}
+        description={uiT(
+          "This verified deletion has no recovery. Sign in again first if your last authentication was more than 10 minutes ago.",
+        )}
         size="compact"
         footer={
           <>
             <Button onClick={() => setDeleteOpen(false)} disabled={deleteBusy}>
-              Cancel
+              {uiT("Cancel")}
             </Button>
             <Button
               variant="danger"
@@ -1187,17 +1274,18 @@ export default function Settings({
                 }
               }}
             >
-              {deleteBusy ? "Deleting…" : "Delete permanently"}
+              {deleteBusy ? uiT("Deleting…") : uiT("Delete permanently")}
             </Button>
           </>
         }
       >
         <div className="permanent-delete-confirmation">
           <p>
-            Hibi will purge cloud records and recovery history first, then hard-delete the Auth user and this
-            account&apos;s encrypted data on this device.
+            {uiT(
+              "Hibi will purge cloud records and recovery history first, then hard-delete the Auth user and this account&apos;s encrypted data on this device.",
+            )}
           </p>
-          <Field label="Type DELETE MY ACCOUNT to confirm" error={deleteError}>
+          <Field label={uiT("Type DELETE MY ACCOUNT to confirm")} error={deleteError}>
             <Input
               value={deleteConfirmation}
               onChange={(event) => setDeleteConfirmation(event.target.value)}

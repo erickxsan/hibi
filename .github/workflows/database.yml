@@ -20,6 +20,9 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
       - uses: supabase/setup-cli@v3
         with:
           version: 2.113.0
@@ -32,6 +35,8 @@ jobs:
         run: supabase db lint --local --level warning --fail-on warning
       - name: Run pgTAP database tests
         run: supabase test db
+      - name: Register and unlock client-generated recovery material through SQL
+        run: node scripts/test-recovery-sql.mjs
       - name: Stop local stack
         if: always()
         run: supabase stop --no-backup

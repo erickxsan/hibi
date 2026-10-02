@@ -9515,6 +9515,14 @@ tbody .attendance-student-column {
   .tracking-table-shell .tracking-col-secondary {
     display: none;
   }
+  .tracking-table-payments table {
+    table-layout: auto;
+  }
+  .tracking-table-payments td:not(:first-child),
+  .tracking-table-payments .status-badge {
+    white-space: nowrap;
+    overflow-wrap: normal;
+  }
   .tracking-sidebar {
     grid-template-columns: 1fr;
   }
@@ -11517,6 +11525,18 @@ tbody .attendance-student-column {
   font-weight: 800;
 }
 
+.tracking-table-pagination {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px solid #eee9e1;
+}
+.tracking-table-pagination > span {
+  margin-right: auto;
+  font-size: 12px;
+}
+
 .community-table-row {
   position: relative;
   min-height: 78px;
@@ -11999,7 +12019,13 @@ tbody .attendance-student-column {
     font-size: 11px;
   }
   .community-table-head {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
   }
   .community-table-row,
   .community-student-table .community-table-row,
@@ -12011,6 +12037,7 @@ tbody .attendance-student-column {
   }
   .community-table-row > .community-phone,
   .community-table-row > .enrollment-tags,
+  .community-table-row > .community-enrollment-cell,
   .community-table-row > .record-status,
   .community-table-row > strong {
     display: none;
@@ -13417,7 +13444,12 @@ tbody .attendance-student-column {
     margin-inline: 14px;
   }
   .directory-table-head {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
   }
   .directory-table-row {
     grid-template-columns: minmax(0, 1fr) auto;

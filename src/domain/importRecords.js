@@ -268,6 +268,7 @@ export function buildImportPlan(currentInput, importedInput, decisions = {}) {
         reason,
         decision,
         existingId: existing?.id || null,
+        existingContent: existing ? comparable(existing) : null,
         importedId,
       };
       entries.push(entry);
@@ -316,6 +317,10 @@ export function buildImportPlan(currentInput, importedInput, decisions = {}) {
     }
   }
 
-  const signature = JSON.stringify(entries.map(({ key, status, existingId }) => [key, status, existingId]));
+  const signature = Object.keys(decisions).length
+    ? buildImportPlan(current, imported).signature
+    : JSON.stringify(
+        entries.map(({ key, status, existingId, existingContent }) => [key, status, existingId, existingContent]),
+      );
   return { candidate: canonicalCandidate, entries, summary, signature };
 }

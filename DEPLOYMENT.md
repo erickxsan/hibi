@@ -5,7 +5,7 @@ The recommended free stack is Supabase for authentication/database and Cloudflar
 ## 1. Create and configure Supabase
 
 1. Create a Supabase project.
-2. Apply every file in `supabase/migrations/` in filename order, preferably by linking the Supabase CLI and running `supabase db push`. The `202608250001_end_to_end_encryption_v2.sql` migration adds the encrypted v2 model beside legacy storage. Deploy the database migration before the matching frontend. Accounts migrate only after their owner returns, creates a production passkey, and the browser verifies staged ciphertext; old open clients fail closed once migration begins.
+2. Apply every file in `supabase/migrations/` in filename order, preferably by linking the Supabase CLI and running `supabase db push`. The `202608250001_end_to_end_encryption_v2.sql` migration adds the encrypted v2 model beside legacy storage. Deploy the database migration before the matching frontend. Accounts migrate only after their owner returns, creates an encryption password, and the browser verifies staged ciphertext; old open clients fail closed once migration begins.
 3. In **Authentication → URL Configuration**, set the production Site URL to `https://usehibi.pages.dev/` and add these redirect URLs:
    - `http://127.0.0.1:4173/`
    - `https://usehibi.pages.dev/`
@@ -43,9 +43,8 @@ Restart the Vite server after changing environment variables.
 
 Follow the two-account procedure in `supabase/README.md`. With Docker Desktop and the Supabase CLI running, execute `pnpm test:db`. Do not publish until both accounts can only read their own workspace, direct table writes are denied, and the revision-conflict test succeeds.
 
-Also complete the real WebAuthn PRF and migration release matrix in
-[`docs/E2EE_ARCHITECTURE.md`](./docs/E2EE_ARCHITECTURE.md). Cloudflare previews and localhost intentionally cannot
-register credentials for the production RP. Test production passkeys only at `https://usehibi.pages.dev`.
+Also complete the password, recovery, rotation, backup and migration release matrix in
+[`docs/E2EE_ARCHITECTURE.md`](./docs/E2EE_ARCHITECTURE.md). Passkeys remain a legacy compatibility path with RP restrictions. Preview origins are read-only unless explicitly allowed; use a separate staging backend for write tests. Apply `202610020001_recovery_contract_and_wrapper_purge.sql` before publishing this frontend.
 
 ## 3. Deploy to Cloudflare Pages
 

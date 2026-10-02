@@ -1,3 +1,4 @@
+import { roundMoney, sumMoney, moneyDifference } from "./money.js";
 import { DEFAULT_SETTINGS, PAYMENT_STATUSES } from "./constants.js";
 import {
   addDays,
@@ -80,12 +81,12 @@ function sum(items, selector) {
 }
 
 function validPaymentAmount(row) {
-  return numberOrZero(row?.amountPaid);
+  return roundMoney(numberOrZero(row?.amountPaid));
 }
 
 function amountCollectedInRange(rows, start, end) {
   if (!isDateOnly(start) || !isDateOnly(end) || start > end) return 0;
-  return sum(
+  return sumMoney(
     rows.filter((row) => isDateOnly(row?.paymentDate) && isDateInRange(row.paymentDate, start, end)),
     validPaymentAmount,
   );
@@ -138,10 +139,10 @@ function rateForContext(context, student, group) {
 function chargeForContext(context, row, student, group) {
   if (!row?.classDate || !row?.studentId || !row?.classStatus) return null;
   if (row.classStatus === "Cancelled") return 0;
-  if (finiteNumber(row.appliedCharge)) return row.appliedCharge;
+  if (finiteNumber(row.appliedCharge)) return roundMoney(row.appliedCharge);
   const hours = finiteNumber(row.hours) ? row.hours : context.config.defaultClassHours;
   const rate = finiteNumber(row.appliedHourlyRate) ? row.appliedHourlyRate : rateForContext(context, student, group);
-  return finiteNumber(hours) && finiteNumber(rate) ? hours * rate : null;
+  return finiteNumber(hours) && finiteNumber(rate) ? roundMoney(hours * rate) : null;
 }
 
 function outstandingForContext(context, row, student, group) {
@@ -150,7 +151,7 @@ function outstandingForContext(context, row, student, group) {
   if (row.classDate > context.asOf || row.classStatus === "Cancelled" || charge === 0) return 0;
   if (!finiteNumber(charge)) return null;
   const paid = isDateOnly(row.paymentDate) && row.paymentDate <= context.asOf ? validPaymentAmount(row) : 0;
-  return Math.max(charge - paid, 0);
+  return moneyDifference(charge, paid);
 }
 
 function paymentStatusForContext(context, row, student, group) {
@@ -207,7 +208,7 @@ export function calculateCharge(state, row) {
   const config = settings(state);
   if (!row?.classDate || !row?.studentId || !row?.classStatus) return null;
   if (row.classStatus === "Cancelled") return 0;
-  if (finiteNumber(row.appliedCharge)) return row.appliedCharge;
+  if (finiteNumber(row.appliedCharge)) return roundMoney(row.appliedCharge);
 
   // Blank hours use the default; an explicit 0 waives the charge.
   const effectiveHours = finiteNumber(row.hours) ? row.hours : config.defaultClassHours;
@@ -215,7 +216,7 @@ export function calculateCharge(state, row) {
     ? row.appliedHourlyRate
     : resolveHourlyRate(state, row.studentId, row.groupId);
   if (!finiteNumber(effectiveHours) || !finiteNumber(hourlyRate)) return null;
-  return effectiveHours * hourlyRate;
+  return roundMoney(effectiveHours * hourlyRate);
 }
 
 export function calculatePaymentStatus(state, row, asOfDate) {
@@ -260,7 +261,7 @@ export function calculateOutstanding(state, row, asOfDate) {
   if (!finiteNumber(charge)) return null;
 
   const recognizedPayment = isDateOnly(row.paymentDate) && row.paymentDate <= asOf ? validPaymentAmount(row) : 0;
-  return Math.max(charge - recognizedPayment, 0);
+  return moneyDifference(charge, recognizedPayment);
 }
 
 export function deriveClassLogRow(state, row, asOfDate, suppliedContext) {
@@ -300,10 +301,10 @@ function studentMetricsForRows(context, student, gradeRows, logRows, fallbackGro
   const attended = attendanceRows.filter((row) => row.attendance === "P" || row.attendance === "L").length;
   const attendance = attendanceRows.length ? attended / attendanceRows.length : null;
   const missingAssignments = gradeRows.filter((row) => row?.workStatus === "Missing").length;
-  const outstanding = sum(logRows, (row) =>
+  const outstanding = sumMoney(logRows, (row) =>
     outstandingForContext(context, row, student, context.groupsById.get(row?.groupId) ?? fallbackGroup),
   );
-  const paidThroughToday = sum(
+  const paidThroughToday = sumMoney(
     logRows.filter((row) => isDateOnly(row?.paymentDate) && row.paymentDate <= context.asOf),
     validPaymentAmount,
   );
@@ -389,17 +390,17 @@ export function deriveGroup(state, groupId, asOfDate, suppliedContext) {
     (item) => item.groupId === groupId && item.status !== "Cancelled",
   );
   const idealRevenue = scheduledOccurrences.length
-    ? sum(scheduledOccurrences, (occurrence) => {
+    ? sumMoney(scheduledOccurrences, (occurrence) => {
         const participants =
           occurrence.participantMode === "custom"
             ? activeStudentRecords.filter((student) => occurrence.participantIds?.includes(student.id))
             : activeStudentRecords;
-        return sum(
+        return sumMoney(
           participants,
           (student) => numberOrZero(resolveHourlyRate(state, student, group)) * numberOrZero(occurrence.durationHours),
         );
       })
-    : sum(
+    : sumMoney(
         activeStudentRecords,
         (student) =>
           numberOrZero(group.plannedSessionsPerMonth) *
@@ -417,7 +418,7 @@ export function deriveGroup(state, groupId, asOfDate, suppliedContext) {
     attendance: average(studentMetrics.map((metrics) => metrics.attendance)),
     missingAssignments: sum(studentMetrics, (metrics) => metrics.missingAssignments),
     collectedSelectedMonth,
-    outstanding: sum(studentMetrics, (metrics) => metrics.outstanding),
+    outstanding: sumMoney(studentMetrics, (metrics) => metrics.outstanding),
     idealRevenue,
     scheduledOccurrences: scheduledOccurrences.length,
     effectiveHourlyRate: finiteNumber(group.hourlyRate) ? group.hourlyRate : config.hourlyRate,
@@ -442,7 +443,7 @@ export function deriveUnassignedGroup(state, asOfDate, suppliedContext) {
   const scheduledOccurrences = selectedMonthOccurrences(context, selectedMonth).filter(
     (item) => activeStudentsById.has(item.studentId) && item.status !== "Cancelled",
   );
-  const idealRevenue = sum(scheduledOccurrences, (occurrence) => {
+  const idealRevenue = sumMoney(scheduledOccurrences, (occurrence) => {
     const student = activeStudentsById.get(occurrence.studentId);
     return numberOrZero(resolveHourlyRate(state, student)) * numberOrZero(occurrence.durationHours);
   });
@@ -476,7 +477,7 @@ export function deriveUnassignedGroup(state, asOfDate, suppliedContext) {
     missingAssignments: sum(studentMetrics, (metrics) => metrics.missingAssignments),
     collectedSelectedMonth:
       selectedMonth <= selectedMonthEnd ? amountCollectedInRange(groupLog, selectedMonth, selectedMonthEnd) : 0,
-    outstanding: sum(studentMetrics, (metrics) => metrics.outstanding),
+    outstanding: sumMoney(studentMetrics, (metrics) => metrics.outstanding),
     idealRevenue,
     scheduledOccurrences: scheduledOccurrences.length,
     projectionExcluded: scheduledOccurrences.length === 0,
@@ -533,7 +534,7 @@ export function deriveDashboard(state, asOfDate, suppliedContext) {
   const recentStart = addDays(asOf, -7 * recentWeeks + 1);
   const recentCollections = amountCollectedInRange(data.classLog, recentStart, asOf);
 
-  const paidForFutureClasses = sum(
+  const paidForFutureClasses = sumMoney(
     data.classLog.filter(
       (row) =>
         isDateOnly(row?.classDate) && row.classDate > asOf && isDateOnly(row.paymentDate) && row.paymentDate <= asOf,
@@ -551,9 +552,9 @@ export function deriveDashboard(state, asOfDate, suppliedContext) {
     collectedThisWeek: amountCollectedInRange(data.classLog, weekStart, asOf),
     collectedSelectedMonth:
       selectedMonth <= selectedMonthEnd ? amountCollectedInRange(data.classLog, selectedMonth, selectedMonthEnd) : 0,
-    outstandingThroughToday: sum(active, (student) => student.outstanding),
+    outstandingThroughToday: sumMoney(active, (student) => student.outstanding),
     paidForFutureClasses,
-    idealRevenue: sum(groups, (group) => group.idealRevenue),
+    idealRevenue: sumMoney(groups, (group) => group.idealRevenue),
     recentProjection: (recentCollections / recentWeeks) * (daysInMonth(selectedMonth) / 7),
     recentCollections,
     recentWeeklyAverage: recentCollections / recentWeeks,

@@ -26,11 +26,13 @@ export class CloudPersistenceError extends Error {
   constructor(message = "Cloud records could not be loaded or saved.", options) {
     super(message, options);
     this.name = "CloudPersistenceError";
+    /** @type {string | undefined} */
+    this.code = undefined;
   }
 }
 
 export class WorkspaceConflictError extends CloudPersistenceError {
-  constructor({ latestState, latestRevision, latestUpdatedAt = null, cause } = {}) {
+  constructor({ latestState = undefined, latestRevision = undefined, latestUpdatedAt = null, cause = undefined } = {}) {
     super("This record changed in another session. The latest cloud version has been loaded.", { cause });
     this.name = "WorkspaceConflictError";
     this.latestState = latestState;
@@ -455,7 +457,10 @@ export function createWorkspaceRepository(client = supabase, { allowWrites = tru
     return cache;
   }
 
-  async function subscribeToWorkspace(onChange, { userId, onStatus, onError } = {}) {
+  async function subscribeToWorkspace(
+    onChange,
+    { userId = undefined, onStatus = undefined, onError = undefined } = {},
+  ) {
     if (typeof onChange !== "function") throw new TypeError("subscribeToWorkspace requires an update callback.");
     const ownerId = (await requireUser(userId)).id;
     let active = true;

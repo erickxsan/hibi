@@ -1,3 +1,5 @@
+import { uiText } from "../i18n";
+import { useI18n } from "../i18n/index.jsx";
 import { Check } from "lucide-react";
 import { STUDENT_AVATAR_IDS } from "../domain/constants";
 import { playHibiSound } from "../utils/hibiSounds";
@@ -103,6 +105,7 @@ function AnimalFace({ id }) {
 }
 
 export function StudentAvatar({ avatarId, name = "Student", size = "medium", decorative = false, className = "" }) {
+  const { t: uiT } = useI18n();
   const id = STUDENT_AVATAR_IDS.includes(avatarId) ? avatarId : "cat";
   const meta = AVATAR_META[id];
   return (
@@ -110,7 +113,7 @@ export function StudentAvatar({ avatarId, name = "Student", size = "medium", dec
       className={`student-animal-avatar avatar-tone-${meta.tone} avatar-size-${size} ${className}`.trim()}
       role={decorative ? undefined : "img"}
       aria-hidden={decorative ? "true" : undefined}
-      aria-label={decorative ? undefined : `${meta.label} avatar for ${name}`}
+      aria-label={decorative ? undefined : uiT("{p0} avatar for {p1}", { p0: uiText(meta.label), p1: name })}
     >
       <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
         <AnimalFace id={id} />
@@ -120,19 +123,20 @@ export function StudentAvatar({ avatarId, name = "Student", size = "medium", dec
 }
 
 export function AvatarPicker({ value, onChange }) {
+  const { t: uiT } = useI18n();
   const selected = STUDENT_AVATAR_IDS.includes(value) ? value : "cat";
   return (
     <details className="avatar-picker">
-      <summary aria-label="Choose student avatar">
+      <summary aria-label={uiT("Choose student avatar")}>
         <StudentAvatar avatarId={selected} name="Selected student" size="small" decorative />
         <span>
-          <strong>Student avatar</strong>
+          <strong>{uiT("Student avatar")}</strong>
           <small>{AVATAR_META[selected].label}</small>
         </span>
-        <span className="avatar-picker-change">Change</span>
+        <span className="avatar-picker-change">{uiT("Change")}</span>
       </summary>
       <fieldset>
-        <legend>Choose an avatar</legend>
+        <legend>{uiT("Choose an avatar")}</legend>
         <div className="avatar-option-grid">
           {STUDENT_AVATARS.map((avatar) => (
             <label className={selected === avatar.id ? "avatar-option selected" : "avatar-option"} key={avatar.id}>

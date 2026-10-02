@@ -20,6 +20,22 @@ const state = {
   ],
 };
 const range = trackingRange("2026-07-25", "month");
+it("uses exact minor-unit balances in payment detail aggregates", () => {
+  const rows = [
+    {
+      id: "decimal",
+      studentId: "s1",
+      groupId: "g1",
+      classDate: "2026-07-20",
+      charge: 0.3,
+      recognizedPaid: 0.1,
+      paymentDate: "2026-07-20",
+    },
+  ];
+  const data = buildPaymentTracking(state, rows, { mode: "overview", range });
+  expect(data.tableRows.find((row) => row.id === "s1").pending).toBe(0.2);
+  expect(data.pending).toBe(0.2);
+});
 const grades = [
   {
     id: "other-group",
@@ -339,8 +355,8 @@ describe("tracking model", () => {
 
     expect(result.tableRows.map((row) => row.id)).toEqual(["s2", "s1", "s3"]);
     expect(result.tableRows[0]).toMatchObject({ charged: 0, paid: 0, pending: 0, lastPayment: "" });
-    expect(result.tableRows[1]).toMatchObject({ charged: 0.1 + 0.2 + 0.3, paid: 0.1 + 0.2 + 0.3, pending: 0 });
-    expect(result.generated).toBe(0.1 + 0.2 + 0.3);
+    expect(result.tableRows[1]).toMatchObject({ charged: 0.6, paid: 0.6, pending: 0 });
+    expect(result.generated).toBe(0.6);
     expect({ state: orderedState, rows }).toEqual(original);
   });
 

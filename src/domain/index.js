@@ -114,3 +114,5 @@ export {
   serializeState,
   StorageUnavailableError,
 } from "./storage.js";
+
+export { roundMoney, sumMoney, toMinorUnits, moneyDifference } from "./money.js";

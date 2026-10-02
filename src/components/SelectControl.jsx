@@ -1,4 +1,5 @@
-import { Children, isValidElement, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useI18n } from "../i18n/index.jsx";
+import { Children, isValidElement, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, LoaderCircle, Search, UsersRound, X } from "lucide-react";
 import { closeOverlayHistory, pushOverlayHistory, subscribeToAppHistory } from "../navigation/appHistory";
@@ -9,7 +10,11 @@ function optionLabel(children) {
   return Children.toArray(children)
     .map((child) => {
       if (typeof child === "string" || typeof child === "number") return String(child);
-      return isValidElement(child) ? optionLabel(child.props.children) : "";
+      return isValidElement(child)
+        ? optionLabel(
+            /** @type {import("react").ReactElement<{children?: import("react").ReactNode}>} */ (child).props.children,
+          )
+        : "";
     })
     .join("");
 }
@@ -86,11 +91,14 @@ function useChoicePopover({
 }) {
   const overlayId = useId();
   const ownsHistory = useRef(false);
-  const close = (returnFocus = true) => {
-    if (ownsHistory.current && closeOverlayHistory(overlayId)) return;
-    setOpen(false);
-    if (returnFocus) requestAnimationFrame(() => focusWithoutPageScroll(triggerRef.current));
-  };
+  const close = useCallback(
+    (returnFocus = true) => {
+      if (ownsHistory.current && closeOverlayHistory(overlayId)) return;
+      setOpen(false);
+      if (returnFocus) requestAnimationFrame(() => focusWithoutPageScroll(triggerRef.current));
+    },
+    [overlayId, setOpen, triggerRef],
+  );
 
   useEffect(() => {
     if (!open) return undefined;
@@ -118,7 +126,7 @@ function useChoicePopover({
       if (ownsHistory.current) closeOverlayHistory(overlayId);
       ownsHistory.current = false;
     };
-  }, [menuRef, open, overlayId, setOpen, triggerRef]);
+  }, [close, menuRef, open, overlayId, setOpen, triggerRef]);
 
   const onKeyDown = (event) => {
     if (event.key === "Escape") {
@@ -219,6 +227,7 @@ function ChoiceMenu({
   setQuery,
   variant,
 }) {
+  const { t: uiT } = useI18n();
   const searchRef = useRef(null);
   useEffect(() => {
     if (!mobile) return undefined;
@@ -263,7 +272,7 @@ function ChoiceMenu({
       style={mobile ? undefined : position}
       role={mobile ? "dialog" : !searchable ? "listbox" : undefined}
       aria-modal={mobile ? "true" : undefined}
-      aria-label={mobile ? "Choose an option" : undefined}
+      aria-label={mobile ? uiT("Choose an option") : undefined}
       aria-multiselectable={!searchable && multiple ? "true" : undefined}
       aria-activedescendant={!searchable && activeIndex >= 0 ? optionId(activeIndex) : undefined}
       tabIndex={searchable ? -1 : 0}
@@ -272,8 +281,8 @@ function ChoiceMenu({
       {mobile ? (
         <div className="select-sheet-head">
           <span aria-hidden="true" />
-          <strong>Choose an option</strong>
-          <button type="button" aria-label="Close selector" onClick={onClose}>
+          <strong>{uiT("Choose an option")}</strong>
+          <button type="button" aria-label={uiT("Close selector")} onClick={onClose}>
             <X size={18} />
           </button>
         </div>
@@ -281,11 +290,11 @@ function ChoiceMenu({
       {searchable ? (
         <label className="select-search">
           <Search aria-hidden="true" size={17} />
-          <span className="sr-only">Search options</span>
+          <span className="sr-only">{uiT("Search options")}</span>
           <input
             ref={searchRef}
             role="combobox"
-            aria-label="Search options"
+            aria-label={uiT("Search options")}
             aria-expanded="true"
             aria-controls={listId}
             aria-activedescendant={activeIndex >= 0 ? optionId(activeIndex) : undefined}
@@ -294,13 +303,13 @@ function ChoiceMenu({
               setQuery(event.target.value);
               setActiveIndex(0);
             }}
-            placeholder="Search…"
+            placeholder={uiT("Search…")}
             autoComplete="off"
           />
           {query ? (
             <button
               type="button"
-              aria-label="Clear search"
+              aria-label={uiT("Clear search")}
               onClick={() => {
                 setQuery("");
                 setActiveIndex(0);
@@ -316,12 +325,12 @@ function ChoiceMenu({
         className="select-options"
         role={searchable || mobile ? "listbox" : "presentation"}
         aria-multiselectable={(searchable || mobile) && multiple ? "true" : undefined}
-        aria-label={searchable || mobile ? "Options" : undefined}
+        aria-label={searchable || mobile ? uiT("Options") : undefined}
       >
         {loading ? (
           <div className="select-message" role="status">
             <LoaderCircle className="select-spinner" />
-            <span>Loading options…</span>
+            <span>{uiT("Loading options…")}</span>
           </div>
         ) : null}
         {!loading &&
@@ -352,14 +361,14 @@ function ChoiceMenu({
         {!loading && !filteredOptions.length ? (
           <div className="select-message">
             <Search aria-hidden="true" />
-            <strong>{emptyMessage}</strong>
-            <span>Try a different search.</span>
+            <strong>{uiT(emptyMessage)}</strong>
+            <span>{uiT("Try a different search.")}</span>
           </div>
         ) : null}
       </div>
       {mobile && multiple ? (
         <button type="button" className="select-sheet-done" onClick={onClose}>
-          Done
+          {uiT("Done")}
         </button>
       ) : null}
     </div>
@@ -392,6 +401,7 @@ export function Select({
   value,
   ...props
 }) {
+  const { t: uiT } = useI18n();
   const options = useMemo(() => optionsFromChildren(children), [children]);
   const selectedValue = String(value ?? "");
   const selected = options.find((option) => option.value === selectedValue) || options[0];
@@ -496,7 +506,7 @@ export function Select({
           <OptionArtwork option={selected || {}} variant={variant} />
         )}
         <span className="select-trigger-copy" id={valueId}>
-          <strong>{selected?.label || props.placeholder || "Choose an option"}</strong>
+          <strong>{selected?.label || props.placeholder || uiT("Choose an option")}</strong>
           {selected?.meta ? <small>{selected.meta}</small> : null}
         </span>
         <ChevronDown className="select-chevron" aria-hidden="true" size={17} strokeWidth={1.8} />
@@ -543,6 +553,7 @@ export function MultiSelect({
   value = [],
   variant = "standard",
 }) {
+  const { t: uiT } = useI18n();
   const triggerRef = useRef(null);
   const menuRef = useRef(null);
   const [open, setOpen] = useState(false);
@@ -558,12 +569,13 @@ export function MultiSelect({
       .filter((option) => !needle || normalizeSearchText(`${option.label} ${option.meta || ""}`).includes(needle));
   }, [options, query]);
   useEffect(() => {
-    if (!open) setQuery("");
-  }, [open]);
+    if (!open || disabled) setQuery("");
+    if (disabled) setOpen(false);
+  }, [open, disabled]);
   const { mobile, position } = usePopoverPosition(open, triggerRef);
   const choose = (index) => {
     const option = filteredOptions[index];
-    if (!option || option.disabled) return;
+    if (disabled || !option || option.disabled) return;
     const next = selectedValues.includes(option.value)
       ? selectedValues.filter((item) => item !== option.value)
       : [...selectedValues, option.value];
@@ -587,21 +599,23 @@ export function MultiSelect({
       <div
         className="control multi-select-trigger"
         onClick={(event) => {
-          if (disabled || event.target.closest(".multi-select-chip")) return;
+          if (disabled || (event.target instanceof Element && event.target.closest(".multi-select-chip"))) return;
           if (open) popover.close();
           else setOpen(true);
         }}
       >
         <span className="multi-select-values">
-          {!visible.length ? <span className="multi-select-placeholder">{placeholder}</span> : null}
+          {!visible.length ? <span className="multi-select-placeholder">{uiT(placeholder)}</span> : null}
           {visible.map((option) => (
             <button
               type="button"
               className="multi-select-chip"
+              disabled={disabled}
               key={option.value}
-              aria-label={`Remove ${option.label}`}
+              aria-label={uiT("Remove {p0}", { p0: option.label })}
               onClick={(event) => {
                 event.stopPropagation();
+                if (disabled) return;
                 onChange(selectedValues.filter((item) => item !== String(option.value)));
               }}
             >
@@ -613,7 +627,9 @@ export function MultiSelect({
             </button>
           ))}
           {selectedOptions.length > visible.length ? (
-            <span className="multi-select-more">+{selectedOptions.length - visible.length} more</span>
+            <span className="multi-select-more">
+              +{selectedOptions.length - visible.length} {uiT(" more")}
+            </span>
           ) : null}
         </span>
         <button
@@ -627,11 +643,13 @@ export function MultiSelect({
           aria-controls={open ? listId : undefined}
           onClick={(event) => {
             event.stopPropagation();
+            if (disabled) return;
             if (open) popover.close();
             else setOpen(true);
           }}
           onPointerDown={(event) => event.stopPropagation()}
           onKeyDown={(event) => {
+            if (disabled) return;
             if (["Enter", " ", "ArrowDown", "ArrowUp"].includes(event.key)) {
               event.preventDefault();
               setActiveIndex(event.key === "ArrowUp" ? Math.max(0, filteredOptions.length - 1) : 0);
@@ -643,14 +661,22 @@ export function MultiSelect({
         </button>
       </div>
       <div className="multi-select-summary">
-        <span>{selectedOptions.length ? `${selectedOptions.length} selected` : "None selected"}</span>
+        <span>
+          {selectedOptions.length ? uiT("{p0} selected", { p0: selectedOptions.length }) : uiT("None selected")}
+        </span>
         {selectedOptions.length ? (
-          <button type="button" onClick={() => onChange([])}>
-            Clear
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => {
+              if (!disabled) onChange([]);
+            }}
+          >
+            {uiT("Clear")}
           </button>
         ) : null}
       </div>
-      {open && typeof document !== "undefined"
+      {open && !disabled && typeof document !== "undefined"
         ? createPortal(
             <ChoiceMenu
               activeIndex={activeIndex}

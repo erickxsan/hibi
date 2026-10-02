@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { createStarterState } from "../domain";
@@ -23,7 +23,7 @@ function renderSettings(overrides = {}) {
     ...overrides.actions,
   };
   const onDeleteAccount = overrides.onDeleteAccount || vi.fn(async () => undefined);
-  render(
+  const view = render(
     <I18nProvider>
       <Settings
         state={createStarterState()}
@@ -35,23 +35,65 @@ function renderSettings(overrides = {}) {
       />
     </I18nProvider>,
   );
-  return { actions, onDeleteAccount };
+  return { ...view, actions, onDeleteAccount };
 }
 
 describe("Settings privacy actions", () => {
-  it("warns only for the new password and permits a weak replacement", async () => {
+  it("offers source password recovery for an old backup after rotation in the same workspace", async () => {
+    const state = createStarterState();
+    const previewEncryptedBackup = vi.fn(async () => {
+      throw Object.assign(new Error("old key"), { code: "backup_recovery_required" });
+    });
+    const previewEncryptedBackupWithPassword = vi.fn(async () => state);
+    const { container } = renderSettings({
+      encryption: { enabled: true, profile: { workspaceCryptoId: "same" }, wrappers: [] },
+      actions: { previewEncryptedBackup, previewEncryptedBackupWithPassword },
+    });
+    const text = JSON.stringify({
+      format: "hibi-encrypted-backup",
+      workspaceCryptoId: "same",
+      wrappers: [{ type: "password", keyVersion: 1 }],
+    });
+    const file = new File([text], "old.hibi", { type: "application/json" });
+    file.text = async () => text;
+    fireEvent.change(container.querySelector('input[type="file"][accept*=".hibi"]'), { target: { files: [file] } });
+    const dialog = await screen.findByRole("dialog", { name: "Unlock the source backup" });
+    fireEvent.change(within(dialog).getByLabelText("Source workspace encryption password"), {
+      target: { value: "legacy source password" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Unlock source with password" }));
+    await waitFor(() =>
+      expect(previewEncryptedBackupWithPassword).toHaveBeenCalledWith(text, "legacy source password"),
+    );
+    expect(await screen.findByRole("dialog", { name: /Restore/ })).toBeInTheDocument();
+  });
+  it("disables server security mutations in a read-only preview", () => {
+    renderSettings({ encryption: { enabled: true, writesEnabled: false, wrappers: [] } });
+    expect(screen.getByRole("button", { name: "Change encryption password" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Create recovery key" })).toBeDisabled();
+  });
+  it("blocks weak replacements while allowing legacy current passwords", async () => {
     const user = userEvent.setup();
     const changePassword = vi.fn(async () => undefined);
     renderSettings({ encryption: { enabled: true, wrappers: [], changePassword } });
     await user.click(screen.getByRole("button", { name: "Change encryption password" }));
-    await user.type(screen.getByLabelText("Current encryption password"), "a");
+    fireEvent.change(screen.getByLabelText("Current encryption password"), { target: { value: "a" } });
     expect(screen.queryByText(/easy to guess/)).not.toBeInTheDocument();
-    await user.type(screen.getByLabelText("New encryption password"), "passwordpassword");
-    await user.type(screen.getByLabelText("Confirm new encryption password"), "passwordpassword");
+    fireEvent.change(screen.getByLabelText("New encryption password"), { target: { value: "passwordpassword" } });
+    fireEvent.change(screen.getByLabelText("Confirm new encryption password"), {
+      target: { value: "passwordpassword" },
+    });
     expect(screen.getByText(/easy to guess/)).toBeInTheDocument();
     expect(changePassword).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "Use this password anyway" }));
-    expect(changePassword).toHaveBeenCalledWith("a", "passwordpassword");
+    expect(screen.getByRole("button", { name: "Save new password" })).toBeDisabled();
+    await user.clear(screen.getByLabelText("New encryption password"));
+    await user.clear(screen.getByLabelText("Confirm new encryption password"));
+    fireEvent.change(screen.getByLabelText("New encryption password"), { target: { value: "luna bosque mar faro" } });
+    fireEvent.change(screen.getByLabelText("Confirm new encryption password"), {
+      target: { value: "luna bosque mar faro" },
+    });
+    await user.click(screen.getByRole("button", { name: "Save new password" }));
+    expect(changePassword).toHaveBeenCalledWith("a", "luna bosque mar faro");
   });
   it("keeps failed cloud saves dirty so encrypted changes can be retried", async () => {
     const user = userEvent.setup();

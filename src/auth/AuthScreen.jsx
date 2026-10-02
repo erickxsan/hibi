@@ -1,3 +1,4 @@
+import { useI18n } from "../i18n/index.jsx";
 import { useEffect, useId, useRef, useState } from "react";
 import HCaptcha from "@hcaptcha/react-hcaptcha";
 import { ArrowLeft, Check, Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
@@ -79,7 +80,7 @@ function AuthField({
   required = true,
   type = "text",
   value,
-  children,
+  children = undefined,
 }) {
   return (
     <div className="auth-field">
@@ -104,7 +105,8 @@ function AuthField({
   );
 }
 
-function PasswordField({ autoComplete, describedBy, id, label, onChange, value }) {
+function PasswordField({ autoComplete, describedBy = undefined, id, label, onChange, value }) {
+  const { t: uiT } = useI18n();
   const [visible, setVisible] = useState(false);
 
   return (
@@ -122,7 +124,7 @@ function PasswordField({ autoComplete, describedBy, id, label, onChange, value }
         className="auth-reveal-button"
         type="button"
         onClick={() => setVisible((current) => !current)}
-        aria-label={visible ? "Hide password" : "Show password"}
+        aria-label={visible ? uiT("Hide password") : uiT("Show password")}
         aria-pressed={visible}
       >
         {visible ? <EyeOff aria-hidden="true" size={18} /> : <Eye aria-hidden="true" size={18} />}
@@ -132,8 +134,9 @@ function PasswordField({ autoComplete, describedBy, id, label, onChange, value }
 }
 
 function PasswordRequirements({ password, id }) {
+  const { t: uiT } = useI18n();
   return (
-    <div id={id} className="auth-password-rules" aria-label="Password requirements">
+    <div id={id} className="auth-password-rules" aria-label={uiT("Password requirements")}>
       {PASSWORD_RULES.map((rule) => {
         const met = rule.test(password);
         return (
@@ -160,20 +163,21 @@ function PasswordRequirements({ password, id }) {
  * A callback may throw, or return { error } / { message } for inline feedback.
  */
 export function AuthScreen({
-  mode: controlledMode,
+  mode: controlledMode = undefined,
   initialMode = AUTH_MODES.SIGN_IN,
   defaultEmail = "",
   captchaSiteKey = "",
   loading = false,
   error = "",
   success = "",
-  onModeChange,
-  onGoogleSignIn,
-  onSignIn,
-  onSignUp,
-  onForgotPassword,
-  onResetPassword,
+  onModeChange = undefined,
+  onGoogleSignIn = undefined,
+  onSignIn = undefined,
+  onSignUp = undefined,
+  onForgotPassword = undefined,
+  onResetPassword = undefined,
 }) {
+  const { t: uiT } = useI18n();
   const [internalMode, setInternalMode] = useState(initialMode);
   const [email, setEmail] = useState(defaultEmail);
   const [password, setPassword] = useState("");
@@ -299,26 +303,26 @@ export function AuthScreen({
   return (
     <main className="auth-screen">
       <section className="auth-frame" aria-labelledby={`${formId}-title`}>
-        <aside className="auth-brand-panel" aria-label="hibi">
-          <div className="auth-brand-lockup" aria-label="hibi, teaching day by day">
+        <aside className="auth-brand-panel" aria-label={uiT("hibi")}>
+          <div className="auth-brand-lockup" aria-label={uiT("hibi, teaching day by day")}>
             <BrandMark />
             <span>
-              <strong>hibi</strong>
-              <small>Teaching, day by day.</small>
+              <strong>{uiT("hibi")}</strong>
+              <small>{uiT("Teaching, day by day.")}</small>
             </span>
           </div>
           <div className="auth-brand-copy">
             <h2>
-              Teaching organized.
+              {uiT("Teaching organized.")}
               <br />
-              Time reclaimed.
+              {uiT("Time reclaimed.")}
             </h2>
-            <p>One calm place for your students, grades, classes, and payments.</p>
+            <p>{uiT("One calm place for your students, grades, classes, and payments.")}</p>
           </div>
           <img
             className="auth-brand-art"
             src="/hibi-logo.png"
-            alt="hibi cat resting on a class planner"
+            alt={uiT("hibi cat resting on a class planner")}
             loading="lazy"
             decoding="async"
           />
@@ -334,7 +338,7 @@ export function AuthScreen({
           {mode === AUTH_MODES.FORGOT_PASSWORD || mode === AUTH_MODES.RESET_PASSWORD ? (
             <button className="auth-back-button" type="button" onClick={() => changeMode(AUTH_MODES.SIGN_IN)}>
               <ArrowLeft aria-hidden="true" size={17} />
-              Back to sign in
+              {uiT("Back to sign in")}
             </button>
           ) : null}
 
@@ -358,10 +362,10 @@ export function AuthScreen({
             <>
               <button className="auth-google-button" type="button" onClick={handleGoogleSignIn} disabled={busy}>
                 <GoogleMark />
-                Continue with Google
+                {uiT("Continue with Google")}
               </button>
               <div className="auth-divider">
-                <span>or use an existing email account</span>
+                <span>{uiT("or use an existing email account")}</span>
               </div>
             </>
           ) : null}
@@ -370,7 +374,7 @@ export function AuthScreen({
             {needsEmail ? (
               <AuthField
                 id={`${formId}-email`}
-                label="Email address"
+                label={uiT("Email address")}
                 icon={Mail}
                 type="email"
                 value={email}
@@ -383,7 +387,7 @@ export function AuthScreen({
             {needsPassword ? (
               <PasswordField
                 id={`${formId}-password`}
-                label={mode === AUTH_MODES.RESET_PASSWORD ? "New password" : "Password"}
+                label={mode === AUTH_MODES.RESET_PASSWORD ? uiT("New password") : uiT("Password")}
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 autoComplete={mode === AUTH_MODES.SIGN_IN ? "current-password" : "new-password"}
@@ -397,7 +401,7 @@ export function AuthScreen({
                 type="button"
                 onClick={() => changeMode(AUTH_MODES.FORGOT_PASSWORD)}
               >
-                Forgot password?
+                {uiT("Forgot password?")}
               </button>
             ) : null}
 
@@ -406,7 +410,7 @@ export function AuthScreen({
                 <PasswordRequirements password={password} id={requirementsId} />
                 <PasswordField
                   id={`${formId}-confirmation`}
-                  label="Confirm password"
+                  label={uiT("Confirm password")}
                   value={confirmation}
                   onChange={(event) => setConfirmation(event.target.value)}
                   autoComplete="new-password"
@@ -415,7 +419,7 @@ export function AuthScreen({
             ) : null}
 
             {needsCaptcha ? (
-              <div className="auth-captcha" aria-label="Security check">
+              <div className="auth-captcha" aria-label={uiT("Security check")}>
                 <HCaptcha
                   ref={captchaRef}
                   sitekey={captchaSiteKey}
@@ -436,31 +440,31 @@ export function AuthScreen({
 
             <button className="auth-submit-button" type="submit" disabled={busy}>
               {busy ? <span className="auth-spinner" aria-hidden="true" /> : null}
-              {busy ? "Please wait…" : copy.action}
+              {busy ? uiT("Please wait…") : copy.action}
             </button>
           </form>
 
           {mode === AUTH_MODES.SIGN_IN && onSignUp ? (
             <p className="auth-switch-copy">
-              New to hibi?{" "}
+              {uiT("New to hibi?")}{" "}
               <button className="auth-text-button" type="button" onClick={() => changeMode(AUTH_MODES.SIGN_UP)}>
-                Create an account
+                {uiT("Create an account")}
               </button>
             </p>
           ) : null}
           {mode === AUTH_MODES.SIGN_UP ? (
             <p className="auth-switch-copy">
-              Already have an account?{" "}
+              {uiT("Already have an account?")}{" "}
               <button className="auth-text-button" type="button" onClick={() => changeMode(AUTH_MODES.SIGN_IN)}>
-                Sign in
+                {uiT("Sign in")}
               </button>
             </p>
           ) : null}
 
-          <footer className="auth-legal-links" aria-label="Legal and support links">
-            <a href="/privacy.html">Privacy</a>
-            <a href="/terms.html">Terms</a>
-            <a href="mailto:hibicontact.old339@passinbox.com">Support</a>
+          <footer className="auth-legal-links" aria-label={uiT("Legal and support links")}>
+            <a href="/privacy.html">{uiT("Privacy")}</a>
+            <a href="/terms.html">{uiT("Terms")}</a>
+            <a href="mailto:hibicontact.old339@passinbox.com">{uiT("Support")}</a>
           </footer>
         </div>
       </section>

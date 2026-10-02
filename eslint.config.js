@@ -18,7 +18,7 @@ export default [
     plugins: { "react-hooks": reactHooks },
     rules: {
       "react-hooks/rules-of-hooks": "error",
-      "react-hooks/exhaustive-deps": "off",
+      "react-hooks/exhaustive-deps": "error",
       "no-useless-assignment": "off",
       "no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
     },
@@ -28,15 +28,11 @@ export default [
     languageOptions: { globals: { ...globals.browser } },
   },
   {
-    files: ["src/i18n/translations.js"],
-    rules: { "no-dupe-keys": "off" },
-  },
-  {
     files: ["**/*.test.{js,jsx}", "src/test/**/*.js"],
     languageOptions: { globals: { ...globals.browser, ...globals.node } },
   },
   {
-    files: ["*.config.js", "tests/**/*.js"],
+    files: ["*.config.js", "tests/**/*.js", "scripts/**/*.mjs"],
     languageOptions: { globals: { ...globals.node } },
   },
 ];

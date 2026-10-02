@@ -10,7 +10,7 @@ export const LEGACY_DATA_CLAIM_KEY = "minimal-class-manager:legacy-data-claimed:
 const UI_STORAGE_PREFIX = "minimal-class-manager:ui:v1:";
 
 export class AccountDeletionError extends Error {
-  constructor(message, { code = "account_deletion_failed", retryable = false, cause } = {}) {
+  constructor(message, { code = "account_deletion_failed", retryable = false, cause = undefined } = {}) {
     super(message, { cause });
     this.name = "AccountDeletionError";
     this.code = code;

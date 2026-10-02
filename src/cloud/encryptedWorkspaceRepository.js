@@ -15,7 +15,7 @@ import {
   ENCRYPTED_COLLECTIONS,
   envelopeKey,
   parseRecoveryKey,
-  recoveryKeyFingerprint,
+  recoveryKeyFingerprints,
   unwrapMasterKey,
   verifyManifest,
   verifyManifestMac,
@@ -273,7 +273,7 @@ export function createEncryptedWorkspaceRepository(
     return retryAuthenticated(() => loadBootstrapOnce(expectedOwnerId));
   }
 
-  async function workspaceFromRpcRow(row, session, { minimumRevision = 0, expectedPreviousRoot } = {}) {
+  async function workspaceFromRpcRow(row, session, { minimumRevision = 0, expectedPreviousRoot = undefined } = {}) {
     if (!row) throw new CloudPersistenceError("The encrypted workspace response was empty.");
     if (row.workspace_crypto_id !== session.workspaceCryptoId) {
       throw new WorkspaceCryptoError("The downloaded workspace does not match the unlocked workspace key.");
@@ -808,6 +808,7 @@ export function createEncryptedWorkspaceRepository(
   }
 
   async function replacePasswordWrapper(currentWrapperId, wrapper, expectedOwnerId) {
+    requireWritesEnabled();
     const user = await requireUser(expectedOwnerId);
     const { error } = await cloud().rpc(REPLACE_PASSWORD_WRAPPER_RPC, {
       p_expected_owner_id: expectedOwnerId || user.id,
@@ -818,6 +819,7 @@ export function createEncryptedWorkspaceRepository(
   }
 
   async function touchWrapper(wrapperId, expectedOwnerId) {
+    requireWritesEnabled();
     const user = await requireUser(expectedOwnerId);
     const { error } = await cloud().rpc(TOUCH_WRAPPER_RPC, {
       p_expected_owner_id: expectedOwnerId || user.id,
@@ -827,6 +829,7 @@ export function createEncryptedWorkspaceRepository(
   }
 
   async function abortMigration(expectedOwnerId) {
+    requireWritesEnabled();
     const user = await requireUser(expectedOwnerId);
     const { error } = await cloud().rpc(ABORT_MIGRATION_RPC, { p_expected_owner_id: expectedOwnerId || user.id });
     if (error) throw persistenceFailure("The interrupted encrypted migration could not be reset.", error);
@@ -1322,7 +1325,7 @@ export function createEncryptedWorkspaceRepository(
     return cache.revision > startingRevision ? cache : null;
   }
 
-  async function subscribe(session, onChange, { userId, onStatus, onError } = {}) {
+  async function subscribe(session, onChange, { userId = undefined, onStatus = undefined, onError = undefined } = {}) {
     const ownerId = (await requireUser(userId)).id;
     let active = true;
     let refreshTask;
@@ -1419,23 +1422,21 @@ export function createEncryptedWorkspaceRepository(
     if (backup?.format !== "hibi-encrypted-backup" || (!legacyFormat && !currentFormat)) {
       throw new CloudPersistenceError("This encrypted backup uses an unsupported format.");
     }
-    let decryptionKey = session.masterKey;
+    const backupKeyVersion = currentFormat
+      ? backup.encryptedSnapshot?.keyVersion
+      : backup.snapshot?.manifest?.keyVersion;
+    let decryptionKey = sourceMasterKey || session.masterKey;
     let temporaryMasterKey = null;
-    if (backup.workspaceCryptoId !== session.workspaceCryptoId) {
-      if (sourceMasterKey) {
-        decryptionKey = sourceMasterKey;
-      } else if (!recoveryKey) {
-        const required = new CloudPersistenceError(
-          "Enter the source workspace recovery key to restore this backup into a different account.",
-        );
-        required.code = "backup_recovery_required";
-        throw required;
-      }
+    if (!sourceMasterKey && recoveryKey) {
       const secret = await parseRecoveryKey(recoveryKey);
       try {
-        const fingerprint = await recoveryKeyFingerprint(secret);
+        const fingerprints = await recoveryKeyFingerprints(secret);
         const wrapper = (backup.wrappers || []).find(
-          (candidate) => candidate.type === "recovery" && candidate.recoveryFingerprint === fingerprint,
+          (candidate) =>
+            candidate.type === "recovery" &&
+            !candidate.revokedAt &&
+            fingerprints.includes(candidate.recoveryFingerprint) &&
+            (!backupKeyVersion || candidate.keyVersion === backupKeyVersion),
         );
         if (!wrapper) throw new CloudPersistenceError("That recovery key does not match this encrypted backup.");
         temporaryMasterKey = await unwrapMasterKey({
@@ -1447,6 +1448,14 @@ export function createEncryptedWorkspaceRepository(
       } finally {
         wipeBytes(secret);
       }
+    } else if (
+      !sourceMasterKey &&
+      (backup.workspaceCryptoId !== session.workspaceCryptoId ||
+        (backupKeyVersion && session.keyVersion && backupKeyVersion !== session.keyVersion))
+    ) {
+      const required = new CloudPersistenceError("Unlock this backup with its encryption password or recovery key.");
+      required.code = "backup_recovery_required";
+      throw required;
     }
     try {
       const snapshot = currentFormat

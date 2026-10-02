@@ -73,5 +73,12 @@ export async function parseRecoveryKey(value, cryptoApi = globalThis.crypto) {
 
 export async function recoveryKeyFingerprint(secret, cryptoApi = globalThis.crypto) {
   const digest = new Uint8Array(await cryptoApi.subtle.digest("SHA-256", secret));
-  return toBase64Url(digest.slice(0, 10));
+  return toBase64Url(digest);
+}
+
+// v2 is the full SHA-256 digest (43 characters); v1 was truncated (14).
+// Keep v1 readable for previously downloaded backups and wrappers.
+export async function recoveryKeyFingerprints(secret, cryptoApi = globalThis.crypto) {
+  const digest = new Uint8Array(await cryptoApi.subtle.digest("SHA-256", secret));
+  return [toBase64Url(digest), toBase64Url(digest.slice(0, 10))];
 }

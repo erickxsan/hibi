@@ -1,3 +1,4 @@
+import { useI18n } from "../i18n/index.jsx";
 import { useState } from "react";
 import { CheckCircle2, Cloud, DatabaseBackup, LogOut, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
 import { BrandMark } from "../components/BrandMark";
@@ -6,20 +7,22 @@ import { LanguageToggle } from "../i18n";
 import "./cloud.css";
 
 export function CloudLoading({ message = "Loading your private workspace…" }) {
+  const { t: uiT } = useI18n();
   return (
     <main className="cloud-state-screen" aria-busy="true">
       <LanguageToggle className="cloud-language-toggle" />
       <div className="cloud-state-card">
         <BrandMark />
         <span className="cloud-state-spinner" aria-hidden="true" />
-        <h1>hibi</h1>
-        <p>{message}</p>
+        <h1>{uiT("hibi")}</h1>
+        <p>{uiT(message)}</p>
       </div>
     </main>
   );
 }
 
 export function CloudError({ error, onRetry, onSignOut }) {
+  const { t: uiT } = useI18n();
   return (
     <main className="cloud-state-screen">
       <LanguageToggle className="cloud-language-toggle" />
@@ -27,17 +30,19 @@ export function CloudError({ error, onRetry, onSignOut }) {
         <span className="cloud-state-icon">
           <Cloud aria-hidden="true" />
         </span>
-        <h1 id="cloud-error-title">Cloud workspace unavailable</h1>
-        <p>{error?.message || "The secure workspace could not be loaded. Check your connection and try again."}</p>
+        <h1 id="cloud-error-title">{uiT("Cloud workspace unavailable")}</h1>
+        <p>{error?.message || uiT("The secure workspace could not be loaded. Check your connection and try again.")}</p>
         <p>
-          Your saved records have not been replaced. Retry or sign out, then contact support if the problem continues.
+          {uiT(
+            "Your saved records have not been replaced. Retry or sign out, then contact support if the problem continues.",
+          )}
         </p>
         <div className="cloud-state-actions">
           <Button variant="primary" icon={RefreshCw} onClick={onRetry}>
-            Try again
+            {uiT("Try again")}
           </Button>
           <Button icon={LogOut} onClick={onSignOut}>
-            Sign out
+            {uiT("Sign out")}
           </Button>
         </div>
       </section>
@@ -46,6 +51,7 @@ export function CloudError({ error, onRetry, onSignOut }) {
 }
 
 export function CloudConfigurationRequired() {
+  const { t: uiT } = useI18n();
   return (
     <main className="cloud-state-screen">
       <LanguageToggle className="cloud-language-toggle" />
@@ -53,17 +59,19 @@ export function CloudConfigurationRequired() {
         <span className="cloud-state-icon">
           <Cloud aria-hidden="true" />
         </span>
-        <h1 id="cloud-config-title">Cloud setup required</h1>
+        <h1 id="cloud-config-title">{uiT("Cloud setup required")}</h1>
         <p>
-          This production build is missing its Supabase URL or public publishable key. No records can be entered until
-          the deployment is configured correctly.
+          {uiT(
+            "This production build is missing its Supabase URL or public publishable key. No records can be entered until the deployment is configured correctly.",
+          )}
         </p>
       </section>
     </main>
   );
 }
 
-export function AccountDeletionPending({ busy = false, error, onResume, onSignOut }) {
+export function AccountDeletionPending({ busy = false, error = undefined, onResume, onSignOut }) {
+  const { t: uiT } = useI18n();
   const [confirmation, setConfirmation] = useState("");
   const [localError, setLocalError] = useState("");
   return (
@@ -73,12 +81,13 @@ export function AccountDeletionPending({ busy = false, error, onResume, onSignOu
         <span className="cloud-state-icon">
           <Trash2 aria-hidden="true" />
         </span>
-        <h1 id="deletion-pending-title">Account deletion is pending</h1>
+        <h1 id="deletion-pending-title">{uiT("Account deletion is pending")}</h1>
         <p>
-          Hibi has blocked this account so an old device, JWT, or offline outbox cannot recreate records. Resume the
-          verified deletion to finish removing Auth.
+          {uiT(
+            "Hibi has blocked this account so an old device, JWT, or offline outbox cannot recreate records. Resume the verified deletion to finish removing Auth.",
+          )}
         </p>
-        <Field label="Type DELETE MY ACCOUNT to resume" error={localError || error}>
+        <Field label={uiT("Type DELETE MY ACCOUNT to resume")} error={localError || error}>
           <Input
             value={confirmation}
             onChange={(event) => setConfirmation(event.target.value)}
@@ -100,10 +109,10 @@ export function AccountDeletionPending({ busy = false, error, onResume, onSignOu
               }
             }}
           >
-            {busy ? "Finishing deletion…" : "Resume permanent deletion"}
+            {busy ? uiT("Finishing deletion…") : uiT("Resume permanent deletion")}
           </Button>
           <Button icon={LogOut} onClick={onSignOut} disabled={busy}>
-            Sign out
+            {uiT("Sign out")}
           </Button>
         </div>
       </section>
@@ -112,6 +121,7 @@ export function AccountDeletionPending({ busy = false, error, onResume, onSignOu
 }
 
 export function AccountDeletionComplete({ receipt, onRetryLocalPurge, onContinue }) {
+  const { t: uiT } = useI18n();
   const [purgeBusy, setPurgeBusy] = useState(false);
   const [purgeError, setPurgeError] = useState("");
   return (
@@ -121,16 +131,18 @@ export function AccountDeletionComplete({ receipt, onRetryLocalPurge, onContinue
         <span className="cloud-state-icon">
           <CheckCircle2 aria-hidden="true" />
         </span>
-        <h1 id="deletion-complete-title">Account and data deleted</h1>
+        <h1 id="deletion-complete-title">{uiT("Account and data deleted")}</h1>
         <p>
-          Cloud records, recovery history, imports, synchronization data, and the Auth account were permanently removed.
+          {uiT(
+            "Cloud records, recovery history, imports, synchronization data, and the Auth account were permanently removed.",
+          )}
           {receipt.localPurgeComplete
-            ? " Hibi also purged this account's encrypted copies from the current device."
-            : " Local browser purging could not be verified."}
+            ? uiT(" Hibi also purged this account's encrypted copies from the current device.")
+            : uiT(" Local browser purging could not be verified.")}
         </p>
         {!receipt.localPurgeComplete ? (
           <div className="cloud-local-purge-warning" role="alert">
-            <p>{purgeError || "Retry while this browser is still open to remove the remaining device copy."}</p>
+            <p>{purgeError || uiT("Retry while this browser is still open to remove the remaining device copy.")}</p>
             <Button
               icon={RefreshCw}
               disabled={purgeBusy}
@@ -146,27 +158,27 @@ export function AccountDeletionComplete({ receipt, onRetryLocalPurge, onContinue
                 }
               }}
             >
-              {purgeBusy ? "Cleaning device…" : "Retry device cleanup"}
+              {purgeBusy ? uiT("Cleaning device…") : uiT("Retry device cleanup")}
             </Button>
           </div>
         ) : null}
         <dl className="deletion-receipt">
           <div>
-            <dt>Request</dt>
+            <dt>{uiT("Request")}</dt>
             <dd>{receipt.requestId}</dd>
           </div>
           <div>
-            <dt>Verification code</dt>
+            <dt>{uiT("Verification code")}</dt>
             <dd>{receipt.receiptSecret}</dd>
           </div>
           <div>
-            <dt>Completed</dt>
+            <dt>{uiT("Completed")}</dt>
             <dd>{new Date(receipt.completedAt).toLocaleString()}</dd>
           </div>
         </dl>
         <div className="cloud-state-actions">
           <Button variant="primary" onClick={onContinue}>
-            Continue to sign in
+            {uiT("Continue to sign in")}
           </Button>
         </div>
       </section>
@@ -175,6 +187,7 @@ export function AccountDeletionComplete({ receipt, onRetryLocalPurge, onContinue
 }
 
 export function LocalDataMigration({ state, accountEmail, busy, error, recoveryMode = false, onImport, onSkip }) {
+  const { t: uiT } = useI18n();
   const counts = {
     students: state.students.length,
     groups: state.groups.length,
@@ -191,41 +204,43 @@ export function LocalDataMigration({ state, accountEmail, busy, error, recoveryM
             <DatabaseBackup aria-hidden="true" />
           </span>
           <div>
-            <p className="cloud-eyebrow">{recoveryMode ? "Recovery copy found" : "One-time migration"}</p>
+            <p className="cloud-eyebrow">{recoveryMode ? uiT("Recovery copy found") : uiT("One-time migration")}</p>
             <h1 id="migration-title">
-              {recoveryMode ? "Recover this browser’s saved records?" : "Move this browser’s records online?"}
+              {recoveryMode ? uiT("Recover this browser’s saved records?") : uiT("Move this browser’s records online?")}
             </h1>
             <p>
-              We found local class data on this device. You can {recoveryMode ? "restore" : "copy"} it into the private
-              workspace for <strong>{accountEmail}</strong>.
+              {uiT("We found local class data on this device. You can ")}
+              {recoveryMode ? uiT("restore") : uiT("copy")} {uiT(" it into the private workspace for ")}
+              <strong>{accountEmail}</strong>.
             </p>
           </div>
         </div>
 
-        <div className="cloud-migration-counts" aria-label="Local record summary">
+        <div className="cloud-migration-counts" aria-label={uiT("Local record summary")}>
           <div>
             <strong>{counts.students}</strong>
-            <span>Students</span>
+            <span>{uiT("Students")}</span>
           </div>
           <div>
             <strong>{counts.groups}</strong>
-            <span>Groups</span>
+            <span>{uiT("Groups")}</span>
           </div>
           <div>
             <strong>{counts.grades}</strong>
-            <span>Grades</span>
+            <span>{uiT("Grades")}</span>
           </div>
           <div>
             <strong>{counts.classes}</strong>
-            <span>Classes</span>
+            <span>{uiT("Classes")}</span>
           </div>
         </div>
 
         <div className="cloud-security-note">
           <ShieldCheck aria-hidden="true" />
           <p>
-            The copy is written only to your authenticated workspace. The local version stays on this device until you
-            clear it yourself.
+            {uiT(
+              "The copy is written only to your authenticated workspace. The local version stays on this device until you clear it yourself.",
+            )}
           </p>
         </div>
         {error ? (
@@ -235,10 +250,14 @@ export function LocalDataMigration({ state, accountEmail, busy, error, recoveryM
         ) : null}
         <div className="cloud-state-actions cloud-migration-actions">
           <Button variant="primary" icon={Cloud} onClick={onImport} disabled={busy}>
-            {busy ? "Restoring records…" : recoveryMode ? "Restore records from this browser" : "Move records online"}
+            {busy
+              ? uiT("Restoring records…")
+              : recoveryMode
+                ? uiT("Restore records from this browser")
+                : uiT("Move records online")}
           </Button>
           <Button onClick={onSkip} disabled={busy}>
-            Start with an empty cloud workspace
+            {uiT("Start with an empty cloud workspace")}
           </Button>
         </div>
       </section>

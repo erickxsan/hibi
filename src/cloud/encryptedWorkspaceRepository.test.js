@@ -567,3 +567,16 @@ describe("encrypted live replacement recovery", () => {
     }
   });
 });
+
+describe("preview write protection", () => {
+  it.each(["addWrapper", "revokeWrapper", "replacePasswordWrapper", "touchWrapper", "abortMigration"])(
+    "rejects %s before making any API request",
+    async (method) => {
+      const client = { auth: { getUser: vi.fn() }, rpc: vi.fn() };
+      const repository = createEncryptedWorkspaceRepository(client, { allowWrites: false });
+      await expect(repository[method]("wrapper-id", {}, "owner")).rejects.toThrow(/writes are disabled/);
+      expect(client.auth.getUser).not.toHaveBeenCalled();
+      expect(client.rpc).not.toHaveBeenCalled();
+    },
+  );
+});

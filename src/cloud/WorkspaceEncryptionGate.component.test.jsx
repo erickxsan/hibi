@@ -59,7 +59,7 @@ describe("workspace encryption gate", () => {
   });
 
   it.each(["a", "passwordpassword", "12345678901234567890"])(
-    "warns before activation but permits weak passwords: %s",
+    "blocks weak passwords before activation: %s",
     async (password) => {
       const user = userEvent.setup();
       const values = props();
@@ -68,8 +68,8 @@ describe("workspace encryption gate", () => {
       await user.type(screen.getByLabelText("Confirm encryption password"), password);
       expect(screen.getByRole("status")).toHaveTextContent(/easy to guess/);
       expect(values.onActivate).not.toHaveBeenCalled();
-      await user.click(screen.getByRole("button", { name: "Use this password anyway" }));
-      expect(values.onActivate).toHaveBeenCalledWith({ password, rememberDevice: true });
+      expect(screen.getByRole("button", { name: "Create encryption password" })).toBeDisabled();
+      expect(values.onActivate).not.toHaveBeenCalled();
     },
   );
   it("requires password confirmation for first-time activation and honors the remembered-device choice", async () => {

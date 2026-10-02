@@ -1,3 +1,5 @@
+const EMPTY_MAP = new Map();
+import { useI18n } from "../i18n/index.jsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive,
@@ -52,13 +54,14 @@ function pct(value) {
 }
 
 export function EnrollmentTags({ student, groupsById }) {
+  const { t: uiT } = useI18n();
   const groupIds = Array.isArray(student.groupIds) ? student.groupIds : student.groupId ? [student.groupId] : [];
   return (
     <div className="enrollment-tags">
       {student.isIndividual || groupIds.length === 0 ? (
         <span className="enroll-tag individual">
           <UserRound size={13} />
-          Individual
+          {uiT("Individual")}
         </span>
       ) : null}
       {groupIds
@@ -75,6 +78,7 @@ export function EnrollmentTags({ student, groupsById }) {
 }
 
 export function StudentEditor({ draft, setDraft, groups, defaultRate }) {
+  const { t: uiT } = useI18n();
   const selectedGroups = draft.groupIds.map((id) => groups.find((group) => group.id === id)).filter(Boolean);
   const groupOptions = groups.map((group) => ({
     value: group.id,
@@ -89,25 +93,25 @@ export function StudentEditor({ draft, setDraft, groups, defaultRate }) {
   return (
     <form id="student-editor" className="drawer-form" onSubmit={(event) => event.preventDefault()}>
       <div className="form-grid two-columns">
-        <Field label="Student ID" required>
+        <Field label={uiT("Student ID")} required>
           <Input value={draft.code} onChange={(event) => setDraft({ ...draft, code: event.target.value })} />
         </Field>
-        <Field label="Status">
+        <Field label={uiT("Status")}>
           <Select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value })}>
-            <option>Active</option>
-            <option>Inactive</option>
+            <option>{uiT("Active")}</option>
+            <option>{uiT("Inactive")}</option>
           </Select>
         </Field>
       </div>
-      <Field label="Full name" required>
+      <Field label={uiT("Full name")} required>
         <Input value={draft.fullName} onChange={(event) => setDraft({ ...draft, fullName: event.target.value })} />
       </Field>
       <AvatarPicker value={draft.avatarId} onChange={(avatarId) => setDraft({ ...draft, avatarId })} />
-      <section className="compact-enrollment" aria-label="Enrollment">
+      <section className="compact-enrollment" aria-label={uiT("Enrollment")}>
         <div className="enrollment-heading">
           <div>
-            <strong>Enrollment</strong>
-            <span>Individual, groups, or both</span>
+            <strong>{uiT("Enrollment")}</strong>
+            <span>{uiT("Individual, groups, or both")}</span>
           </div>
           <label className="switch-row">
             <input
@@ -116,16 +120,16 @@ export function StudentEditor({ draft, setDraft, groups, defaultRate }) {
               onChange={(event) => setDraft({ ...draft, isIndividual: event.target.checked })}
             />
             <span aria-hidden="true" />
-            <b>Individual classes</b>
+            <b>{uiT("Individual classes")}</b>
           </label>
         </div>
         <MultiSelect
-          ariaLabel="Assign groups"
+          ariaLabel={uiT("Assign groups")}
           value={draft.groupIds}
           options={groupOptions}
           onChange={(groupIds) => setDraft((current) => ({ ...current, groupIds }))}
-          placeholder="Choose groups"
-          emptyMessage="No groups match"
+          placeholder={uiT("Choose groups")}
+          emptyMessage={uiT("No groups match")}
           variant="group"
         />
       </section>
@@ -133,14 +137,14 @@ export function StudentEditor({ draft, setDraft, groups, defaultRate }) {
         <summary>
           <span>
             <DollarSign size={17} />
-            <strong>Pricing</strong>
+            <strong>{uiT("Pricing")}</strong>
           </span>
           <small>
             {Number.isFinite(draft.customHourlyRate)
-              ? `${money(draft.customHourlyRate)} / hour override`
+              ? uiT("{p0} / hour override", { p0: money(draft.customHourlyRate) })
               : selectedGroups.length > 1
-                ? "Uses each group rate"
-                : `${money(inheritedRate)} / hour inherited`}
+                ? uiT("Uses each group rate")
+                : uiT("{p0} / hour inherited", { p0: money(inheritedRate) })}
           </small>
         </summary>
         <div className="optional-settings-body">
@@ -153,10 +157,10 @@ export function StudentEditor({ draft, setDraft, groups, defaultRate }) {
               }
             />
             <span aria-hidden="true" />
-            <b>Override inherited rate</b>
+            <b>{uiT("Override inherited rate")}</b>
           </label>
           {Number.isFinite(draft.customHourlyRate) ? (
-            <Field label="Custom hourly rate">
+            <Field label={uiT("Custom hourly rate")}>
               <Input
                 type="number"
                 min="0"
@@ -164,23 +168,25 @@ export function StudentEditor({ draft, setDraft, groups, defaultRate }) {
                 value={draft.customHourlyRate}
                 onChange={(event) => setDraft({ ...draft, customHourlyRate: Number(event.target.value) })}
               />
-              <small>MXN / hour</small>
+              <small>{uiT("MXN / hour")}</small>
             </Field>
           ) : (
             <p>
               {selectedGroups.length > 1
-                ? "This student uses the relevant group rate for each class, then the account default when a group has no rate."
-                : `Inherited rate: ${money(inheritedRate)} per hour.`}
+                ? uiT(
+                    "This student uses the relevant group rate for each class, then the account default when a group has no rate.",
+                  )
+                : uiT("Inherited rate: {p0} per hour.", { p0: money(inheritedRate) })}
             </p>
           )}
         </div>
       </details>
       <section className="student-contact-fields" aria-labelledby="student-contact-heading">
         <div className="student-contact-heading">
-          <strong id="student-contact-heading">Contact information</strong>
-          <span>Email is shown first in Community.</span>
+          <strong id="student-contact-heading">{uiT("Contact information")}</strong>
+          <span>{uiT("Email is shown first in Community.")}</span>
         </div>
-        <Field label="Student email">
+        <Field label={uiT("Student email")}>
           <Input
             type="email"
             inputMode="email"
@@ -189,7 +195,7 @@ export function StudentEditor({ draft, setDraft, groups, defaultRate }) {
             onChange={(event) => setDraft({ ...draft, studentEmail: event.target.value })}
           />
         </Field>
-        <Field label="Guardian phone">
+        <Field label={uiT("Guardian phone")}>
           <Input
             type="tel"
             inputMode="tel"
@@ -198,7 +204,7 @@ export function StudentEditor({ draft, setDraft, groups, defaultRate }) {
             onChange={(event) => setDraft({ ...draft, guardianPhone: event.target.value })}
           />
         </Field>
-        <Field label="Student phone">
+        <Field label={uiT("Student phone")}>
           <Input
             type="tel"
             inputMode="tel"
@@ -207,7 +213,7 @@ export function StudentEditor({ draft, setDraft, groups, defaultRate }) {
             onChange={(event) => setDraft({ ...draft, phone: event.target.value })}
           />
         </Field>
-        <Field label="Parent / tutor details" hint="Name or other useful contact details">
+        <Field label={uiT("Parent / tutor details")} hint={uiT("Name or other useful contact details")}>
           <TextArea
             rows="2"
             value={draft.guardianContact}
@@ -215,7 +221,7 @@ export function StudentEditor({ draft, setDraft, groups, defaultRate }) {
           />
         </Field>
       </section>
-      <Field label="Notes">
+      <Field label={uiT("Notes")}>
         <TextArea
           rows="3"
           value={draft.notes}
@@ -227,21 +233,22 @@ export function StudentEditor({ draft, setDraft, groups, defaultRate }) {
 }
 
 function StudentDetailContent({ tab, student, summary, grades, classes, onEdit }) {
+  const { t: uiT } = useI18n();
   if (tab === "attendance") {
     return (
       <article className="detail-card span-two">
         <header>
-          <h2>Attendance history</h2>
+          <h2>{uiT("Attendance history")}</h2>
           <History size={18} />
         </header>
         {classes.map((row) => (
           <div className="history-line" key={row.id}>
             <span>{row.classDate}</span>
-            <strong>{row.classTitle || row.groupName || "Individual class"}</strong>
+            <strong>{row.classTitle || row.groupName || uiT("Individual class")}</strong>
             <em>{row.attendance || "—"}</em>
           </div>
         ))}
-        {!classes.length ? <p>No attendance records yet.</p> : null}
+        {!classes.length ? <p>{uiT("No attendance records yet.")}</p> : null}
       </article>
     );
   }
@@ -249,7 +256,7 @@ function StudentDetailContent({ tab, student, summary, grades, classes, onEdit }
     return (
       <article className="detail-card span-two">
         <header>
-          <h2>Grades</h2>
+          <h2>{uiT("Grades")}</h2>
           <Star size={18} />
         </header>
         {grades.map((row) => (
@@ -259,7 +266,7 @@ function StudentDetailContent({ tab, student, summary, grades, classes, onEdit }
             <em>{pct(row.percentage)}</em>
           </div>
         ))}
-        {!grades.length ? <p>No grades yet.</p> : null}
+        {!grades.length ? <p>{uiT("No grades yet.")}</p> : null}
       </article>
     );
   }
@@ -267,17 +274,17 @@ function StudentDetailContent({ tab, student, summary, grades, classes, onEdit }
     return (
       <article className="detail-card span-two">
         <header>
-          <h2>Class history</h2>
+          <h2>{uiT("Class history")}</h2>
           <History size={18} />
         </header>
         {classes.map((row) => (
           <div className="history-line" key={row.id}>
             <span>{row.classDate}</span>
-            <strong>{row.classTitle || row.groupName || "Individual class"}</strong>
-            <em>{row.classStatus}</em>
+            <strong>{row.classTitle || row.groupName || uiT("Individual class")}</strong>
+            <em>{uiT(row.classStatus)}</em>
           </div>
         ))}
-        {!classes.length ? <p>No classes yet.</p> : null}
+        {!classes.length ? <p>{uiT("No classes yet.")}</p> : null}
       </article>
     );
   }
@@ -285,20 +292,22 @@ function StudentDetailContent({ tab, student, summary, grades, classes, onEdit }
     return (
       <article className="detail-card span-two">
         <header>
-          <h2>Payments</h2>
+          <h2>{uiT("Payments")}</h2>
           <CreditCard size={18} />
         </header>
         {classes.map((row) => (
           <div className="student-payment-line" key={row.id}>
             <span>
               {row.classDate}
-              <small>{row.paymentStatus}</small>
+              <small>{uiT(row.paymentStatus)}</small>
             </span>
             <strong>{money(row.recognizedPaid)}</strong>
-            <em>{money(row.outstanding)} pending</em>
+            <em>
+              {money(row.outstanding)} {uiT(" pending")}
+            </em>
           </div>
         ))}
-        {!classes.length ? <p>No payment records yet.</p> : null}
+        {!classes.length ? <p>{uiT("No payment records yet.")}</p> : null}
       </article>
     );
   }
@@ -306,12 +315,12 @@ function StudentDetailContent({ tab, student, summary, grades, classes, onEdit }
     return (
       <article className="detail-card span-two">
         <header>
-          <h2>Notes</h2>
+          <h2>{uiT("Notes")}</h2>
           <button type="button" onClick={onEdit}>
-            Edit
+            {uiT("Edit")}
           </button>
         </header>
-        <p>{student.notes || "No notes yet."}</p>
+        <p>{student.notes || uiT("No notes yet.")}</p>
       </article>
     );
   }
@@ -319,17 +328,18 @@ function StudentDetailContent({ tab, student, summary, grades, classes, onEdit }
     <>
       <article className="detail-card">
         <header>
-          <h2>Attendance</h2>
-          <span>This term</span>
+          <h2>{uiT("Attendance")}</h2>
+          <span>{uiT("This term")}</span>
         </header>
         <div className="large-stat">{pct(summary.attendance)}</div>
         <p>
-          {summary.attendedClasses || 0} of {summary.attendanceClasses || 0} recorded classes attended
+          {summary.attendedClasses || 0} {uiT(" of ")}
+          {summary.attendanceClasses || 0} {uiT(" recorded classes attended")}
         </p>
       </article>
       <article className="detail-card">
         <header>
-          <h2>Latest grades</h2>
+          <h2>{uiT("Latest grades")}</h2>
           <Star size={18} />
         </header>
         {grades.slice(0, 3).map((row) => (
@@ -338,44 +348,45 @@ function StudentDetailContent({ tab, student, summary, grades, classes, onEdit }
             <strong>{pct(row.percentage)}</strong>
           </div>
         ))}
-        {!grades.length ? <p>No grades yet.</p> : null}
+        {!grades.length ? <p>{uiT("No grades yet.")}</p> : null}
       </article>
       <article className="detail-card span-two">
         <header>
-          <h2>Class history</h2>
+          <h2>{uiT("Class history")}</h2>
           <History size={18} />
         </header>
         {classes.slice(0, 4).map((row) => (
           <div className="history-line" key={row.id}>
             <span>{row.classDate}</span>
-            <strong>{row.classTitle || row.groupName || "Individual class"}</strong>
+            <strong>{row.classTitle || row.groupName || uiT("Individual class")}</strong>
             <em>{row.attendance || "—"}</em>
           </div>
         ))}
-        {!classes.length ? <p>No classes yet.</p> : null}
+        {!classes.length ? <p>{uiT("No classes yet.")}</p> : null}
       </article>
       <article className="detail-card">
         <header>
-          <h2>Payments</h2>
+          <h2>{uiT("Payments")}</h2>
           <CreditCard size={18} />
         </header>
         <div className="large-stat">{money(summary.outstanding)}</div>
-        <p>Current outstanding balance</p>
+        <p>{uiT("Current outstanding balance")}</p>
       </article>
       <article className="detail-card">
         <header>
-          <h2>Notes</h2>
+          <h2>{uiT("Notes")}</h2>
           <button type="button" onClick={onEdit}>
-            Edit
+            {uiT("Edit")}
           </button>
         </header>
-        <p>{student.notes || "No notes yet."}</p>
+        <p>{student.notes || uiT("No notes yet.")}</p>
       </article>
     </>
   );
 }
 
 export default function Students({ state, derived, actions, intent, clearIntent, registerNavigationBlocker }) {
+  const { t: uiT } = useI18n();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [filters, setFilters] = useState({ groupIds: [], groupMatch: "any", enrollment: [] });
@@ -386,7 +397,7 @@ export default function Students({ state, derived, actions, intent, clearIntent,
   const [saving, setSaving] = useState(false);
   const baselineRef = useRef(null);
   const dirty = Boolean(draft) && draftChanged(draft, baselineRef.current);
-  const groupsById = derived.groupsById || new Map();
+  const groupsById = derived.groupsById || EMPTY_MAP;
   const activeFilterCount = filters.groupIds.length + filters.enrollment.length + (status === "all" ? 0 : 1);
 
   useUnsavedChanges(registerNavigationBlocker, dirty, "Discard your unsaved student changes?");
@@ -429,6 +440,7 @@ export default function Students({ state, derived, actions, intent, clearIntent,
     .slice()
     .sort((left, right) => right.classDate.localeCompare(left.classDate));
 
+  /** @param {Partial<ReturnType<typeof import("../domain").createStudent>> & {studentCode?: string, studentPhone?: string, importantNotes?: string, groupId?: string}} [item] */
   const open = (item = EMPTY) => {
     const next = {
       ...EMPTY,
@@ -473,27 +485,27 @@ export default function Students({ state, derived, actions, intent, clearIntent,
       <div className="page detail-page">
         <button className="back-link" type="button" onClick={() => changeSelected("")}>
           <ArrowLeft size={17} />
-          Students
+          {uiT("Students")}
         </button>
         <section className="detail-hero">
           <StudentAvatar avatarId={student.avatarId} name={student.fullName} size="large" />
           <div className="detail-identity">
             <h1>{student.fullName}</h1>
             <p>
-              {student.code} · {student.guardianContact || "No parent/tutor registered"}
+              {student.code} · {student.guardianContact || uiT("No parent/tutor registered")}
             </p>
             <EnrollmentTags student={student} groupsById={groupsById} />
           </div>
           <div className="hero-actions">
             <Button icon={Pencil} onClick={() => open(student)}>
-              Edit student
+              {uiT("Edit student")}
             </Button>
             {student.status === "Active" ? (
               <button
                 className="hero-icon"
                 type="button"
-                title="Archive student"
-                aria-label="Archive student"
+                title={uiT("Archive student")}
+                aria-label={uiT("Archive student")}
                 onClick={() => setDeleteTarget({ type: "archive", student })}
               >
                 <Archive size={18} />
@@ -502,15 +514,15 @@ export default function Students({ state, derived, actions, intent, clearIntent,
             <button
               className="hero-icon danger"
               type="button"
-              title="Delete student"
-              aria-label="Delete student"
+              title={uiT("Delete student")}
+              aria-label={uiT("Delete student")}
               onClick={() => setDeleteTarget({ type: "delete", student })}
             >
               <Trash2 size={18} />
             </button>
           </div>
         </section>
-        <div className="detail-tabs" role="tablist" aria-label="Student details">
+        <div className="detail-tabs" role="tablist" aria-label={uiT("Student details")}>
           {DETAIL_TABS.map((tab) => (
             <button
               type="button"
@@ -537,13 +549,13 @@ export default function Students({ state, derived, actions, intent, clearIntent,
         <Drawer
           open={Boolean(draft)}
           onClose={closeDraft}
-          title="Edit student"
-          description="Individual and group enrollment can be combined."
+          title={uiT("Edit student")}
+          description={uiT("Individual and group enrollment can be combined.")}
           footer={
             <>
-              <Button onClick={closeDraft}>Cancel</Button>
+              <Button onClick={closeDraft}>{uiT("Cancel")}</Button>
               <Button variant="primary" onClick={save} disabled={saving}>
-                {saving ? "Saving…" : "Save student"}
+                {saving ? uiT("Saving…") : uiT("Save student")}
               </Button>
             </>
           }
@@ -559,13 +571,17 @@ export default function Students({ state, derived, actions, intent, clearIntent,
         </Drawer>
         <ConfirmDialog
           open={Boolean(deleteTarget)}
-          title={deleteTarget?.type === "archive" ? `Archive ${student.fullName}?` : `Delete ${student.fullName}?`}
+          title={
+            deleteTarget?.type === "archive"
+              ? uiT("Archive {p0}?", { p0: student.fullName })
+              : uiT("Delete {p0}?", { p0: student.fullName })
+          }
           description={
             deleteTarget?.type === "archive"
-              ? "The student becomes inactive while grades, attendance, and payment history stay available."
-              : "Students with grades or class history cannot be deleted; archive them instead."
+              ? uiT("The student becomes inactive while grades, attendance, and payment history stay available.")
+              : uiT("Students with grades or class history cannot be deleted; archive them instead.")
           }
-          confirmLabel={deleteTarget?.type === "archive" ? "Archive student" : "Delete student"}
+          confirmLabel={deleteTarget?.type === "archive" ? uiT("Archive student") : uiT("Delete student")}
           tone={deleteTarget?.type === "archive" ? "primary" : "danger"}
           onClose={() => setDeleteTarget(null)}
           onConfirm={async () => {
@@ -587,31 +603,32 @@ export default function Students({ state, derived, actions, intent, clearIntent,
     <div className="page">
       <div className="page-heading">
         <div>
-          <h1>Students</h1>
-          <p>Keep profiles, enrollment, progress, and balances together.</p>
+          <h1>{uiT("Students")}</h1>
+          <p>{uiT("Keep profiles, enrollment, progress, and balances together.")}</p>
         </div>
         <Button variant="primary" icon={Plus} onClick={() => open()}>
-          Add student
+          {uiT("Add student")}
         </Button>
       </div>
       <div className="page-list-tools">
         <label className="page-search">
           <Search size={17} />
-          <span className="sr-only">Search students</span>
+          <span className="sr-only">{uiT("Search students")}</span>
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search students, parents, or groups"
+            placeholder={uiT("Search students, parents, or groups")}
           />
         </label>
         <details className="student-filter-menu">
           <summary>
             <Filter size={16} />
-            Filters{activeFilterCount ? <span>{activeFilterCount}</span> : null}
+            {uiT("Filters")}
+            {activeFilterCount ? <span>{activeFilterCount}</span> : null}
           </summary>
           <div className="student-filter-panel">
             <div className="filter-panel-heading">
-              <strong>Filter students</strong>
+              <strong>{uiT("Filter students")}</strong>
               <div className="filter-panel-actions">
                 {activeFilterCount ? (
                   <button
@@ -621,7 +638,7 @@ export default function Students({ state, derived, actions, intent, clearIntent,
                       setFilters({ groupIds: [], groupMatch: "any", enrollment: [] });
                     }}
                   >
-                    Clear all
+                    {uiT("Clear all")}
                   </button>
                 ) : null}
                 <button
@@ -632,13 +649,13 @@ export default function Students({ state, derived, actions, intent, clearIntent,
                     if (menu) menu.open = false;
                   }}
                 >
-                  Done
+                  {uiT("Done")}
                 </button>
               </div>
             </div>
             <fieldset>
-              <legend>Status</legend>
-              <div className="filter-status-options" role="group" aria-label="Filter students by status">
+              <legend>{uiT("Status")}</legend>
+              <div className="filter-status-options" role="group" aria-label={uiT("Filter students by status")}>
                 {[
                   ["all", "All statuses"],
                   ["Active", "Active"],
@@ -651,13 +668,13 @@ export default function Students({ state, derived, actions, intent, clearIntent,
                     aria-pressed={status === value}
                     onClick={() => setStatus(value)}
                   >
-                    {label}
+                    {uiT(label)}
                   </button>
                 ))}
               </div>
             </fieldset>
             <fieldset>
-              <legend>Enrollment</legend>
+              <legend>{uiT("Enrollment")}</legend>
               {[
                 ["individual", "Individual only"],
                 ["group", "Group classes"],
@@ -676,12 +693,12 @@ export default function Students({ state, derived, actions, intent, clearIntent,
                       }))
                     }
                   />
-                  {label}
+                  {uiT(label)}
                 </label>
               ))}
             </fieldset>
             <fieldset>
-              <legend>Groups</legend>
+              <legend>{uiT("Groups")}</legend>
               <div className="filter-group-list">
                 {state.groups.map((group) => (
                   <label key={group.id}>
@@ -703,20 +720,20 @@ export default function Students({ state, derived, actions, intent, clearIntent,
               </div>
               {filters.groupIds.length > 1 ? (
                 <div className="filter-match">
-                  <span>Match</span>
+                  <span>{uiT("Match")}</span>
                   <button
                     type="button"
                     className={filters.groupMatch === "any" ? "active" : ""}
                     onClick={() => setFilters((current) => ({ ...current, groupMatch: "any" }))}
                   >
-                    Any
+                    {uiT("Any")}
                   </button>
                   <button
                     type="button"
                     className={filters.groupMatch === "all" ? "active" : ""}
                     onClick={() => setFilters((current) => ({ ...current, groupMatch: "all" }))}
                   >
-                    All
+                    {uiT("All")}
                   </button>
                 </div>
               ) : null}
@@ -736,11 +753,11 @@ export default function Students({ state, derived, actions, intent, clearIntent,
                 <EnrollmentTags student={item} groupsById={groupsById} />
               </span>
               <span className="person-metric">
-                <small>Attendance</small>
+                <small>{uiT("Attendance")}</small>
                 <strong>{pct(itemSummary.attendance)}</strong>
               </span>
               <span className="person-metric">
-                <small>Balance</small>
+                <small>{uiT("Balance")}</small>
                 <strong>{money(itemSummary.outstanding)}</strong>
               </span>
               <span className={item.status === "Active" ? "record-status active" : "record-status"}>{item.status}</span>
@@ -750,21 +767,21 @@ export default function Students({ state, derived, actions, intent, clearIntent,
         {!list.length ? (
           <div className="empty-box">
             <UsersRound size={28} />
-            <h2>No students found</h2>
-            <p>Add a student or adjust your filters.</p>
+            <h2>{uiT("No students found")}</h2>
+            <p>{uiT("Add a student or adjust your filters.")}</p>
           </div>
         ) : null}
       </section>
       <Drawer
         open={Boolean(draft)}
         onClose={closeDraft}
-        title={draft?.id ? "Edit student" : "Add student"}
-        description="Use individual classes, one or many groups, or both."
+        title={draft?.id ? uiT("Edit student") : uiT("Add student")}
+        description={uiT("Use individual classes, one or many groups, or both.")}
         footer={
           <>
-            <Button onClick={closeDraft}>Cancel</Button>
+            <Button onClick={closeDraft}>{uiT("Cancel")}</Button>
             <Button variant="primary" onClick={save} disabled={saving}>
-              {saving ? "Saving…" : "Save student"}
+              {saving ? uiT("Saving…") : uiT("Save student")}
             </Button>
           </>
         }

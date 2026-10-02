@@ -14,6 +14,13 @@
     "target": "ES2022",
     "types": ["vite/client", "vitest/globals"]
   },
-  "include": ["src/domain/**/*.js", "src/utils/**/*.js", "vite.config.js", "playwright.config.js", "tests/e2e/**/*.js"],
-  "exclude": ["src/**/*.test.js"]
+  "include": [
+    "src/**/*.js",
+    "src/**/*.jsx",
+    "src/**/*.ts",
+    "vite.config.js",
+    "playwright.config.js",
+    "tests/e2e/**/*.js"
+  ],
+  "exclude": ["src/**/*.test.js", "src/**/*.test.jsx", "src/test/**"]
 }

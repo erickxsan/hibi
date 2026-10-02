@@ -23,12 +23,9 @@ describe("password-protected workspace keys", () => {
     "Password123456789!",
     "password password",
     "!!!!!!!!!!!!!!!",
-  ])("warns about weak secrets without prohibiting creation: %s", async (password) => {
+  ])("blocks weak new secrets: %s", async (password) => {
     expect(getNewPasswordWarning(password)).toContain("easy to guess");
-    const masterKey = generateAccountMasterKey();
-    const workspaceCryptoId = generateWorkspaceCryptoId();
-    const wrapper = await createPasswordWrapper({ masterKey, password, workspaceCryptoId });
-    await expect(unlockWithPassword({ wrapper, password, workspaceCryptoId })).resolves.toEqual(masterKey);
+    await expect(createPasswordWrapper({ password })).rejects.toMatchObject({ code: "password_too_weak" });
   });
 
   it.each([
@@ -40,8 +37,8 @@ describe("password-protected workspace keys", () => {
 
   it("accepts length boundaries and Unicode without changing the secret", () => {
     for (const password of [
-      "luna bosque mar",
-      "luna bosque ma😀",
+      "luna bosque mar faro",
+      "luna bosque mar😀",
       "  río nube árbol faro  ",
       "violet canyon ".repeat(73) + "xy",
     ]) {
@@ -65,13 +62,12 @@ describe("password-protected workspace keys", () => {
     };
     wipeBytes(secret);
     await expect(unlockWithPassword({ wrapper, password: "a", workspaceCryptoId })).resolves.toEqual(masterKey);
-    const weakReplacement = await createPasswordWrapper({ masterKey, password: "b", workspaceCryptoId });
-    await expect(unlockWithPassword({ wrapper: weakReplacement, password: "b", workspaceCryptoId })).resolves.toEqual(
-      masterKey,
-    );
-    const replacement = await createPasswordWrapper({ masterKey, password: "luna bosque mar", workspaceCryptoId });
+    await expect(createPasswordWrapper({ masterKey, password: "b", workspaceCryptoId })).rejects.toMatchObject({
+      code: "password_too_weak",
+    });
+    const replacement = await createPasswordWrapper({ masterKey, password: "luna bosque mar faro", workspaceCryptoId });
     await expect(
-      unlockWithPassword({ wrapper: replacement, password: "luna bosque mar", workspaceCryptoId }),
+      unlockWithPassword({ wrapper: replacement, password: "luna bosque mar faro", workspaceCryptoId }),
     ).resolves.toEqual(masterKey);
   });
 

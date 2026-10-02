@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { createStarterState } from "../domain/index.js";
 import {
+  createPasswordWrapper,
+  unlockWithPassword,
+  recoveryKeyFingerprints,
   createManifest,
   encryptWorkspace,
   generateAccountMasterKey,
@@ -110,5 +113,92 @@ describe("encrypted .hibi backups", () => {
     await expect(
       repository.decryptBackup(backup, destination, { recoveryKey: recovery.formatted }),
     ).resolves.toMatchObject({ students: [expect.objectContaining({ fullName: "Source Student" })] });
+  });
+});
+
+async function passwordBackup(keyVersion = 1) {
+  const repository = createEncryptedWorkspaceRepository(null, { allowWrites: false });
+  const masterKey = generateAccountMasterKey();
+  const workspaceCryptoId = generateWorkspaceCryptoId();
+  const password = "synthetic violet canyon lantern";
+  const wrapper = await createPasswordWrapper({ masterKey, workspaceCryptoId, keyVersion, password });
+  const recovery = await generateRecoveryKey();
+  const wrapperId = crypto.randomUUID();
+  const recoveryWrapper = {
+    wrapperId,
+    type: "recovery",
+    recoveryFingerprint: await recoveryKeyFingerprint(recovery.secret),
+    ...(await wrapMasterKey({ masterKey, workspaceCryptoId, keyVersion, wrapperId, wrappingSecret: recovery.secret })),
+  };
+  const state = createStarterState();
+  state.settings.hourlyRate = 99.9;
+  const envelopes = await encryptWorkspace({ masterKey, workspaceCryptoId, keyVersion, state });
+  const manifest = await createManifest({
+    masterKey,
+    workspaceCryptoId,
+    keyVersion,
+    envelopes,
+    workspaceRevision: 1,
+    operationId: crypto.randomUUID(),
+  });
+  const text = await repository.exportBackup(
+    { masterKey, workspaceCryptoId, keyVersion, envelopes, manifest, revision: 1 },
+    [wrapper, recoveryWrapper],
+    { masterKey },
+  );
+  return { repository, masterKey, workspaceCryptoId, text, wrapper, password, recovery };
+}
+describe("backup credential selection after rotation", () => {
+  it.each(["other-account", "same-account-rotated", "same-account-current"])(
+    "restores using the supplied password AMK: %s",
+    async (scenario) => {
+      const source = await passwordBackup();
+      const session = {
+        masterKey: scenario === "same-account-current" ? source.masterKey : generateAccountMasterKey(),
+        workspaceCryptoId: scenario === "other-account" ? generateWorkspaceCryptoId() : source.workspaceCryptoId,
+        keyVersion: scenario === "same-account-rotated" ? 2 : 1,
+      };
+      const sourceMasterKey = await unlockWithPassword({
+        wrapper: source.wrapper,
+        password: source.password,
+        workspaceCryptoId: source.workspaceCryptoId,
+      });
+      await expect(source.repository.decryptBackup(source.text, session, { sourceMasterKey })).resolves.toMatchObject({
+        settings: { hourlyRate: 99.9 },
+      });
+      if (scenario !== "same-account-current")
+        await expect(source.repository.decryptBackup(source.text, session)).rejects.toMatchObject({
+          code: "backup_recovery_required",
+        });
+      await expect(
+        source.repository.decryptBackup(source.text, session, { sourceMasterKey: generateAccountMasterKey() }),
+      ).rejects.toMatchObject({ code: "backup_authentication_failed" });
+      await expect(
+        unlockWithPassword({ wrapper: source.wrapper, password: "wrong", workspaceCryptoId: source.workspaceCryptoId }),
+      ).rejects.toMatchObject({ code: "invalid_password" });
+    },
+  );
+  it("unlocks old-key backups with a recovery key even on the same workspace and preserves legacy fingerprints", async () => {
+    const source = await passwordBackup();
+    const session = {
+      masterKey: generateAccountMasterKey(),
+      workspaceCryptoId: source.workspaceCryptoId,
+      keyVersion: 2,
+    };
+    const backup = JSON.parse(source.text);
+    backup.wrappers.find((wrapper) => wrapper.type === "recovery").recoveryFingerprint = (
+      await recoveryKeyFingerprints(source.recovery.secret)
+    )[1];
+    await expect(
+      source.repository.decryptBackup(JSON.stringify(backup), session, { recoveryKey: source.recovery.formatted }),
+    ).resolves.toMatchObject({ settings: { hourlyRate: 99.9 } });
+    const wrong = await generateRecoveryKey();
+    await expect(
+      source.repository.decryptBackup(source.text, session, { recoveryKey: wrong.formatted }),
+    ).rejects.toThrow(/does not match/);
+    backup.encryptedSnapshot.ciphertext = backup.encryptedSnapshot.ciphertext.slice(0, -3) + "AAA";
+    await expect(
+      source.repository.decryptBackup(JSON.stringify(backup), session, { recoveryKey: source.recovery.formatted }),
+    ).rejects.toMatchObject({ code: "backup_authentication_failed" });
   });
 });

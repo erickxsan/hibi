@@ -35,13 +35,9 @@ The following are explicitly outside protocol v1:
 
 ## Key hierarchy and wrappers
 
-New encryption passwords receive an advisory warning in setup and password-change forms when shorter than
-15 Unicode code points (excluding surrounding whitespace) or matching common passwords, repeated patterns,
-or simple sequences. Users can ignore the recommendation and use the password anyway. There is no mandatory
-minimum length or strength rule: the cryptographic API accepts any nonempty password up to the existing limit
-of 1,024 UTF-16 code units. The warning is shown before submission and never during unlock, backup recovery,
-or master-key rotation; existing password holders receive no prompts. Checks run locally and do not alter KDF
-input. They are a usability recommendation, not an entropy guarantee or a comprehensive breached-password list.
+New encryption passwords must contain at least 15 Unicode code points excluding surrounding whitespace, and must pass the local common-password, repetition and sequence checks. Creation and replacement enforce the same rule in the form and cryptographic API. The 1,024 UTF-16 unit maximum remains. Unlock, old backup passwords and emergency rotation continue accepting existing passwords, including weak legacy values. The input used by PBKDF2 is unchanged. These checks are not an entropy guarantee or a comprehensive breached-password list.
+
+Recovery fingerprints use the complete SHA-256 digest in base64url (43 characters). Unlock and SQL also accept the legacy truncated 14-character format. New wrappers always use the complete digest.
 
 The browser generates a uniformly random 256-bit AMK. It never derives the AMK from account, OAuth, JWT, email, or
 password material. HKDF-SHA-256 derives independent 256-bit material using versioned purpose and context values:
@@ -167,3 +163,9 @@ Before production rollout:
 5. Inspect browser network/log output and confirm that AMK, PRF results, recovery secrets, and plaintext are absent.
 6. Benchmark the versioned password work factor on the supported browser/device matrix and keep derivation under one
    second on the slowest supported device.
+
+## Device and revocation retention policy
+
+Forget this device and ordinary sign-out remove the remembered AMK. The independent encrypted recovery copies remain in this browser profile for offline recovery; their device CryptoKey remains until an explicit purge. On a shared device, Clear local copies drains current device writes, refuses a nonempty outbox, atomically checks for pending operations, deletes that account's recovery/cache/key material and remembered access, and locks the workspace. Other open unlocked tabs can create new copies when they continue working; close or sign out of them before leaving a shared browser profile. Account deletion still purges all local account data, including the outbox, after its recovery/export flow.
+
+Revoked wrappers are deleted by a database trigger. The owner-readable revocation table retains only IDs, type, label, key version and timestamps, and participates in account erasure. Password replacement keeps the same AMK: rotate it after suspected compromise. Already downloaded backups may retain old wrappers and cannot be revoked remotely.

@@ -19,7 +19,12 @@ export {
   rewrapPasskey,
   unlockWithPasskey,
 } from "./passkeys.js";
-export { generateRecoveryKey, parseRecoveryKey, recoveryKeyFingerprint } from "./recoveryKeys.js";
+export {
+  generateRecoveryKey,
+  parseRecoveryKey,
+  recoveryKeyFingerprint,
+  recoveryKeyFingerprints,
+} from "./recoveryKeys.js";
 export {
   canonicalWorkspaceHash,
   createCryptoSession,

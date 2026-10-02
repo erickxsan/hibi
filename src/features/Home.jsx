@@ -1,3 +1,4 @@
+import { uiText } from "../i18n/index.jsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
@@ -64,7 +65,8 @@ function formatTime(value) {
 }
 
 function Delta({ value, kind = "percent" }) {
-  if (value == null) return <span className="home-delta neutral">New</span>;
+  const { t: uiT } = useI18n();
+  if (value == null) return <span className="home-delta neutral">{uiT("New")}</span>;
   const positive = value > 0;
   const negative = value < 0;
   const amount =
@@ -151,6 +153,7 @@ function attendanceInsight(sessions) {
 }
 
 export function AttendancePanel({ title, sessions, previousSessions, onOpen }) {
+  const { t: uiT } = useI18n();
   const [scope, setScope] = useState("all");
   const [selectedSessionKey, setSelectedSessionKey] = useState("");
   const scopeOptions = useMemo(() => {
@@ -159,12 +162,12 @@ export function AttendancePanel({ title, sessions, previousSessions, onOpen }) {
       if (!options.has(session.scopeId)) {
         options.set(session.scopeId, {
           value: session.scopeId,
-          label: session.groupId ? session.title : "Individual classes",
+          label: session.groupId ? session.title : uiT("Individual classes"),
         });
       }
     });
-    return [{ value: "all", label: "All groups" }, ...options.values()];
-  }, [previousSessions, sessions]);
+    return [{ value: "all", label: uiT("All groups") }, ...options.values()];
+  }, [previousSessions, sessions, uiT]);
   const activeScope = scopeOptions.some((option) => option.value === scope) ? scope : "all";
   const matchesScope = (session) => activeScope === "all" || session.scopeId === activeScope;
   const filteredSessions = sessions.filter(matchesScope);
@@ -183,12 +186,12 @@ export function AttendancePanel({ title, sessions, previousSessions, onOpen }) {
     <article className="home-metric-panel home-attendance-panel green">
       <header className="home-attendance-header">
         <span className="home-panel-heading">
-          <UserRoundCheck aria-hidden="true" size={21} /> <strong>{title}</strong>
+          <UserRoundCheck aria-hidden="true" size={21} /> <strong>{uiT(title)}</strong>
         </span>
         <label className="home-attendance-scope">
-          <span className="sr-only">Attendance group</span>
+          <span className="sr-only">{uiT("Attendance group")}</span>
           <select
-            aria-label="Attendance group"
+            aria-label={uiT("Attendance group")}
             value={activeScope}
             onChange={(event) => {
               setScope(event.target.value);
@@ -212,9 +215,12 @@ export function AttendancePanel({ title, sessions, previousSessions, onOpen }) {
               {percent(summary.value)} <Delta value={delta} kind="points" />
             </span>
             <span className="home-attendance-count">
-              {`Attendance in ${filteredSessions.length} ${filteredSessions.length === 1 ? "class" : "classes"}`}
+              {uiT("Attendance in {p0} {p1}", {
+                p0: filteredSessions.length,
+                p1: uiText(filteredSessions.length === 1 ? "class" : "classes"),
+              })}
             </span>
-            <small>vs. previous period</small>
+            <small>{uiT("vs. previous period")}</small>
           </div>
 
           <div className="home-attendance-sessions" style={{ "--attendance-session-count": visibleSessions.length }}>
@@ -226,7 +232,7 @@ export function AttendancePanel({ title, sessions, previousSessions, onOpen }) {
                   key={session.key}
                   type="button"
                   aria-pressed={selected}
-                  aria-label={`Class ${index + 1}: ${percent(session.attendance)} attendance`}
+                  aria-label={uiT("Class {p0}: {p1} attendance", { p0: index + 1, p1: percent(session.attendance) })}
                   onClick={() => setSelectedSessionKey(session.key)}
                 >
                   {selected ? (
@@ -234,7 +240,7 @@ export function AttendancePanel({ title, sessions, previousSessions, onOpen }) {
                       {`${session.title} · ${session.attended} ${session.attended === 1 ? "student" : "students"}`}
                     </span>
                   ) : null}
-                  <span className="home-attendance-session-label">{`Class ${index + 1}`}</span>
+                  <span className="home-attendance-session-label">{uiT("Class {p0}", { p0: index + 1 })}</span>
                   <span className="home-attendance-bubble">{percent(session.attendance)}</span>
                 </button>
               );
@@ -244,8 +250,8 @@ export function AttendancePanel({ title, sessions, previousSessions, onOpen }) {
       ) : (
         <div className="home-attendance-empty">
           <span>—</span>
-          <strong>No attendance in this period</strong>
-          <small>Attendance will appear after completed classes.</small>
+          <strong>{uiT("No attendance in this period")}</strong>
+          <small>{uiT("Attendance will appear after completed classes.")}</small>
         </div>
       )}
 
@@ -256,7 +262,8 @@ export function AttendancePanel({ title, sessions, previousSessions, onOpen }) {
           </span>
         ) : null}
         <button type="button" onClick={onOpen}>
-          View sessions <ArrowRight aria-hidden="true" size={16} />
+          {uiT("View sessions ")}
+          <ArrowRight aria-hidden="true" size={16} />
         </button>
       </footer>
     </article>
@@ -264,6 +271,7 @@ export function AttendancePanel({ title, sessions, previousSessions, onOpen }) {
 }
 
 function RevenueChart({ series, period, locale }) {
+  const { t: uiT } = useI18n();
   const maximum = Math.max(...series.map((item) => item.collected), 0);
   const peakIndex = series.findLastIndex((item) => maximum > 0 && item.collected === maximum);
   const label = (value) => {
@@ -274,11 +282,11 @@ function RevenueChart({ series, period, locale }) {
     return new Intl.DateTimeFormat(locale, { weekday: "short", timeZone: "UTC" }).format(date);
   };
   return (
-    <div className="home-revenue-chart" role="img" aria-label="Payments received over the selected period">
+    <div className="home-revenue-chart" role="img" aria-label={uiT("Payments received over the selected period")}>
       {series.map((item, index) => {
         const height = maximum ? Math.max(5, Math.round((item.collected / maximum) * 88)) : 0;
         return (
-          <div className="home-revenue-bar-slot" key={item.label}>
+          <div className="home-revenue-bar-slot" key={uiT(item.label)}>
             <span
               className={`home-revenue-bar ${item.collected ? "has-value" : ""} ${index === peakIndex ? "peak" : ""}`}
               style={{ "--revenue-bar-height": `${height}px` }}
@@ -299,6 +307,7 @@ const REVENUE_VIEWS = Object.freeze([
 ]);
 
 function RevenueRhythm({ dashboard, period, locale, onOpen }) {
+  const { t: uiT } = useI18n();
   const activeSegments = dashboard.collectionSeries.filter((item) => item.collected > 0).length;
   return (
     <>
@@ -310,16 +319,20 @@ function RevenueRhythm({ dashboard, period, locale, onOpen }) {
       <RevenueChart series={dashboard.collectionSeries} period={period} locale={locale} />
       <footer className="home-revenue-footer">
         <span>
-          <i aria-hidden="true" /> Collections by payment date
+          <i aria-hidden="true" /> {uiT(" Collections by payment date")}
         </span>
         <span className="home-revenue-insight">
           <Sparkles aria-hidden="true" size={14} />
           {activeSegments
-            ? `Collections were concentrated in ${activeSegments} ${activeSegments === 1 ? "payment day" : "payment days"}`
-            : "Your collections will appear here"}
+            ? uiT("Collections were concentrated in {p0} {p1}", {
+                p0: activeSegments,
+                p1: uiText(activeSegments === 1 ? "payment day" : "payment days"),
+              })
+            : uiT("Your collections will appear here")}
         </span>
         <button type="button" onClick={onOpen}>
-          Explore period <ArrowRight aria-hidden="true" size={16} />
+          {uiT("Explore period ")}
+          <ArrowRight aria-hidden="true" size={16} />
         </button>
       </footer>
     </>
@@ -327,25 +340,26 @@ function RevenueRhythm({ dashboard, period, locale, onOpen }) {
 }
 
 function RevenueProjection({ dashboard, onOpen }) {
+  const { t: uiT } = useI18n();
   const ratio = dashboard.collectionProjection ? Math.min(1, dashboard.collected / dashboard.collectionProjection) : 0;
   return (
     <div className="home-revenue-projection">
       <div className="home-revenue-projection-values">
         <span>
           <strong>{money(dashboard.collected)}</strong>
-          <small>Collected</small>
+          <small>{uiT("Collected")}</small>
         </span>
         <span>
           <strong>{money(dashboard.collectionProjection)}</strong>
-          <small>Period projection</small>
+          <small>{uiT("Period projection")}</small>
         </span>
       </div>
       <div
         className="home-revenue-progress"
         role="progressbar"
-        aria-label="Collected amount toward projection"
-        aria-valuemin="0"
-        aria-valuemax="100"
+        aria-label={uiT("Collected amount toward projection")}
+        aria-valuemin={0}
+        aria-valuemax={100}
         aria-valuenow={Math.round(ratio * 100)}
       >
         <i style={{ width: `${Math.round(ratio * 100)}%` }} />
@@ -364,11 +378,12 @@ function RevenueProjection({ dashboard, onOpen }) {
         <span>
           <BarChart3 aria-hidden="true" size={15} />
           {dashboard.collectionProjection
-            ? `You have collected ${Math.round(ratio * 100)}% of this period’s projection`
-            : "Add rates and scheduled classes to see a projection"}
+            ? uiT("You have collected {p0}% of this period’s projection", { p0: Math.round(ratio * 100) })
+            : uiT("Add rates and scheduled classes to see a projection")}
         </span>
         <button type="button" onClick={onOpen}>
-          View considered classes <ArrowRight aria-hidden="true" size={16} />
+          {uiT("View considered classes ")}
+          <ArrowRight aria-hidden="true" size={16} />
         </button>
       </footer>
     </div>
@@ -376,13 +391,14 @@ function RevenueProjection({ dashboard, onOpen }) {
 }
 
 function RevenueGroups({ dashboard, onOpen }) {
+  const { t: uiT } = useI18n();
   const visibleGroups = dashboard.collectionGroups.slice(0, 4);
   const maximum = Math.max(...visibleGroups.map((item) => item.value), 0);
   return (
     <div className="home-revenue-groups">
       <div className="home-revenue-value">
         <strong>{money(dashboard.collected)}</strong>
-        <span>Collected</span>
+        <span>{uiT("Collected")}</span>
       </div>
       {visibleGroups.length ? (
         <div className="home-revenue-group-list">
@@ -400,14 +416,15 @@ function RevenueGroups({ dashboard, onOpen }) {
           ))}
         </div>
       ) : (
-        <p className="home-revenue-empty">Group collections will appear after payments are recorded.</p>
+        <p className="home-revenue-empty">{uiT("Group collections will appear after payments are recorded.")}</p>
       )}
       <footer className="home-revenue-projection-footer">
         <span>
-          <UsersRound aria-hidden="true" size={15} /> Amount collected by each group or student
+          <UsersRound aria-hidden="true" size={15} /> {uiT(" Amount collected by each group or student")}
         </span>
         <button type="button" onClick={onOpen}>
-          View breakdown <ArrowRight aria-hidden="true" size={16} />
+          {uiT("View breakdown ")}
+          <ArrowRight aria-hidden="true" size={16} />
         </button>
       </footer>
     </div>
@@ -415,6 +432,7 @@ function RevenueGroups({ dashboard, onOpen }) {
 }
 
 export function RevenuePanel({ dashboard, period, locale, noun, onOpen }) {
+  const { t: uiT } = useI18n();
   const [view, setView] = useState("rhythm");
   const [menuOpen, setMenuOpen] = useState(false);
   const switcherRef = useRef(null);
@@ -451,8 +469,8 @@ export function RevenuePanel({ dashboard, period, locale, noun, onOpen }) {
       <header>
         <span>
           <TrendingUp aria-hidden="true" size={21} />
-          <strong>{title}</strong>
-          <Info aria-label="Payments recorded in this period" size={15} />
+          <strong>{uiT(title)}</strong>
+          <Info aria-label={uiT("Payments recorded in this period")} size={15} />
         </span>
         <div className="home-revenue-controls">
           <div className="home-revenue-view-switcher" ref={switcherRef}>
@@ -486,7 +504,8 @@ export function RevenuePanel({ dashboard, period, locale, noun, onOpen }) {
                       : event.key === "End"
                         ? items.length - 1
                         : (currentIndex + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
-                  items[nextIndex]?.focus();
+                  const nextItem = items[nextIndex];
+                  if (nextItem instanceof HTMLElement) nextItem.focus();
                 }}
               >
                 {REVENUE_VIEWS.map(({ value, label, Icon }) => (
@@ -502,14 +521,17 @@ export function RevenuePanel({ dashboard, period, locale, noun, onOpen }) {
                     }}
                   >
                     <Icon aria-hidden="true" size={17} />
-                    <span>{label}</span>
+                    <span>{uiT(label)}</span>
                     {view === value ? <Check aria-hidden="true" size={16} /> : null}
                   </button>
                 ))}
               </div>
             ) : null}
           </div>
-          <span className="home-period-label" aria-label={`Collection period: ${PERIOD_LABELS[period]}`}>
+          <span
+            className="home-period-label"
+            aria-label={uiT("Collection period: {p0}", { p0: PERIOD_LABELS[period] })}
+          >
             {PERIOD_LABELS[period]} <ChevronDown aria-hidden="true" size={14} />
           </span>
         </div>
@@ -543,15 +565,16 @@ function ClassGlyph({ title }) {
 }
 
 function SessionCard({ session, onOpen }) {
+  const { t: uiT } = useI18n();
   return (
     <button className={session.isNext ? "home-session next" : "home-session"} type="button" onClick={onOpen}>
-      {session.isNext ? <span className="next-class-label">Next class</span> : null}
+      {session.isNext ? <span className="next-class-label">{uiT("Next class")}</span> : null}
       <time>{formatTime(session.startTime)}</time>
       <ClassGlyph title={session.title} />
       <span className="home-session-copy">
         <strong>{session.title}</strong>
         <small>
-          {session.attended} / {session.expected} students
+          {session.attended} / {session.expected} {uiT(" students")}
         </small>
       </span>
       <span className={`home-session-status ${session.status.toLowerCase()}`}>{session.status}</span>
@@ -573,10 +596,11 @@ function MetricPanel({
   sparkValues,
   onClick,
 }) {
+  const { t: uiT } = useI18n();
   return (
     <button className={`home-metric-panel ${tone}`} type="button" onClick={onClick}>
       <span className="home-panel-heading">
-        <Icon aria-hidden="true" size={21} /> <strong>{title}</strong>
+        <Icon aria-hidden="true" size={21} /> <strong>{uiT(title)}</strong>
       </span>
       <span className="home-metric-content">
         <span className="home-metric-copy">
@@ -584,8 +608,8 @@ function MetricPanel({
             {value}
             {suffix ? <small>{suffix}</small> : null} <Delta value={delta} kind={deltaKind} />
           </span>
-          <span className="home-metric-caption">{caption}</span>
-          <em>{message}</em>
+          <span className="home-metric-caption">{uiT(caption)}</span>
+          <em>{uiT(message)}</em>
         </span>
         <Ring value={ringValue} tone={tone} />
         <Sparkline values={sparkValues} tone={tone} />
@@ -594,18 +618,19 @@ function MetricPanel({
   );
 }
 
-function FinanceSummary({ icon: Icon, title, value, delta, note, tone, progress, onClick }) {
+function FinanceSummary({ icon: Icon, title, value, delta = undefined, note, tone, progress = undefined, onClick }) {
+  const { t: uiT } = useI18n();
   return (
     <button className={`home-finance-summary ${tone}`} type="button" onClick={onClick}>
       <span>
         <Icon aria-hidden="true" size={18} />
       </span>
       <span>
-        <strong>{title}</strong>
+        <strong>{uiT(title)}</strong>
         <b>
           {value} {delta == null ? null : <Delta value={delta} />}
         </b>
-        <small>{note}</small>
+        <small>{uiT(note)}</small>
         {progress == null ? null : (
           <i className="home-summary-progress">
             <span style={{ width: `${Math.round(Math.max(0, Math.min(1, progress)) * 100)}%` }} />
@@ -618,15 +643,16 @@ function FinanceSummary({ icon: Icon, title, value, delta, note, tone, progress,
 }
 
 function StudentList({ title, icon: Icon, tone, students, empty, showScores = false, onOpen }) {
+  const { t: uiT } = useI18n();
   return (
     <section className={`home-list-card ${tone}`}>
       <header>
         <span>
           <Icon aria-hidden="true" size={19} />
-          <strong>{title}</strong>
+          <strong>{uiT(title)}</strong>
         </span>
         <button type="button" onClick={onOpen}>
-          View all
+          {uiT("View all")}
         </button>
       </header>
       {students.length ? (
@@ -656,15 +682,16 @@ function StudentList({ title, icon: Icon, tone, students, empty, showScores = fa
 }
 
 function GroupList({ groups, onOpen }) {
+  const { t: uiT } = useI18n();
   return (
     <section className="home-list-card purple">
       <header>
         <span>
           <Trophy aria-hidden="true" size={19} />
-          <strong>Top groups by consistency</strong>
+          <strong>{uiT("Top groups by consistency")}</strong>
         </span>
         <button type="button" onClick={onOpen}>
-          View all
+          {uiT("View all")}
         </button>
       </header>
       {groups.length ? (
@@ -681,13 +708,14 @@ function GroupList({ groups, onOpen }) {
           ))}
         </div>
       ) : (
-        <p className="home-list-empty">Attendance will appear after completed classes.</p>
+        <p className="home-list-empty">{uiT("Attendance will appear after completed classes.")}</p>
       )}
     </section>
   );
 }
 
 export default function Home({ state, derived, openPage, navigate }) {
+  const { t: uiT } = useI18n();
   const { locale } = useI18n();
   const [period, setPeriod] = useState("weekly");
   const dashboard = useMemo(() => buildHomeDashboard(state, derived, period), [derived, period, state]);
@@ -726,11 +754,12 @@ export default function Home({ state, derived, openPage, navigate }) {
       <header className="home-dashboard-header">
         <div>
           <h1>
-            Good morning, Teacher! <span aria-hidden="true">🌿</span>
+            {uiT("Good morning, Teacher! ")}
+            <span aria-hidden="true">🌿</span>
           </h1>
-          <p>This week you are doing great. Your classes make an impact and your students keep growing.</p>
+          <p>{uiT("This week you are doing great. Your classes make an impact and your students keep growing.")}</p>
         </div>
-        <div className="home-period-tabs" role="group" aria-label="Dashboard period">
+        <div className="home-period-tabs" role="group" aria-label={uiT("Dashboard period")}>
           {HOME_PERIODS.map((item) => (
             <button
               key={item}
@@ -749,23 +778,26 @@ export default function Home({ state, derived, openPage, navigate }) {
         <header>
           <span>
             <CalendarDays aria-hidden="true" size={23} />
-            <h2 id="home-today-title">Today’s classes</h2>
+            <h2 id="home-today-title">{uiT("Today’s classes")}</h2>
           </span>
           <div className="home-today-summary">
             <span>
               <CalendarDays aria-hidden="true" size={16} />
-              {`${dashboard.sessions.length} ${dashboard.sessions.length === 1 ? "class" : "classes"} today`}
+              {uiT("{p0} {p1} today", {
+                p0: dashboard.sessions.length,
+                p1: uiText(dashboard.sessions.length === 1 ? "class" : "classes"),
+              })}
             </span>
             <span>
               <UsersRound aria-hidden="true" size={16} />
-              {dashboard.expectedStudents} students expected
+              {dashboard.expectedStudents} {uiT(" students expected")}
             </span>
             <span className="pending">
               <Clock3 aria-hidden="true" size={16} />
-              {dashboard.pendingSessions} pending
+              {dashboard.pendingSessions} {uiT(" pending")}
             </span>
           </div>
-          <img src="/hibi-companion.png" alt="" />
+          <img src="/hibi-companion.png" alt={uiT("")} />
         </header>
         {dashboard.sessions.length ? (
           <div className="home-session-rail">
@@ -776,11 +808,12 @@ export default function Home({ state, derived, openPage, navigate }) {
         ) : (
           <div className="home-no-classes">
             <span>
-              <strong>No classes scheduled for today</strong>
-              <small>Your next recurring or one-time class will appear here.</small>
+              <strong>{uiT("No classes scheduled for today")}</strong>
+              <small>{uiT("Your next recurring or one-time class will appear here.")}</small>
             </span>
             <button type="button" onClick={() => openPage("classes", "new-class")}>
-              Create class <ArrowRight aria-hidden="true" size={16} />
+              {uiT("Create class ")}
+              <ArrowRight aria-hidden="true" size={16} />
             </button>
           </div>
         )}
@@ -790,20 +823,21 @@ export default function Home({ state, derived, openPage, navigate }) {
           disabled={!nextTodaySession}
           onClick={() => nextTodaySession && openTodaySession(nextTodaySession)}
         >
-          View all my classes today <ArrowRight aria-hidden="true" size={17} />
+          {uiT("View all my classes today ")}
+          <ArrowRight aria-hidden="true" size={17} />
         </button>
       </section>
 
-      <section className="home-academic-grid" aria-label="Academic overview">
+      <section className="home-academic-grid" aria-label={uiT("Academic overview")}>
         <AttendancePanel
-          title={`Average attendance ${noun}`}
+          title={uiT("Average attendance {p0}", { p0: noun })}
           sessions={dashboard.attendanceSessions}
           previousSessions={dashboard.previousAttendanceSessions}
           onOpen={openAttendanceOverview}
         />
         <MetricPanel
           icon={Star}
-          title={`Average grade ${noun}`}
+          title={uiT("Average grade {p0}", { p0: noun })}
           value={gradeValue}
           suffix="/ 10"
           delta={dashboard.gradeDelta}
@@ -819,10 +853,10 @@ export default function Home({ state, derived, openPage, navigate }) {
 
       <section className="home-finance-grid">
         <RevenuePanel dashboard={dashboard} period={period} locale={locale} noun={noun} onOpen={openPaymentOverview} />
-        <aside className="home-finance-side" aria-label="Financial summary">
+        <aside className="home-finance-side" aria-label={uiT("Financial summary")}>
           <FinanceSummary
             icon={Wallet}
-            title="Income this month"
+            title={uiT("Income this month")}
             value={money(dashboard.monthlyCollected)}
             delta={dashboard.monthlyCollectedDelta}
             note="Compared with last month"
@@ -832,7 +866,7 @@ export default function Home({ state, derived, openPage, navigate }) {
           />
           <FinanceSummary
             icon={TrendingUp}
-            title="Monthly projection"
+            title={uiT("Monthly projection")}
             value={money(dashboard.monthlyProjection)}
             delta={dashboard.monthlyProjectionDelta}
             note="Based on your recent collections"
@@ -842,7 +876,7 @@ export default function Home({ state, derived, openPage, navigate }) {
           />
           <FinanceSummary
             icon={CreditCard}
-            title="Pending payments"
+            title={uiT("Pending payments")}
             value={money(dashboard.outstanding)}
             note={`${dashboard.outstandingRecords} records`}
             tone="purple"
@@ -851,9 +885,9 @@ export default function Home({ state, derived, openPage, navigate }) {
         </aside>
       </section>
 
-      <section className="home-lists-grid" aria-label="Students and groups overview">
+      <section className="home-lists-grid" aria-label={uiT("Students and groups overview")}>
         <StudentList
-          title="Outstanding students"
+          title={uiT("Outstanding students")}
           icon={Sparkles}
           tone="green"
           students={dashboard.topStudents}
@@ -862,7 +896,7 @@ export default function Home({ state, derived, openPage, navigate }) {
           onOpen={() => openPage("community", "students")}
         />
         <StudentList
-          title="Students requiring attention"
+          title={uiT("Students requiring attention")}
           icon={AlertTriangle}
           tone="orange"
           students={dashboard.attentionStudents}

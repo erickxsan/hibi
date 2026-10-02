@@ -101,6 +101,7 @@ export function createClassSchedule(overrides = {}) {
     groupId: "",
     studentId: "",
     startDate: "",
+    recurrenceAnchorDate: "",
     endDate: "",
     startTime: "",
     durationHours: 2,

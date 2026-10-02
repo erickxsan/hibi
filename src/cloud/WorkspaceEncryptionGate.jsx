@@ -1,3 +1,4 @@
+import { useI18n } from "../i18n/index.jsx";
 import { useState } from "react";
 import { KeyRound, LockKeyhole, LogOut, RefreshCw, ShieldCheck } from "lucide-react";
 import { BrandMark } from "../components/BrandMark";
@@ -19,6 +20,7 @@ export function WorkspaceEncryptionGate({
   onRetry,
   onSignOut,
 }) {
+  const { t: uiT } = useI18n();
   const [rememberDevice, setRememberDevice] = useState(true);
   const [password, setPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
@@ -45,6 +47,10 @@ export function WorkspaceEncryptionGate({
       return;
     }
     if (needsPasswordCreation) {
+      if (passwordWarning) {
+        setFormError(passwordWarning);
+        return;
+      }
       if (password !== passwordConfirmation) {
         setFormError("The password confirmation does not match.");
         return;
@@ -63,51 +69,56 @@ export function WorkspaceEncryptionGate({
         <span className="cloud-state-icon encryption-gate-icon">
           {profile ? <LockKeyhole aria-hidden="true" /> : <ShieldCheck aria-hidden="true" />}
         </span>
-        <p className="cloud-eyebrow">End-to-end encrypted workspace</p>
+        <p className="cloud-eyebrow">{uiT("End-to-end encrypted workspace")}</p>
         <h1 id="encryption-gate-title">
           {loading
-            ? "Checking workspace protection…"
+            ? uiT("Checking workspace protection…")
             : !bootstrapKnown
-              ? "Workspace temporarily unavailable"
+              ? uiT("Workspace temporarily unavailable")
               : needsPasswordCreation && !profile
-                ? "Protect your workspace before continuing"
+                ? uiT("Protect your workspace before continuing")
                 : needsPasswordCreation
-                  ? "Restart encryption with a password"
+                  ? uiT("Restart encryption with a password")
                   : profile.migrationStatus === "migration_started"
-                    ? "Resume the encrypted migration"
-                    : "Unlock your private workspace"}
+                    ? uiT("Resume the encrypted migration")
+                    : uiT("Unlock your private workspace")}
         </h1>
 
         {!loading && !bootstrapKnown ? (
           <p>
-            Hibi could not check your encryption settings. Retry when the connection recovers. Do not create a new
-            password or clear this browser's data; your remembered device key may still be available.
+            {uiT(
+              "Hibi could not check your encryption settings. Retry when the connection recovers. Do not create a new password or clear this browser's data; your remembered device key may still be available.",
+            )}
           </p>
         ) : null}
 
         {!loading && needsPasswordCreation && !profile ? (
           <p>
-            Choose a separate encryption password. Hibi will derive a wrapping key locally, encrypt every record and
-            recovery snapshot, verify the result, and only then remove readable cloud records for{" "}
+            {uiT(
+              "Choose a separate encryption password. Hibi will derive a wrapping key locally, encrypt every record and recovery snapshot, verify the result, and only then remove readable cloud records for",
+            )}{" "}
             <strong>{accountEmail}</strong>.
           </p>
         ) : null}
         {!loading && needsPasswordCreation && profile?.migrationStatus === "migration_started" ? (
           <p>
-            The previous passkey setup did not finish. Your original records are still intact. Hibi will remove only
-            that incomplete encrypted staging and restart safely with the password you choose.
+            {uiT(
+              "The previous passkey setup did not finish. Your original records are still intact. Hibi will remove only that incomplete encrypted staging and restart safely with the password you choose.",
+            )}
           </p>
         ) : null}
         {!loading && !needsPasswordCreation && profile?.migrationStatus === "migration_started" ? (
           <p>
-            The original records are still intact and legacy writes are paused. Enter the encryption password created
-            for this migration so Hibi can verify and finish it safely.
+            {uiT(
+              "The original records are still intact and legacy writes are paused. Enter the encryption password created for this migration so Hibi can verify and finish it safely.",
+            )}
           </p>
         ) : null}
         {!loading && profile?.migrationStatus === "active" ? (
           <p>
-            Signing in identifies your account. Your encryption password or recovery key separately unlocks the content
-            on this device; Supabase never receives the password, decrypted key, or records.
+            {uiT(
+              "Signing in identifies your account. Your encryption password or recovery key separately unlocks the content on this device; Supabase never receives the password, decrypted key, or records.",
+            )}
           </p>
         ) : null}
 
@@ -119,8 +130,10 @@ export function WorkspaceEncryptionGate({
         ) : null}
         {error || formError ? (
           <div className="encryption-error" role="alert">
-            <strong>{bootstrapKnown ? "Workspace remains safe." : "Encryption settings could not be checked."}</strong>
-            <span>{formError || error?.message || "The workspace could not be unlocked."}</span>
+            <strong>
+              {bootstrapKnown ? uiT("Workspace remains safe.") : uiT("Encryption settings could not be checked.")}
+            </strong>
+            <span>{formError || error?.message || uiT("The workspace could not be unlocked.")}</span>
           </div>
         ) : null}
 
@@ -133,16 +146,18 @@ export function WorkspaceEncryptionGate({
               disabled={busy}
             />
             <span>
-              <strong>Remember this device</strong>
-              <small>Store a non-extractable local device key so future openings do not require the password.</small>
+              <strong>{uiT("Remember this device")}</strong>
+              <small>
+                {uiT("Store a non-extractable local device key so future openings do not require the password.")}
+              </small>
             </span>
           </label>
         ) : null}
 
         {!loading && bootstrapKnown ? (
           <form className="recovery-unlock-form encryption-password-form" onSubmit={submitPassword}>
-            {needsPasswordCreation ? <p>{NEW_PASSWORD_GUIDANCE}</p> : null}
-            <Field label={needsPasswordCreation ? "Create encryption password" : "Encryption password"}>
+            {needsPasswordCreation ? <p>{uiT(NEW_PASSWORD_GUIDANCE)}</p> : null}
+            <Field label={needsPasswordCreation ? uiT("Create encryption password") : uiT("Encryption password")}>
               <Input
                 type="password"
                 value={password}
@@ -156,7 +171,7 @@ export function WorkspaceEncryptionGate({
               />
             </Field>
             {needsPasswordCreation ? (
-              <Field label="Confirm encryption password">
+              <Field label={uiT("Confirm encryption password")}>
                 <Input
                   type="password"
                   value={passwordConfirmation}
@@ -170,28 +185,32 @@ export function WorkspaceEncryptionGate({
                 />
               </Field>
             ) : null}
-            {passwordWarning ? <p role="status">{passwordWarning}</p> : null}
+            {passwordWarning ? <p role="status">{uiT(passwordWarning)}</p> : null}
             <Button
               type="submit"
               variant="primary"
               icon={KeyRound}
-              disabled={busy || !password || (needsPasswordCreation && !passwordConfirmation)}
+              disabled={
+                busy || !password || (needsPasswordCreation && (!passwordConfirmation || Boolean(passwordWarning)))
+              }
             >
               {busy
-                ? "Protecting workspace…"
+                ? uiT("Protecting workspace…")
                 : passwordWarning
-                  ? "Use this password anyway"
+                  ? uiT("Create encryption password")
                   : needsPasswordCreation
                     ? profile
-                      ? "Restart and encrypt workspace"
-                      : "Set password and encrypt workspace"
+                      ? uiT("Restart and encrypt workspace")
+                      : uiT("Set password and encrypt workspace")
                     : profile?.migrationStatus === "migration_started"
-                      ? "Resume encrypted migration"
-                      : "Unlock workspace"}
+                      ? uiT("Resume encrypted migration")
+                      : uiT("Unlock workspace")}
             </Button>
             {needsPasswordCreation ? (
               <p className="encryption-compatibility-note">
-                This password is used only in this browser to unlock encryption. Hibi cannot recover it if it is lost.
+                {uiT(
+                  "This password is used only in this browser to unlock encryption. Hibi cannot recover it if it is lost.",
+                )}
               </p>
             ) : null}
           </form>
@@ -200,11 +219,11 @@ export function WorkspaceEncryptionGate({
         {!loading && profile && recoveryAvailable ? (
           <div className="encryption-unlock-options">
             <div className="recovery-unlock-form">
-              <Field label="Recovery key">
+              <Field label={uiT("Recovery key")}>
                 <Input
                   value={recoveryKey}
                   onChange={(event) => setRecoveryKey(event.target.value)}
-                  placeholder="HIBI1-…"
+                  placeholder={uiT("HIBI1-…")}
                   autoComplete="off"
                   spellCheck="false"
                 />
@@ -214,7 +233,7 @@ export function WorkspaceEncryptionGate({
                 disabled={busy || !recoveryKey.trim()}
                 onClick={() => onUnlockRecovery(recoveryKey, { rememberDevice })}
               >
-                Unlock with recovery key
+                {uiT("Unlock with recovery key")}
               </Button>
             </div>
           </div>
@@ -223,15 +242,15 @@ export function WorkspaceEncryptionGate({
         <div className="cloud-state-actions encryption-secondary-actions">
           {error || formError || (!loading && !bootstrapKnown) ? (
             <Button icon={RefreshCw} onClick={onRetry} disabled={busy || loading}>
-              Check again
+              {uiT("Check again")}
             </Button>
           ) : null}
           <Button icon={LogOut} onClick={onSignOut} disabled={busy}>
-            Sign out
+            {uiT("Sign out")}
           </Button>
         </div>
         <p className="encryption-compatibility-note">
-          Signing out also forgets this device. You will need your encryption password next time.
+          {uiT("Signing out also forgets this device. You will need your encryption password next time.")}
         </p>
       </section>
     </main>

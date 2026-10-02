@@ -2,10 +2,13 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 
-afterEach(() => {
+afterEach(async () => {
   if (typeof document !== "undefined") {
     cleanup();
     document.body.innerHTML = "";
+    // jsdom queues history.back() traversal separately from React cleanup.
+    // Drain those events before the next component subscribes to navigation.
+    await new Promise((resolve) => setTimeout(resolve, 20));
     window.history.replaceState({}, "", "/");
   }
   vi.clearAllMocks();

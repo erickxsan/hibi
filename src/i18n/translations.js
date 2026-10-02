@@ -6,6 +6,37 @@ export const SUPPORTED_LANGUAGES = Object.freeze({
 });
 
 export const SPANISH_TRANSLATIONS = Object.freeze({
+  Page: "Página",
+  Previous: "Anterior",
+  "The new date must be within the series end date.": "La nueva fecha debe estar dentro del periodo de la serie.",
+  "Move one occurrence at a time for a series with multiple weekdays.":
+    "Para una serie con varios días de la semana, mueve una sola sesión a la vez.",
+  "This device is being locked.": "Se está bloqueando este dispositivo.",
+  "Finish the current operation before replacing records.":
+    "Termina la operación actual antes de reemplazar los registros.",
+  "Finish the current operation before clearing local copies.":
+    "Termina la operación actual antes de borrar las copias locales.",
+  "Sync every pending change before clearing local copies.":
+    "Sincroniza todos los cambios pendientes antes de borrar las copias locales.",
+  "Sync or export every pending change before clearing local copies.":
+    "Sincroniza o exporta todos los cambios pendientes antes de borrar las copias locales.",
+  "This backup needs its original encryption password or recovery key. Hibi will unlock and validate it in this browser, then re-encrypt the records for the current account.":
+    "Este respaldo necesita su contraseña de cifrado original o clave de recuperación. Hibi lo desbloqueará y validará en este navegador y después cifrará los registros para la cuenta actual.",
+  "This view could not be loaded": "No se pudo cargar esta vista",
+  "Your saved records are still available. Try opening the view again.":
+    "Tus registros guardados siguen disponibles. Intenta abrir la vista de nuevo.",
+  "Reload application": "Recargar aplicación",
+  "Resolve or export pending changes before reloading.": "Resuelve o exporta los cambios pendientes antes de recargar.",
+  "This preview is read-only. Security changes are disabled.":
+    "Esta vista previa es de solo lectura. Los cambios de seguridad están deshabilitados.",
+  "Forget this device removes remembered access. Local backups remain encrypted in this browser. Use Clear local copies on a shared device after syncing pending changes.":
+    "Olvidar este dispositivo elimina el acceso recordado. Las copias locales permanecen cifradas en este navegador. En un dispositivo compartido, sincroniza los cambios pendientes y usa Borrar copias locales.",
+  "Clear local copies": "Borrar copias locales",
+  "We recommend a long phrase with several unrelated words. Use at least 15 characters. No special symbols are required.":
+    "Usa una frase larga de al menos 15 caracteres con varias palabras sin relación. No se requieren símbolos especiales.",
+  "This password may be easy to guess. We recommend a longer phrase with unrelated words, choose a longer phrase before continuing.":
+    "Esta contraseña puede ser fácil de adivinar. Elige una frase más larga con palabras sin relación antes de continuar.",
+
   "Continue later": "Continuar después",
   Agenda: "Agenda",
   "Create a group, add your students, and let Hibi prepare your agenda.":
@@ -41,7 +72,6 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "This password may be easy to guess. We recommend a longer phrase with unrelated words, but you can use this password anyway.":
     "Esta contraseña puede ser fácil de adivinar. Recomendamos una frase más larga con palabras sin relación entre sí, pero puedes usar esta contraseña de todos modos.",
   "Use this password anyway": "Usar esta contraseña de todos modos",
-  // Brand, navigation, and shared controls
   "Teaching, day by day.": "Enseñando, día a día.",
   "Teaching organized.": "Enseñanza organizada.",
   "Time reclaimed.": "Tiempo recuperado.",
@@ -80,7 +110,6 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "Turn sound effects off": "Desactivar efectos de sonido",
   On: "Activados",
   Off: "Desactivados",
-  Actions: "Acciones",
   Search: "Buscar",
   "Search options": "Buscar opciones",
   "Search…": "Buscar…",
@@ -95,7 +124,6 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "In group": "En el grupo",
   "Not in group": "Sin asignar",
   "Selections stay saved while you search.": "Las selecciones se conservan mientras buscas.",
-  "No students found": "No se encontraron alumnos",
   "Try another name or filter.": "Prueba con otro nombre o filtro.",
   "Loading options…": "Cargando opciones…",
   Done: "Listo",
@@ -125,18 +153,14 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   Method: "Método",
   Hours: "Horas",
   Student: "Alumno",
-  Students: "Alumnos",
   student: "alumno",
-  students: "alumnos",
   Group: "Grupo",
-  Groups: "Grupos",
   group: "grupo",
   groups: "grupos",
   class: "clase",
   classes: "clases",
   record: "registro",
   records: "registros",
-  of: "de",
   Attendance: "Asistencia",
   Outstanding: "Pendiente",
   Total: "Total",
@@ -185,8 +209,6 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
     "Un alumno ya tiene un registro de clase en esta fecha. Revisa Historial antes de guardar.",
   "That backup is larger than the 5 MB safety limit.": "Ese respaldo supera el límite de seguridad de 5 MB.",
   "The selected file is not valid JSON.": "El archivo seleccionado no es un JSON válido.",
-
-  // Authentication and account
   "Welcome back": "Te damos la bienvenida",
   "Sign in to continue managing your classes.": "Inicia sesión para seguir administrando tus clases.",
   "Continue with Google": "Continuar con Google",
@@ -254,8 +276,6 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "Offline — device copy": "Sin conexión — copia del dispositivo",
   "Sync needs attention": "La sincronización necesita atención",
   "Couldn’t sign out. Please try again.": "No se pudo cerrar la sesión. Inténtalo de nuevo.",
-
-  // Cloud states
   "Loading your private workspace…": "Cargando tu espacio privado…",
   "Checking your secure session…": "Verificando tu sesión segura…",
   "Cloud workspace unavailable": "El espacio en la nube no está disponible",
@@ -276,8 +296,6 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "Move records online": "Mover registros a la nube",
   "Moving records…": "Moviendo registros…",
   "Start with an empty cloud workspace": "Comenzar con un espacio vacío en la nube",
-
-  // Dashboard
   "Dashboard filters": "Filtros del panel",
   "Selected month": "Mes seleccionado",
   "As of": "Al día",
@@ -301,15 +319,9 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "Student snapshot": "Resumen del alumno",
   "Selected student details": "Detalles del alumno seleccionado",
   "Select a student": "Selecciona un alumno",
-  "No data": "Sin datos",
   "Balance due": "Saldo pendiente",
   Balance: "Saldo",
-  "On track": "Al corriente",
-  "Needs attention": "Necesita atención",
   "Latest feedback": "Comentarios recientes",
-  "Last class": "Última clase",
-  "Next class": "Próxima clase",
-  "View all": "Ver los",
   Showing: "Mostrando",
   "No feedback yet.": "Aún no hay comentarios.",
   "No notes yet.": "Aún no hay notas.",
@@ -323,8 +335,6 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "Add a student in Setup to see their snapshot.": "Agrega un alumno en Configuración para ver su resumen.",
   "Collections – Last 8 weeks (MXN)": "Cobros – Últimas 8 semanas (MXN)",
   "Collections – Last 6 months (MXN)": "Cobros – Últimos 6 meses (MXN)",
-
-  // Setup
   "Keep groups, students, and pricing in one dependable place.":
     "Mantén grupos, alumnos y precios en un solo lugar confiable.",
   "Add student": "Agregar alumno",
@@ -341,7 +351,6 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   Missing: "Faltante",
   "No students found": "No se encontraron alumnos",
   "Try another filter or add your first student.": "Prueba otro filtro o agrega tu primer alumno.",
-  Grade: "Grado",
   Subject: "Materia",
   "Schedule / room": "Horario / salón",
   "Sessions / month": "Sesiones / mes",
@@ -391,7 +400,6 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   Archive: "Archivar",
   "Archive student": "Archivar alumno",
   "Permanently delete": "Eliminar permanentemente",
-  "Remove local copy": "Eliminar copia local",
   "Keep them": "Conservarlos",
   "Restore backup": "Restaurar respaldo",
   "JSON backups contain personal, grade, attendance, and payment information in readable text. Keep them in a private, protected location.":
@@ -403,20 +411,13 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "The student becomes inactive while grade, attendance, and payment history stays available.":
     "El alumno queda inactivo, pero su historial de calificaciones, asistencia y pagos permanece disponible.",
   "Groups with assigned students cannot be deleted.": "No se pueden eliminar grupos que tengan alumnos asignados.",
-  "This removes only the legacy browser copy on this device. Your signed-in cloud workspace remains available.":
-    "Esto elimina únicamente la copia anterior del navegador en este dispositivo. Tu espacio en la nube permanece disponible.",
   "This cannot be undone without a JSON backup.": "Esto no se puede deshacer sin un respaldo JSON.",
-
-  // Grades
   "Attendance and grades, together after every class.": "Asistencia y calificaciones, juntas después de cada clase.",
-  Record: "Registrar",
   Gradebook: "Libro de calificaciones",
   "Progress views": "Vistas de progreso",
   "Class to record": "Clase a registrar",
   "Custom class…": "Clase personalizada…",
-  "Hide details": "Ocultar detalles",
   "Change class": "Cambiar clase",
-  "Start time": "Hora de inicio",
   "Assessment (optional)": "Evaluación (opcional)",
   "e.g. Quiz 1": "p. ej., Cuestionario 1",
   "Clear scores": "Borrar puntuaciones",
@@ -425,8 +426,6 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
     "Asigna alumnos activos a este grupo y vuelve para registrar su progreso.",
   "Class progress roster": "Lista de progreso de la clase",
   "Optional note": "Nota opcional",
-  "Class summary": "Resumen de la clase",
-  Students: "Alumnos",
   "Average score": "Puntuación promedio",
   "Score missing": "Sin puntuación",
   "Everyone is here!": "¡Todos están aquí!",
@@ -435,10 +434,8 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "Unsaved changes": "Cambios sin guardar",
   "Everything is up to date": "Todo está actualizado",
   "Save class progress": "Guardar progreso de la clase",
-  Period: "Periodo",
   "Search students": "Buscar alumnos",
   "Add assessment": "Agregar evaluación",
-  Average: "Promedio",
   "No grades for this period": "No hay calificaciones en este periodo",
   "Add an assessment once, then enter scores directly in the gradebook.":
     "Agrega una evaluación una vez y captura las puntuaciones directamente en el libro.",
@@ -455,8 +452,6 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "All attendance": "Toda la asistencia",
   "Click any date to open that class roster and edit attendance.":
     "Haz clic en una fecha para abrir la lista de esa clase y editar la asistencia.",
-  "Individual students": "Alumnos individuales",
-  "Choose group": "Elegir grupo",
   "Not recorded": "Sin registrar",
   "Progress saved for": "Progreso guardado para",
   "Record scores and feedback without retyping student details.":
@@ -500,22 +495,15 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "On time": "A tiempo",
   Late: "Tarde",
   Excused: "Justificado",
-
-  // Class log
-  "New class": "Nueva clase",
-  History: "Historial",
   "Class Log views": "Vistas del registro de clases",
   "Class details": "Detalles de la clase",
   Class: "Clase",
   "Balances calculated through": "Saldos calculados hasta",
   "Class date": "Fecha de la clase",
-  "Choose a group": "Elige un grupo",
   "Class status": "Estado de la clase",
-  Scheduled: "Programada",
   Completed: "Completada",
   Cancelled: "Cancelada",
   "Advance payment": "Pago anticipado",
-  "Save class": "Guardar clase",
   "Mark all present": "Marcar a todos presentes",
   "Mark all paid": "Marcar a todos como pagados",
   "Class roster": "Lista de la clase",
@@ -525,8 +513,6 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "This group has no active students": "Este grupo no tiene alumnos activos",
   "Add active students in Setup, or choose another group.":
     "Agrega alumnos activos en Configuración o elige otro grupo.",
-  Present: "Presente",
-  Absent: "Ausente",
   Charge: "Cargo",
   "Amount paid": "Monto pagado",
   "Payment date": "Fecha de pago",
@@ -534,11 +520,9 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "More details": "Más detalles",
   "Reference and notes": "Referencia y notas",
   "Payment reference": "Referencia del pago",
-  "Review before saving": "Revisar antes de guardar",
   "One row will be saved per student.": "Se guardará una fila por alumno.",
   "Attendance summary": "Resumen de asistencia",
   "Payment summary": "Resumen de pagos",
-  // Tracking
   Tracking: "Seguimiento",
   "Tracking views": "Vistas de seguimiento",
   "Review grades, attendance, and payments for students and groups.":
@@ -548,7 +532,6 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "This month": "Este mes",
   "Last 30 days": "Últimos 30 días",
   "All records": "Todos los registros",
-  "Search students or groups": "Buscar alumnos o grupos",
   "Search students or groups…": "Buscar alumnos o grupos…",
   "Export Excel": "Exportar Excel",
   Advanced: "Avanzado",
@@ -587,7 +570,6 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "Class collection summary": "Resumen de cobro de la clase",
   "Student summary": "Resumen del alumno",
   "Assessment summary": "Resumen de la tarea",
-  "Average grade": "Calificación promedio",
   "Best result": "Mejor resultado",
   "Lowest result": "Peor resultado",
   "Graded assignments": "Tareas evaluadas",
@@ -601,7 +583,6 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "No data": "Sin datos",
   Good: "Bien",
   "At risk": "En riesgo",
-  "Low attendance": "Baja asistencia",
   "Recorded classes": "Clases registradas",
   "Calculated from present and absent records.": "Calculada con registros presentes y ausentes.",
   "Period status": "Estado del periodo",
@@ -634,12 +615,10 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "Collected vs. projection": "Cobrado vs. proyección",
   "Payment analytics": "Análisis de pagos",
   "Payment chart": "Gráfica de pagos",
-  Projection: "Proyección",
   Gap: "Diferencia",
   "Pending overall": "Pendientes generales",
   "Up to date": "Al día",
   "Collected vs. pending": "Cobrado vs. pendiente",
-  Collected: "Cobrado",
   "Total generated": "Total generado",
   "Payment details": "Detalle de pagos",
   Amount: "Importe",
@@ -692,18 +671,14 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "This student already has a record on one of these dates. Edit it in History instead.":
     "Este alumno ya tiene un registro en una de estas fechas. Edítalo en Historial.",
   "Record an advance payment": "Registrar un pago anticipado",
-  "Choose a student": "Elige un alumno",
   "Choose a method": "Elige un método",
   "Future classes": "Clases futuras",
-  "Add class": "Agregar clase",
   "Allocated payment": "Pago asignado",
   "Future class date": "Fecha de la clase futura",
   "Remove future class": "Eliminar clase futura",
   "Total received": "Total recibido",
-  "Edit class record": "Editar registro de clase",
   "Calculated charge, status, and outstanding balance update automatically.":
     "El cargo, el estado y el saldo pendiente se actualizan automáticamente.",
-  "Save changes": "Guardar cambios",
   "This student already has a class record on that date.": "Este alumno ya tiene un registro de clase en esa fecha.",
   "Complete the required fields and resolve the payment warning before saving.":
     "Completa los campos obligatorios y resuelve la advertencia de pago antes de guardar.",
@@ -715,7 +690,6 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "Filter by payment status": "Filtrar por estado de pago",
   "All class statuses": "Todos los estados de clase",
   "All payment statuses": "Todos los estados de pago",
-  "Class history": "Historial de clases",
   "No matching class records": "No hay registros de clase que coincidan",
   "Try clearing one or more filters.": "Prueba limpiar uno o más filtros.",
   "Clear filters": "Limpiar filtros",
@@ -729,16 +703,12 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "Date needed": "Falta fecha",
   "Amount needed": "Falta monto",
   "Future payment date": "Fecha de pago futura",
-  Pending: "Pendiente",
   Partial: "Parcial",
   "Paid in advance": "Pagado por adelantado",
-  Paid: "Pagado",
   "Choose a valid class date.": "Elige una fecha de clase válida.",
   "Hours cannot be negative.": "Las horas no pueden ser negativas.",
   "This group has no active students.": "Este grupo no tiene alumnos activos.",
   "Choose a group.": "Elige un grupo.",
-
-  // Redesigned application shell and dashboard
   "Hibi home": "Inicio de Hibi",
   "Hibi cat reading": "Gato de Hibi leyendo",
   More: "Más",
@@ -752,7 +722,6 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "No classes logged for today": "No hay clases registradas para hoy",
   "Record a group or individual class when you're ready.": "Registra una clase grupal o individual cuando quieras.",
   "Record a group or individual class when you’re ready.": "Registra una clase grupal o individual cuando quieras.",
-  "Create class": "Crear clase",
   "Active groups": "Grupos activos",
   Average: "Promedio",
   "Pending payments": "Pagos pendientes",
@@ -763,16 +732,13 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "Little by little, your students are doing amazing! 💚": "¡Poco a poco, tus alumnos lo están haciendo increíble! 💚",
   "Every class, note, and small improvement adds up.": "Cada clase, nota y pequeño avance cuenta.",
   "View all": "Ver todo",
-
   "This week you are doing great. Your classes make an impact and your students keep growing.":
     "Esta semana vas con todo. Tus clases generan impacto y tus alumnos siguen creciendo.",
   "Dashboard period": "Periodo del panel",
-  Weekly: "Semanal",
   Monthly: "Mensual",
   Yearly: "Anual",
   "Today’s classes": "Clases de hoy",
   "students expected": "alumnos esperados",
-  "Next class": "Siguiente clase",
   Confirmed: "Confirmada",
   "View all my classes today": "Ver todas mis clases de hoy",
   "No classes scheduled for today": "No hay clases programadas para hoy",
@@ -862,19 +828,14 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "Low attendance": "Asistencia baja",
   "Missing work": "Trabajo faltante",
   "Needs attention": "Necesita atención",
-  New: "Nuevo",
-
-  // Redesigned students and groups
   "Keep profiles, enrollment, progress, and balances together.":
     "Mantén juntos los perfiles, inscripciones, avances y saldos.",
   "Search students, parents, or groups": "Buscar alumnos, tutores o grupos",
-  Enrollment: "Inscripción",
   "Individual, groups, or both": "Clases individuales, grupos o ambas",
   "Individual classes": "Clases individuales",
   "No schedule": "Sin horario",
   "No groups match.": "No hay grupos que coincidan.",
   "Parent / tutor": "Padre, madre o tutor",
-  Individual: "Individual",
   "Individual + group": "Individual y grupal",
   "Group student": "Alumno de grupo",
   "Student details": "Detalle del alumno",
@@ -902,11 +863,8 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "Open any group to see its members, schedule, progress, and balances.":
     "Abre un grupo para ver sus integrantes, horario, progreso y saldos.",
   "Group details": "Detalle del grupo",
-  Members: "Integrantes",
   "Members (": "Integrantes (",
-  Manage: "Administrar",
   "Add students": "Agregar alumnos",
-  "Group schedule": "Horario del grupo",
   "Not scheduled": "Sin horario",
   "No subject set": "Sin materia definida",
   "Record a class": "Registrar una clase",
@@ -929,8 +887,6 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "Schedule not set": "Horario sin definir",
   "Create your first class group.": "Crea tu primer grupo de clase.",
   students: "alumnos",
-
-  // Redesigned classes, payments, and settings
   "Schedule, record, and review group or individual classes.":
     "Programa, registra y revisa clases grupales o individuales.",
   "Individual students": "Alumnos individuales",
@@ -985,8 +941,6 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "Payments & Revenue": "Pagos e ingresos",
   "Track class-by-class collections, balances, advance payments, and both revenue projections.":
     "Controla cobros por clase, saldos, pagos anticipados y ambas proyecciones de ingresos.",
-  Week: "Semana",
-  Month: "Mes",
   "Paid class records": "Registros de clases pagados",
   "Pending balance": "Saldo pendiente",
   "Overdue balance": "Saldo vencido",
@@ -1003,7 +957,6 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "Ideal attendance": "Asistencia ideal",
   "Recent collections": "Cobros recientes",
   "Month start": "Inicio del mes",
-  Today: "Hoy",
   "Month end": "Fin del mes",
   "Ideal · all attend": "Ideal · todos asisten",
   "Recent trend": "Tendencia reciente",
@@ -1047,10 +1000,8 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   Enrollment: "Modalidad",
   "Individual only": "Solo individual",
   "Group classes": "Clases grupales",
-  Groups: "Grupos",
   Match: "Coincidencia",
   Any: "Cualquiera",
-  All: "Todos",
   "Start time": "Hora de inicio",
   "Rates use the student override, then the group rate, then the account default.":
     "Las tarifas usan primero la personalizada del alumno, luego la del grupo y al final la predeterminada de la cuenta.",
@@ -1060,7 +1011,6 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "Upcoming classes": "Próximas clases",
   "The next six weeks from weekly group schedules.":
     "Las próximas seis semanas según los horarios semanales de los grupos.",
-  Weekly: "Semanal",
   Adjusted: "Ajustada",
   Record: "Registrar",
   "No upcoming classes yet": "Aún no hay próximas clases",
@@ -1165,11 +1115,8 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "Records imported safely": "Registros importados de forma segura",
   "Reading…": "Leyendo…",
   "Importing…": "Importando…",
-
-  // Unified Classes workspace
   "Record the current class quickly and simply.":
     "Registra la información de la clase actual de forma rápida y sencilla.",
-  "Next class": "Próxima clase",
   Calendar: "Calendario",
   History: "Historial",
   "New class": "Nueva clase",
@@ -1291,8 +1238,6 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "Enter a valid maximum score.": "Captura un puntaje máximo válido.",
   "Mark this class as cancelled? Existing payments will be preserved.":
     "¿Marcar esta clase como cancelada? Los pagos existentes se conservarán.",
-
-  // Unified Community workspace
   Community: "Comunidad",
   "Manage students and groups in one place, quickly and simply.":
     "Gestiona alumnos y grupos en un solo lugar de forma rápida y sencilla.",

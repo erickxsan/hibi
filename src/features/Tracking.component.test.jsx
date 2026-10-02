@@ -4,6 +4,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import Tracking from "./Tracking";
+import { I18nProvider } from "../i18n/index.jsx";
 
 const state = {
   settings: { asOfDate: "2026-07-25", lowAttendanceThreshold: 0.8 },
@@ -82,6 +83,54 @@ function renderTracking({ notify = vi.fn(), openPage = vi.fn() } = {}) {
 describe("Tracking attendance overview", () => {
   beforeEach(() => {
     window.history.replaceState({}, "", "/");
+  });
+  it("pages a large payment table without changing totals and resets after filtering", async () => {
+    const user = userEvent.setup();
+    const students = Array.from({ length: 55 }, (_, i) => ({
+      ...state.students[0],
+      id: `student-${i}`,
+      code: `S${i}`,
+      fullName: `Person ${i}`,
+    }));
+    const rows = students.map((student, i) => ({
+      ...classRows[0],
+      id: `row-${i}`,
+      studentId: student.id,
+      studentName: student.fullName,
+    }));
+    render(<Tracking state={{ ...state, students }} derived={{ classLogRows: rows }} actions={{}} />);
+    await user.click(screen.getByRole("tab", { name: "Payments", exact: true }));
+    const table = screen.getByRole("table");
+    expect(within(table).getAllByRole("row")).toHaveLength(26);
+    expect(screen.getAllByText(/5,500\.00/).length).toBeGreaterThan(0);
+    await user.click(screen.getByRole("button", { name: "Next page", exact: true }));
+    expect(within(table).queryByText("Person 0")).not.toBeInTheDocument();
+    expect(within(table).getByText("Person 25")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Next page", exact: true }));
+    expect(within(table).getAllByRole("row")).toHaveLength(6);
+    expect(screen.getByRole("button", { name: "Next page", exact: true })).toBeDisabled();
+    await user.type(screen.getByRole("textbox", { name: "Search students or groups" }), "Person 0");
+    expect(within(table).getByText("Person 0")).toBeInTheDocument();
+    expect(within(table).getAllByRole("row")).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: "Next page", exact: true })).not.toBeInTheDocument();
+  });
+  it("preserves user class names in Spanish attendance signals and payment selectors", async () => {
+    const user = userEvent.setup();
+    localStorage.setItem("hibi:language:v1", "es");
+    const rows = classRows.map((row) => ({ ...row, classTitle: "Home", groupName: "Home" }));
+    render(
+      <I18nProvider>
+        <Tracking state={state} derived={{ classLogRows: rows }} actions={{}} />
+      </I18nProvider>,
+    );
+    await user.click(screen.getByRole("tab", { name: "Asistencia" }));
+    expect(screen.getByText(/Home.*50%/)).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Pagos" }));
+    await user.click(screen.getByRole("button", { name: "Desglose", exact: true }));
+    await user.click(screen.getByRole("button", { name: "Clase", exact: true }));
+    const classSelector = screen.getByRole("combobox", { name: "Clase", exact: true });
+    expect(classSelector).toHaveTextContent("Home");
+    expect(classSelector).not.toHaveTextContent("Inicio");
   });
 
   it("opens the global P/A overview and preserves the existing breakdown", async () => {
@@ -184,4 +233,21 @@ describe("Tracking attendance overview", () => {
     await user.click(within(screen.getByRole("group", { name: "Scope" })).getByRole("button", { name: "Overview" }));
     expect(generatedValue()).toHaveTextContent("$450");
   });
+});
+
+it("supports roving keyboard focus and links the active tracking panel", async () => {
+  render(<Tracking state={state} derived={{ gradeRows: state.grades, classLogRows: classRows }} actions={{}} />);
+  const grades = screen.getByRole("tab", { name: "Grades" });
+  grades.focus();
+  const user = userEvent.setup();
+  await user.keyboard("{ArrowRight}");
+  const attendance = screen.getByRole("tab", { name: "Attendance" });
+  expect(attendance).toHaveFocus();
+  expect(attendance).toHaveAttribute("tabindex", "0");
+  expect(grades).toHaveAttribute("tabindex", "-1");
+  expect(screen.getByRole("tabpanel")).toHaveAttribute("aria-labelledby", attendance.id);
+  await user.keyboard("{End}");
+  expect(screen.getByRole("tab", { name: "Payments" })).toHaveFocus();
+  await user.keyboard("{Home}");
+  expect(grades).toHaveFocus();
 });

@@ -505,7 +505,7 @@ export async function verifyManifest({
   envelopes,
   manifest,
   minimumRevision = 0,
-  expectedPreviousRoot,
+  expectedPreviousRoot = undefined,
   cryptoApi = globalThis.crypto,
 }) {
   if (!manifest || manifest.workspaceCryptoId !== workspaceCryptoId) {
@@ -571,7 +571,7 @@ export async function wrapMasterKey({
   const ciphertext = await cryptoApi.subtle.encrypt(
     { name: "AES-GCM", iv: nonce, additionalData: aad, tagLength: 128 },
     key,
-    asBytes(masterKey),
+    asBytes(masterKey).slice(),
   );
   return { wrapperVersion: 1, keyVersion, nonce: toBase64Url(nonce), wrappedKey: toBase64Url(ciphertext) };
 }
@@ -611,6 +611,7 @@ export async function unwrapMasterKey({ wrapper, wrappingSecret, workspaceCrypto
   }
 }
 
+/** @returns {import("../contracts").CryptoSession} */
 export function createCryptoSession({ ownerId, workspaceCryptoId, masterKey, keyVersion = 1, method }) {
   const secret = new Uint8Array(asBytes(masterKey));
   let active = true;

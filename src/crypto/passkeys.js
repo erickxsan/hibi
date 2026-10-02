@@ -62,42 +62,46 @@ export async function registerPasskey({
   requirePasskeyEnvironment({ credentials, PublicKeyCredentialApi, origin, cryptoApi });
   const wrapperId = cryptoApi.randomUUID();
   const prfSalt = randomBytes(32, cryptoApi);
-  const credential = await credentials.create({
-    publicKey: {
-      challenge: asArrayBuffer(randomBytes(32, cryptoApi)),
-      rp: { id: HIBI_RP_ID, name: "Hibi" },
-      user: {
-        id: asArrayBuffer(new TextEncoder().encode(user.id)),
-        name: user.email || user.id,
-        displayName: user.email || "Hibi user",
+  const credential = /** @type {PublicKeyCredential & { response: AuthenticatorAttestationResponse }} */ (
+    await credentials.create({
+      publicKey: {
+        challenge: asArrayBuffer(randomBytes(32, cryptoApi)),
+        rp: { id: HIBI_RP_ID, name: "Hibi" },
+        user: {
+          id: asArrayBuffer(new TextEncoder().encode(user.id)),
+          name: user.email || user.id,
+          displayName: user.email || "Hibi user",
+        },
+        pubKeyCredParams: [
+          { type: "public-key", alg: -7 },
+          { type: "public-key", alg: -257 },
+        ],
+        authenticatorSelection: { residentKey: "required", userVerification: "required" },
+        attestation: "none",
+        timeout: 120000,
+        excludeCredentials: existingCredentialIds.map((id) => ({
+          type: "public-key",
+          id: asArrayBuffer(fromBase64Url(id)),
+        })),
+        extensions: { prf: { eval: { first: asArrayBuffer(prfSalt) } } },
       },
-      pubKeyCredParams: [
-        { type: "public-key", alg: -7 },
-        { type: "public-key", alg: -257 },
-      ],
-      authenticatorSelection: { residentKey: "required", userVerification: "required" },
-      attestation: "none",
-      timeout: 120000,
-      excludeCredentials: existingCredentialIds.map((id) => ({
-        type: "public-key",
-        id: asArrayBuffer(fromBase64Url(id)),
-      })),
-      extensions: { prf: { eval: { first: asArrayBuffer(prfSalt) } } },
-    },
-  });
+    })
+  );
   if (!credential) throw new WorkspaceCryptoError("Passkey registration was cancelled.", { code: "passkey_cancelled" });
   let secret = optionalPrfResult(credential);
   if (!secret) {
-    const assertion = await credentials.get({
-      publicKey: {
-        challenge: asArrayBuffer(randomBytes(32, cryptoApi)),
-        rpId: HIBI_RP_ID,
-        allowCredentials: [{ type: "public-key", id: credential.rawId }],
-        userVerification: "required",
-        timeout: 120000,
-        extensions: { prf: { eval: { first: asArrayBuffer(prfSalt) } } },
-      },
-    });
+    const assertion = /** @type {PublicKeyCredential} */ (
+      await credentials.get({
+        publicKey: {
+          challenge: asArrayBuffer(randomBytes(32, cryptoApi)),
+          rpId: HIBI_RP_ID,
+          allowCredentials: [{ type: "public-key", id: credential.rawId }],
+          userVerification: "required",
+          timeout: 120000,
+          extensions: { prf: { eval: { first: asArrayBuffer(prfSalt) } } },
+        },
+      })
+    );
     secret = prfResult(assertion);
   }
   const wrapped = await wrapMasterKey({ masterKey, wrappingSecret: secret, workspaceCryptoId, wrapperId, cryptoApi });
@@ -123,22 +127,24 @@ export async function unlockWithPasskey({
 }) {
   requirePasskeyEnvironment({ credentials, PublicKeyCredentialApi, origin, cryptoApi });
   const salt = fromBase64Url(wrapper.prfSalt);
-  const assertion = await credentials.get({
-    publicKey: {
-      challenge: asArrayBuffer(randomBytes(32, cryptoApi)),
-      rpId: HIBI_RP_ID,
-      allowCredentials: [
-        {
-          type: "public-key",
-          id: asArrayBuffer(fromBase64Url(wrapper.credentialId)),
-          transports: wrapper.transports || undefined,
-        },
-      ],
-      userVerification: "required",
-      timeout: 120000,
-      extensions: { prf: { eval: { first: asArrayBuffer(salt) } } },
-    },
-  });
+  const assertion = /** @type {PublicKeyCredential} */ (
+    await credentials.get({
+      publicKey: {
+        challenge: asArrayBuffer(randomBytes(32, cryptoApi)),
+        rpId: HIBI_RP_ID,
+        allowCredentials: [
+          {
+            type: "public-key",
+            id: asArrayBuffer(fromBase64Url(wrapper.credentialId)),
+            transports: wrapper.transports || undefined,
+          },
+        ],
+        userVerification: "required",
+        timeout: 120000,
+        extensions: { prf: { eval: { first: asArrayBuffer(salt) } } },
+      },
+    })
+  );
   if (!assertion) throw new WorkspaceCryptoError("Passkey unlock was cancelled.", { code: "passkey_cancelled" });
   if (toBase64Url(assertion.rawId) !== wrapper.credentialId) {
     throw new WorkspaceCryptoError("The passkey response did not match the selected key.");
@@ -163,22 +169,24 @@ export async function rewrapPasskey({
 }) {
   requirePasskeyEnvironment({ credentials, PublicKeyCredentialApi, origin, cryptoApi });
   const salt = fromBase64Url(wrapper.prfSalt);
-  const assertion = await credentials.get({
-    publicKey: {
-      challenge: asArrayBuffer(randomBytes(32, cryptoApi)),
-      rpId: HIBI_RP_ID,
-      allowCredentials: [
-        {
-          type: "public-key",
-          id: asArrayBuffer(fromBase64Url(wrapper.credentialId)),
-          transports: wrapper.transports || undefined,
-        },
-      ],
-      userVerification: "required",
-      timeout: 120000,
-      extensions: { prf: { eval: { first: asArrayBuffer(salt) } } },
-    },
-  });
+  const assertion = /** @type {PublicKeyCredential} */ (
+    await credentials.get({
+      publicKey: {
+        challenge: asArrayBuffer(randomBytes(32, cryptoApi)),
+        rpId: HIBI_RP_ID,
+        allowCredentials: [
+          {
+            type: "public-key",
+            id: asArrayBuffer(fromBase64Url(wrapper.credentialId)),
+            transports: wrapper.transports || undefined,
+          },
+        ],
+        userVerification: "required",
+        timeout: 120000,
+        extensions: { prf: { eval: { first: asArrayBuffer(salt) } } },
+      },
+    })
+  );
   if (!assertion || toBase64Url(assertion.rawId) !== wrapper.credentialId) {
     throw new WorkspaceCryptoError("The selected passkey could not authorize key rotation.");
   }

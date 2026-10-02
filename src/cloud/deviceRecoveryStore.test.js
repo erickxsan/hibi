@@ -154,6 +154,21 @@ describe("device recovery store", () => {
     expect(JSON.stringify(raw)).not.toContain("Private Student");
   });
 
+  it("atomically refuses shared-device clearing when the account has an unsynced mutation", async () => {
+    const indexedDb = new IDBFactory();
+    const store = createDeviceRecoveryStore(indexedDb, globalThis.crypto);
+    const workspace = { state: createStarterState(), versions: {}, revision: 1 };
+    const mutation = { operationId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", patch: {}, expectedVersions: {} };
+    await store.stageMutation({ ownerId: "owner", workspace, mutation });
+    const reopened = createDeviceRecoveryStore(indexedDb, globalThis.crypto);
+    await expect(reopened.purgeAccount("owner", { preservePending: true })).rejects.toThrow("pending change");
+    expect(await reopened.listMutations("owner")).toHaveLength(1);
+    expect(await reopened.loadWorkspaceCache("owner")).toMatchObject({ revision: 1 });
+    await reopened.completeMutation("owner", mutation.operationId);
+    await reopened.purgeAccount("owner", { preservePending: true });
+    expect(await reopened.list("owner")).toEqual([]);
+    expect(await reopened.loadWorkspaceCache("owner")).toBeNull();
+  });
   it("purges only the selected account from copies, cache, outbox, and keys", async () => {
     const indexedDb = new IDBFactory();
     const store = createDeviceRecoveryStore(indexedDb, globalThis.crypto);

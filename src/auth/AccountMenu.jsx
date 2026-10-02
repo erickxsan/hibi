@@ -1,3 +1,4 @@
+import { useI18n } from "../i18n/index.jsx";
 import { useEffect, useId, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, ChevronDown, Cloud, CloudOff, LogOut } from "lucide-react";
 import "./auth.css";
@@ -17,6 +18,7 @@ function initialFromEmail(email) {
 }
 
 export function AccountMenu({ email, syncStatus = "synced", syncMessage, signingOut = false, onSignOut }) {
+  const { t: uiT } = useI18n();
   const [open, setOpen] = useState(false);
   const [signOutError, setSignOutError] = useState("");
   const [localSigningOut, setLocalSigningOut] = useState(false);
@@ -68,7 +70,7 @@ export function AccountMenu({ email, syncStatus = "synced", syncMessage, signing
         className="account-menu-trigger"
         type="button"
         onClick={() => setOpen((current) => !current)}
-        aria-label={`Account menu for ${email || "current account"}`}
+        aria-label={uiT("Account menu for {p0}", { p0: email || "current account" })}
         aria-expanded={open}
         aria-controls={panelId}
       >
@@ -76,7 +78,7 @@ export function AccountMenu({ email, syncStatus = "synced", syncMessage, signing
           {initialFromEmail(email)}
         </span>
         <span className="account-trigger-copy">
-          <span className="account-email">{email || "Account"}</span>
+          <span className="account-email">{email || uiT("Account")}</span>
           <span className={`account-sync-inline is-${syncStatus}`}>
             <span aria-hidden="true" />
             {status.label}
@@ -86,14 +88,14 @@ export function AccountMenu({ email, syncStatus = "synced", syncMessage, signing
       </button>
 
       {open ? (
-        <section id={panelId} className="account-menu-panel" aria-label="Account options">
+        <section id={panelId} className="account-menu-panel" aria-label={uiT("Account options")}>
           <div className="account-menu-heading">
             <span className="account-avatar account-avatar-large" aria-hidden="true">
               {initialFromEmail(email)}
             </span>
             <div>
-              <span>Signed in as</span>
-              <strong>{email || "Your account"}</strong>
+              <span>{uiT("Signed in as")}</span>
+              <strong>{email || uiT("Your account")}</strong>
             </div>
           </div>
 
@@ -118,7 +120,7 @@ export function AccountMenu({ email, syncStatus = "synced", syncMessage, signing
             disabled={busy || !onSignOut}
           >
             <LogOut aria-hidden="true" size={18} strokeWidth={1.9} />
-            {busy ? "Signing out…" : "Sign out"}
+            {busy ? uiT("Signing out…") : uiT("Sign out")}
           </button>
         </section>
       ) : null}

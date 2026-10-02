@@ -1,3 +1,5 @@
+const EMPTY_ROWS = Object.freeze([]);
+import { useI18n } from "../i18n/index.jsx";
 import { useEffect, useMemo, useState } from "react";
 import {
   BarChart3,
@@ -61,6 +63,7 @@ const PAYMENT_CHART_ITEMS = [
   { value: "projection", label: "Collected vs. projection" },
 ];
 
+/** @param {string} value @param {Intl.DateTimeFormatOptions} [options] */
 function formatDate(value, options = { day: "2-digit", month: "short", year: "numeric" }) {
   if (!value) return "—";
   return new Intl.DateTimeFormat(getUiLocale(), options).format(new Date(`${value}T12:00:00`));
@@ -115,18 +118,34 @@ function downloadExcel(filename, title, rows) {
 }
 
 function TrackingTabs({ value, onChange }) {
+  const { t: uiT } = useI18n();
   return (
-    <div className="tracking-tabs" role="tablist" aria-label="Tracking views">
+    <div className="tracking-tabs" role="tablist" aria-label={uiT("Tracking views")}>
       {TAB_ITEMS.map((item) => (
         <button
           key={item.value}
           type="button"
           role="tab"
+          id={`tracking-tab-${item.value}`}
+          aria-controls={`tracking-panel-${item.value}`}
+          tabIndex={value === item.value ? 0 : -1}
+          onKeyDown={(event) => {
+            const index = TAB_ITEMS.findIndex((tab) => tab.value === value);
+            let next;
+            if (event.key === "ArrowRight") next = (index + 1) % TAB_ITEMS.length;
+            if (event.key === "ArrowLeft") next = (index + TAB_ITEMS.length - 1) % TAB_ITEMS.length;
+            if (event.key === "Home") next = 0;
+            if (event.key === "End") next = TAB_ITEMS.length - 1;
+            if (next === undefined) return;
+            event.preventDefault();
+            onChange(TAB_ITEMS[next].value);
+            document.getElementById(`tracking-tab-${TAB_ITEMS[next].value}`)?.focus();
+          }}
           aria-selected={value === item.value}
           className={value === item.value ? "active" : ""}
           onClick={() => onChange(item.value)}
         >
-          {item.label}
+          {uiT(item.label)}
         </button>
       ))}
     </div>
@@ -134,10 +153,11 @@ function TrackingTabs({ value, onChange }) {
 }
 
 function ModeSwitch({ value, onChange, items, label = "View by" }) {
+  const { t: uiT } = useI18n();
   return (
     <div className="tracking-mode">
-      <strong>{label}</strong>
-      <div role="group" aria-label={label}>
+      <strong>{uiT(label)}</strong>
+      <div role="group" aria-label={uiT(label)}>
         {items.map((item) => (
           <button
             key={item.value}
@@ -145,10 +165,10 @@ function ModeSwitch({ value, onChange, items, label = "View by" }) {
             className={value === item.value ? "active" : ""}
             aria-pressed={value === item.value}
             disabled={item.disabled}
-            title={item.disabled ? "Create a group in Community to use this view" : undefined}
+            title={item.disabled ? uiT("Create a group in Community to use this view") : undefined}
             onClick={() => onChange(item.value)}
           >
-            {item.label}
+            {uiT(item.label)}
           </button>
         ))}
       </div>
@@ -157,49 +177,61 @@ function ModeSwitch({ value, onChange, items, label = "View by" }) {
 }
 
 function TrackingSelect({ label, value, onChange, children, searchable = false }) {
+  const { t: uiT } = useI18n();
   return (
     <label className="tracking-select">
-      <strong>{label}</strong>
-      <Select value={value} onChange={onChange} searchable={searchable}>
+      <strong>{uiT(label)}</strong>
+      <Select aria-label={uiT(label)} value={value} onChange={onChange} searchable={searchable}>
         {children}
       </Select>
     </label>
   );
 }
 
-function Metric({ icon: Icon, label, value, note, tone = "green" }) {
+function Metric({ icon: Icon, label, value, note = undefined, tone = "green" }) {
+  const { t: uiT } = useI18n();
   return (
     <div className={`tracking-metric ${tone}`}>
       <span>
         <Icon size={24} aria-hidden="true" />
       </span>
       <div>
-        <small>{label}</small>
+        <small>{uiT(label)}</small>
         <strong>{value}</strong>
-        {note ? <em>{note}</em> : null}
+        {note ? <em>{uiT(note)}</em> : null}
       </div>
     </div>
   );
 }
 
 function MetricStrip({ title, children }) {
+  const { t: uiT } = useI18n();
   return (
     <section className="tracking-summary" data-onboarding-tour="tracking">
-      <h2>{title}</h2>
+      <h2>{uiT(title)}</h2>
       <div>{children}</div>
     </section>
   );
 }
 
-function TrendChart({ title, series, valueFormatter = percent, maximum, threshold, footer, className = "" }) {
+function TrendChart({
+  title,
+  series,
+  valueFormatter = percent,
+  maximum = undefined,
+  threshold = undefined,
+  footer = undefined,
+  className = "",
+}) {
+  const { t: uiT } = useI18n();
   if (!series.length)
     return (
       <div className={`tracking-chart ${className}`.trim()}>
-        <h3>{title}</h3>
+        <h3>{uiT(title)}</h3>
         <EmptyState
           icon={BarChart3}
-          title="No trend yet"
-          description="The chart will appear after records are saved in this period."
+          title={uiT("No trend yet")}
+          description={uiT("The chart will appear after records are saved in this period.")}
         />
       </div>
     );
@@ -218,8 +250,8 @@ function TrendChart({ title, series, valueFormatter = percent, maximum, threshol
   const area = `${line} L${points.at(-1).x} ${height - padding.bottom} L${points[0].x} ${height - padding.bottom} Z`;
   return (
     <div className={`tracking-chart ${className}`.trim()}>
-      <h3>{title}</h3>
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={title}>
+      <h3>{uiT(title)}</h3>
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={uiT(title)}>
         <g className="tracking-grid">
           {[0, 0.25, 0.5, 0.75, 1].map((ratio) => (
             <line
@@ -267,18 +299,19 @@ function TrendChart({ title, series, valueFormatter = percent, maximum, threshol
 }
 
 function DistributionChart({ items }) {
+  const { t: uiT } = useI18n();
   const max = Math.max(1, ...items.map((item) => item.value));
   return (
     <div className="tracking-chart tracking-distribution">
-      <h3>Grade distribution</h3>
+      <h3>{uiT("Grade distribution")}</h3>
       <div>
         {items.map((item) => (
-          <span key={item.label}>
+          <span key={uiT(item.label)}>
             <i>
               <b className={item.tone} style={{ height: `${Math.max(5, (item.value / max) * 100)}%` }} />
             </i>
             <strong>{item.value}</strong>
-            <small>{item.label}</small>
+            <small>{uiT(item.label)}</small>
           </span>
         ))}
       </div>
@@ -286,12 +319,13 @@ function DistributionChart({ items }) {
   );
 }
 
-function InsightPanel({ title, insights, footer }) {
+function InsightPanel({ title, insights, footer = undefined }) {
+  const { t: uiT } = useI18n();
   return (
     <aside className="tracking-side-card">
       <h3>
         <Lightbulb size={20} aria-hidden="true" />
-        {title}
+        {uiT(title)}
       </h3>
       <ul>
         {insights.map((insight, index) => {
@@ -311,17 +345,18 @@ function InsightPanel({ title, insights, footer }) {
   );
 }
 
-function RecentPanel({ title, rows, renderRow, footer }) {
+function RecentPanel({ title, rows, renderRow, footer = undefined }) {
+  const { t: uiT } = useI18n();
   return (
     <aside className="tracking-side-card tracking-recent">
       <h3>
         <CalendarDays size={19} aria-hidden="true" />
-        {title}
+        {uiT(title)}
       </h3>
       {rows.length ? (
         <div>{rows.map(renderRow)}</div>
       ) : (
-        <p className="tracking-empty-copy">No matching records in this period.</p>
+        <p className="tracking-empty-copy">{uiT("No matching records in this period.")}</p>
       )}
       {footer}
     </aside>
@@ -329,9 +364,10 @@ function RecentPanel({ title, rows, renderRow, footer }) {
 }
 
 function RelatedClassButton({ sessionKey, onOpen }) {
+  const { t: uiT } = useI18n();
   return (
     <IconButton
-      label="View related class"
+      label={uiT("View related class")}
       icon={MoreHorizontal}
       disabled={!sessionKey}
       onClick={() => onOpen(sessionKey)}
@@ -340,18 +376,61 @@ function RelatedClassButton({ sessionKey, onOpen }) {
 }
 
 function StudentCell({ student }) {
+  const { t: uiT } = useI18n();
   return (
     <span className="tracking-person">
       <StudentAvatar avatarId={student?.avatarId} name={student?.fullName} size="tiny" decorative />
       <span>
-        <strong>{student?.fullName || "Unknown student"}</strong>
+        <strong>{student?.fullName || uiT("Unknown student")}</strong>
         <small>{student?.code || ""}</small>
       </span>
     </span>
   );
 }
 
+function useTablePagination(rows) {
+  const [page, setPage] = useState(1);
+  const pageSize = 25;
+  const pages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const currentPage = Math.min(page, pages);
+  useEffect(() => setPage(1), [rows]);
+  return {
+    rows: rows.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    page: currentPage,
+    pages,
+    setPage,
+  };
+}
+
+function TablePagination({ pagination }) {
+  const { t: uiT } = useI18n();
+  if (pagination.pages <= 1) return null;
+  return (
+    <div className="tracking-table-pagination">
+      <span role="status">
+        {uiT("Page")} {pagination.page} / {pagination.pages}
+      </span>
+      <Button
+        aria-label={uiT("Previous page")}
+        disabled={pagination.page <= 1}
+        onClick={() => pagination.setPage(pagination.page - 1)}
+      >
+        {uiT("Previous")}
+      </Button>
+      <Button
+        aria-label={uiT("Next page")}
+        disabled={pagination.page >= pagination.pages}
+        onClick={() => pagination.setPage(pagination.page + 1)}
+      >
+        {uiT("Next")}
+      </Button>
+    </div>
+  );
+}
+
 function GradeView({ data, mode, onOpenClass }) {
+  const { t: uiT } = useI18n();
+  const pagination = useTablePagination(data.tableRows);
   const insights = [
     {
       icon: TrendingUp,
@@ -379,34 +458,34 @@ function GradeView({ data, mode, onOpenClass }) {
   return (
     <div className="tracking-content-grid">
       <main>
-        <MetricStrip title={mode === "student" ? "Student summary" : "Assessment summary"}>
-          <Metric icon={TrendingUp} label="Average grade" value={percent(data.average)} />
-          <Metric icon={Star} label="Best result" value={percent(data.best)} />
-          <Metric icon={TrendingDown} label="Lowest result" value={percent(data.worst)} tone="red" />
-          <Metric icon={UsersRound} label="Graded assignments" value={data.gradedCount} tone="blue" />
-          <Metric icon={UserRound} label="Not graded" value={data.missingCount} tone="orange" />
+        <MetricStrip title={mode === "student" ? uiT("Student summary") : uiT("Assessment summary")}>
+          <Metric icon={TrendingUp} label={uiT("Average grade")} value={percent(data.average)} />
+          <Metric icon={Star} label={uiT("Best result")} value={percent(data.best)} />
+          <Metric icon={TrendingDown} label={uiT("Lowest result")} value={percent(data.worst)} tone="red" />
+          <Metric icon={UsersRound} label={uiT("Graded assignments")} value={data.gradedCount} tone="blue" />
+          <Metric icon={UserRound} label={uiT("Not graded")} value={data.missingCount} tone="orange" />
         </MetricStrip>
         {mode === "student" ? (
-          <TrendChart title="Grade evolution" series={data.series} />
+          <TrendChart title={uiT("Grade evolution")} series={data.series} />
         ) : (
           <DistributionChart items={data.distribution} />
         )}
-        <section className="tracking-table-shell tracking-table-grades" aria-label="Grade details">
+        <section className="tracking-table-shell tracking-table-grades" aria-label={uiT("Grade details")}>
           <table>
             <thead>
               <tr>
-                {mode === "group" ? <th>Student</th> : <th>Assignment</th>}
-                <th className="tracking-col-date">Date</th>
-                <th>Grade</th>
-                <th className="tracking-col-secondary">Percentage</th>
-                <th>Status</th>
+                {mode === "group" ? <th>{uiT("Student")}</th> : <th>{uiT("Assignment")}</th>}
+                <th className="tracking-col-date">{uiT("Date")}</th>
+                <th>{uiT("Grade")}</th>
+                <th className="tracking-col-secondary">{uiT("Percentage")}</th>
+                <th>{uiT("Status")}</th>
                 <th>
-                  <span className="sr-only">Actions</span>
+                  <span className="sr-only">{uiT("Actions")}</span>
                 </th>
               </tr>
             </thead>
             <tbody>
-              {data.tableRows.map((row) => (
+              {pagination.rows.map((row) => (
                 <tr key={row.id}>
                   {mode === "group" ? (
                     <td>
@@ -423,7 +502,7 @@ function GradeView({ data, mode, onOpenClass }) {
                   </td>
                   <td className="tracking-col-secondary">{percent(row.percentage)}</td>
                   <td>
-                    <StatusBadge tone={row.status.tone}>{row.status.label}</StatusBadge>
+                    <StatusBadge tone={row.status.tone}>{uiT(row.status.label)}</StatusBadge>
                   </td>
                   <td>
                     <RelatedClassButton sessionKey={row.sessionKey} onOpen={onOpenClass} />
@@ -432,19 +511,23 @@ function GradeView({ data, mode, onOpenClass }) {
               ))}
             </tbody>
           </table>
+          <TablePagination pagination={pagination} />
           {!data.tableRows.length ? (
             <EmptyState
               icon={Star}
-              title="No grades found"
-              description="Try another group, student, assessment, or period."
+              title={uiT("No grades found")}
+              description={uiT("Try another group, student, assessment, or period.")}
             />
           ) : null}
         </section>
       </main>
       <aside className="tracking-sidebar">
-        <InsightPanel title={mode === "student" ? "Student insights" : "Assessment insights"} insights={insights} />
+        <InsightPanel
+          title={mode === "student" ? uiT("Student insights") : uiT("Assessment insights")}
+          insights={insights}
+        />
         <RecentPanel
-          title="Latest assignments"
+          title={uiT("Latest assignments")}
           rows={data.tableRows.filter((row) => row.percentage != null).slice(0, 3)}
           renderRow={(row) => (
             <div className="tracking-recent-row" key={`recent-${row.id}`}>
@@ -462,30 +545,31 @@ function GradeView({ data, mode, onOpenClass }) {
 }
 
 function AttendanceOverviewSummary({ data }) {
+  const { t: uiT } = useI18n();
   const rate = data.average == null ? 0 : Math.max(0, Math.min(1, data.average));
   return (
     <section className="attendance-overview-summary" aria-labelledby="attendance-overview-heading">
-      <h2 id="attendance-overview-heading">Attendance summary</h2>
+      <h2 id="attendance-overview-heading">{uiT("Attendance summary")}</h2>
       <div>
         <div
           className="attendance-rate-ring"
           style={{ "--attendance-rate": `${rate * 360}deg` }}
           role="img"
-          aria-label={`Average attendance ${percent(data.average)}`}
+          aria-label={uiT("Average attendance {p0}", { p0: percent(data.average) })}
         >
           <span>
             <strong>{percent(data.average)}</strong>
-            <small>Average attendance</small>
+            <small>{uiT("Average attendance")}</small>
           </span>
         </div>
         <div className="attendance-rate-copy">
-          <p>Calculated from present and absent records.</p>
-          <strong>P / (P + A)</strong>
+          <p>{uiT("Calculated from present and absent records.")}</p>
+          <strong>{uiT("P / (P + A)")}</strong>
         </div>
         <div className="attendance-overview-metrics">
-          <Metric icon={CalendarDays} label="Recorded classes" value={data.sessions} tone="blue" />
-          <Metric icon={UserRoundCheck} label="Present" value={data.present} />
-          <Metric icon={UserRound} label="Absent" value={data.absent} tone="red" />
+          <Metric icon={CalendarDays} label={uiT("Recorded classes")} value={data.sessions} tone="blue" />
+          <Metric icon={UserRoundCheck} label={uiT("Present")} value={data.present} />
+          <Metric icon={UserRound} label={uiT("Absent")} value={data.absent} tone="red" />
         </div>
       </div>
     </section>
@@ -493,18 +577,19 @@ function AttendanceOverviewSummary({ data }) {
 }
 
 function AttendanceCompositionPanel({ data }) {
+  const { t: uiT } = useI18n();
   const presentRatio = data.total ? data.present / data.total : 0;
   const absentRatio = data.total ? data.absent / data.total : 0;
   return (
     <aside className="tracking-side-card attendance-composition" aria-labelledby="attendance-period-heading">
-      <h3 id="attendance-period-heading">Period status</h3>
-      <p>Attendance composition (all records)</p>
+      <h3 id="attendance-period-heading">{uiT("Period status")}</h3>
+      <p>{uiT("Attendance composition (all records)")}</p>
       {data.total ? (
         <>
           <div
             className="attendance-composition-bar"
             role="img"
-            aria-label={`Present ${percent(presentRatio)}, absent ${percent(absentRatio)}`}
+            aria-label={uiT("Present {p0}, absent {p1}", { p0: percent(presentRatio), p1: percent(absentRatio) })}
           >
             <span className="present" style={{ width: `${presentRatio * 100}%` }}>
               {data.present} ({percent(presentRatio)})
@@ -516,7 +601,7 @@ function AttendanceCompositionPanel({ data }) {
           <dl>
             <div>
               <dt>
-                <i className="present" /> Present
+                <i className="present" /> {uiT(" Present")}
               </dt>
               <dd>
                 {data.present} ({percent(presentRatio)})
@@ -524,7 +609,7 @@ function AttendanceCompositionPanel({ data }) {
             </div>
             <div>
               <dt>
-                <i className="absent" /> Absent
+                <i className="absent" /> {uiT(" Absent")}
               </dt>
               <dd>
                 {data.absent} ({percent(absentRatio)})
@@ -532,12 +617,12 @@ function AttendanceCompositionPanel({ data }) {
             </div>
           </dl>
           <footer>
-            <span>Total records</span>
+            <span>{uiT("Total records")}</span>
             <strong>{data.total}</strong>
           </footer>
         </>
       ) : (
-        <p className="tracking-empty-copy">No attendance records to summarize.</p>
+        <p className="tracking-empty-copy">{uiT("No attendance records to summarize.")}</p>
       )}
     </aside>
   );
@@ -548,6 +633,7 @@ function attendanceSignalText(count, singular, plural = singular) {
 }
 
 function AttendanceSignalsPanel({ data }) {
+  const { t: uiT } = useI18n();
   const lowest = data.lowestSessions || [];
   const signals = [
     {
@@ -558,7 +644,7 @@ function AttendanceSignalsPanel({ data }) {
         "student with repeated absences",
         "students with repeated absences",
       ),
-      detail: "They missed 2 or more classes in the period.",
+      detail: uiT("They missed 2 or more classes in the period."),
     },
     {
       icon: UserRoundCheck,
@@ -568,13 +654,13 @@ function AttendanceSignalsPanel({ data }) {
         "student with perfect attendance",
         "students with perfect attendance",
       ),
-      detail: "They did not miss any class in the period.",
+      detail: uiT("They did not miss any class in the period."),
     },
     {
       icon: TrendingUp,
       tone: "green",
       title: attendanceSignalText(data.improvingStudents, "student improving", "students improving"),
-      detail: "Their attendance increased from the previous week.",
+      detail: uiT("Their attendance increased from the previous week."),
     },
     {
       icon: CalendarDays,
@@ -582,23 +668,23 @@ function AttendanceSignalsPanel({ data }) {
       title: "Lowest-attendance classes",
       detail: lowest.length
         ? lowest.map((item) => `${item.title} ${formatTime(item.startTime)} (${percent(item.rate)})`).join(" · ")
-        : "No classes with attendance records in this period.",
+        : uiT("No classes with attendance records in this period."),
     },
   ];
   return (
     <aside className="tracking-side-card attendance-signals" aria-labelledby="attendance-signals-heading">
       <h3 id="attendance-signals-heading">
         <Lightbulb size={20} aria-hidden="true" />
-        Important signals
+        {uiT("Important signals")}
       </h3>
       <ul>
         {signals.map(({ icon: Icon, tone, title, detail }) => (
-          <li className={tone} key={title}>
+          <li className={tone} key={uiT(title)}>
             <span>
               <Icon size={15} aria-hidden="true" />
             </span>
             <p>
-              <strong>{title}</strong>
+              <strong>{uiT(title)}</strong>
               <small>{detail}</small>
             </p>
           </li>
@@ -609,42 +695,47 @@ function AttendanceSignalsPanel({ data }) {
 }
 
 function AttendanceOverview({ data, onOpenClass }) {
+  const { t: uiT } = useI18n();
+  const pagination = useTablePagination(data.tableRows);
   return (
     <div className="tracking-content-grid attendance-overview-grid">
       <main>
         <AttendanceOverviewSummary data={data} />
         <TrendChart
-          title="Attendance evolution by week"
+          title={uiT("Attendance evolution by week")}
           series={data.series}
           maximum={1}
           threshold={data.threshold}
           className="attendance-overview-trend"
           footer={
             <div className="attendance-chart-legend" aria-hidden="true">
-              <span>Attendance</span>
-              <span>Risk threshold ({percent(data.threshold)})</span>
+              <span>{uiT("Attendance")}</span>
+              <span>
+                {uiT("Risk threshold (")}
+                {percent(data.threshold)})
+              </span>
             </div>
           }
         />
         <section className="attendance-follow-up" aria-labelledby="attendance-follow-up-heading">
-          <h3 id="attendance-follow-up-heading">Students requiring follow-up</h3>
-          <div className="tracking-table-shell tracking-table-attendance" aria-label="Attendance details">
+          <h3 id="attendance-follow-up-heading">{uiT("Students requiring follow-up")}</h3>
+          <div className="tracking-table-shell tracking-table-attendance" aria-label={uiT("Attendance details")}>
             <table>
               <thead>
                 <tr>
-                  <th>Student</th>
-                  <th>Group</th>
-                  <th>Attendance</th>
-                  <th className="tracking-col-secondary">Absences</th>
-                  <th className="tracking-col-date">Last class</th>
-                  <th>Status</th>
+                  <th>{uiT("Student")}</th>
+                  <th>{uiT("Group")}</th>
+                  <th>{uiT("Attendance")}</th>
+                  <th className="tracking-col-secondary">{uiT("Absences")}</th>
+                  <th className="tracking-col-date">{uiT("Last class")}</th>
+                  <th>{uiT("Status")}</th>
                   <th>
-                    <span className="sr-only">Actions</span>
+                    <span className="sr-only">{uiT("Actions")}</span>
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {data.tableRows.map((row) => (
+                {pagination.rows.map((row) => (
                   <tr key={row.id}>
                     <td>
                       <StudentCell student={row.student} />
@@ -658,7 +749,7 @@ function AttendanceOverview({ data, onOpenClass }) {
                     </td>
                     <td className="tracking-col-date">{formatDate(row.lastClass)}</td>
                     <td>
-                      <StatusBadge tone={row.status.tone}>{row.status.label}</StatusBadge>
+                      <StatusBadge tone={row.status.tone}>{uiT(row.status.label)}</StatusBadge>
                     </td>
                     <td>
                       <RelatedClassButton sessionKey={row.sessionKey} onOpen={onOpenClass} />
@@ -667,11 +758,12 @@ function AttendanceOverview({ data, onOpenClass }) {
                 ))}
               </tbody>
             </table>
+            <TablePagination pagination={pagination} />
             {!data.tableRows.length ? (
               <EmptyState
                 icon={UserRoundCheck}
-                title="No attendance found"
-                description="No attendance has been recorded in this period."
+                title={uiT("No attendance found")}
+                description={uiT("No attendance has been recorded in this period.")}
               />
             ) : null}
           </div>
@@ -686,6 +778,8 @@ function AttendanceOverview({ data, onOpenClass }) {
 }
 
 function AttendanceView({ data, mode, scope = "breakdown", onOpenClass }) {
+  const { t: uiT } = useI18n();
+  const pagination = useTablePagination(data.tableRows);
   if (scope === "overview") return <AttendanceOverview data={data} onOpenClass={onOpenClass} />;
   const low = data.tableRows.filter((row) => row.rate != null && row.rate < 0.8);
   const highCount = data.tableRows.filter((row) => row.rate != null && row.rate >= 0.9).length;
@@ -715,30 +809,30 @@ function AttendanceView({ data, mode, scope = "breakdown", onOpenClass }) {
   return (
     <div className="tracking-content-grid">
       <main>
-        <MetricStrip title="Attendance summary">
-          <Metric icon={UsersRound} label="Average attendance" value={percent(data.average)} />
-          <Metric icon={CalendarDays} label="Recorded classes" value={data.sessions} />
-          <Metric icon={UserRoundCheck} label="Present" value={data.present} note={`of ${data.total}`} />
-          <Metric icon={UserRound} label="Absent" value={data.absent} note={`of ${data.total}`} tone="orange" />
+        <MetricStrip title={uiT("Attendance summary")}>
+          <Metric icon={UsersRound} label={uiT("Average attendance")} value={percent(data.average)} />
+          <Metric icon={CalendarDays} label={uiT("Recorded classes")} value={data.sessions} />
+          <Metric icon={UserRoundCheck} label={uiT("Present")} value={data.present} note={`of ${data.total}`} />
+          <Metric icon={UserRound} label={uiT("Absent")} value={data.absent} note={`of ${data.total}`} tone="orange" />
         </MetricStrip>
-        <TrendChart title="Attendance evolution by week" series={data.series} />
-        <section className="tracking-table-shell tracking-table-attendance" aria-label="Attendance details">
+        <TrendChart title={uiT("Attendance evolution by week")} series={data.series} />
+        <section className="tracking-table-shell tracking-table-attendance" aria-label={uiT("Attendance details")}>
           <table>
             <thead>
               <tr>
-                {mode === "group" ? <th>Student</th> : <th>Class</th>}
-                <th>Attendance</th>
-                <th className="tracking-col-secondary">Present</th>
-                <th className="tracking-col-secondary">Absences</th>
-                <th className="tracking-col-date">{mode === "group" ? "Last class" : "Date"}</th>
-                <th>Status</th>
+                {mode === "group" ? <th>{uiT("Student")}</th> : <th>{uiT("Class")}</th>}
+                <th>{uiT("Attendance")}</th>
+                <th className="tracking-col-secondary">{uiT("Present")}</th>
+                <th className="tracking-col-secondary">{uiT("Absences")}</th>
+                <th className="tracking-col-date">{mode === "group" ? uiT("Last class") : uiT("Date")}</th>
+                <th>{uiT("Status")}</th>
                 <th>
-                  <span className="sr-only">Actions</span>
+                  <span className="sr-only">{uiT("Actions")}</span>
                 </th>
               </tr>
             </thead>
             <tbody>
-              {data.tableRows.map((row) => (
+              {pagination.rows.map((row) => (
                 <tr key={row.id}>
                   {mode === "group" ? (
                     <td>
@@ -756,7 +850,7 @@ function AttendanceView({ data, mode, scope = "breakdown", onOpenClass }) {
                   <td className={`tracking-col-secondary ${row.absent ? "danger-value" : ""}`.trim()}>{row.absent}</td>
                   <td className="tracking-col-date">{formatDate(row.lastClass || row.classDate)}</td>
                   <td>
-                    <StatusBadge tone={row.status.tone}>{row.status.label}</StatusBadge>
+                    <StatusBadge tone={row.status.tone}>{uiT(row.status.label)}</StatusBadge>
                   </td>
                   <td>
                     <RelatedClassButton sessionKey={row.sessionKey} onOpen={onOpenClass} />
@@ -765,19 +859,20 @@ function AttendanceView({ data, mode, scope = "breakdown", onOpenClass }) {
               ))}
             </tbody>
           </table>
+          <TablePagination pagination={pagination} />
           {!data.tableRows.length ? (
             <EmptyState
               icon={UserRoundCheck}
-              title="No attendance found"
-              description="Try another group, student, or period."
+              title={uiT("No attendance found")}
+              description={uiT("Try another group, student, or period.")}
             />
           ) : null}
         </section>
       </main>
       <aside className="tracking-sidebar">
-        <InsightPanel title="Period insights" insights={insights} />
+        <InsightPanel title={uiT("Period insights")} insights={insights} />
         <RecentPanel
-          title={mode === "group" ? "Attendance below 80%" : "Recent absences"}
+          title={mode === "group" ? uiT("Attendance below 80%") : uiT("Recent absences")}
           rows={low.slice(0, 4)}
           renderRow={(row) => (
             <div className="tracking-recent-row" key={`low-${row.id}`}>
@@ -799,16 +894,19 @@ function AttendanceView({ data, mode, scope = "breakdown", onOpenClass }) {
 }
 
 function PaymentBar({ data }) {
+  const { t: uiT } = useI18n();
   const ratio = data.generated > 0 ? Math.min(1, data.collected / data.generated) : 0;
   return (
     <div className="tracking-payment-chart">
-      <h3>Collected vs. pending</h3>
+      <h3>{uiT("Collected vs. pending")}</h3>
       <div className="payment-chart-labels">
         <span>
-          Collected <strong>{percent(ratio)}</strong>
+          {uiT("Collected ")}
+          <strong>{percent(ratio)}</strong>
         </span>
         <span>
-          Pending <strong>{percent(1 - ratio)}</strong>
+          {uiT("Pending ")}
+          <strong>{percent(1 - ratio)}</strong>
         </span>
       </div>
       <div className="payment-chart-track">
@@ -818,7 +916,8 @@ function PaymentBar({ data }) {
       <div className="payment-chart-values">
         <strong>{money(data.collected)}</strong>
         <span>
-          Total generated <b>{money(data.generated)}</b>
+          {uiT("Total generated ")}
+          <b>{money(data.generated)}</b>
         </span>
         <strong>{money(data.pending)}</strong>
       </div>
@@ -835,6 +934,7 @@ function chartPath(points) {
 }
 
 function PaymentProjectionChart({ data }) {
+  const { t: uiT } = useI18n();
   const width = 760;
   const height = 190;
   const padding = { left: 48, right: 22, top: 18, bottom: 34 };
@@ -861,7 +961,10 @@ function PaymentProjectionChart({ data }) {
       <svg
         viewBox={`0 0 ${width} ${height}`}
         role="img"
-        aria-label={`Collected ${money(data.collected)} versus projected ${money(data.projection)}`}
+        aria-label={uiT("Collected {p0} versus projected {p1}", {
+          p0: money(data.collected),
+          p1: money(data.projection),
+        })}
       >
         <g className="tracking-grid">
           {[0, 0.25, 0.5, 0.75, 1].map((ratio) => (
@@ -885,7 +988,7 @@ function PaymentProjectionChart({ data }) {
           {formatDate(data.projectionStart, { month: "short", day: "numeric" })}
         </text>
         <text className="tracking-axis-label" x={x(data.actualEnd)} y={height - 9} textAnchor="middle">
-          Today
+          {uiT("Today")}
         </text>
         <text className="tracking-axis-label" x={width - padding.right} y={height - 9} textAnchor="end">
           {formatDate(data.projectionEnd, { month: "short", day: "numeric" })}
@@ -896,10 +999,11 @@ function PaymentProjectionChart({ data }) {
 }
 
 function PaymentAnalytics({ data, value, onChange }) {
+  const { t: uiT } = useI18n();
   return (
-    <section className="payment-analytics" aria-label="Payment analytics">
+    <section className="payment-analytics" aria-label={uiT("Payment analytics")}>
       <header>
-        <div className="payment-chart-toggle" role="tablist" aria-label="Payment chart">
+        <div className="payment-chart-toggle" role="tablist" aria-label={uiT("Payment chart")}>
           {PAYMENT_CHART_ITEMS.map((item) => (
             <button
               key={item.value}
@@ -909,26 +1013,26 @@ function PaymentAnalytics({ data, value, onChange }) {
               className={value === item.value ? "active" : ""}
               onClick={() => onChange(item.value)}
             >
-              {item.label}
+              {uiT(item.label)}
             </button>
           ))}
         </div>
         {value === "projection" ? (
           <div className="payment-forecast-values">
             <span className="actual">
-              <small>Actual</small>
+              <small>{uiT("Actual")}</small>
               <strong>{money(data.collected)}</strong>
             </span>
             <span className="projection">
-              <small>Projection</small>
+              <small>{uiT("Projection")}</small>
               <strong>{money(data.projection)}</strong>
             </span>
             <span>
-              <small>Gap</small>
+              <small>{uiT("Gap")}</small>
               <strong>{money(data.projectionGap)}</strong>
             </span>
             <span className="overdue">
-              <small>Overdue</small>
+              <small>{uiT("Overdue")}</small>
               <strong>{money(data.overdue)}</strong>
             </span>
           </div>
@@ -937,13 +1041,15 @@ function PaymentAnalytics({ data, value, onChange }) {
       {value === "projection" ? (
         <PaymentProjectionChart data={data} />
       ) : (
-        <TrendChart title="Payment evolution" series={data.series} valueFormatter={money} />
+        <TrendChart title={uiT("Payment evolution")} series={data.series} valueFormatter={money} />
       )}
     </section>
   );
 }
 
 function PaymentView({ data, mode, scope, chartView, onChartViewChange, onOpenClass }) {
+  const { t: uiT } = useI18n();
+  const pagination = useTablePagination(data.tableRows);
   const pendingRows = data.tableRows.filter(
     (row) => row.pending > 0 || row.status?.label === "Pending" || row.status?.label === "Overdue",
   );
@@ -977,22 +1083,22 @@ function PaymentView({ data, mode, scope, chartView, onChartViewChange, onOpenCl
   return (
     <div className="tracking-content-grid">
       <main>
-        <MetricStrip title={mode === "class" ? "Class collection summary" : "Payment summary"}>
-          <Metric icon={CircleDollarSign} label="Generated value" value={money(data.generated)} />
-          <Metric icon={CheckCircle2} label="Amount collected" value={money(data.collected)} />
-          <Metric icon={Clock3} label="Pending amount" value={money(data.pending)} tone="orange" />
+        <MetricStrip title={mode === "class" ? uiT("Class collection summary") : uiT("Payment summary")}>
+          <Metric icon={CircleDollarSign} label={uiT("Generated value")} value={money(data.generated)} />
+          <Metric icon={CheckCircle2} label={uiT("Amount collected")} value={money(data.collected)} />
+          <Metric icon={Clock3} label={uiT("Pending amount")} value={money(data.pending)} tone="orange" />
           {mode === "class" ? (
             <>
               <Metric
                 icon={UsersRound}
-                label="Students paid"
+                label={uiT("Students paid")}
                 value={data.paidStudents}
                 note={`of ${data.totalStudents}`}
                 tone="blue"
               />
               <Metric
                 icon={UserRound}
-                label="Students pending"
+                label={uiT("Students pending")}
                 value={data.pendingStudents}
                 note={`of ${data.totalStudents}`}
                 tone="orange"
@@ -1000,29 +1106,29 @@ function PaymentView({ data, mode, scope, chartView, onChartViewChange, onOpenCl
             </>
           ) : (
             <>
-              <Metric icon={CalendarDays} label="Paid classes" value={data.paidClasses} tone="blue" />
-              <Metric icon={CalendarDays} label="Unpaid classes" value={data.unpaidClasses} tone="orange" />
+              <Metric icon={CalendarDays} label={uiT("Paid classes")} value={data.paidClasses} tone="blue" />
+              <Metric icon={CalendarDays} label={uiT("Unpaid classes")} value={data.unpaidClasses} tone="orange" />
             </>
           )}
         </MetricStrip>
         <PaymentBar data={data} />
         {mode === "class" ? null : <PaymentAnalytics data={data} value={chartView} onChange={onChartViewChange} />}
-        <section className="tracking-table-shell tracking-table-payments" aria-label="Payment details">
+        <section className="tracking-table-shell tracking-table-payments" aria-label={uiT("Payment details")}>
           <table>
             <thead>
               <tr>
-                {mode === "student" ? <th>Class</th> : <th>Student</th>}
-                <th>{aggregateByStudent ? "Paid" : "Amount"}</th>
-                {aggregateByStudent ? <th>Pending</th> : null}
-                <th>Payment status</th>
-                <th className="tracking-col-date">Payment date</th>
+                {mode === "student" ? <th>{uiT("Class")}</th> : <th>{uiT("Student")}</th>}
+                <th>{aggregateByStudent ? uiT("Paid") : uiT("Amount")}</th>
+                {aggregateByStudent ? <th>{uiT("Pending")}</th> : null}
+                <th>{uiT("Payment status")}</th>
+                <th className="tracking-col-date">{uiT("Payment date")}</th>
                 <th>
-                  <span className="sr-only">Actions</span>
+                  <span className="sr-only">{uiT("Actions")}</span>
                 </th>
               </tr>
             </thead>
             <tbody>
-              {data.tableRows.map((row) => (
+              {pagination.rows.map((row) => (
                 <tr key={row.id}>
                   {mode === "student" ? (
                     <td>
@@ -1039,7 +1145,7 @@ function PaymentView({ data, mode, scope, chartView, onChartViewChange, onOpenCl
                     <td className={row.pending ? "warning-value" : ""}>{money(row.pending)}</td>
                   ) : null}
                   <td>
-                    <StatusBadge tone={row.status.tone}>{row.status.label}</StatusBadge>
+                    <StatusBadge tone={row.status.tone}>{uiT(row.status.label)}</StatusBadge>
                   </td>
                   <td className="tracking-col-date">{formatDate(row.lastPayment || row.paymentDate)}</td>
                   <td>
@@ -1049,19 +1155,20 @@ function PaymentView({ data, mode, scope, chartView, onChartViewChange, onOpenCl
               ))}
             </tbody>
           </table>
+          <TablePagination pagination={pagination} />
           {!data.tableRows.length ? (
             <EmptyState
               icon={CircleDollarSign}
-              title="No payments found"
-              description="Try another group, student, class, or period."
+              title={uiT("No payments found")}
+              description={uiT("Try another group, student, class, or period.")}
             />
           ) : null}
         </section>
       </main>
       <aside className="tracking-sidebar">
-        <InsightPanel title="Collection summary" insights={insights} />
+        <InsightPanel title={uiT("Collection summary")} insights={insights} />
         <RecentPanel
-          title={scope === "overview" ? "Pending overall" : "Pending in this view"}
+          title={scope === "overview" ? uiT("Pending overall") : uiT("Pending in this view")}
           rows={pendingRows.slice(0, 4)}
           renderRow={(row) => (
             <div className="tracking-recent-row" key={`pending-${row.id}`}>
@@ -1075,11 +1182,19 @@ function PaymentView({ data, mode, scope, chartView, onChartViewChange, onOpenCl
   );
 }
 
-export default function Tracking({ state = {}, derived = {}, actions = {}, openPage, intent, clearIntent }) {
+export default function Tracking({
+  state = undefined,
+  derived = undefined,
+  actions = undefined,
+  openPage,
+  intent,
+  clearIntent,
+}) {
+  const { t: uiT } = useI18n();
   const groups = (state.groups || []).filter((group) => group.status !== "Inactive");
   const students = (state.students || []).filter((student) => student.status !== "Inactive");
-  const gradeRows = derived.gradeRows || state.grades || [];
-  const classRows = derived.classLogRows || derived.classLog || state.classLog || [];
+  const gradeRows = derived.gradeRows || state.grades || EMPTY_ROWS;
+  const classRows = derived.classLogRows || derived.classLog || state.classLog || EMPTY_ROWS;
   const [tab, setTab] = useState("grades");
   const [period, setPeriod] = useState("month");
   const [search, setSearch] = useState("");
@@ -1167,51 +1282,58 @@ export default function Tracking({ state = {}, derived = {}, actions = {}, openP
   }, [assessmentKey, assessments]);
   const gradeData = useMemo(
     () =>
-      buildGradeTracking(reportState, gradeRows, {
-        mode: gradeMode,
-        groupId,
-        studentId,
-        assessmentKey,
-        range,
-        search,
-        classRows,
-      }),
-    [assessmentKey, classRows, gradeMode, gradeRows, groupId, range, search, reportState, studentId],
+      tab === "grades"
+        ? buildGradeTracking(reportState, gradeRows, {
+            mode: gradeMode,
+            groupId,
+            studentId,
+            assessmentKey,
+            range,
+            search,
+            classRows,
+          })
+        : null,
+    [tab, assessmentKey, classRows, gradeMode, gradeRows, groupId, range, search, reportState, studentId],
   );
   const activeAttendanceMode = attendanceScope === "overview" ? "overview" : attendanceMode;
   const attendanceData = useMemo(
     () =>
-      buildAttendanceTracking(reportState, classRows, {
-        mode: activeAttendanceMode,
-        groupId,
-        studentId,
-        range,
-        search,
-      }),
-    [activeAttendanceMode, classRows, groupId, range, reportState, search, studentId],
+      tab === "attendance"
+        ? buildAttendanceTracking(reportState, classRows, {
+            mode: activeAttendanceMode,
+            groupId,
+            studentId,
+            range,
+            search,
+          })
+        : null,
+    [tab, activeAttendanceMode, classRows, groupId, range, reportState, search, studentId],
   );
   const activePaymentMode = paymentScope === "overview" ? "overview" : paymentMode;
   const overviewProjection = period === "month" ? derived.dashboard?.recentProjection : undefined;
   const paymentBase = useMemo(
     () =>
-      buildPaymentTracking(reportState, classRows, {
-        mode: activePaymentMode,
-        groupId,
-        studentId,
-        sessionKey: "",
-        range,
-        search,
-        projectionTotal: activePaymentMode === "overview" ? overviewProjection : undefined,
-      }),
-    [activePaymentMode, classRows, groupId, overviewProjection, range, reportState, search, studentId],
+      tab === "payments"
+        ? buildPaymentTracking(reportState, classRows, {
+            mode: activePaymentMode,
+            groupId,
+            studentId,
+            sessionKey: "",
+            range,
+            search,
+            projectionTotal: activePaymentMode === "overview" ? overviewProjection : undefined,
+          })
+        : null,
+    [tab, activePaymentMode, classRows, groupId, overviewProjection, range, reportState, search, studentId],
   );
   useEffect(() => {
+    if (tab !== "payments" || !paymentBase) return;
     if (!paymentBase.sessions.some((item) => item.key === sessionKey))
       setSessionKey(paymentBase.sessions[0]?.key || "");
-  }, [paymentBase.sessions, sessionKey]);
+  }, [tab, paymentBase, sessionKey]);
   const paymentData = useMemo(() => {
     // Only class mode changes the report when a session is selected.
-    if (activePaymentMode !== "class" || !sessionKey) return paymentBase;
+    if (tab !== "payments" || activePaymentMode !== "class" || !sessionKey) return paymentBase;
     return buildPaymentTracking(reportState, classRows, {
       mode: activePaymentMode,
       groupId,
@@ -1219,20 +1341,9 @@ export default function Tracking({ state = {}, derived = {}, actions = {}, openP
       sessionKey,
       range,
       search,
-      projectionTotal: activePaymentMode === "overview" ? overviewProjection : undefined,
+      projectionTotal: undefined,
     });
-  }, [
-    activePaymentMode,
-    classRows,
-    groupId,
-    overviewProjection,
-    paymentBase,
-    range,
-    search,
-    sessionKey,
-    reportState,
-    studentId,
-  ]);
+  }, [tab, activePaymentMode, classRows, groupId, paymentBase, range, search, sessionKey, reportState, studentId]);
 
   const activeMode = tab === "grades" ? gradeMode : tab === "attendance" ? activeAttendanceMode : activePaymentMode;
   const modeItems =
@@ -1303,32 +1414,33 @@ export default function Tracking({ state = {}, derived = {}, actions = {}, openP
         <header className="tracking-heading">
           <div>
             <h1>
-              Tracking <span aria-hidden="true">🌿</span>
+              {uiT("Tracking ")}
+              <span aria-hidden="true">🌿</span>
             </h1>
-            <p>Review grades, attendance, and payments for students and groups.</p>
+            <p>{uiT("Review grades, attendance, and payments for students and groups.")}</p>
           </div>
           <div className="tracking-top-actions">
-            <TrackingSelect label="Period" value={period} onChange={(event) => setPeriod(event.target.value)}>
+            <TrackingSelect label={uiT("Period")} value={period} onChange={(event) => setPeriod(event.target.value)}>
               {PERIOD_ITEMS.map((item) => (
                 <option key={item.value} value={item.value}>
-                  {item.label}
+                  {uiT(item.label)}
                 </option>
               ))}
             </TrackingSelect>
             <label className="tracking-search">
               <Search size={18} aria-hidden="true" />
-              <span className="sr-only">Search students or groups</span>
+              <span className="sr-only">{uiT("Search students or groups")}</span>
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search students or groups…"
+                placeholder={uiT("Search students or groups…")}
               />
             </label>
             <Button icon={FileSpreadsheet} onClick={exportVisible}>
-              Export Excel
+              {uiT("Export Excel")}
             </Button>
             <Button icon={Settings2} onClick={openDateSettings}>
-              Report date
+              {uiT("Report date")}
             </Button>
           </div>
         </header>
@@ -1338,12 +1450,15 @@ export default function Tracking({ state = {}, derived = {}, actions = {}, openP
             <span>
               <CalendarDays size={18} aria-hidden="true" />
               <span>
-                <strong>Historical view</strong>
-                <small>Data calculated through {formatDate(reportDate)}.</small>
+                <strong>{uiT("Historical view")}</strong>
+                <small>
+                  {uiT("Data calculated through ")}
+                  {formatDate(reportDate)}.
+                </small>
               </span>
             </span>
             <Button icon={RotateCcw} onClick={() => setHistoricalDate("")}>
-              Back to today
+              {uiT("Back to today")}
             </Button>
           </div>
         ) : null}
@@ -1351,19 +1466,19 @@ export default function Tracking({ state = {}, derived = {}, actions = {}, openP
           {tab === "payments" ? (
             <>
               <ModeSwitch
-                label="Scope"
+                label={uiT("Scope")}
                 value={paymentScope}
                 onChange={changePaymentScope}
                 items={PAYMENT_SCOPE_ITEMS}
               />
               {paymentScope === "overview" ? (
-                <span className="tracking-scope-summary">All groups, students, and classes</span>
+                <span className="tracking-scope-summary">{uiT("All groups, students, and classes")}</span>
               ) : (
                 <>
                   <ModeSwitch value={paymentMode} onChange={setPaymentMode} items={modeItems} />
                   {useStudentOwner ? (
                     <TrackingSelect
-                      label="Student"
+                      label={uiT("Student")}
                       value={studentId}
                       onChange={(event) => setStudentId(event.target.value)}
                       searchable
@@ -1376,7 +1491,7 @@ export default function Tracking({ state = {}, derived = {}, actions = {}, openP
                     </TrackingSelect>
                   ) : (
                     <TrackingSelect
-                      label="Group"
+                      label={uiT("Group")}
                       value={groupId}
                       onChange={(event) => setGroupId(event.target.value)}
                       searchable
@@ -1390,7 +1505,7 @@ export default function Tracking({ state = {}, derived = {}, actions = {}, openP
                   )}
                   {paymentMode === "class" ? (
                     <TrackingSelect
-                      label="Class"
+                      label={uiT("Class")}
                       value={sessionKey}
                       onChange={(event) => setSessionKey(event.target.value)}
                       searchable
@@ -1402,7 +1517,7 @@ export default function Tracking({ state = {}, derived = {}, actions = {}, openP
                           </option>
                         ))
                       ) : (
-                        <option value="">No classes</option>
+                        <option value="">{uiT("No classes")}</option>
                       )}
                     </TrackingSelect>
                   ) : null}
@@ -1412,19 +1527,19 @@ export default function Tracking({ state = {}, derived = {}, actions = {}, openP
           ) : tab === "attendance" ? (
             <>
               <ModeSwitch
-                label="Scope"
+                label={uiT("Scope")}
                 value={attendanceScope}
                 onChange={changeAttendanceScope}
                 items={ATTENDANCE_SCOPE_ITEMS}
               />
               {attendanceScope === "overview" ? (
-                <span className="tracking-scope-summary">All groups, students, and classes</span>
+                <span className="tracking-scope-summary">{uiT("All groups, students, and classes")}</span>
               ) : (
                 <>
                   <ModeSwitch value={attendanceMode} onChange={setAttendanceMode} items={modeItems} />
                   {attendanceMode === "student" ? (
                     <TrackingSelect
-                      label="Student"
+                      label={uiT("Student")}
                       value={studentId}
                       onChange={(event) => setStudentId(event.target.value)}
                       searchable
@@ -1437,7 +1552,7 @@ export default function Tracking({ state = {}, derived = {}, actions = {}, openP
                     </TrackingSelect>
                   ) : (
                     <TrackingSelect
-                      label="Group"
+                      label={uiT("Group")}
                       value={groupId}
                       onChange={(event) => setGroupId(event.target.value)}
                       searchable
@@ -1457,7 +1572,7 @@ export default function Tracking({ state = {}, derived = {}, actions = {}, openP
               <ModeSwitch value={activeMode} onChange={setMode} items={modeItems} />
               {useStudentOwner ? (
                 <TrackingSelect
-                  label="Student"
+                  label={uiT("Student")}
                   value={studentId}
                   onChange={(event) => setStudentId(event.target.value)}
                   searchable
@@ -1470,7 +1585,7 @@ export default function Tracking({ state = {}, derived = {}, actions = {}, openP
                 </TrackingSelect>
               ) : (
                 <TrackingSelect
-                  label="Group"
+                  label={uiT("Group")}
                   value={groupId}
                   onChange={(event) => setGroupId(event.target.value)}
                   searchable
@@ -1484,7 +1599,7 @@ export default function Tracking({ state = {}, derived = {}, actions = {}, openP
               )}
               {tab === "grades" && gradeMode === "group" ? (
                 <TrackingSelect
-                  label="Assignment"
+                  label={uiT("Assignment")}
                   value={assessmentKey}
                   onChange={(event) => setAssessmentKey(event.target.value)}
                   searchable
@@ -1496,13 +1611,13 @@ export default function Tracking({ state = {}, derived = {}, actions = {}, openP
                       </option>
                     ))
                   ) : (
-                    <option value="">No assignments</option>
+                    <option value="">{uiT("No assignments")}</option>
                   )}
                 </TrackingSelect>
               ) : null}
               {tab === "payments" && paymentMode === "class" ? (
                 <TrackingSelect
-                  label="Class"
+                  label={uiT("Class")}
                   value={sessionKey}
                   onChange={(event) => setSessionKey(event.target.value)}
                   searchable
@@ -1514,14 +1629,14 @@ export default function Tracking({ state = {}, derived = {}, actions = {}, openP
                       </option>
                     ))
                   ) : (
-                    <option value="">No classes</option>
+                    <option value="">{uiT("No classes")}</option>
                   )}
                 </TrackingSelect>
               ) : null}
             </>
           )}
         </div>
-        <section role="tabpanel">
+        <section role="tabpanel" id={`tracking-panel-${tab}`} aria-labelledby={`tracking-tab-${tab}`} tabIndex={0}>
           {tab === "grades" ? <GradeView data={gradeData} mode={gradeMode} onOpenClass={openRelatedClass} /> : null}
           {tab === "attendance" ? (
             <AttendanceView
@@ -1546,31 +1661,31 @@ export default function Tracking({ state = {}, derived = {}, actions = {}, openP
       <Drawer
         open={dateSettingsOpen}
         onClose={() => setDateSettingsOpen(false)}
-        title="Report date"
-        description="Choose the last day to include in Tracking."
+        title={uiT("Report date")}
+        description={uiT("Choose the last day to include in Tracking.")}
         size="compact"
         footer={
           <>
-            <Button onClick={() => setDateSettingsOpen(false)}>Cancel</Button>
+            <Button onClick={() => setDateSettingsOpen(false)}>{uiT("Cancel")}</Button>
             <Button
               variant="primary"
               disabled={dateModeDraft === "historical" && !dateDraft}
               onClick={applyDateSettings}
             >
-              Apply date
+              {uiT("Apply date")}
             </Button>
           </>
         }
       >
         <div className="tracking-date-settings">
-          <div className="tracking-date-mode" role="group" aria-label="Reporting date mode">
+          <div className="tracking-date-mode" role="group" aria-label={uiT("Reporting date mode")}>
             <button
               type="button"
               className={dateModeDraft === "automatic" ? "active" : ""}
               aria-pressed={dateModeDraft === "automatic"}
               onClick={() => setDateModeDraft("automatic")}
             >
-              Use today
+              {uiT("Use today")}
             </button>
             <button
               type="button"
@@ -1578,12 +1693,12 @@ export default function Tracking({ state = {}, derived = {}, actions = {}, openP
               aria-pressed={dateModeDraft === "historical"}
               onClick={() => setDateModeDraft("historical")}
             >
-              Choose another date
+              {uiT("Choose another date")}
             </button>
           </div>
           {dateModeDraft === "historical" ? (
             <>
-              <Field label="Show data through">
+              <Field label={uiT("Show data through")}>
                 <Input
                   type="date"
                   max={liveDate}
@@ -1594,9 +1709,9 @@ export default function Tracking({ state = {}, derived = {}, actions = {}, openP
               <div className="tracking-date-note historical">
                 <CalendarDays size={19} aria-hidden="true" />
                 <div>
-                  <strong>Historical preview</strong>
+                  <strong>{uiT("Historical preview")}</strong>
                   <p>
-                    You will see grades, attendance, and payments recorded through{" "}
+                    {uiT("You will see grades, attendance, and payments recorded through")}{" "}
                     <time dateTime={dateDraft}>{formatDate(dateDraft)}</time>.
                   </p>
                 </div>
@@ -1607,9 +1722,10 @@ export default function Tracking({ state = {}, derived = {}, actions = {}, openP
               <CalendarDays size={19} aria-hidden="true" />
               <div>
                 <strong>
-                  Using today: <time dateTime={liveDate}>{formatDate(liveDate)}</time>
+                  {uiT("Using today: ")}
+                  <time dateTime={liveDate}>{formatDate(liveDate)}</time>
                 </strong>
-                <p>Hibi will update this date automatically each day.</p>
+                <p>{uiT("Hibi will update this date automatically each day.")}</p>
               </div>
             </div>
           )}

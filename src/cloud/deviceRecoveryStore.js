@@ -400,9 +400,8 @@ export function createDeviceRecoveryStore(indexedDb = globalThis.indexedDB, cryp
     await done;
   }
 
-  async function purgeAccount(ownerId) {
+  async function purgeAccount(ownerId, { preservePending = false } = {}) {
     if (!ownerId) throw new TypeError("An account ID is required for device purging.");
-    keyPromises.delete(ownerId);
     const database = await openDatabase();
     if (!database) return;
     const transaction = database.transaction([RECOVERY_STORE, CACHE_STORE, OUTBOX_STORE, KEY_STORE], "readwrite");
@@ -412,11 +411,17 @@ export function createDeviceRecoveryStore(indexedDb = globalThis.indexedDB, cryp
     const recoveryRequest = recovery.getAll();
     const outboxRequest = outbox.getAll();
     const [copies, mutations] = await Promise.all([requestResult(recoveryRequest), requestResult(outboxRequest)]);
+    if (preservePending && mutations.some((item) => item.ownerId === ownerId)) {
+      transaction.abort();
+      await done.catch(() => {});
+      throw new Error("Sync every pending change before clearing local copies.");
+    }
     copies.filter((copy) => copy.ownerId === ownerId).forEach((copy) => recovery.delete(copy.id));
     mutations.filter((item) => item.ownerId === ownerId).forEach((item) => outbox.delete(item.id));
     transaction.objectStore(CACHE_STORE).delete(ownerId);
     transaction.objectStore(KEY_STORE).delete(ownerId);
     await done;
+    keyPromises.delete(ownerId);
   }
 
   return {

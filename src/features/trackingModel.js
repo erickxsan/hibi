@@ -1,3 +1,4 @@
+import { moneyDifference, sumMoney, roundMoney } from "../domain/money.js";
 import { addDays, endOfMonth, parseDateOnly, startOfMonth, startOfWeek } from "../domain/dates";
 import { gradeGroupId } from "../domain/semanticIdentity";
 import { classWorkspaceSessionKey } from "./classesWorkspaceModel";
@@ -26,7 +27,7 @@ function rowsByStudent(rows) {
 }
 
 function inclusiveDayCount(start, end) {
-  return Math.max(1, Math.round((parseDateOnly(end) - parseDateOnly(start)) / 86_400_000) + 1);
+  return Math.max(1, Math.round((parseDateOnly(end).getTime() - parseDateOnly(start).getTime()) / 86_400_000) + 1);
 }
 
 function studentGroupIds(student) {
@@ -107,6 +108,15 @@ export function buildGradeTracking(
   gradeRows,
   { mode, groupId, studentId, assessmentKey, range, search = "", classRows = [] },
 ) {
+  const classesByStudentDate = new Map();
+  const classesByStudentGroupDate = new Map();
+  for (const row of classRows) {
+    if (row.classStatus === "Cancelled") continue;
+    const key = `${row.studentId}|${row.classDate}`;
+    const groupKey = `${row.studentId}|${row.groupId}|${row.classDate}`;
+    if (!classesByStudentDate.has(key)) classesByStudentDate.set(key, row);
+    if (!classesByStudentGroupDate.has(groupKey)) classesByStudentGroupDate.set(groupKey, row);
+  }
   const studentsById = new Map((state.students || []).map((student) => [student.id, student]));
   const roster =
     mode === "student"
@@ -135,13 +145,7 @@ export function buildGradeTracking(
             const grade = rows.find((row) => row.studentId === student.id);
             const maximum = grade?.maxScore ?? grade?.maximum ?? assessment.maximum;
             const percentage = finite(grade?.score) && finite(maximum) && maximum > 0 ? grade.score / maximum : null;
-            const relatedClass = classRows.find(
-              (row) =>
-                row.studentId === student.id &&
-                row.groupId === groupId &&
-                row.classDate === assessment.date &&
-                row.classStatus !== "Cancelled",
-            );
+            const relatedClass = classesByStudentGroupDate.get(`${student.id}|${groupId}|${assessment.date}`);
             const sessionKey =
               grade?.classSessionKey ||
               (relatedClass
@@ -168,10 +172,7 @@ export function buildGradeTracking(
             const student = studentsById.get(grade.studentId);
             const maximum = grade.maxScore ?? grade.maximum ?? 0;
             const percentage = finite(grade.score) && finite(maximum) && maximum > 0 ? grade.score / maximum : null;
-            const relatedClass = classRows.find(
-              (row) =>
-                row.studentId === grade.studentId && row.classDate === grade.date && row.classStatus !== "Cancelled",
-            );
+            const relatedClass = classesByStudentDate.get(`${grade.studentId}|${grade.date}`);
             const sessionKey =
               grade.classSessionKey ||
               (relatedClass
@@ -405,8 +406,10 @@ export function buildAttendanceTracking(state, classRows, { mode, groupId, stude
 }
 
 function paymentStatus(row, asOfDate) {
-  const charge = finite(row.charge) ? row.charge : 0;
-  const paid = finite(row.recognizedPaid) ? row.recognizedPaid : finite(row.amountPaid) ? row.amountPaid : 0;
+  const charge = roundMoney(finite(row.charge) ? row.charge : 0);
+  const paid = roundMoney(
+    finite(row.recognizedPaid) ? row.recognizedPaid : finite(row.amountPaid) ? row.amountPaid : 0,
+  );
   if (charge > 0 && paid >= charge) return { label: "Paid", tone: "success" };
   if (row.classDate < asOfDate) return { label: "Overdue", tone: "danger" };
   return { label: "Pending", tone: "warning" };
@@ -463,9 +466,9 @@ export function buildPaymentTracking(
         .filter((student) => matchesSearch([student.fullName, student.code], search))
         .map((student) => {
           const rows = relevantByStudent.get(student.id) || [];
-          const charged = sum(rows, (row) => row.charge);
-          const paid = sum(rows, (row) => row.recognizedPaid);
-          const pending = Math.max(charged - paid, 0);
+          const charged = sumMoney(rows, (row) => row.charge);
+          const paid = sumMoney(rows, (row) => row.recognizedPaid);
+          const pending = moneyDifference(charged, paid);
           const lastPayment =
             rows
               .map((row) => row.paymentDate)
@@ -499,15 +502,15 @@ export function buildPaymentTracking(
           paid: finite(row.recognizedPaid) ? row.recognizedPaid : 0,
           pending: finite(row.outstanding)
             ? row.outstanding
-            : Math.max((row.charge || 0) - (row.recognizedPaid || 0), 0),
+            : moneyDifference(row.charge || 0, row.recognizedPaid || 0),
           paymentDate: row.paymentDate || "",
           status: paymentStatus(row, asOfDate),
           sessionKey: classWorkspaceSessionKey({ ...row, studentId: row.groupId ? "" : row.studentId }),
         }))
         .sort((a, b) => b.classDate.localeCompare(a.classDate));
-  const generated = sum(relevant, (row) => row.charge);
-  const collected = sum(relevant, (row) => row.recognizedPaid);
-  const pending = Math.max(generated - collected, 0);
+  const generated = sumMoney(relevant, (row) => row.charge);
+  const collected = sumMoney(relevant, (row) => row.recognizedPaid);
+  const pending = moneyDifference(generated, collected);
   const paidStudents = new Set(
     relevant.filter((row) => paymentStatus(row, asOfDate).label === "Paid").map((row) => row.studentId),
   ).size;
@@ -517,10 +520,10 @@ export function buildPaymentTracking(
   const paidClasses = relevant.filter((row) => paymentStatus(row, asOfDate).label === "Paid").length;
   const unpaidClasses = relevant.length - paidClasses;
   const overdueRows = relevant.filter((row) => paymentStatus(row, asOfDate).label === "Overdue");
-  const overdue = sum(overdueRows, (row) =>
+  const overdue = sumMoney(overdueRows, (row) =>
     finite(row.outstanding)
       ? row.outstanding
-      : Math.max((row.charge || 0) - (row.recognizedPaid || row.amountPaid || 0), 0),
+      : moneyDifference(row.charge || 0, row.recognizedPaid || row.amountPaid || 0),
   );
   const daily = new Map();
   for (const row of relevant)
@@ -530,14 +533,14 @@ export function buildPaymentTracking(
     .map(([label, value]) => ({ label, value }));
   let runningCollected = 0;
   const cumulativeSeries = series.map((item) => {
-    runningCollected += item.value;
+    runningCollected = roundMoney(runningCollected + item.value);
     return { ...item, value: runningCollected };
   });
   const projectionEnd =
     range.period === "month" ? endOfMonth(asOfDate) : range.period === "week" ? addDays(range.start, 6) : range.end;
   const elapsedDays = inclusiveDayCount(range.start, asOfDate > projectionEnd ? projectionEnd : asOfDate);
   const totalDays = inclusiveDayCount(range.start, projectionEnd);
-  const paceProjection = collected > 0 ? (collected / elapsedDays) * totalDays : 0;
+  const paceProjection = collected > 0 ? roundMoney((collected / elapsedDays) * totalDays) : 0;
   const projection = Math.max(
     collected,
     finite(projectionTotal) && projectionTotal >= 0 ? projectionTotal : paceProjection,
@@ -559,7 +562,7 @@ export function buildPaymentTracking(
     series,
     cumulativeSeries,
     projection,
-    projectionGap: Math.max(projection - collected, 0),
+    projectionGap: moneyDifference(projection, collected),
     projectionStart: range.start,
     projectionEnd,
     actualEnd: asOfDate,

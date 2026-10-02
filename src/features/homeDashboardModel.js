@@ -1,3 +1,4 @@
+import { roundMoney, sumMoney } from "../domain/money.js";
 import {
   addDays,
   addMonths,
@@ -24,7 +25,7 @@ function sum(items, selector) {
 }
 
 function dayCount(start, end) {
-  return Math.round((parseDateOnly(end) - parseDateOnly(start)) / 86_400_000) + 1;
+  return Math.round((parseDateOnly(end).getTime() - parseDateOnly(start).getTime()) / 86_400_000) + 1;
 }
 
 function yearStart(value) {
@@ -129,7 +130,7 @@ function gradeFor(rows, range, previous = false) {
 }
 
 function collectedFor(rows, range, previous = false) {
-  return sum(
+  return sumMoney(
     rows.filter((row) => inRange(row.paymentDate, range, previous)),
     (row) => row.amountPaid,
   );
@@ -182,11 +183,11 @@ function collectionSeries(rows, asOf, period) {
     const collected =
       window.start > asOf
         ? 0
-        : sum(
+        : sumMoney(
             rows.filter((row) => isDateInRange(row.paymentDate, window.start, window.end)),
             (row) => row.amountPaid,
           );
-    running += collected;
+    running = roundMoney(running + collected);
     return { ...window, collected, value: running };
   });
 }
@@ -219,19 +220,19 @@ function projectedCollections(state, asOf, period, collected) {
   const occurrences = generateScheduledOccurrences(state, addDays(asOf, 1), end).filter(
     (occurrence) => occurrence.status !== "Cancelled" && !occurrence.recorded,
   );
-  const upcomingValue = sum(occurrences, (occurrence) => {
+  const upcomingValue = sumMoney(occurrences, (occurrence) => {
     const hours = finite(occurrence.durationHours)
       ? occurrence.durationHours
       : finite(state.settings?.defaultClassHours)
         ? state.settings.defaultClassHours
         : 0;
-    return sum(rosterForClassSession(state, occurrence), (student) => {
+    return sumMoney(rosterForClassSession(state, occurrence), (student) => {
       const rate = resolveHourlyRate(state, student, occurrence.groupId);
-      return finite(rate) ? hours * rate : 0;
+      return finite(rate) ? roundMoney(hours * rate) : 0;
     });
   });
 
-  return { value: collected + upcomingValue, upcomingClasses: occurrences.length };
+  return { value: roundMoney(collected + upcomingValue), upcomingClasses: occurrences.length };
 }
 
 function collectionsByGroup(rows, range, groupsById, studentsById) {
@@ -248,7 +249,7 @@ function collectionsByGroup(rows, range, groupsById, studentsById) {
       value: 0,
       paymentKeys: new Set(),
     };
-    current.value += row.amountPaid;
+    current.value = roundMoney(current.value + roundMoney(row.amountPaid));
     current.paymentKeys.add(`${row.paymentDate}|${row.paymentReference || row.id || row.studentId || "payment"}`);
     aggregates.set(id, current);
   }

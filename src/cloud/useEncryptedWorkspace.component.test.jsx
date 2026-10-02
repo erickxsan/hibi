@@ -15,7 +15,7 @@ vi.mock("../crypto/index.js", async (importOriginal) => ({
 }));
 const user = { id: "owner" };
 const session = { workspaceCryptoId: "workspace" };
-const security = { wrappers: [] };
+const security = { wrappers: [], clearLocalCopies: vi.fn(async () => {}) };
 const workspace = {
   state: createStarterState(),
   revision: 1,
@@ -59,6 +59,69 @@ beforeEach(() => {
   });
 });
 describe("encrypted offline queue", () => {
+  it("blocks overlapping restores and local purging until the restore completes", async () => {
+    const cloud = renderHook(() => useEncryptedWorkspace(user, session, security));
+    await waitFor(() => expect(cloud.result.current.syncStatus).toBe("saved"));
+    let finishReplace;
+    mocks.repository.replaceWorkspace = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          finishReplace = resolve;
+        }),
+    );
+    let replacing;
+    await act(async () => {
+      replacing = cloud.result.current.persistence.replace(workspace.state);
+    });
+    expect(mocks.repository.replaceWorkspace).toHaveBeenCalledOnce();
+    await expect(cloud.result.current.persistence.replace(workspace.state)).rejects.toThrow("current operation");
+    await expect(cloud.result.current.persistence.encryption.clearLocalCopies()).rejects.toThrow("current operation");
+    await act(async () => {
+      finishReplace({ ...workspace, revision: 2 });
+      await replacing;
+    });
+    expect(cloud.result.current.workspace.revision).toBe(2);
+  });
+  it("waits for a late device write, then blocks further writes while clearing and locking", async () => {
+    const cloud = renderHook(() => useEncryptedWorkspace(user, session, security));
+    await waitFor(() => expect(cloud.result.current.syncStatus).toBe("saved"));
+    let unsubscribe;
+    await act(async () => {
+      unsubscribe = cloud.result.current.persistence.subscribe(() => {});
+    });
+    let finishCache;
+    mocks.store.cacheWorkspace.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishCache = resolve;
+        }),
+    );
+    const receive = mocks.repository.subscribe.mock.calls[0][1];
+    let reception;
+    await act(async () => {
+      reception = receive({ ...workspace, revision: 2 });
+    });
+    let clearing;
+    await act(async () => {
+      clearing = cloud.result.current.persistence.encryption.clearLocalCopies();
+    });
+    expect(security.clearLocalCopies).not.toHaveBeenCalled();
+    await act(async () => {
+      finishCache();
+      await reception;
+      await clearing;
+    });
+    expect(security.clearLocalCopies).toHaveBeenCalledOnce();
+    const before = mocks.store.cacheWorkspace.mock.calls.length;
+    await act(async () => {
+      await receive({ ...workspace, revision: 3 });
+      await cloud.result.current.persistence.retrySync();
+    });
+    expect(mocks.store.cacheWorkspace).toHaveBeenCalledTimes(before);
+    await expect(cloud.result.current.persistence.save(workspace.state)).rejects.toThrow("locked");
+    unsubscribe();
+    cloud.unmount();
+  });
   it("keeps a live integrity error that arrives during an idle outbox check", async () => {
     const cloud = renderHook(() => useEncryptedWorkspace(user, session, security));
     await waitFor(() => expect(cloud.result.current.syncStatus).toBe("saved"));

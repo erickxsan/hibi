@@ -1,3 +1,5 @@
+import { uiText } from "../i18n/index.jsx";
+const EMPTY_ROWS = Object.freeze([]);
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Archive, Download, Pencil, Plus, Trash2, Upload, UsersRound } from "lucide-react";
 import {
@@ -55,6 +57,7 @@ export default function Setup({
   clearIntent,
   registerNavigationBlocker,
 }) {
+  const { t: uiT } = useI18n();
   const { language } = useI18n();
   const [tab, setTab] = useState("students");
   const [search, setSearch] = useState("");
@@ -69,9 +72,9 @@ export default function Setup({
   const studentBaselineRef = useRef(null);
   const groupBaselineRef = useRef(null);
 
-  const groups = state.groups || [];
-  const students = state.students || [];
-  const studentSummaries = derived.studentSummaries || derived.dashboard?.studentSummaries || [];
+  const groups = state.groups || EMPTY_ROWS;
+  const students = state.students || EMPTY_ROWS;
+  const studentSummaries = derived.studentSummaries || derived.dashboard?.studentSummaries || EMPTY_ROWS;
   const summaryById = useMemo(
     () => new Map(studentSummaries.map((student) => [student.id || student.studentId, student])),
     [studentSummaries],
@@ -246,16 +249,16 @@ export default function Setup({
   return (
     <div className="page page-setup">
       <SectionHeading
-        title="Setup"
-        description="Keep groups, students, and pricing in one dependable place."
+        title={uiT("Setup")}
+        description={uiT("Keep groups, students, and pricing in one dependable place.")}
         actions={
           tab === "students" ? (
             <Button variant="primary" icon={Plus} onClick={() => openStudent(EMPTY_STUDENT)}>
-              Add student
+              {uiT("Add student")}
             </Button>
           ) : tab === "groups" ? (
             <Button variant="primary" icon={Plus} onClick={() => openGroup(EMPTY_GROUP)}>
-              Add group
+              {uiT("Add group")}
             </Button>
           ) : null
         }
@@ -264,7 +267,7 @@ export default function Setup({
       <Tabs
         value={tab}
         onChange={changeTab}
-        ariaLabel="Setup sections"
+        ariaLabel={uiT("Setup sections")}
         items={[
           { value: "students", label: "Students" },
           { value: "groups", label: "Groups" },
@@ -277,17 +280,17 @@ export default function Setup({
           <SearchInput
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder={`Search ${tab}`}
+            placeholder={uiT("Search {p0}", { p0: tab })}
           />
           {tab === "students" ? (
             <Select
               value={statusFilter}
               onChange={(event) => setStatusFilter(event.target.value)}
-              aria-label="Filter students by status"
+              aria-label={uiT("Filter students by status")}
             >
-              <option value="all">All statuses</option>
-              <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
+              <option value="all">{uiT("All statuses")}</option>
+              <option value="Active">{uiT("Active")}</option>
+              <option value="Inactive">{uiT("Inactive")}</option>
             </Select>
           ) : null}
           <span className="toolbar-count">
@@ -303,29 +306,29 @@ export default function Setup({
 
       {tab === "students" ? (
         visibleStudents.length ? (
-          <TableShell label="Students">
+          <TableShell label={uiT("Students")}>
             <table className="data-table">
               <thead>
                 <tr>
                   <th scope="col" className="sticky-cell">
-                    Student
+                    {uiT("Student")}
                   </th>
-                  <th scope="col">Group</th>
-                  <th scope="col">Guardian / contact</th>
-                  <th scope="col">Status</th>
+                  <th scope="col">{uiT("Group")}</th>
+                  <th scope="col">{uiT("Guardian / contact")}</th>
+                  <th scope="col">{uiT("Status")}</th>
                   <th scope="col" className="numeric">
-                    Grade
-                  </th>
-                  <th scope="col" className="numeric">
-                    Attendance
+                    {uiT("Grade")}
                   </th>
                   <th scope="col" className="numeric">
-                    Missing
+                    {uiT("Attendance")}
                   </th>
                   <th scope="col" className="numeric">
-                    Outstanding
+                    {uiT("Missing")}
                   </th>
-                  <th scope="col" aria-label="Actions" />
+                  <th scope="col" className="numeric">
+                    {uiT("Outstanding")}
+                  </th>
+                  <th scope="col" aria-label={uiT("Actions")} />
                 </tr>
               </thead>
               <tbody>
@@ -348,11 +351,11 @@ export default function Setup({
                           </div>
                         </div>
                       </th>
-                      <td>{groupById.get(student.groupId)?.name || "Unassigned"}</td>
+                      <td>{groupById.get(student.groupId)?.name || uiT("Unassigned")}</td>
                       <td className="wrap-cell">{student.guardianContact || "—"}</td>
                       <td>
                         <StatusBadge tone={student.status === "Active" ? "success" : "neutral"}>
-                          {student.status}
+                          {uiT(student.status)}
                         </StatusBadge>
                       </td>
                       <td className="numeric">{formatPercent(summary.gradeAverage)}</td>
@@ -362,17 +365,17 @@ export default function Setup({
                       <td>
                         <div className="row-actions">
                           <IconButton
-                            label={`Edit ${student.fullName}`}
+                            label={uiT("Edit {p0}", { p0: student.fullName })}
                             icon={Pencil}
                             onClick={() => openStudent(student)}
                           />
                           <IconButton
-                            label={`Archive ${student.fullName}`}
+                            label={uiT("Archive {p0}", { p0: student.fullName })}
                             icon={Archive}
                             onClick={() => setDeleteTarget({ type: "archive-student", item: student })}
                           />
                           <IconButton
-                            label={`Delete ${student.fullName}`}
+                            label={uiT("Delete {p0}", { p0: student.fullName })}
                             icon={Trash2}
                             onClick={() => setDeleteTarget({ type: "student", item: student })}
                           />
@@ -387,11 +390,11 @@ export default function Setup({
         ) : (
           <EmptyState
             icon={UsersRound}
-            title="No students found"
-            description="Try another filter or add your first student."
+            title={uiT("No students found")}
+            description={uiT("Try another filter or add your first student.")}
             action={
               <Button icon={Plus} onClick={() => openStudent(EMPTY_STUDENT)}>
-                Add student
+                {uiT("Add student")}
               </Button>
             }
           />
@@ -400,27 +403,27 @@ export default function Setup({
 
       {tab === "groups" ? (
         visibleGroups.length ? (
-          <TableShell label="Groups">
+          <TableShell label={uiT("Groups")}>
             <table className="data-table">
               <thead>
                 <tr>
                   <th scope="col" className="sticky-cell">
-                    Group
+                    {uiT("Group")}
                   </th>
-                  <th scope="col">Grade</th>
-                  <th scope="col">Subject</th>
-                  <th scope="col">Schedule / room</th>
+                  <th scope="col">{uiT("Grade")}</th>
+                  <th scope="col">{uiT("Subject")}</th>
+                  <th scope="col">{uiT("Schedule / room")}</th>
                   <th scope="col" className="numeric">
-                    Sessions / month
+                    {uiT("Sessions / month")}
                   </th>
-                  <th scope="col">Assistant / contact</th>
+                  <th scope="col">{uiT("Assistant / contact")}</th>
                   <th scope="col" className="numeric">
-                    Active students
+                    {uiT("Active students")}
                   </th>
                   <th scope="col" className="numeric">
-                    Ideal revenue
+                    {uiT("Ideal revenue")}
                   </th>
-                  <th scope="col" aria-label="Actions" />
+                  <th scope="col" aria-label={uiT("Actions")} />
                 </tr>
               </thead>
               <tbody>
@@ -440,9 +443,13 @@ export default function Setup({
                       <td className="numeric">{formatMxn(summary.idealRevenue)}</td>
                       <td>
                         <div className="row-actions">
-                          <IconButton label={`Edit ${group.name}`} icon={Pencil} onClick={() => openGroup(group)} />
                           <IconButton
-                            label={`Delete ${group.name}`}
+                            label={uiT("Edit {p0}", { p0: group.name })}
+                            icon={Pencil}
+                            onClick={() => openGroup(group)}
+                          />
+                          <IconButton
+                            label={uiT("Delete {p0}", { p0: group.name })}
                             icon={Trash2}
                             onClick={() => setDeleteTarget({ type: "group", item: group })}
                           />
@@ -456,11 +463,11 @@ export default function Setup({
           </TableShell>
         ) : (
           <EmptyState
-            title="No groups found"
-            description="Try another search or add a group."
+            title={uiT("No groups found")}
+            description={uiT("Try another search or add a group.")}
             action={
               <Button icon={Plus} onClick={() => openGroup(EMPTY_GROUP)}>
-                Add group
+                {uiT("Add group")}
               </Button>
             }
           />
@@ -471,11 +478,11 @@ export default function Setup({
         <div className="preferences-layout">
           <form className="preferences-form" onSubmit={saveSettings}>
             <div className="panel-heading">
-              <h2>Class and alert defaults</h2>
-              <p>Changes recalculate charges, balances, and projections immediately.</p>
+              <h2>{uiT("Class and alert defaults")}</h2>
+              <p>{uiT("Changes recalculate charges, balances, and projections immediately.")}</p>
             </div>
             <div className="form-grid two-columns">
-              <Field label="Hourly rate (MXN)" required>
+              <Field label={uiT("Hourly rate (MXN)")} required>
                 <Input
                   type="number"
                   inputMode="decimal"
@@ -487,7 +494,7 @@ export default function Setup({
                   }
                 />
               </Field>
-              <Field label="Default class hours" required>
+              <Field label={uiT("Default class hours")} required>
                 <Input
                   type="number"
                   inputMode="decimal"
@@ -499,7 +506,7 @@ export default function Setup({
                   }
                 />
               </Field>
-              <Field label="Recent projection window" hint="Number of recent weeks">
+              <Field label={uiT("Recent projection window")} hint={uiT("Number of recent weeks")}>
                 <Input
                   type="number"
                   inputMode="numeric"
@@ -511,7 +518,7 @@ export default function Setup({
                   }
                 />
               </Field>
-              <Field label="Low grade threshold">
+              <Field label={uiT("Low grade threshold")}>
                 <Input
                   type="number"
                   inputMode="numeric"
@@ -524,7 +531,7 @@ export default function Setup({
                   }
                 />
               </Field>
-              <Field label="Low attendance threshold">
+              <Field label={uiT("Low attendance threshold")}>
                 <Input
                   type="number"
                   inputMode="numeric"
@@ -540,35 +547,38 @@ export default function Setup({
             </div>
             <div className="form-actions">
               <Button variant="primary" type="submit" disabled={saving}>
-                {saving ? "Saving…" : "Save preferences"}
+                {saving ? uiT("Saving…") : uiT("Save preferences")}
               </Button>
             </div>
           </form>
 
           <section className="data-tools" aria-labelledby="data-tools-title">
             <div className="panel-heading">
-              <h2 id="data-tools-title">Backup and restore</h2>
+              <h2 id="data-tools-title">{uiT("Backup and restore")}</h2>
               <p>
                 {persistenceMode === "cloud"
-                  ? "Your records sync to your private cloud workspace. Export a backup whenever you want an offline copy."
-                  : "Your records stay in this browser unless you export a backup."}
+                  ? uiT(
+                      "Your records sync to your private cloud workspace. Export a backup whenever you want an offline copy.",
+                    )
+                  : uiT("Your records stay in this browser unless you export a backup.")}
               </p>
             </div>
             <p className="privacy-note">
-              JSON backups contain personal, grade, attendance, and payment information in readable text. Keep them in a
-              private, protected location.
+              {uiT(
+                "JSON backups contain personal, grade, attendance, and payment information in readable text. Keep them in a private, protected location.",
+              )}
             </p>
             <div className="stacked-actions">
               <Button icon={Download} onClick={actions.exportJson}>
-                Download JSON backup
+                {uiT("Download JSON backup")}
               </Button>
               <Button icon={Upload} onClick={() => importRef.current?.click()}>
-                Restore JSON backup
+                {uiT("Restore JSON backup")}
               </Button>
               <input ref={importRef} type="file" accept="application/json,.json" onChange={handleImport} hidden />
               {persistenceMode === "cloud" ? (
                 <Button icon={Trash2} onClick={() => setDeleteTarget({ type: "clear-local" })}>
-                  Remove old local browser copy
+                  {uiT("Remove old local browser copy")}
                 </Button>
               ) : null}
             </div>
@@ -579,15 +589,15 @@ export default function Setup({
       <Drawer
         open={Boolean(studentDraft)}
         onClose={closeStudent}
-        title={studentDraft?.id ? "Edit student" : "Add student"}
-        description="Student indicators are calculated automatically."
+        title={studentDraft?.id ? uiT("Edit student") : uiT("Add student")}
+        description={uiT("Student indicators are calculated automatically.")}
         footer={
           <>
             <Button onClick={closeStudent} disabled={saving}>
-              Cancel
+              {uiT("Cancel")}
             </Button>
             <Button variant="primary" type="submit" form="student-form" disabled={saving}>
-              {saving ? "Saving…" : "Save student"}
+              {saving ? uiT("Saving…") : uiT("Save student")}
             </Button>
           </>
         }
@@ -595,34 +605,34 @@ export default function Setup({
         {studentDraft ? (
           <form id="student-form" className="drawer-form" onSubmit={saveStudent}>
             <div className="form-grid two-columns">
-              <Field label="Student ID" required>
+              <Field label={uiT("Student ID")} required>
                 <Input
                   value={studentDraft.studentCode}
                   onChange={(event) => setStudentDraft({ ...studentDraft, studentCode: event.target.value })}
                 />
               </Field>
-              <Field label="Status">
+              <Field label={uiT("Status")}>
                 <Select
                   value={studentDraft.status}
                   onChange={(event) => setStudentDraft({ ...studentDraft, status: event.target.value })}
                 >
-                  <option>Active</option>
-                  <option>Inactive</option>
+                  <option>{uiT("Active")}</option>
+                  <option>{uiT("Inactive")}</option>
                 </Select>
               </Field>
             </div>
-            <Field label="Full name" required>
+            <Field label={uiT("Full name")} required>
               <Input
                 value={studentDraft.fullName}
                 onChange={(event) => setStudentDraft({ ...studentDraft, fullName: event.target.value })}
               />
             </Field>
-            <Field label="Group" hint="Optional — you can assign this later">
+            <Field label={uiT("Group")} hint={uiT("Optional — you can assign this later")}>
               <Select
                 value={studentDraft.groupId}
                 onChange={(event) => setStudentDraft({ ...studentDraft, groupId: event.target.value })}
               >
-                <option value="">Unassigned / no group</option>
+                <option value="">{uiT("Unassigned / no group")}</option>
                 {groups.map((group) => (
                   <option key={group.id} value={group.id}>
                     {group.name}
@@ -630,7 +640,7 @@ export default function Setup({
                 ))}
               </Select>
             </Field>
-            <Field label="Student phone">
+            <Field label={uiT("Student phone")}>
               <Input
                 type="tel"
                 inputMode="tel"
@@ -639,14 +649,14 @@ export default function Setup({
                 onChange={(event) => setStudentDraft({ ...studentDraft, studentPhone: event.target.value })}
               />
             </Field>
-            <Field label="Guardian / contact">
+            <Field label={uiT("Guardian / contact")}>
               <TextArea
                 rows="3"
                 value={studentDraft.guardianContact}
                 onChange={(event) => setStudentDraft({ ...studentDraft, guardianContact: event.target.value })}
               />
             </Field>
-            <Field label="Important notes">
+            <Field label={uiT("Important notes")}>
               <TextArea
                 rows="4"
                 value={studentDraft.importantNotes}
@@ -660,48 +670,48 @@ export default function Setup({
       <Drawer
         open={Boolean(groupDraft)}
         onClose={closeGroup}
-        title={groupDraft?.id ? "Edit group" : "Add group"}
-        description="Planned monthly sessions drive the ideal revenue projection."
+        title={groupDraft?.id ? uiT("Edit group") : uiT("Add group")}
+        description={uiT("Planned monthly sessions drive the ideal revenue projection.")}
         footer={
           <>
             <Button onClick={closeGroup} disabled={saving}>
-              Cancel
+              {uiT("Cancel")}
             </Button>
             <Button variant="primary" type="submit" form="group-form" disabled={saving}>
-              {saving ? "Saving…" : "Save group"}
+              {saving ? uiT("Saving…") : uiT("Save group")}
             </Button>
           </>
         }
       >
         {groupDraft ? (
           <form id="group-form" className="drawer-form" onSubmit={saveGroup}>
-            <Field label="Group name" required>
+            <Field label={uiT("Group name")} required>
               <Input
                 value={groupDraft.name}
                 onChange={(event) => setGroupDraft({ ...groupDraft, name: event.target.value })}
               />
             </Field>
             <div className="form-grid two-columns">
-              <Field label="Grade">
+              <Field label={uiT("Grade")}>
                 <Input
                   value={groupDraft.grade}
                   onChange={(event) => setGroupDraft({ ...groupDraft, grade: event.target.value })}
                 />
               </Field>
-              <Field label="Subject">
+              <Field label={uiT("Subject")}>
                 <Input
                   value={groupDraft.subject}
                   onChange={(event) => setGroupDraft({ ...groupDraft, subject: event.target.value })}
                 />
               </Field>
             </div>
-            <Field label="Schedule / room">
+            <Field label={uiT("Schedule / room")}>
               <Input
                 value={groupDraft.scheduleRoom}
                 onChange={(event) => setGroupDraft({ ...groupDraft, scheduleRoom: event.target.value })}
               />
             </Field>
-            <Field label="Planned sessions / month">
+            <Field label={uiT("Planned sessions / month")}>
               <Input
                 type="number"
                 inputMode="numeric"
@@ -713,14 +723,14 @@ export default function Setup({
                 }
               />
             </Field>
-            <Field label="Assistant / contact">
+            <Field label={uiT("Assistant / contact")}>
               <TextArea
                 rows="3"
                 value={groupDraft.assistantContact}
                 onChange={(event) => setGroupDraft({ ...groupDraft, assistantContact: event.target.value })}
               />
             </Field>
-            <Field label="Notes">
+            <Field label={uiT("Notes")}>
               <TextArea
                 rows="4"
                 value={groupDraft.notes}
@@ -735,26 +745,28 @@ export default function Setup({
         open={Boolean(deleteTarget)}
         title={
           deleteTarget?.type === "clear-local"
-            ? "Remove the old local copy?"
+            ? uiT("Remove the old local copy?")
             : deleteTarget?.type === "archive-student"
-              ? `Archive ${deleteTarget?.item?.fullName || "student"}?`
-              : `Delete ${deleteTarget?.item?.fullName || deleteTarget?.item?.name || "record"}?`
+              ? uiT("Archive {p0}?", { p0: deleteTarget?.item?.fullName || "student" })
+              : uiT("Delete {p0}?", { p0: deleteTarget?.item?.fullName || deleteTarget?.item?.name || "record" })
         }
         description={
           deleteTarget?.type === "archive-student"
-            ? "The student becomes inactive while grade, attendance, and payment history stays available."
+            ? uiT("The student becomes inactive while grade, attendance, and payment history stays available.")
             : deleteTarget?.type === "group"
-              ? "Groups with assigned students cannot be deleted."
+              ? uiT("Groups with assigned students cannot be deleted.")
               : deleteTarget?.type === "clear-local"
-                ? "This removes only the legacy browser copy on this device. Your signed-in cloud workspace remains available."
-                : "This cannot be undone without a JSON backup."
+                ? uiT(
+                    "This removes only the legacy browser copy on this device. Your signed-in cloud workspace remains available.",
+                  )
+                : uiT("This cannot be undone without a JSON backup.")
         }
         confirmLabel={
           deleteTarget?.type === "archive-student"
-            ? "Archive student"
+            ? uiT("Archive student")
             : deleteTarget?.type === "clear-local"
-              ? "Remove local copy"
-              : "Delete"
+              ? uiT("Remove local copy")
+              : uiT("Delete")
         }
         tone={deleteTarget?.type === "archive-student" ? "primary" : "danger"}
         busy={saving}
@@ -764,13 +776,23 @@ export default function Setup({
 
       <ConfirmDialog
         open={Boolean(pendingImport)}
-        title="Restore this backup?"
+        title={uiT("Restore this backup?")}
         description={
           pendingImport
-            ? `${pendingImport.name} contains ${pendingImport.counts.students} students, ${pendingImport.counts.groups} groups, ${pendingImport.counts.grades} grades, and ${pendingImport.counts.classes} class records. Restoring replaces the data currently saved in ${persistenceMode === "cloud" ? "your cloud workspace" : "this browser"}.`
+            ? uiT(
+                "{p0} contains {p1} students, {p2} groups, {p3} grades, and {p4} class records. Restoring replaces the data currently saved in {p5}.",
+                {
+                  p0: pendingImport.name,
+                  p1: pendingImport.counts.students,
+                  p2: pendingImport.counts.groups,
+                  p3: pendingImport.counts.grades,
+                  p4: pendingImport.counts.classes,
+                  p5: uiText(persistenceMode === "cloud" ? "your cloud workspace" : "this browser"),
+                },
+              )
             : ""
         }
-        confirmLabel="Restore backup"
+        confirmLabel={uiT("Restore backup")}
         tone="primary"
         busy={saving}
         onClose={() => setPendingImport(null)}

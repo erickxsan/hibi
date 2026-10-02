@@ -17,6 +17,7 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
   const [connectionStatus, setConnectionStatus] = useState("connecting");
   const [pendingOperations, setPendingOperations] = useState([]);
   const resolvingRef = useRef(false);
+  const replacingRef = useRef(false);
   const listenersRef = useRef(new Set());
   const savePromiseRef = useRef(null);
   const retryTimerRef = useRef(null);
@@ -27,6 +28,20 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
   const forceFlushLoadRef = useRef(false);
   const mutationGenerationRef = useRef(0);
   const rerunFlushRef = useRef(false);
+  const clearingDeviceRef = useRef(false);
+  const storageWritesRef = useRef(new Set());
+  const writeDevice = useCallback((operation) => {
+    if (clearingDeviceRef.current) return Promise.resolve(null);
+    const task = Promise.resolve().then(operation);
+    storageWritesRef.current.add(task);
+    const remove = () => storageWritesRef.current.delete(task);
+    task.then(remove, remove);
+    return task;
+  }, []);
+  const cacheWorkspace = useCallback(
+    (incoming) => writeDevice(() => deviceRecoveryStore.cacheWorkspace(user.id, incoming)),
+    [user.id, writeDevice],
+  );
   // Channel health cannot acknowledge a durable write or clear an integrity failure.
   const syncStatus = ["error", "conflict", "pending"].includes(persistenceStatus)
     ? persistenceStatus
@@ -46,26 +61,30 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
 
   const writeWitness = useCallback(
     (verifiedWorkspace) =>
-      deviceKeyStore
-        .writeIntegrity({
-          ownerId: user.id,
-          workspaceCryptoId: cryptoSession.workspaceCryptoId,
-          revision: verifiedWorkspace.revision,
-          root: verifiedWorkspace.manifest.root,
-        })
-        .catch(() => false),
-    [cryptoSession.workspaceCryptoId, user.id],
+      writeDevice(() =>
+        deviceKeyStore
+          .writeIntegrity({
+            ownerId: user.id,
+            workspaceCryptoId: cryptoSession.workspaceCryptoId,
+            revision: verifiedWorkspace.revision,
+            root: verifiedWorkspace.manifest.root,
+          })
+          .catch(() => false),
+      ),
+    [cryptoSession.workspaceCryptoId, user.id, writeDevice],
   );
 
   const captureDeviceCopy = useCallback(
     async (state, revision, source, updatedAt = null) => {
       try {
-        return await deviceRecoveryStore.capture({ ownerId: user.id, state, revision, source, updatedAt });
+        return await writeDevice(() =>
+          deviceRecoveryStore.capture({ ownerId: user.id, state, revision, source, updatedAt }),
+        );
       } catch {
         return null;
       }
     },
-    [user.id],
+    [user.id, writeDevice],
   );
 
   // Every accepted snapshot is published through this adapter, including loads and flushes.
@@ -80,6 +99,7 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
 
   const flushPending = useCallback(
     ({ onlyIfQueued = false } = {}) => {
+      if (clearingDeviceRef.current) return Promise.resolve({ status: "paused" });
       if (resolvingRef.current) return Promise.resolve({ status: "pending" });
       if (flushPromiseRef.current) {
         if (!onlyIfQueued) forceFlushLoadRef.current = true;
@@ -157,7 +177,7 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
           return { status: "pending" };
         }
         if (latest) {
-          await deviceRecoveryStore.cacheWorkspace(user.id, latest);
+          await cacheWorkspace(latest);
           await writeWitness(latest);
           if (generation !== mutationGenerationRef.current) {
             rerunFlushRef.current = true;
@@ -177,7 +197,7 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
           setPendingOperations(queued);
           const failure = encryptedSyncFailure(caught);
           updateSync(failure.status, failure.message);
-          if (failure.status === "pending" && !retryTimerRef.current) {
+          if (!clearingDeviceRef.current && failure.status === "pending" && !retryTimerRef.current) {
             retryTimerRef.current = globalThis.setTimeout(() => {
               retryTimerRef.current = null;
               void flushPending();
@@ -188,7 +208,7 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
         })
         .finally(() => {
           flushPromiseRef.current = null;
-          if (rerunFlushRef.current) {
+          if (!clearingDeviceRef.current && rerunFlushRef.current) {
             rerunFlushRef.current = false;
             globalThis.setTimeout?.(() => void flushPending(), 0);
           }
@@ -196,7 +216,7 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
       flushPromiseRef.current = task;
       return task;
     },
-    [applyWorkspace, captureDeviceCopy, cryptoSession, updateSync, user.id, writeWitness],
+    [applyWorkspace, cacheWorkspace, captureDeviceCopy, cryptoSession, updateSync, user.id, writeWitness],
   );
 
   useEffect(() => {
@@ -230,7 +250,7 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
           void flushPending();
         } else {
           applyWorkspace(loaded, { allowOlder: true });
-          await deviceRecoveryStore.cacheWorkspace(user.id, loaded);
+          await cacheWorkspace(loaded);
           await writeWitness(loaded);
           void captureDeviceCopy(loaded.state, loaded.revision, "encrypted-cloud-load", loaded.updatedAt);
           if (generation !== mutationGenerationRef.current) void flushPending();
@@ -251,7 +271,17 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
     return () => {
       active = false;
     };
-  }, [applyWorkspace, captureDeviceCopy, cryptoSession, flushPending, reloadToken, updateSync, user.id, writeWitness]);
+  }, [
+    applyWorkspace,
+    cacheWorkspace,
+    captureDeviceCopy,
+    cryptoSession,
+    flushPending,
+    reloadToken,
+    updateSync,
+    user.id,
+    writeWitness,
+  ]);
 
   useEffect(() => {
     const reconnect = () => void flushPending();
@@ -265,6 +295,7 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
 
   const save = useCallback(
     (state, previousState) => {
+      if (clearingDeviceRef.current) return Promise.reject(new Error("This device is being locked."));
       if (resolvingRef.current)
         return Promise.reject(new Error("Finish resolving the pending operation before editing."));
       mutationGenerationRef.current += 1;
@@ -303,6 +334,7 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
 
   const resolvePendingOperation = useCallback(
     async (operationId, choice) => {
+      if (clearingDeviceRef.current) throw new Error("This device is being locked.");
       if (!["local", "discard"].includes(choice)) throw new Error("Choose keep local or discard.");
       if (resolvingRef.current) throw new Error("An operation is already being resolved.");
       resolvingRef.current = true;
@@ -360,6 +392,7 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
   );
 
   const requireEmptyOutbox = useCallback(async () => {
+    if (clearingDeviceRef.current) throw new Error("This device is being locked.");
     const queued = await deviceRecoveryStore.listMutations(user.id);
     if (queued.length) throw new Error("Reconnect and finish syncing encrypted changes before this operation.");
   }, [user.id]);
@@ -367,22 +400,40 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
   const replace = useCallback(
     async (state, reason = "replace", importMetadata = null, returnWorkspace = false) => {
       await requireEmptyOutbox();
-      const previous = workspaceRef.current;
-      if (previous) await captureDeviceCopy(previous.state, previous.revision, `before-${reason}`, previous.updatedAt);
-      const replaced = await encryptedWorkspaceRepository.replaceWorkspace(
-        state,
-        cryptoSession,
-        user.id,
-        reason,
-        importMetadata,
-      );
-      applyWorkspace(replaced, { allowOlder: true, source: "local" });
-      await deviceRecoveryStore.cacheWorkspace(user.id, replaced);
-      await writeWitness(replaced);
-      updateSync("saved");
-      return returnWorkspace ? replaced : replaced.state;
+      if (clearingDeviceRef.current) throw new Error("This device is being locked.");
+      if (replacingRef.current || resolvingRef.current)
+        throw new Error("Finish the current operation before replacing records.");
+      replacingRef.current = true;
+      try {
+        const previous = workspaceRef.current;
+        if (previous)
+          await captureDeviceCopy(previous.state, previous.revision, `before-${reason}`, previous.updatedAt);
+        const replaced = await encryptedWorkspaceRepository.replaceWorkspace(
+          state,
+          cryptoSession,
+          user.id,
+          reason,
+          importMetadata,
+        );
+        applyWorkspace(replaced, { allowOlder: true, source: "local" });
+        await cacheWorkspace(replaced);
+        await writeWitness(replaced);
+        updateSync("saved");
+        return returnWorkspace ? replaced : replaced.state;
+      } finally {
+        replacingRef.current = false;
+      }
     },
-    [applyWorkspace, captureDeviceCopy, cryptoSession, requireEmptyOutbox, updateSync, user.id, writeWitness],
+    [
+      applyWorkspace,
+      cacheWorkspace,
+      captureDeviceCopy,
+      cryptoSession,
+      requireEmptyOutbox,
+      updateSync,
+      user.id,
+      writeWitness,
+    ],
   );
 
   const importRecords = useCallback(
@@ -438,9 +489,14 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
         .subscribe(
           cryptoSession,
           async (incoming) => {
-            if (disposed || ["pending", "conflict", "error"].includes(syncStatusRef.current)) return;
+            if (
+              disposed ||
+              clearingDeviceRef.current ||
+              ["pending", "conflict", "error"].includes(syncStatusRef.current)
+            )
+              return;
             if (applyWorkspace(incoming, { notify: true })) {
-              await deviceRecoveryStore.cacheWorkspace(user.id, incoming);
+              await cacheWorkspace(incoming);
               await writeWitness(incoming);
             }
           },
@@ -481,7 +537,7 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
         if (cleanup) void cleanup();
       };
     },
-    [applyWorkspace, cryptoSession, flushPending, updateSync, user.id, writeWitness],
+    [applyWorkspace, cacheWorkspace, cryptoSession, flushPending, updateSync, user.id, writeWitness],
   );
 
   const downloadEncryptedBackup = useCallback(async () => {
@@ -508,8 +564,10 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
   const decryptBackupWithPassword = useCallback(
     async (text, password) => {
       const backup = JSON.parse(text);
+      const sourceVersion = backup.encryptedSnapshot?.keyVersion || backup.snapshot?.manifest?.keyVersion || 1;
       const wrapper = (backup.wrappers || []).find(
-        (candidate) => candidate.type === "password" && !candidate.revokedAt,
+        (candidate) =>
+          candidate.type === "password" && !candidate.revokedAt && (candidate.keyVersion || 1) === sourceVersion,
       );
       if (!wrapper) throw new Error("This backup does not contain a compatible password wrapper.");
       const sourceMasterKey = await unlockWithPassword({
@@ -533,13 +591,30 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
     [decryptBackupWithPassword, replace],
   );
 
+  const clearLocalCopies = useCallback(async () => {
+    if (clearingDeviceRef.current || resolvingRef.current || replacingRef.current)
+      throw new Error("Finish the current operation before clearing local copies.");
+    clearingDeviceRef.current = true;
+    globalThis.clearTimeout(retryTimerRef.current);
+    retryTimerRef.current = null;
+    try {
+      await savePromiseRef.current;
+      await flushPromiseRef.current;
+      await Promise.allSettled([...storageWritesRef.current]);
+      await security.clearLocalCopies();
+    } catch (caught) {
+      clearingDeviceRef.current = false;
+      throw caught;
+    }
+  }, [security]);
+
   const persistence = useMemo(
     () =>
       workspace
         ? {
             mode: "cloud",
             encrypted: true,
-            encryption: security,
+            encryption: { ...security, clearLocalCopies },
             uiStorageKey: `minimal-class-manager:ui:v1:${user.id}`,
             initialState: workspace.state,
             syncStatus,
@@ -583,6 +658,7 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
       restoreRecoveryPoint,
       save,
       security,
+      clearLocalCopies,
       subscribe,
       syncMessage,
       syncStatus,

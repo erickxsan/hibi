@@ -25,7 +25,12 @@ function allowedValue(value, allowedValues) {
  * guard can return false (or show window.confirm and return its result) before
  * either a click or browser Back changes the rendered page.
  */
-export function usePageNavigation({ routes = APP_ROUTES, defaultPage = "home", canNavigate, onPageChange } = {}) {
+export function usePageNavigation({
+  routes = APP_ROUTES,
+  defaultPage = "home",
+  canNavigate = undefined,
+  onPageChange = undefined,
+} = {}) {
   const [page, setPage] = useState(() => {
     if (typeof window === "undefined") return defaultPage;
     return pageFromPath(window.location.pathname, routes) ?? defaultPage;
@@ -111,7 +116,7 @@ export function useHistoryBackedState({
   onChange,
   defaultValue,
   allowedValues,
-  canChange,
+  canChange = undefined,
   enabled = true,
 }) {
   const valueRef = useRef(value);

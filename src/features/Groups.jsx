@@ -1,3 +1,4 @@
+import { useI18n } from "../i18n/index.jsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -45,6 +46,7 @@ function pct(value) {
 }
 
 export function GroupEditor({ draft, setDraft, defaultHours, defaultRate }) {
+  const { t: uiT } = useI18n();
   const addSchedule = () =>
     setDraft((current) => ({
       ...current,
@@ -62,31 +64,31 @@ export function GroupEditor({ draft, setDraft, defaultHours, defaultRate }) {
     setDraft((current) => ({ ...current, weeklySchedule: current.weeklySchedule.filter((slot) => slot.id !== id) }));
   return (
     <form className="drawer-form" onSubmit={(event) => event.preventDefault()}>
-      <Field label="Group name" required>
+      <Field label={uiT("Group name")} required>
         <Input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
       </Field>
       <div className="form-grid two-columns">
-        <Field label="Grade">
+        <Field label={uiT("Grade")}>
           <Input value={draft.grade} onChange={(event) => setDraft({ ...draft, grade: event.target.value })} />
         </Field>
-        <Field label="Subject">
+        <Field label={uiT("Subject")}>
           <Input value={draft.subject} onChange={(event) => setDraft({ ...draft, subject: event.target.value })} />
         </Field>
       </div>
       <section className="recurring-schedule-editor" aria-labelledby="weekly-schedule-heading">
         <div className="editor-section-heading">
           <div>
-            <strong id="weekly-schedule-heading">Weekly schedule</strong>
-            <small>Add every regular meeting time for this group.</small>
+            <strong id="weekly-schedule-heading">{uiT("Weekly schedule")}</strong>
+            <small>{uiT("Add every regular meeting time for this group.")}</small>
           </div>
           <Button icon={Plus} onClick={addSchedule}>
-            Add time
+            {uiT("Add time")}
           </Button>
         </div>
         <div className="schedule-slot-list">
           {draft.weeklySchedule.map((slot) => (
             <div className="schedule-slot-row" key={slot.id}>
-              <Field label="Day">
+              <Field label={uiT("Day")}>
                 <Select
                   value={slot.dayOfWeek}
                   onChange={(event) => updateSchedule(slot.id, { dayOfWeek: Number(event.target.value) })}
@@ -98,14 +100,14 @@ export function GroupEditor({ draft, setDraft, defaultHours, defaultRate }) {
                   ))}
                 </Select>
               </Field>
-              <Field label="Time">
+              <Field label={uiT("Time")}>
                 <Input
                   type="time"
                   value={slot.startTime}
                   onChange={(event) => updateSchedule(slot.id, { startTime: event.target.value })}
                 />
               </Field>
-              <Field label="Hours">
+              <Field label={uiT("Hours")}>
                 <Input
                   type="number"
                   min="0"
@@ -114,11 +116,11 @@ export function GroupEditor({ draft, setDraft, defaultHours, defaultRate }) {
                   onChange={(event) => updateSchedule(slot.id, { durationHours: Number(event.target.value) })}
                 />
               </Field>
-              <IconButton label="Remove meeting time" icon={Trash2} onClick={() => removeSchedule(slot.id)} />
+              <IconButton label={uiT("Remove meeting time")} icon={Trash2} onClick={() => removeSchedule(slot.id)} />
             </div>
           ))}
           {!draft.weeklySchedule.length ? (
-            <p className="compact-empty">No recurring times yet. Existing manual classes remain unchanged.</p>
+            <p className="compact-empty">{uiT("No recurring times yet. Existing manual classes remain unchanged.")}</p>
           ) : null}
         </div>
       </section>
@@ -126,12 +128,12 @@ export function GroupEditor({ draft, setDraft, defaultHours, defaultRate }) {
         <summary>
           <span>
             <DollarSign size={17} />
-            <strong>Pricing & fallback details</strong>
+            <strong>{uiT("Pricing & fallback details")}</strong>
           </span>
           <small>
             {Number.isFinite(draft.hourlyRate)
-              ? `${money(draft.hourlyRate)} / hour`
-              : `${money(defaultRate)} / hour inherited`}
+              ? uiT("{p0} / hour", { p0: money(draft.hourlyRate) })
+              : uiT("{p0} / hour inherited", { p0: money(defaultRate) })}
           </small>
         </summary>
         <div className="optional-settings-body">
@@ -142,10 +144,10 @@ export function GroupEditor({ draft, setDraft, defaultHours, defaultRate }) {
               onChange={(event) => setDraft({ ...draft, hourlyRate: event.target.checked ? defaultRate : null })}
             />
             <span aria-hidden="true" />
-            <b>Set a group rate</b>
+            <b>{uiT("Set a group rate")}</b>
           </label>
           {Number.isFinite(draft.hourlyRate) ? (
-            <Field label="Group hourly rate">
+            <Field label={uiT("Group hourly rate")}>
               <Input
                 type="number"
                 min="0"
@@ -153,20 +155,23 @@ export function GroupEditor({ draft, setDraft, defaultHours, defaultRate }) {
                 value={draft.hourlyRate}
                 onChange={(event) => setDraft({ ...draft, hourlyRate: Number(event.target.value) })}
               />
-              <small>MXN / hour</small>
+              <small>{uiT("MXN / hour")}</small>
             </Field>
           ) : (
-            <p>Uses the account default of {money(defaultRate)} per hour.</p>
+            <p>
+              {uiT("Uses the account default of ")}
+              {money(defaultRate)} {uiT(" per hour.")}
+            </p>
           )}
-          <Field label="Schedule note / room">
+          <Field label={uiT("Schedule note / room")}>
             <Input
               value={draft.schedule}
               onChange={(event) => setDraft({ ...draft, schedule: event.target.value })}
-              placeholder="Optional room or legacy schedule note"
+              placeholder={uiT("Optional room or legacy schedule note")}
             />
           </Field>
           {!draft.weeklySchedule.length ? (
-            <Field label="Planned sessions / month">
+            <Field label={uiT("Planned sessions / month")}>
               <Input
                 type="number"
                 min="0"
@@ -177,14 +182,14 @@ export function GroupEditor({ draft, setDraft, defaultHours, defaultRate }) {
           ) : null}
         </div>
       </details>
-      <Field label="Assistant / contact">
+      <Field label={uiT("Assistant / contact")}>
         <TextArea
           rows="2"
           value={draft.assistantContact}
           onChange={(event) => setDraft({ ...draft, assistantContact: event.target.value })}
         />
       </Field>
-      <Field label="Notes">
+      <Field label={uiT("Notes")}>
         <TextArea
           rows="3"
           value={draft.notes}
@@ -196,13 +201,17 @@ export function GroupEditor({ draft, setDraft, defaultHours, defaultRate }) {
 }
 
 function GroupDetailContent({ tab, group, summary, members, classRows, gradeRows, onManage, navigate }) {
+  const { t: uiT } = useI18n();
   if (tab === "students") {
     return (
       <article className="detail-card member-card span-two">
         <header>
-          <h2>Members ({members.length})</h2>
+          <h2>
+            {uiT("Members (")}
+            {members.length})
+          </h2>
           <button type="button" onClick={onManage}>
-            Manage
+            {uiT("Manage")}
           </button>
         </header>
         {members.map((student) => (
@@ -210,12 +219,12 @@ function GroupDetailContent({ tab, group, summary, members, classRows, gradeRows
             <StudentAvatar avatarId={student.avatarId} name={student.fullName} size="tiny" decorative />
             <span>
               <strong>{student.fullName}</strong>
-              <small>{student.isIndividual ? "Individual + group" : "Group student"}</small>
+              <small>{student.isIndividual ? uiT("Individual + group") : uiT("Group student")}</small>
             </span>
-            {student.isIndividual ? <em>Individual</em> : null}
+            {student.isIndividual ? <em>{uiT("Individual")}</em> : null}
           </div>
         ))}
-        {!members.length ? <p>No students assigned yet.</p> : null}
+        {!members.length ? <p>{uiT("No students assigned yet.")}</p> : null}
       </article>
     );
   }
@@ -223,7 +232,7 @@ function GroupDetailContent({ tab, group, summary, members, classRows, gradeRows
     return (
       <article className="detail-card span-two">
         <header>
-          <h2>Attendance history</h2>
+          <h2>{uiT("Attendance history")}</h2>
           <CalendarDays size={18} />
         </header>
         {classRows.map((row) => (
@@ -233,7 +242,7 @@ function GroupDetailContent({ tab, group, summary, members, classRows, gradeRows
             <em>{row.attendance || "—"}</em>
           </div>
         ))}
-        {!classRows.length ? <p>No attendance records yet.</p> : null}
+        {!classRows.length ? <p>{uiT("No attendance records yet.")}</p> : null}
       </article>
     );
   }
@@ -241,7 +250,7 @@ function GroupDetailContent({ tab, group, summary, members, classRows, gradeRows
     return (
       <article className="detail-card span-two">
         <header>
-          <h2>Group grades</h2>
+          <h2>{uiT("Group grades")}</h2>
           <TrendingUp size={18} />
         </header>
         {gradeRows.map((row) => (
@@ -253,7 +262,7 @@ function GroupDetailContent({ tab, group, summary, members, classRows, gradeRows
             <em>{pct(row.percentage)}</em>
           </div>
         ))}
-        {!gradeRows.length ? <p>No grades yet.</p> : null}
+        {!gradeRows.length ? <p>{uiT("No grades yet.")}</p> : null}
       </article>
     );
   }
@@ -261,9 +270,9 @@ function GroupDetailContent({ tab, group, summary, members, classRows, gradeRows
     return (
       <article className="detail-card span-two">
         <header>
-          <h2>Payments</h2>
+          <h2>{uiT("Payments")}</h2>
           <button type="button" onClick={() => navigate("payments")}>
-            Open payments
+            {uiT("Open payments")}
           </button>
         </header>
         {classRows.map((row) => (
@@ -271,14 +280,16 @@ function GroupDetailContent({ tab, group, summary, members, classRows, gradeRows
             <span>
               {row.studentName}
               <small>
-                {row.classDate} · {row.paymentStatus}
+                {row.classDate} · {uiT(row.paymentStatus)}
               </small>
             </span>
             <strong>{money(row.recognizedPaid)}</strong>
-            <em>{money(row.outstanding)} pending</em>
+            <em>
+              {money(row.outstanding)} {uiT(" pending")}
+            </em>
           </div>
         ))}
-        {!classRows.length ? <p>No payment records yet.</p> : null}
+        {!classRows.length ? <p>{uiT("No payment records yet.")}</p> : null}
       </article>
     );
   }
@@ -286,9 +297,12 @@ function GroupDetailContent({ tab, group, summary, members, classRows, gradeRows
     <>
       <article className="detail-card member-card">
         <header>
-          <h2>Members ({members.length})</h2>
+          <h2>
+            {uiT("Members (")}
+            {members.length})
+          </h2>
           <button type="button" onClick={onManage}>
-            Manage
+            {uiT("Manage")}
           </button>
         </header>
         {members.slice(0, 6).map((student) => (
@@ -296,63 +310,66 @@ function GroupDetailContent({ tab, group, summary, members, classRows, gradeRows
             <StudentAvatar avatarId={student.avatarId} name={student.fullName} size="tiny" decorative />
             <span>
               <strong>{student.fullName}</strong>
-              <small>{student.isIndividual ? "Individual + group" : "Group student"}</small>
+              <small>{student.isIndividual ? uiT("Individual + group") : uiT("Group student")}</small>
             </span>
-            {student.isIndividual ? <em>Individual</em> : null}
+            {student.isIndividual ? <em>{uiT("Individual")}</em> : null}
           </div>
         ))}
-        {!members.length ? <p>No students assigned yet.</p> : null}
+        {!members.length ? <p>{uiT("No students assigned yet.")}</p> : null}
       </article>
       <article className="detail-card next-class">
         <header>
-          <h2>Group schedule</h2>
+          <h2>{uiT("Group schedule")}</h2>
           <Clock3 size={18} />
         </header>
-        <strong>{formatWeeklySchedule(group.weeklySchedule) || group.schedule || "Not scheduled"}</strong>
+        <strong>{formatWeeklySchedule(group.weeklySchedule) || group.schedule || uiT("Not scheduled")}</strong>
         <p>
           {Number.isFinite(group.hourlyRate)
-            ? `${money(group.hourlyRate)} per hour · group rate`
-            : `${money(summary.effectiveHourlyRate)} per hour · inherited`}
+            ? uiT("{p0} per hour · group rate", { p0: money(group.hourlyRate) })
+            : uiT("{p0} per hour · inherited", { p0: money(summary.effectiveHourlyRate) })}
         </p>
         <Button variant="primary" onClick={() => navigate("classes")}>
-          Open upcoming classes
+          {uiT("Open upcoming classes")}
         </Button>
       </article>
       <article className="detail-card">
         <header>
-          <h2>Attendance</h2>
+          <h2>{uiT("Attendance")}</h2>
           <CalendarDays size={18} />
         </header>
         <div className="large-stat">{pct(summary.attendance)}</div>
-        <p>Average attendance</p>
+        <p>{uiT("Average attendance")}</p>
       </article>
       <article className="detail-card">
         <header>
-          <h2>Performance</h2>
+          <h2>{uiT("Performance")}</h2>
           <TrendingUp size={18} />
         </header>
         <div className="large-stat">{pct(summary.averageGrade)}</div>
-        <p>Latest group average</p>
+        <p>{uiT("Latest group average")}</p>
       </article>
       <article className="detail-card">
         <header>
-          <h2>Outstanding balances</h2>
+          <h2>{uiT("Outstanding balances")}</h2>
         </header>
         <div className="large-stat">{money(summary.outstanding)}</div>
-        <p>Across current members</p>
+        <p>{uiT("Across current members")}</p>
       </article>
       <article className="detail-card quick-list">
         <header>
-          <h2>Quick actions</h2>
+          <h2>{uiT("Quick actions")}</h2>
         </header>
         <button type="button" onClick={() => navigate("classes")}>
-          Record group class <ChevronRight size={16} />
+          {uiT("Record group class ")}
+          <ChevronRight size={16} />
         </button>
         <button type="button" onClick={() => navigate("grades")}>
-          Add group grades <ChevronRight size={16} />
+          {uiT("Add group grades ")}
+          <ChevronRight size={16} />
         </button>
         <button type="button" onClick={() => navigate("payments")}>
-          View payments <ChevronRight size={16} />
+          {uiT("View payments ")}
+          <ChevronRight size={16} />
         </button>
       </article>
     </>
@@ -360,6 +377,7 @@ function GroupDetailContent({ tab, group, summary, members, classRows, gradeRows
 }
 
 export default function Groups({ state, derived, actions, navigate, registerNavigationBlocker }) {
+  const { t: uiT } = useI18n();
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [detailTab, setDetailTab] = useState("overview");
@@ -445,36 +463,37 @@ export default function Groups({ state, derived, actions, navigate, registerNavi
       <div className="page detail-page">
         <button className="back-link" type="button" onClick={() => changeSelected("")}>
           <ArrowLeft size={17} />
-          Groups
+          {uiT("Groups")}
         </button>
         <section className="detail-hero">
           <div className="group-emblem">{group.name.slice(0, 1).toUpperCase()}</div>
           <div className="detail-identity">
             <h1>{group.name}</h1>
             <p>
-              {formatWeeklySchedule(group.weeklySchedule) || group.schedule || "Schedule not set"} · {members.length}{" "}
-              students {group.grade ? `· ${group.grade}` : ""}
+              {formatWeeklySchedule(group.weeklySchedule) || group.schedule || uiT("Schedule not set")} ·{" "}
+              {members.length} {uiT("students ")}
+              {group.grade ? `· ${group.grade}` : ""}
             </p>
           </div>
           <div className="hero-actions">
             <Button icon={Plus} onClick={() => setMembersOpen(true)}>
-              Add students
+              {uiT("Add students")}
             </Button>
             <Button icon={Pencil} onClick={() => openEditor(group)}>
-              Edit
+              {uiT("Edit")}
             </Button>
             <button
               className="hero-icon danger"
               type="button"
-              title="Delete group"
-              aria-label="Delete group"
+              title={uiT("Delete group")}
+              aria-label={uiT("Delete group")}
               onClick={() => setDeleteOpen(true)}
             >
               <Trash2 size={18} />
             </button>
           </div>
         </section>
-        <div className="detail-tabs" role="tablist" aria-label="Group details">
+        <div className="detail-tabs" role="tablist" aria-label={uiT("Group details")}>
           {GROUP_TABS.map((tab) => (
             <button
               type="button"
@@ -503,8 +522,8 @@ export default function Groups({ state, derived, actions, navigate, registerNavi
         <Drawer
           open={membersOpen}
           onClose={() => setMembersOpen(false)}
-          title={`Manage ${group.name}`}
-          description="Students can belong to more than one group."
+          title={uiT("Manage {p0}", { p0: group.name })}
+          description={uiT("Students can belong to more than one group.")}
         >
           <div className="member-picker">
             {state.students.map((student) => (
@@ -517,7 +536,7 @@ export default function Groups({ state, derived, actions, navigate, registerNavi
                 <StudentAvatar avatarId={student.avatarId} name={student.fullName} size="tiny" decorative />
                 <span>
                   <strong>{student.fullName}</strong>
-                  <small>{student.isIndividual ? "Also takes individual classes" : "Group enrollment"}</small>
+                  <small>{student.isIndividual ? uiT("Also takes individual classes") : uiT("Group enrollment")}</small>
                 </span>
               </label>
             ))}
@@ -526,12 +545,12 @@ export default function Groups({ state, derived, actions, navigate, registerNavi
         <Drawer
           open={Boolean(draft)}
           onClose={closeEditor}
-          title="Edit group"
+          title={uiT("Edit group")}
           footer={
             <>
-              <Button onClick={closeEditor}>Cancel</Button>
+              <Button onClick={closeEditor}>{uiT("Cancel")}</Button>
               <Button variant="primary" onClick={save} disabled={saving}>
-                {saving ? "Saving…" : "Save group"}
+                {saving ? uiT("Saving…") : uiT("Save group")}
               </Button>
             </>
           }
@@ -547,9 +566,11 @@ export default function Groups({ state, derived, actions, navigate, registerNavi
         </Drawer>
         <ConfirmDialog
           open={deleteOpen}
-          title={`Delete ${group.name}?`}
-          description="Groups with assigned students cannot be deleted. Existing class history remains protected."
-          confirmLabel="Delete group"
+          title={uiT("Delete {p0}?", { p0: group.name })}
+          description={uiT(
+            "Groups with assigned students cannot be deleted. Existing class history remains protected.",
+          )}
+          confirmLabel={uiT("Delete group")}
           onClose={() => setDeleteOpen(false)}
           onConfirm={async () => {
             if (await actions.deleteGroup(group.id)) {
@@ -566,17 +587,17 @@ export default function Groups({ state, derived, actions, navigate, registerNavi
     <div className="page">
       <div className="page-heading">
         <div>
-          <h1>Groups</h1>
-          <p>Open any group to see its members, schedule, progress, and balances.</p>
+          <h1>{uiT("Groups")}</h1>
+          <p>{uiT("Open any group to see its members, schedule, progress, and balances.")}</p>
         </div>
         <Button variant="primary" icon={Plus} onClick={() => openEditor()}>
-          Add group
+          {uiT("Add group")}
         </Button>
       </div>
       <label className="page-search">
         <Search size={17} />
-        <span className="sr-only">Search groups</span>
-        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search groups" />
+        <span className="sr-only">{uiT("Search groups")}</span>
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={uiT("Search groups")} />
       </label>
       <section className="group-list">
         {filtered.map((item) => {
@@ -587,19 +608,22 @@ export default function Groups({ state, derived, actions, navigate, registerNavi
               <span className="group-main">
                 <strong>{item.name}</strong>
                 <small>
-                  {formatWeeklySchedule(item.weeklySchedule) || item.schedule || item.subject || "Schedule not set"}
+                  {formatWeeklySchedule(item.weeklySchedule) ||
+                    item.schedule ||
+                    item.subject ||
+                    uiT("Schedule not set")}
                 </small>
               </span>
               <span>
-                <small>Students</small>
+                <small>{uiT("Students")}</small>
                 <strong>{itemSummary.activeStudents || 0}</strong>
               </span>
               <span>
-                <small>Attendance</small>
+                <small>{uiT("Attendance")}</small>
                 <strong>{pct(itemSummary.attendance)}</strong>
               </span>
               <span>
-                <small>Ideal revenue</small>
+                <small>{uiT("Ideal revenue")}</small>
                 <strong>{money(itemSummary.idealRevenue)}</strong>
               </span>
               <ChevronRight size={18} />
@@ -609,20 +633,20 @@ export default function Groups({ state, derived, actions, navigate, registerNavi
         {!filtered.length ? (
           <div className="empty-box">
             <UsersRound size={28} />
-            <h2>No groups yet</h2>
-            <p>Create your first class group.</p>
+            <h2>{uiT("No groups yet")}</h2>
+            <p>{uiT("Create your first class group.")}</p>
           </div>
         ) : null}
       </section>
       <Drawer
         open={Boolean(draft)}
         onClose={closeEditor}
-        title={draft?.id ? "Edit group" : "Add group"}
+        title={draft?.id ? uiT("Edit group") : uiT("Add group")}
         footer={
           <>
-            <Button onClick={closeEditor}>Cancel</Button>
+            <Button onClick={closeEditor}>{uiT("Cancel")}</Button>
             <Button variant="primary" onClick={save} disabled={saving}>
-              {saving ? "Saving…" : "Save group"}
+              {saving ? uiT("Saving…") : uiT("Save group")}
             </Button>
           </>
         }

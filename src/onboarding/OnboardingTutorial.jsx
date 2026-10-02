@@ -29,7 +29,7 @@ import {
 } from "./onboardingModel";
 import "./onboarding.css";
 
-const GUIDE_MASCOT = "/onboarding/hibi-guide.png";
+const GUIDE_MASCOT = "/onboarding/hibi-guide.webp";
 const SETUP_LABELS = ["Group", "Students", "Agenda"];
 
 const DURATION_OPTIONS = Object.freeze([
@@ -99,8 +99,12 @@ function tourContextFor(state, groupId) {
 }
 
 function StepProgress({ step }) {
+  const { t: uiT } = useI18n();
   return (
-    <ol className="onboarding-progress" aria-label={`Step ${step - 1} of ${SETUP_LABELS.length}`}>
+    <ol
+      className="onboarding-progress"
+      aria-label={uiT("Step {p0} of {p1}", { p0: step - 1, p1: SETUP_LABELS.length })}
+    >
       {SETUP_LABELS.map((label, index) => (
         <li
           key={label}
@@ -110,7 +114,7 @@ function StepProgress({ step }) {
           <span className="onboarding-step-number" aria-hidden="true">
             {index + 2 < step ? <Check size={16} /> : index + 1}
           </span>
-          <span>{label}</span>
+          <span>{uiT(label)}</span>
         </li>
       ))}
     </ol>
@@ -120,6 +124,7 @@ function StepProgress({ step }) {
 // Pinned above the footer buttons so the resulting dates stay visible while the
 // teacher edits days and times. A submitted schedule issue becomes an alert.
 function SchedulePreview({ slots, submittedIssue, locale }) {
+  const { t: uiT } = useI18n();
   const issue = scheduleIssue(slots);
   if (issue) {
     return (
@@ -137,7 +142,7 @@ function SchedulePreview({ slots, submittedIssue, locale }) {
     <div className="onboarding-schedule-preview" aria-live="polite">
       <strong>
         <CalendarDays aria-hidden="true" size={16} />
-        Upcoming classes
+        {uiT("Upcoming classes")}
       </strong>
       <ol>
         {upcomingClasses(slots, 3).map(({ slot, date }, index) => (
@@ -146,12 +151,13 @@ function SchedulePreview({ slots, submittedIssue, locale }) {
           </li>
         ))}
       </ol>
-      <small>{`${slots.length} per week · ${slots.length * 4} a month`}</small>
+      <small>{uiT("{p0} per week · {p1} a month", { p0: slots.length, p1: slots.length * 4 })}</small>
     </div>
   );
 }
 
 function ScheduleRows({ rows, setRows }) {
+  const { t: uiT } = useI18n();
   const addSlot = () => {
     const usedDays = new Set(rows.map((row) => Number(row.dayOfWeek)));
     const nextDay = ONBOARDING_DAYS.find((day) => !usedDays.has(day.value))?.value || 1;
@@ -161,11 +167,11 @@ function ScheduleRows({ rows, setRows }) {
 
   return (
     <section className="onboarding-weekly-schedule" aria-labelledby="onboarding-schedule-title">
-      <h2 id="onboarding-schedule-title">Class days</h2>
+      <h2 id="onboarding-schedule-title">{uiT("Class days")}</h2>
       <div className="onboarding-schedule-rows">
         {rows.map((slot, index) => (
           <div className="onboarding-schedule-row" key={slot.id}>
-            <Field label="Day">
+            <Field label={uiT("Day")}>
               <select
                 className="control"
                 value={String(slot.dayOfWeek)}
@@ -182,7 +188,7 @@ function ScheduleRows({ rows, setRows }) {
                 ))}
               </select>
             </Field>
-            <Field label="Time">
+            <Field label={uiT("Time")}>
               <Input
                 type="time"
                 required
@@ -192,7 +198,7 @@ function ScheduleRows({ rows, setRows }) {
                 }
               />
             </Field>
-            <Field label="Duration">
+            <Field label={uiT("Duration")}>
               <select
                 className="control"
                 value={String(slot.durationHours)}
@@ -206,7 +212,7 @@ function ScheduleRows({ rows, setRows }) {
               >
                 {DURATION_OPTIONS.map((option) => (
                   <option value={option.value} key={option.value}>
-                    {option.label}
+                    {uiT(option.label)}
                   </option>
                 ))}
               </select>
@@ -215,7 +221,7 @@ function ScheduleRows({ rows, setRows }) {
               className="onboarding-remove-schedule"
               type="button"
               disabled={rows.length === 1}
-              aria-label={`Remove class day ${index + 1}`}
+              aria-label={uiT("Remove class day {p0}", { p0: index + 1 })}
               onClick={() => setRows(rows.filter((row) => row.id !== slot.id))}
             >
               <Trash2 aria-hidden="true" size={17} />
@@ -224,7 +230,7 @@ function ScheduleRows({ rows, setRows }) {
         ))}
       </div>
       <Button className="onboarding-add-day" icon={Plus} disabled={rows.length >= 7} onClick={addSlot}>
-        Add another day
+        {uiT("Add another day")}
       </Button>
     </section>
   );
@@ -241,6 +247,7 @@ export default function OnboardingTutorial({
   onDismiss,
   onComplete,
 }) {
+  const { t: uiT } = useI18n();
   useI18n();
   const titleId = useId();
   const panelRef = useRef(null);
@@ -253,7 +260,7 @@ export default function OnboardingTutorial({
   const [removedStudentIds, setRemovedStudentIds] = useState([]);
   const [focusStudentKey, setFocusStudentKey] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [errors, setErrors] = useState({});
+  const [errors, setErrors] = useState(/** @type {Record<string, string>} */ ({}));
   const [completed, setCompleted] = useState(false);
 
   // Only an unfinished first run saves tour progress; replays leave settings untouched.
@@ -501,7 +508,7 @@ export default function OnboardingTutorial({
           {step > 1 && !completed ? (
             <>
               <button className="onboarding-defer" type="button" disabled={busy} onClick={continueLater}>
-                Continue later
+                {uiT("Continue later")}
               </button>
               <StepProgress step={step} />
             </>
@@ -509,15 +516,15 @@ export default function OnboardingTutorial({
 
           {completed ? (
             <div className="onboarding-welcome onboarding-complete">
-              <img className="onboarding-welcome-mascot" src={GUIDE_MASCOT} alt="" />
-              <h1 id={titleId} ref={headingRef} tabIndex="-1">
-                You’re all set!
+              <img className="onboarding-welcome-mascot" src={GUIDE_MASCOT} alt={uiT("")} />
+              <h1 id={titleId} ref={headingRef} tabIndex={-1}>
+                {uiT("You’re all set!")}
               </h1>
-              <p>Your group, students, and agenda are ready. What would you like to do next?</p>
+              <p>{uiT("Your group, students, and agenda are ready. What would you like to do next?")}</p>
               {upcomingClass ? (
                 <p className="onboarding-complete-next">
                   <CalendarDays aria-hidden="true" size={18} />
-                  <span>Next class</span>
+                  <span>{uiT("Next class")}</span>
                   <strong>
                     {formatOnboardingDate(upcomingClass.date, locale)} · {upcomingClass.time}
                   </strong>
@@ -525,10 +532,10 @@ export default function OnboardingTutorial({
               ) : null}
               <div className="onboarding-actions onboarding-actions-centered">
                 <Button variant="primary" icon={ArrowRight} onClick={() => onComplete?.("classes")}>
-                  Open my next class
+                  {uiT("Open my next class")}
                 </Button>
                 <Button icon={UsersRound} onClick={() => onComplete?.("community")}>
-                  Add more students
+                  {uiT("Add more students")}
                 </Button>
               </div>
               <button
@@ -536,52 +543,52 @@ export default function OnboardingTutorial({
                 type="button"
                 onClick={() => onComplete?.()}
               >
-                Close
+                {uiT("Close")}
               </button>
             </div>
           ) : null}
 
           {!completed && step === 1 ? (
             <div className="onboarding-welcome">
-              <img className="onboarding-welcome-mascot" src={GUIDE_MASCOT} alt="" />
-              <h1 id={titleId} ref={headingRef} tabIndex="-1">
-                Welcome to Hibi!
+              <img className="onboarding-welcome-mascot" src={GUIDE_MASCOT} alt={uiT("")} />
+              <h1 id={titleId} ref={headingRef} tabIndex={-1}>
+                {uiT("Welcome to Hibi!")}
               </h1>
-              <p>Create a group, add your students, and let Hibi prepare your agenda.</p>
+              <p>{uiT("Create a group, add your students, and let Hibi prepare your agenda.")}</p>
               <div className="onboarding-actions onboarding-actions-centered">
                 <Button variant="primary" icon={ArrowRight} disabled={busy} onClick={() => moveTo(2)}>
-                  Start
+                  {uiT("Start")}
                 </Button>
                 <Button disabled={busy} onClick={dismiss}>
-                  Explore on my own
+                  {uiT("Explore on my own")}
                 </Button>
               </div>
-              <p className="onboarding-welcome-note">You can start the guided setup anytime from Settings.</p>
+              <p className="onboarding-welcome-note">{uiT("You can start the guided setup anytime from Settings.")}</p>
             </div>
           ) : null}
 
           {!completed && step === 2 ? (
             <form className="onboarding-form onboarding-group-form" onSubmit={saveGroup} noValidate>
               <header className="onboarding-copy">
-                <img className="onboarding-heading-mascot" src={GUIDE_MASCOT} alt="" />
-                <h1 id={titleId} ref={headingRef} tabIndex="-1">
-                  Create your first group
+                <img className="onboarding-heading-mascot" src={GUIDE_MASCOT} alt={uiT("")} />
+                <h1 id={titleId} ref={headingRef} tabIndex={-1}>
+                  {uiT("Create your first group")}
                 </h1>
-                <p>Set its class days and Hibi will prepare your agenda.</p>
+                <p>{uiT("Set its class days and Hibi will prepare your agenda.")}</p>
               </header>
               <div className="onboarding-field-grid onboarding-group-fields">
-                <Field label="Group name" error={errors.name}>
+                <Field label={uiT("Group name")} error={errors.name}>
                   <Input
                     autoComplete="off"
-                    placeholder="e.g. Advanced English"
+                    placeholder={uiT("e.g. Advanced English")}
                     value={groupDraft.name}
                     onChange={(event) => setGroupDraft({ ...groupDraft, name: event.target.value })}
                   />
                 </Field>
-                <Field label="Subject" error={errors.subject}>
+                <Field label={uiT("Subject")} error={errors.subject}>
                   <Input
                     autoComplete="off"
-                    placeholder="e.g. English"
+                    placeholder={uiT("e.g. English")}
                     value={groupDraft.subject}
                     onChange={(event) => setGroupDraft({ ...groupDraft, subject: event.target.value })}
                   />
@@ -598,10 +605,10 @@ export default function OnboardingTutorial({
                   locale={locale}
                 />
                 <Button icon={ArrowLeft} disabled={busy} onClick={() => moveTo(1)}>
-                  Back
+                  {uiT("Back")}
                 </Button>
                 <Button variant="primary" icon={ArrowRight} disabled={busy} type="submit">
-                  {busy ? "Saving…" : "Save and continue"}
+                  {busy ? uiT("Saving…") : uiT("Save and continue")}
                 </Button>
               </div>
             </form>
@@ -610,34 +617,34 @@ export default function OnboardingTutorial({
           {!completed && step === 3 ? (
             <form className="onboarding-form" onSubmit={saveStudents}>
               <header className="onboarding-copy">
-                <img className="onboarding-heading-mascot" src={GUIDE_MASCOT} alt="" />
-                <h1 id={titleId} ref={headingRef} tabIndex="-1">
-                  Add your students
+                <img className="onboarding-heading-mascot" src={GUIDE_MASCOT} alt={uiT("")} />
+                <h1 id={titleId} ref={headingRef} tabIndex={-1}>
+                  {uiT("Add your students")}
                 </h1>
-                <p>You can start with one and add more later.</p>
+                <p>{uiT("You can start with one and add more later.")}</p>
               </header>
               <div className="onboarding-group-chip">
                 <UsersRound aria-hidden="true" size={18} />
                 <span>
                   <strong>{group.name || groupDraft.name}</strong>
-                  <small>{`${groupDraft.weeklySchedule.length} class days each week`}</small>
+                  <small>{uiT("{p0} class days each week", { p0: groupDraft.weeklySchedule.length })}</small>
                 </span>
               </div>
               <p className="onboarding-student-tip">
-                Tip: paste a list with one name per line. Press Enter to add the next student.
+                {uiT("Tip: paste a list with one name per line. Press Enter to add the next student.")}
               </p>
               <div className="onboarding-student-list">
                 {studentRows.map((student, index) => (
                   <div className="onboarding-student-row" key={student.key || student.id}>
                     <span aria-hidden="true">{index + 1}</span>
-                    <Field label={`Student ${index + 1}`}>
+                    <Field label={uiT("Student {p0}", { p0: index + 1 })}>
                       <Input
                         ref={(node) => {
                           if (node) studentInputsRef.current.set(student.key, node);
                           else studentInputsRef.current.delete(student.key);
                         }}
                         autoComplete="off"
-                        placeholder="Student name"
+                        placeholder={uiT("Student name")}
                         value={student.fullName}
                         onChange={(event) => updateStudent(student.key, event.target.value)}
                         onKeyDown={(event) => handleStudentKeyDown(event, student, index)}
@@ -648,7 +655,7 @@ export default function OnboardingTutorial({
                       <button
                         className="onboarding-remove-student"
                         type="button"
-                        aria-label={`Remove student ${index + 1}`}
+                        aria-label={uiT("Remove student {p0}", { p0: index + 1 })}
                         onClick={() => removeStudentRow(student)}
                       >
                         <Trash2 aria-hidden="true" size={17} />
@@ -662,19 +669,19 @@ export default function OnboardingTutorial({
                   </p>
                 ) : null}
                 {studentRows.length >= ONBOARDING_MAX_STUDENTS ? (
-                  <p className="onboarding-student-tip">You can add more students later from Community.</p>
+                  <p className="onboarding-student-tip">{uiT("You can add more students later from Community.")}</p>
                 ) : (
                   <Button className="onboarding-add-student" icon={Plus} onClick={() => addStudentRow()}>
-                    Add another student
+                    {uiT("Add another student")}
                   </Button>
                 )}
               </div>
               <div className="onboarding-actions">
                 <Button icon={ArrowLeft} disabled={busy} onClick={() => moveTo(2)}>
-                  Back
+                  {uiT("Back")}
                 </Button>
                 <Button variant="primary" icon={ArrowRight} disabled={busy} type="submit">
-                  {busy ? "Saving…" : "Save and continue"}
+                  {busy ? uiT("Saving…") : uiT("Save and continue")}
                 </Button>
               </div>
             </form>
@@ -683,24 +690,26 @@ export default function OnboardingTutorial({
           {!completed && step === 4 ? (
             <div className="onboarding-form onboarding-agenda-review">
               <header className="onboarding-copy">
-                <img className="onboarding-heading-mascot" src={GUIDE_MASCOT} alt="" />
-                <h1 id={titleId} ref={headingRef} tabIndex="-1">
-                  Your recurring agenda is ready
+                <img className="onboarding-heading-mascot" src={GUIDE_MASCOT} alt={uiT("")} />
+                <h1 id={titleId} ref={headingRef} tabIndex={-1}>
+                  {uiT("Your recurring agenda is ready")}
                 </h1>
                 <p>
-                  Hibi creates upcoming classes from the group schedule. Change a specific session later from Classes.
+                  {uiT(
+                    "Hibi creates upcoming classes from the group schedule. Change a specific session later from Classes.",
+                  )}
                 </p>
               </header>
-              <section className="onboarding-agenda-card" aria-label="Recurring class agenda">
+              <section className="onboarding-agenda-card" aria-label={uiT("Recurring class agenda")}>
                 <header>
                   <span>
                     <CalendarDays aria-hidden="true" size={22} />
                     <span>
                       <strong>{group.name || groupDraft.name}</strong>
-                      <small>{`${studentCount} students enrolled`}</small>
+                      <small>{uiT("{p0} students enrolled", { p0: studentCount })}</small>
                     </span>
                   </span>
-                  <b>Weekly</b>
+                  <b>{uiT("Weekly")}</b>
                 </header>
                 <div className="onboarding-agenda-list">
                   {/* One row per class day, in date order; only the first is the next class. */}
@@ -711,11 +720,11 @@ export default function OnboardingTutorial({
                         <span>
                           <strong>{dayLabel(slot.dayOfWeek)}</strong>
                           <small>
-                            <Clock3 aria-hidden="true" size={14} /> {slot.startTime} · {slot.durationHours} h
+                            <Clock3 aria-hidden="true" size={14} /> {slot.startTime} · {slot.durationHours} {uiT(" h")}
                           </small>
                         </span>
                         <span>
-                          {index === 0 ? <b className="onboarding-agenda-next">Next class</b> : null}
+                          {index === 0 ? <b className="onboarding-agenda-next">{uiT("Next class")}</b> : null}
                           <strong>{formatOnboardingDate(date, locale)}</strong>
                         </span>
                       </article>
@@ -725,10 +734,10 @@ export default function OnboardingTutorial({
               </section>
               <div className="onboarding-actions">
                 <Button icon={ArrowLeft} disabled={busy} onClick={() => moveTo(3)}>
-                  Back
+                  {uiT("Back")}
                 </Button>
                 <Button variant="primary" icon={ArrowRight} disabled={busy} onClick={() => moveTo(5)}>
-                  Meet Hibi
+                  {uiT("Meet Hibi")}
                 </Button>
               </div>
             </div>

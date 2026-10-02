@@ -48,6 +48,33 @@ function CommunityHarness() {
 }
 
 describe("Community active student count", () => {
+  it("pages the real student table with valid cell roles", async () => {
+    const user = userEvent.setup();
+    const state = createStarterState();
+    state.students = Array.from({ length: 61 }, (_, i) =>
+      createStudent({
+        id: `s${i}`,
+        code: `S${i}`,
+        fullName: `Person ${String(i).padStart(2, "0")}`,
+        isIndividual: true,
+      }),
+    );
+    render(
+      <I18nProvider>
+        <Community state={state} derived={deriveAll(state)} actions={{}} initialView="students" />
+      </I18nProvider>,
+    );
+    const table = screen.getByRole("table", { name: "Students" });
+    expect(within(table).getAllByRole("row")).toHaveLength(26);
+    expect(within(table).getAllByRole("columnheader")).toHaveLength(5);
+    expect(within(table).getAllByRole("cell")).toHaveLength(125);
+    expect(within(table).getByText("Person 00")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Next page" }));
+    expect(within(table).queryByText("Person 00")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Next page" }));
+    expect(within(table).getAllByRole("row")).toHaveLength(12);
+    expect(screen.getByRole("button", { name: "Next page" })).toBeDisabled();
+  });
   it("decrements after an active student is deactivated", async () => {
     const user = userEvent.setup();
     render(<CommunityHarness />);

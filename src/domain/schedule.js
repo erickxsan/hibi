@@ -61,7 +61,11 @@ function classScheduleOccursOn(schedule, date) {
   if (schedule.endDate && date > schedule.endDate) return false;
   if (schedule.recurrence === "once") return date === schedule.startDate;
   if (!(schedule.daysOfWeek || []).includes(dayOfWeekForDate(date))) return false;
-  return Math.floor(daysBetween(schedule.startDate, date) / 7) % Math.max(1, Number(schedule.intervalWeeks) || 1) === 0;
+  return (
+    Math.floor(daysBetween(schedule.recurrenceAnchorDate || schedule.startDate, date) / 7) %
+      Math.max(1, Number(schedule.intervalWeeks) || 1) ===
+    0
+  );
 }
 
 function exceptionSourceKey(item) {

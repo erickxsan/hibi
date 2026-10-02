@@ -1,3 +1,4 @@
+import { roundMoney } from "./money.js";
 import {
   ATTENDANCE_CODES,
   CLASS_STATUSES,
@@ -207,6 +208,7 @@ export function validateClassSchedule(item, state = null) {
   enumValue(errors, item.recurrence, ["once", "weekly"], "recurrence", "Class frequency");
   enumValue(errors, item.format, ["group", "individual"], "format", "Class format");
   dateOnly(errors, item.startDate, "startDate", "Start date");
+  dateOnly(errors, item.recurrenceAnchorDate, "recurrenceAnchorDate", "Recurrence anchor", { optional: true });
   dateOnly(errors, item.endDate, "endDate", "End date", { optional: true });
   timeOnly(errors, item.startTime, "startTime", "Start time");
   finiteNumber(errors, item.durationHours, "durationHours", "Class duration", { min: 0.25 });
@@ -441,6 +443,7 @@ export function normalizeState(input) {
       groupId: normalizeText(item?.groupId),
       studentId: normalizeText(item?.studentId),
       startDate: normalizeText(item?.startDate),
+      recurrenceAnchorDate: normalizeText(item?.recurrenceAnchorDate),
       endDate: normalizeOptionalText(item?.endDate) || "",
       startTime: normalizeText(item?.startTime),
       durationHours: normalizeNumber(
@@ -499,9 +502,12 @@ export function normalizeState(input) {
     const group = groupsById.get(row.groupId);
     const inheritedRate = student?.customHourlyRate ?? group?.hourlyRate ?? normalized.settings.hourlyRate;
     if (row.appliedHourlyRate === null && Number.isFinite(inheritedRate)) row.appliedHourlyRate = inheritedRate;
+    for (const field of ["appliedCharge", "amountPaid"]) {
+      if (Number.isFinite(row[field])) row[field] = roundMoney(row[field]);
+    }
     if (row.appliedCharge === null && Number.isFinite(row.appliedHourlyRate)) {
       const hours = row.hours === null ? normalized.settings.defaultClassHours : row.hours;
-      row.appliedCharge = row.classStatus === "Cancelled" ? 0 : hours * row.appliedHourlyRate;
+      row.appliedCharge = row.classStatus === "Cancelled" ? 0 : roundMoney(hours * row.appliedHourlyRate);
     }
   });
   return normalized;

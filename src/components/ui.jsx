@@ -1,4 +1,5 @@
-import { cloneElement, isValidElement, useEffect, useId, useRef } from "react";
+import { useI18n } from "../i18n/index.jsx";
+import { Children, Fragment, cloneElement, isValidElement, useCallback, useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import { AlertCircle, Search, X } from "lucide-react";
 import { closeOverlayHistory, pushOverlayHistory, subscribeToAppHistory } from "../navigation/appHistory";
@@ -23,6 +24,7 @@ function unlockDrawerBackground() {
   document.querySelector(".hibi-shell, .app-shell")?.removeAttribute("inert");
 }
 
+/** @param {import("./ui.types").ButtonProps} props */
 export function Button({ children, variant = "secondary", icon: Icon, className = "", ...props }) {
   const accessibleName = props["aria-label"] || (typeof children === "string" ? children : undefined);
   return (
@@ -38,6 +40,7 @@ export function Button({ children, variant = "secondary", icon: Icon, className 
   );
 }
 
+/** @param {import("./ui.types").IconButtonProps} props */
 export function IconButton({ label, icon: Icon, className = "", ...props }) {
   return (
     <button className={`icon-button ${className}`.trim()} type="button" aria-label={label} title={label} {...props}>
@@ -46,15 +49,33 @@ export function IconButton({ label, icon: Icon, className = "", ...props }) {
   );
 }
 
+/** @param {import("./ui.types").FieldProps} props */
 export function Field({ label, hint, error, required, children, className = "" }) {
   const labelId = useId();
-  const labelledChild =
-    isValidElement(children) && !children.props["aria-label"] && !children.props["aria-labelledby"]
-      ? cloneElement(children, {
-          "aria-labelledby": labelId,
-          "aria-invalid": error ? "true" : children.props["aria-invalid"],
-        })
-      : children;
+  const hintId = `${labelId}-hint`;
+  const errorId = `${labelId}-error`;
+  const labelControls = (nodes) =>
+    Children.map(nodes, (child) => {
+      if (!isValidElement(child)) return child;
+      if (child.type === Fragment) return cloneElement(child, {}, labelControls(child.props.children));
+      if (typeof child.type === "string" && !["input", "select", "textarea"].includes(child.type)) {
+        return child.props.children ? cloneElement(child, {}, labelControls(child.props.children)) : child;
+      }
+      return cloneElement(child, {
+        "aria-labelledby": child.props["aria-labelledby"] || (child.props["aria-label"] ? undefined : labelId),
+        "aria-invalid": error ? "true" : child.props["aria-invalid"],
+        "aria-describedby":
+          [child.props["aria-describedby"], error ? errorId : hint ? hintId : ""].filter(Boolean).join(" ") ||
+          undefined,
+        "aria-required": required ? "true" : child.props["aria-required"],
+        ...((typeof child.type === "string" && ["input", "select", "textarea"].includes(child.type)) ||
+        child.type === Input ||
+        child.type === TextArea
+          ? { required: Boolean(required || child.props.required) }
+          : {}),
+      });
+    });
+  const labelledChild = labelControls(children);
   return (
     <label className={`field ${className}`.trim()}>
       <span className="field-label" id={labelId}>
@@ -63,11 +84,15 @@ export function Field({ label, hint, error, required, children, className = "" }
       </span>
       {labelledChild}
       {error ? (
-        <span className="field-error" role="alert">
+        <span className="field-error" role="alert" id={errorId}>
           {error}
         </span>
       ) : null}
-      {!error && hint ? <span className="field-hint">{hint}</span> : null}
+      {!error && hint ? (
+        <span className="field-hint" id={hintId}>
+          {hint}
+        </span>
+      ) : null}
     </label>
   );
 }
@@ -81,15 +106,17 @@ export function TextArea({ className = "", ...props }) {
 }
 
 export function SearchInput({ value, onChange, placeholder = "Search", className = "", ...props }) {
+  const { t: uiT } = useI18n();
   return (
     <label className={`search-control ${className}`.trim()}>
       <Search aria-hidden="true" size={17} strokeWidth={1.8} />
-      <span className="sr-only">Search</span>
+      <span className="sr-only">{uiT("Search")}</span>
       <input value={value} onChange={onChange} placeholder={placeholder} {...props} />
     </label>
   );
 }
 
+/** @param {import("./ui.types").StatusBadgeProps} props */
 export function StatusBadge({ children, tone = "neutral", icon: Icon }) {
   return (
     <span className={`status-badge status-${tone}`}>
@@ -100,6 +127,7 @@ export function StatusBadge({ children, tone = "neutral", icon: Icon }) {
 }
 
 export function Tabs({ value, onChange, items, ariaLabel }) {
+  const { t: uiT } = useI18n();
   return (
     <div className="tabs" role="group" aria-label={ariaLabel}>
       {items.map((item) => (
@@ -110,7 +138,7 @@ export function Tabs({ value, onChange, items, ariaLabel }) {
           className={value === item.value ? "tab is-active" : "tab"}
           onClick={() => onChange(item.value)}
         >
-          {item.label}
+          {uiT(item.label)}
         </button>
       ))}
     </div>
@@ -119,12 +147,13 @@ export function Tabs({ value, onChange, items, ariaLabel }) {
 
 export function TableShell({ children, className = "", label }) {
   return (
-    <div className={`table-shell ${className}`.trim()} role="region" aria-label={label} tabIndex="0">
+    <div className={`table-shell ${className}`.trim()} role="region" aria-label={label} tabIndex={0}>
       {children}
     </div>
   );
 }
 
+/** @param {import("./ui.types").EmptyStateProps} props */
 export function EmptyState({ icon: Icon = AlertCircle, title, description, action }) {
   return (
     <div className="empty-state">
@@ -138,7 +167,9 @@ export function EmptyState({ icon: Icon = AlertCircle, title, description, actio
   );
 }
 
+/** @param {import("./ui.types").DrawerProps} props */
 export function Drawer({ open, onClose, title, description, children, footer, size = "normal", className = "" }) {
+  const { t: uiT } = useI18n();
   const titleId = useId();
   const descriptionId = useId();
   const historyId = useId();
@@ -149,12 +180,12 @@ export function Drawer({ open, onClose, title, description, children, footer, si
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
-  const requestClose = () => {
+  const requestClose = useCallback(() => {
     if (closing.current) return;
     closing.current = true;
     if (ownsHistoryEntry.current && closeOverlayHistory(historyId)) return;
     if (onCloseRef.current?.() === false) closing.current = false;
-  };
+  }, [historyId]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -219,7 +250,7 @@ export function Drawer({ open, onClose, title, description, children, footer, si
       closing.current = false;
       previousFocus.current?.focus?.();
     };
-  }, [historyId, open]);
+  }, [historyId, open, requestClose]);
 
   if (!open || typeof document === "undefined") return null;
   return createPortal(
@@ -241,7 +272,7 @@ export function Drawer({ open, onClose, title, description, children, footer, si
             <h2 id={titleId}>{title}</h2>
             {description ? <p id={descriptionId}>{description}</p> : null}
           </div>
-          <IconButton label="Close" icon={X} onClick={requestClose} />
+          <IconButton label={uiT("Close")} icon={X} onClick={requestClose} />
         </header>
         <div className="drawer-body">{children}</div>
         {footer ? <footer className="drawer-footer">{footer}</footer> : null}
@@ -251,6 +282,7 @@ export function Drawer({ open, onClose, title, description, children, footer, si
   );
 }
 
+/** @param {import("./ui.types").ConfirmDialogProps} props */
 export function ConfirmDialog({
   open,
   title,
@@ -263,6 +295,7 @@ export function ConfirmDialog({
   confirmDisabled = false,
   children,
 }) {
+  const { t: uiT } = useI18n();
   if (!open) return null;
   return (
     <Drawer
@@ -274,17 +307,17 @@ export function ConfirmDialog({
       footer={
         <>
           <Button onClick={onClose} disabled={busy}>
-            Cancel
+            {uiT("Cancel")}
           </Button>
           <Button variant={tone} onClick={onConfirm} disabled={busy || confirmDisabled}>
-            {busy ? "Saving…" : confirmLabel}
+            {busy ? uiT("Saving…") : confirmLabel}
           </Button>
         </>
       }
     >
       <div className="dialog-message">
         <AlertCircle aria-hidden="true" />
-        <p>This action changes saved data immediately.</p>
+        <p>{uiT("This action changes saved data immediately.")}</p>
       </div>
       {children}
     </Drawer>
@@ -292,6 +325,7 @@ export function ConfirmDialog({
 }
 
 export function ToastRegion({ toasts, onDismiss }) {
+  const { t: uiT } = useI18n();
   const soundedToastIds = useRef(new Set());
 
   useEffect(() => {
@@ -313,7 +347,7 @@ export function ToastRegion({ toasts, onDismiss }) {
   }, [toasts]);
 
   return (
-    <div className="toast-region" aria-live="polite" aria-label="Notifications">
+    <div className="toast-region" aria-live="polite" aria-label={uiT("Notifications")}>
       {toasts.map((toast) => (
         <div className={`toast toast-${toast.tone || "success"}`} key={toast.id}>
           {toast.tone === "error" ? (
@@ -323,14 +357,15 @@ export function ToastRegion({ toasts, onDismiss }) {
               <BrandMark />
             </span>
           )}
-          <span>{toast.message}</span>
-          <IconButton label="Dismiss notification" icon={X} onClick={() => onDismiss(toast.id)} />
+          <span>{uiT(toast.message)}</span>
+          <IconButton label={uiT("Dismiss notification")} icon={X} onClick={() => onDismiss(toast.id)} />
         </div>
       ))}
     </div>
   );
 }
 
+/** @param {import("./ui.types").SectionHeadingProps} props */
 export function SectionHeading({ title, description, actions }) {
   return (
     <div className="section-heading">

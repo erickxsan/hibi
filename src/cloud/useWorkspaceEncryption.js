@@ -1,3 +1,4 @@
+import { cloudWritesEnabled } from "./client.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createPasswordWrapper,
@@ -9,6 +10,7 @@ import {
   generateWorkspaceCryptoId,
   parseRecoveryKey,
   recoveryKeyFingerprint,
+  recoveryKeyFingerprints,
   rewrapPassword,
   unlockWithPassword,
   unwrapMasterKey,
@@ -109,7 +111,7 @@ export function useWorkspaceEncryption(user) {
   );
 
   const activate = useCallback(
-    async ({ password, rememberDevice = true } = {}) => {
+    async ({ password = undefined, rememberDevice = true } = {}) => {
       if (busy || loading || !bootstrap) return;
       if (bootstrap.profile && bootstrap.profile.migrationStatus !== "migration_started") return;
       if (bootstrap.wrappers.some((wrapper) => wrapper.type === "password" && !wrapper.revokedAt)) return;
@@ -143,7 +145,6 @@ export function useWorkspaceEncryption(user) {
           adoptSession(
             createCryptoSession({ ownerId: user.id, workspaceCryptoId, masterKey, keyVersion: 1, method: "password" }),
           );
-          masterKey = null;
           await refresh();
         });
       } catch (caught) {
@@ -228,15 +229,18 @@ export function useWorkspaceEncryption(user) {
       setBusy(true);
       setError(null);
       let secret;
+      let masterKey;
       try {
         secret = await parseRecoveryKey(formattedKey);
-        const fingerprint = await recoveryKeyFingerprint(secret);
+        const fingerprints = await recoveryKeyFingerprints(secret);
         const wrapper = bootstrap.wrappers.find(
           (candidate) =>
-            candidate.type === "recovery" && !candidate.revokedAt && candidate.recoveryFingerprint === fingerprint,
+            candidate.type === "recovery" &&
+            !candidate.revokedAt &&
+            fingerprints.includes(candidate.recoveryFingerprint),
         );
         if (!wrapper) throw new Error("That recovery key is not registered for this workspace.");
-        const masterKey = await unwrapMasterKey({
+        masterKey = await unwrapMasterKey({
           wrapper,
           wrappingSecret: secret,
           workspaceCryptoId: bootstrap.profile.workspaceCryptoId,
@@ -261,10 +265,10 @@ export function useWorkspaceEncryption(user) {
           }),
         );
         await refresh();
-        wipeBytes(masterKey);
       } catch (caught) {
         setError(caught);
       } finally {
+        if (masterKey) wipeBytes(masterKey);
         if (secret) wipeBytes(secret);
         setBusy(false);
       }
@@ -404,7 +408,6 @@ export function useWorkspaceEncryption(user) {
             method: "rotated-password",
           }),
         );
-        newMasterKey = null;
         await refresh();
         return true;
       } finally {
@@ -446,8 +449,19 @@ export function useWorkspaceEncryption(user) {
     [user.id],
   );
 
+  const clearLocalCopies = useCallback(async () => {
+    const pending = await deviceRecoveryStore.listMutations(user.id);
+    if (pending.length) throw new Error("Sync or export every pending change before clearing local copies.");
+    await deviceRecoveryStore.purgeAccount(user.id, { preservePending: true });
+    await deviceKeyStore.forget(user.id);
+    setRememberedDevice(null);
+    await lock();
+  }, [lock, user.id]);
+
   const security = useMemo(
     () => ({
+      writesEnabled: cloudWritesEnabled,
+      clearLocalCopies,
       enabled: bootstrap?.profile?.migrationStatus === "active",
       profile: bootstrap?.profile || null,
       wrappers: bootstrap?.wrappers || [],
@@ -463,6 +477,7 @@ export function useWorkspaceEncryption(user) {
     }),
     [
       bootstrap,
+      clearLocalCopies,
       changePassword,
       createRecoveryKey,
       forgetDevice,

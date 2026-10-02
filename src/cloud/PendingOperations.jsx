@@ -1,3 +1,4 @@
+import { useI18n } from "../i18n/index.jsx";
 import { useState } from "react";
 
 function record(state, item) {
@@ -7,6 +8,7 @@ function record(state, item) {
 }
 
 export function PendingOperations({ persistence }) {
+  const { t: uiT } = useI18n();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const entries = persistence?.pendingOperations || [];
@@ -24,11 +26,15 @@ export function PendingOperations({ persistence }) {
   };
   return (
     <details className="pending-operations">
-      <summary>Review pending changes ({entries.length})</summary>
+      <summary>
+        {uiT("Review pending changes (")}
+        {entries.length})
+      </summary>
       <p>{persistence.syncMessage}</p>
       <p>
-        Keep local applies this operation to the current cloud records. Discard removes only this operation; later edits
-        are reviewed separately.
+        {uiT(
+          "Keep local applies this operation to the current cloud records. Discard removes only this operation; later edits are reviewed separately.",
+        )}
       </p>
       {error ? <p role="alert">{error}</p> : null}
       <ul>
@@ -37,7 +43,7 @@ export function PendingOperations({ persistence }) {
           return (
             <li key={entry.id}>
               <p>
-                {entry.status === "conflict" ? "Conflict" : "Pending"} · {entry.createdAt}
+                {entry.status === "conflict" ? uiT("Conflict") : uiT("Pending")} · {entry.createdAt}
               </p>
               <ul>
                 {items.map((item) => (
@@ -50,7 +56,7 @@ export function PendingOperations({ persistence }) {
                 ))}
               </ul>
               <details>
-                <summary>Review this operation</summary>
+                <summary>{uiT("Review this operation")}</summary>
                 <pre>
                   {JSON.stringify(
                     items.map((item) => ({
@@ -64,17 +70,17 @@ export function PendingOperations({ persistence }) {
                 </pre>
               </details>
               <button type="button" disabled={busy} onClick={() => void resolve(entry.id, "local")}>
-                Keep local change
+                {uiT("Keep local change")}
               </button>
               <button type="button" disabled={busy} onClick={() => void resolve(entry.id, "discard")}>
-                Discard this operation
+                {uiT("Discard this operation")}
               </button>
             </li>
           );
         })}
       </ul>
       <button type="button" disabled={busy} onClick={() => void persistence.retrySync()}>
-        Retry synchronization
+        {uiT("Retry synchronization")}
       </button>
     </details>
   );
