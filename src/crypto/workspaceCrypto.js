@@ -270,6 +270,7 @@ export async function decryptWorkspace({ masterKey, workspaceCryptoId, envelopes
     }
   }
   if (!state.settings) throw new WorkspaceCryptoError("The encrypted workspace is missing its settings envelope.");
+  const orderKeys = {};
   for (const collection of ENCRYPTED_COLLECTIONS) {
     state[collection].sort((left, right) => {
       const leftPosition = positions[collection].get(String(left.id));
@@ -279,14 +280,20 @@ export async function decryptWorkspace({ masterKey, workspaceCryptoId, envelopes
       if (rightPosition === undefined) return -1;
       return leftPosition - rightPosition || String(left.id).localeCompare(String(right.id));
     });
-    state[collection].forEach((item, position) => {
+    // Positions are sparse sort keys: gaps left by deletions are valid. Only a
+    // repeated key (or a legacy record without one) needs a new authenticated key.
+    orderKeys[collection] = {};
+    let previousPosition = -1;
+    for (const item of state[collection]) {
       const storedPosition = positions[collection].get(String(item.id));
-      if (storedPosition !== undefined && storedPosition !== position) {
+      if (storedPosition === undefined || storedPosition <= previousPosition) {
         orderingRepairs.push({ collection, entityId: String(item.id) });
       }
-    });
+      if (storedPosition !== undefined) orderKeys[collection][String(item.id)] = storedPosition;
+      previousPosition = Math.max(previousPosition, storedPosition ?? previousPosition);
+    }
   }
-  return { state, versions, orderingRepairs };
+  return { state, versions, orderingRepairs, positions: orderKeys };
 }
 
 async function envelopeLeaf(envelope, cryptoApi) {

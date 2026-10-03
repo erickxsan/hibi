@@ -34,6 +34,10 @@ function canonicalWorkspace(workspace) {
     ...(workspace?.manifest && typeof workspace.manifest === "object" ? { manifest: workspace.manifest } : {}),
     ...(workspace?.workspaceCryptoId ? { workspaceCryptoId: workspace.workspaceCryptoId } : {}),
     ...(workspace?.keyVersion ? { keyVersion: Number(workspace.keyVersion) } : {}),
+    // Sparse order keys of the encrypted records and, for an optimistic
+    // projection, the newest verified cloud revision underneath it.
+    ...(workspace?.positions && typeof workspace.positions === "object" ? { positions: workspace.positions } : {}),
+    ...(Number.isSafeInteger(workspace?.confirmedRevision) ? { confirmedRevision: workspace.confirmedRevision } : {}),
   };
 }
 
@@ -368,36 +372,65 @@ export function createDeviceRecoveryStore(indexedDb = globalThis.indexedDB, cryp
     await done;
   }
 
-  async function replaceMutation(ownerId, operationId, mutation, workspace) {
+  /**
+   * Rewrites several queued operations and the projected cache atomically.
+   * remove: operation IDs to drop. put: rebuilt operations; each replaces the
+   * entry `replaces` (default: its own operation ID) and keeps its queue order.
+   */
+  async function rewriteMutations(ownerId, { remove = [], put = [] } = {}, workspace = null) {
     const database = await openDatabase();
     if (!database) throw new Error("Encrypted offline storage is unavailable.");
-    const payload =
-      mutation && !mutation.empty
-        ? await seal(database, ownerId, { mutation, workspace: canonicalWorkspace(workspace) })
-        : null;
-    const cachePayload = await seal(database, ownerId, canonicalWorkspace(workspace));
+    const sealed = await Promise.all(
+      put.map(async (item) => ({
+        replaces: item.replaces ?? item.mutation.operationId,
+        id: item.mutation.operationId,
+        status: item.status || "pending",
+        payload: await seal(database, ownerId, {
+          mutation: item.mutation,
+          workspace: canonicalWorkspace(item.workspace || workspace),
+        }),
+      })),
+    );
+    const cachePayload = workspace ? await seal(database, ownerId, canonicalWorkspace(workspace)) : null;
     const transaction = database.transaction([OUTBOX_STORE, CACHE_STORE], "readwrite");
     const done = transactionDone(transaction);
     const store = transaction.objectStore(OUTBOX_STORE);
-    const item = await requestResult(store.get(operationId));
-    if (!item || item.ownerId !== ownerId) {
-      await done;
+    const targets = [...new Set([...remove, ...sealed.map((item) => item.replaces)])];
+    const existing = await Promise.all(targets.map((id) => requestResult(store.get(id))));
+    const current = new Map(targets.map((id, index) => [id, existing[index]]));
+    if (targets.some((id) => current.get(id)?.ownerId !== ownerId)) {
+      transaction.abort();
+      await done.catch(() => {});
       throw new Error("This pending operation no longer exists.");
     }
-    store.delete(operationId);
-    if (payload)
+    for (const id of remove) store.delete(id);
+    for (const item of sealed) {
+      if (item.replaces !== item.id) store.delete(item.replaces);
       store.put({
-        id: mutation.operationId,
+        id: item.id,
         ownerId,
-        status: "pending",
-        createdAt: item.createdAt,
-        payload,
+        status: item.status,
+        createdAt: current.get(item.replaces).createdAt,
+        payload: item.payload,
         encrypted: true,
       });
-    transaction
-      .objectStore(CACHE_STORE)
-      .put({ ownerId, payload: cachePayload, cachedAt: new Date().toISOString(), encrypted: true });
+    }
+    if (cachePayload) {
+      transaction
+        .objectStore(CACHE_STORE)
+        .put({ ownerId, payload: cachePayload, cachedAt: new Date().toISOString(), encrypted: true });
+    }
     await done;
+  }
+
+  async function replaceMutation(ownerId, operationId, mutation, workspace) {
+    return rewriteMutations(
+      ownerId,
+      mutation && !mutation.empty
+        ? { put: [{ replaces: operationId, mutation, workspace }] }
+        : { remove: [operationId] },
+      workspace,
+    );
   }
 
   async function purgeAccount(ownerId, { preservePending = false } = {}) {
@@ -436,6 +469,7 @@ export function createDeviceRecoveryStore(indexedDb = globalThis.indexedDB, cryp
     completeMutation,
     clearMutations,
     replaceMutation,
+    rewriteMutations,
     purgeAccount,
   };
 }

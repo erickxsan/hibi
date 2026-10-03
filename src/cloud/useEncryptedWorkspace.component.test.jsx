@@ -44,10 +44,14 @@ beforeEach(() => {
     markMutationConflict: vi.fn(async (_, id) => {
       queue = queue.map((item) => (item.id === id ? { ...item, status: "conflict" } : item));
     }),
-    replaceMutation: vi.fn(async (_, id, mutation) => {
-      queue = queue.flatMap((item) =>
-        item.id !== id ? [item] : mutation ? [{ ...item, id: mutation.operationId, mutation, status: "pending" }] : [],
-      );
+    rewriteMutations: vi.fn(async (_, { remove = [], put = [] }) => {
+      queue = queue.flatMap((item) => {
+        if (remove.includes(item.id)) return [];
+        const replacement = put.find((next) => next.replaces === item.id);
+        return replacement
+          ? [{ ...item, id: replacement.mutation.operationId, mutation: replacement.mutation, status: "pending" }]
+          : [item];
+      });
     }),
   });
   Object.assign(mocks.repository, {
@@ -55,6 +59,7 @@ beforeEach(() => {
     applyMutation: vi.fn(async () => ({ ...workspace, revision: 2 })),
     resolveMutation: vi.fn(async (mutation) => ({ ...mutation, operationId: "replacement" })),
     optimisticWorkspace: vi.fn((current) => current),
+    projectPendingWorkspace: vi.fn(async (confirmed, entries) => ({ workspace: confirmed, entries })),
     subscribe: vi.fn(async () => () => {}),
   });
 });
@@ -340,7 +345,7 @@ describe("encrypted offline queue", () => {
     });
     expect(queue).toEqual([]);
     expect(result.current.syncStatus).toBe("saved");
-    expect(mocks.store.replaceMutation).toHaveBeenCalledOnce();
+    expect(mocks.store.rewriteMutations).toHaveBeenCalledOnce();
     expect(mocks.repository.applyMutation).toHaveBeenCalledTimes(choice === "local" ? 2 : 1);
   });
 

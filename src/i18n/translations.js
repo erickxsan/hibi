@@ -1361,9 +1361,107 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "End-to-end encryption": "Cifrado de extremo a extremo",
   "Your tutorial progress and classroom data stay protected with E2EE.":
     "El avance del tutorial y los datos de tus clases permanecen protegidos con E2EE.",
+  // Encrypted synchronization and change review.
+  "Changes need review": "Cambios por revisar",
+  "Wait for saving to finish before signing out.": "Espera a que termine el guardado antes de cerrar sesión.",
+  "Your edit was safely combined with a newer cloud change.":
+    "Tu edición se combinó de forma segura con un cambio más reciente de la nube.",
+  "Verifying encrypted changes and pending operations.":
+    "Verificando los cambios cifrados y las operaciones pendientes.",
+  "Encrypted changes are safe on this device and waiting to sync.":
+    "Los cambios cifrados están seguros en este dispositivo y esperan sincronizarse.",
+  "Encrypted changes are being saved on this device.": "Los cambios cifrados se están guardando en este dispositivo.",
+  "Encrypted changes are waiting to sync.": "Los cambios cifrados esperan sincronizarse.",
+  "Review pending operations. Changes to other records can still sync.":
+    "Revisa los cambios pendientes. Los cambios en otros registros se siguen sincronizando.",
+  "Review the pending operation to keep your change or discard it.":
+    "Revisa el cambio pendiente para conservarlo o descartarlo.",
+  "Another device saved at the same time. Encrypted local changes will retry automatically.":
+    "Otro dispositivo guardó al mismo tiempo. Los cambios cifrados locales se reintentarán automáticamente.",
+  "The connection was interrupted. Encrypted local changes will retry automatically.":
+    "Se interrumpió la conexión. Los cambios cifrados locales se reintentarán automáticamente.",
+  "Encrypted data could not be verified or decrypted. Sync is paused; your local changes are preserved.":
+    "No se pudieron verificar ni descifrar los datos cifrados. La sincronización está en pausa; tus cambios locales se conservan.",
+  "A storage or operation limit prevents synchronization. Review or discard pending operations.":
+    "Un límite de almacenamiento o de operación impide la sincronización. Revisa o descarta los cambios pendientes.",
+  "This change affects more than 500 records at once. Split it into smaller edits before saving.":
+    "Este cambio afecta más de 500 registros a la vez. Divídelo en ediciones más pequeñas antes de guardar.",
+  "This single encrypted change is too large. Save it in smaller batches.":
+    "Este cambio cifrado es demasiado grande. Guárdalo en partes más pequeñas.",
+  "This change cannot be kept because it no longer fits the current cloud records. Discard it or edit the record again.":
+    "No se puede conservar este cambio porque ya no es compatible con los registros actuales de la nube. Descártalo o vuelve a editar el registro.",
+  "Another device kept saving at the same time. Hibi will retry this change automatically.":
+    "Otro dispositivo siguió guardando al mismo tiempo. Hibi reintentará este cambio automáticamente.",
+  "This pending operation no longer exists.": "Este cambio pendiente ya no existe.",
+  "An operation is already being resolved.": "Ya se está resolviendo otro cambio.",
+  "Finish resolving the pending operation before editing.": "Termina de resolver el cambio pendiente antes de editar.",
+  "Reconnect and finish syncing encrypted changes before this operation.":
+    "Vuelve a conectarte y termina de sincronizar los cambios cifrados antes de esta operación.",
+  "Class record": "Registro de clase",
+  "Class schedule": "Horario de clases",
+  "Class change": "Cambio de clase",
+  "Schedule change": "Cambio de horario",
+  "Other record": "Otro registro",
+  "Untitled record": "Registro sin título",
+  Name: "Nombre",
+  "Student code": "Código del alumno",
+  Guardian: "Tutor",
+  Email: "Correo electrónico",
+  Avatar: "Avatar",
+  "Class title": "Título de la clase",
+  "Payment method": "Método de pago",
+  Currency: "Moneda",
+  "Projection weeks": "Semanas de proyección",
+  "End date": "Fecha de fin",
+  "Repeat every (weeks)": "Repetir cada (semanas)",
+  "Original date": "Fecha original",
+  "Effective from": "Vigente desde",
+  "Day of the week": "Día de la semana",
+  "Not available": "No disponible",
+  "Workspace settings": "Configuración del espacio de trabajo",
+  "Unnamed student": "Alumno sin nombre",
+  "Unnamed group": "Grupo sin nombre",
+  Field: "Campo",
+  Before: "Antes",
+  "Cloud now": "Nube ahora",
+  Deleted: "Eliminado",
+  "Retry synchronization": "Reintentar sincronización",
+  "Saved on this device": "Guardado en este dispositivo",
+  "Different values": "Valores distintos",
+  "1 change is saved on this device and will sync when the connection returns.":
+    "1 cambio está guardado en este dispositivo y se sincronizará cuando vuelva la conexión.",
+  "1 change needs your review": "1 cambio necesita tu revisión",
+  "Another device changed the same information. Compare the values and choose which one to keep. Changes to other records keep syncing.":
+    "Otro dispositivo cambió la misma información. Compara los valores y elige cuál conservar. Los cambios en otros registros se siguen sincronizando.",
+  "This device deleted this record, but another device edited it.":
+    "Este dispositivo eliminó este registro, pero otro dispositivo lo editó.",
+  "This device edited this record, but another device deleted it.":
+    "Este dispositivo editó este registro, pero otro dispositivo lo eliminó.",
+  "This device deleted this record.": "Este dispositivo eliminó este registro.",
+  "This device added this record.": "Este dispositivo agregó este registro.",
+  "Keep this device's version to replace the highlighted cloud values. Discard it to keep the cloud version; nothing else is removed.":
+    "Conserva la versión de este dispositivo para reemplazar los valores resaltados de la nube. Descártala para conservar la versión de la nube; no se elimina nada más.",
+  "Keep this device's version": "Conservar la versión de este dispositivo",
+  "Discard this device's change": "Descartar el cambio de este dispositivo",
+  "1 more change is safe on this device and will sync automatically.":
+    "1 cambio más está seguro en este dispositivo y se sincronizará automáticamente.",
+  "This change could not be resolved. Try again.": "No se pudo resolver este cambio. Inténtalo de nuevo.",
 });
 
 const DYNAMIC_TRANSLATIONS = [
+  [
+    /^(\d+) changes are saved on this device and will sync when the connection returns\.$/,
+    (match) => `${match[1]} cambios están guardados en este dispositivo y se sincronizarán cuando vuelva la conexión.`,
+  ],
+  [/^(\d+) changes need your review$/, (match) => `${match[1]} cambios necesitan tu revisión`],
+  [
+    /^(\d+) more changes are safe on this device and will sync automatically\.$/,
+    (match) => `${match[1]} cambios más están seguros en este dispositivo y se sincronizarán automáticamente.`,
+  ],
+  [
+    /^Synchronization needs attention: (.+)\. Local changes are preserved\.$/,
+    (match) => `La sincronización necesita atención: ${match[1]}. Los cambios locales se conservan.`,
+  ],
   [
     /^Attendance in (\d+) (class|classes)$/,
     (match) => `Asistencia en ${match[1]} ${Number(match[1]) === 1 ? "clase" : "clases"}`,

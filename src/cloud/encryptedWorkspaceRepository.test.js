@@ -1,147 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { createGroup, createStarterState, createStudent } from "../domain/index.js";
-import {
-  createManifest,
-  decryptEntity,
-  encryptEntity,
-  encryptWorkspace,
-  generateAccountMasterKey,
-  generateWorkspaceCryptoId,
-  verifyManifest,
-} from "../crypto/index.js";
+import { createManifest, decryptEntity, encryptEntity } from "../crypto/index.js";
 import {
   APPLY_E2EE_MUTATION_RPC,
   LOAD_E2EE_WORKSPACE_RPC,
-  REPLACE_E2EE_WORKSPACE_RPC,
   createEncryptedWorkspaceRepository,
 } from "./encryptedWorkspaceRepository.js";
+import { twoDevices } from "../test/encryptedSyncServer.js";
 import { WorkspaceConflictError } from "./workspaceRepository.js";
-
-async function twoDevices(state, versions = {}, transformEnvelopes = null) {
-  const session = {
-    masterKey: generateAccountMasterKey(),
-    workspaceCryptoId: generateWorkspaceCryptoId(),
-    keyVersion: 1,
-  };
-  const original = await encryptWorkspace({ ...session, state, versions });
-  const envelopes = transformEnvelopes ? await transformEnvelopes(original, session) : original;
-  let row = {
-    workspace_crypto_id: session.workspaceCryptoId,
-    workspace_revision: 1,
-    active_key_version: 1,
-    migration_status: "active",
-    envelopes,
-    manifest: await createManifest({ ...session, envelopes, workspaceRevision: 1, operationId: "initial" }),
-  };
-  const events = [];
-  const receipts = new Map();
-  let notify;
-  const channel = {
-    on: (_type, _filter, callback) => {
-      notify = callback;
-      return channel;
-    },
-    subscribe: () => channel,
-  };
-  const client = {
-    channel: () => channel,
-    removeChannel: vi.fn(),
-    from: () => {
-      let revision = 0;
-      let maximumRevision = Infinity;
-      const query = {
-        select: () => query,
-        eq: () => query,
-        order: () => query,
-        gt: (_column, value) => {
-          revision = value;
-          return query;
-        },
-        lte: (_column, value) => {
-          maximumRevision = value;
-          return query;
-        },
-        limit: async (count) => ({
-          data: events
-            .filter((event) => event.workspace_revision > revision && event.workspace_revision <= maximumRevision)
-            .slice(0, count),
-          error: null,
-        }),
-      };
-      return query;
-    },
-    auth: { getUser: async () => ({ data: { user: { id: "owner" } }, error: null }) },
-    rpc: vi.fn(async (name, args) => {
-      if (name === LOAD_E2EE_WORKSPACE_RPC) return { data: [row], error: null };
-      if (![APPLY_E2EE_MUTATION_RPC, REPLACE_E2EE_WORKSPACE_RPC].includes(name)) {
-        throw new Error(`Unexpected RPC: ${name}`);
-      }
-      if (receipts.has(args.p_operation_id)) {
-        return { data: [{ result_revision: receipts.get(args.p_operation_id), already_applied: true }], error: null };
-      }
-      if (args.p_expected_workspace_revision !== row.workspace_revision) {
-        return { data: null, error: { code: "PT409", message: "workspace_revision_conflict" } };
-      }
-      if (
-        args.p_manifest.workspaceRevision !== row.workspace_revision + 1 ||
-        args.p_manifest.previousRoot !== row.manifest.root
-      ) {
-        return { data: null, error: { code: "22023", message: "invalid_workspace_manifest" } };
-      }
-      if (name === REPLACE_E2EE_WORKSPACE_RPC) {
-        events.push({
-          workspace_revision: row.workspace_revision + 1,
-          upserts: args.p_envelopes,
-          deleted_entities: row.envelopes
-            .filter(
-              (old) =>
-                !args.p_envelopes.some((item) => item.collection === old.collection && item.entityId === old.entityId),
-            )
-            .map(({ collection, entityId }) => ({ collection, entityId })),
-          manifest: args.p_manifest,
-        });
-        row = {
-          ...row,
-          envelopes: args.p_envelopes,
-          manifest: args.p_manifest,
-          workspace_revision: row.workspace_revision + 1,
-        };
-        return { data: [{ result_revision: row.workspace_revision }], error: null };
-      }
-      const next = new Map(row.envelopes.map((item) => [`${item.collection}/${item.entityId}`, item]));
-      for (const item of args.p_deletes) next.delete(`${item.collection}/${item.entityId}`);
-      for (const item of args.p_upserts) {
-        expect(item.entityRevision).toBe((next.get(`${item.collection}/${item.entityId}`)?.entityRevision || 0) + 1);
-        next.set(`${item.collection}/${item.entityId}`, item);
-      }
-      await verifyManifest({
-        ...session,
-        envelopes: [...next.values()],
-        manifest: args.p_manifest,
-        expectedPreviousRoot: row.manifest.root,
-      });
-      row = {
-        ...row,
-        envelopes: [...next.values()],
-        manifest: args.p_manifest,
-        workspace_revision: row.workspace_revision + 1,
-      };
-      events.push({
-        workspace_revision: row.workspace_revision,
-        upserts: args.p_upserts,
-        deleted_entities: args.p_deletes,
-        manifest: args.p_manifest,
-      });
-      receipts.set(args.p_operation_id, row.workspace_revision);
-      return { data: [{ result_revision: row.workspace_revision }], error: null };
-    }),
-  };
-  const first = createEncryptedWorkspaceRepository(client, { allowWrites: true });
-  const second = createEncryptedWorkspaceRepository(client, { allowWrites: true });
-  const firstBase = await first.loadWorkspace(session, "owner");
-  const secondBase = await second.loadWorkspace(session, "owner");
-  return { first, second, firstBase, secondBase, session, client, events, notify: () => notify() };
-}
 
 function student(id, code = id) {
   return createStudent({ id, code, fullName: `Student ${id}`, isIndividual: true });
@@ -322,14 +188,15 @@ describe("encrypted workspace mutation rebasing", () => {
       { collection: "students", entityId: "b" },
       { collection: "students", entityId: "c" },
     ]);
-    // Model a queued mutation created by a client that did not track repairs.
+    // Model a queued mutation created by a client that did not track repairs
+    // or stored order keys.
     const nextState = {
       ...state,
       students: [{ ...state.students[0], notes: "Tablet edit" }, ...state.students.slice(1)],
     };
     const pending = await devices.first.prepareMutation({
       state: nextState,
-      workspace: { ...devices.firstBase, orderingRepairs: [] },
+      workspace: { ...devices.firstBase, orderingRepairs: [], positions: undefined },
       session: devices.session,
     });
     expect(pending.upserts).toHaveLength(1);
@@ -364,7 +231,8 @@ describe("encrypted workspace mutation rebasing", () => {
       { ...state, students: [student(secondId)] },
     );
     const result = await devices.second.applyMutation(mutation, devices.session, "owner");
-    expect(result.state.students.map(({ id }) => id)).toEqual(["student-a", "student-z"]);
+    // The record saved first keeps its place; the rebased addition follows it.
+    expect(result.state.students.map(({ id }) => id)).toEqual([firstId, secondId]);
     expect(result.manifest.operationId).toBe(mutation.operationId);
     const positions = await Promise.all(
       result.envelopes

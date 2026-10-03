@@ -22,7 +22,14 @@ import {
   wipeBytes,
   WorkspaceCryptoError,
 } from "../crypto/index.js";
-import { applyWorkspacePatch, buildWorkspacePatch } from "./normalizedWorkspace.js";
+import {
+  diffWorkspaceStates,
+  indexOrderKeys,
+  MAX_SYNC_CHANGES,
+  mergeWorkspaceStates,
+  orderKeysFor,
+  sameValue,
+} from "./workspaceMerge.js";
 import {
   CloudAuthenticationError,
   cloudWritesEnabled,
@@ -69,7 +76,13 @@ const STAGE_ROTATION_IMPORTS_RPC = "stage_workspace_key_rotation_import_receipts
 const STAGE_ROTATION_WRAPPERS_RPC = "stage_workspace_key_rotation_wrappers";
 const FINALIZE_STAGED_ROTATION_RPC = "finalize_staged_workspace_key_rotation";
 const ABORT_STAGED_ROTATION_RPC = "abort_staged_workspace_key_rotation";
+// apply_encrypted_workspace_mutation rejects p_upserts above 5 MiB and more
+// than MAX_SYNC_CHANGES upserts + deletions. Check both before queueing.
 const MAX_MUTATION_BYTES = 5 * 1024 * 1024;
+// A revision collision means another device saved first, not that the data is
+// incompatible. Re-read, re-merge and resubmit a bounded number of times.
+const CONTENTION_ATTEMPTS = 4;
+const REPLACEMENT_REASONS = Object.freeze(["replace", "import", "restore", "reset"]);
 const LIVE_REFRESH_RETRY_INITIAL_MS = 2_000;
 const LIVE_REFRESH_RETRY_MAX_MS = 30_000;
 const LIVE_REFRESH_FALLBACK_MS = 30_000;
@@ -189,16 +202,68 @@ function envelopesAfterMutation(currentEnvelopes, upserts, deletes) {
   return [...next.values()];
 }
 
-function touchedEntitiesStillCurrent(mutation, latest) {
-  for (const envelope of mutation.upserts) {
-    const latestRevision = Number(latest.versions?.[envelope.collection]?.[envelope.entityId] || 0);
-    if (latestRevision !== envelope.entityRevision - 1) return false;
-  }
-  for (const deletion of mutation.deletes) {
-    const latestRevision = Number(latest.versions?.[deletion.collection]?.[deletion.entityId] || 0);
-    if (latestRevision !== deletion.expectedRevision) return false;
-  }
-  return true;
+function providerText(error) {
+  return `${error?.code || ""} ${error?.message || ""} ${error?.details || ""}`.toLowerCase();
+}
+
+// The server rejected the operation because its base revision is no longer
+// current. Its receipt was consulted first, so it was not applied before.
+function isStaleBaseResponse(error) {
+  const text = providerText(error);
+  return (
+    ["40001", "PT409"].includes(error?.code) ||
+    text.includes("workspace_revision_conflict") ||
+    text.includes("workspace_entity_conflict")
+  );
+}
+
+function mutationBaseRevision(mutation) {
+  return mutation.baseRevision ?? mutation.manifest.workspaceRevision - 1;
+}
+
+function mutationBaseRoot(mutation) {
+  return mutation.baseRoot ?? mutation.manifest.previousRoot;
+}
+
+function matchesBase(workspace, mutation) {
+  return (
+    workspace.revision === mutationBaseRevision(mutation) && workspace.manifest?.root === mutationBaseRoot(mutation)
+  );
+}
+
+function contentConflict(latest, { cause = undefined, conflicts = [], reason = "content" } = {}) {
+  const error = new WorkspaceConflictError({
+    latestState: latest.state,
+    latestRevision: latest.revision,
+    latestUpdatedAt: latest.updatedAt,
+    cause,
+  });
+  // Which records or fields contradict, and why automatic combination stopped.
+  return Object.assign(error, { conflicts, reason });
+}
+
+function contentionFailure(cause) {
+  const error = new CloudPersistenceError(
+    "Another device kept saving at the same time. Hibi will retry this change automatically.",
+    { cause },
+  );
+  error.code = "workspace_contention";
+  return error;
+}
+
+function mutationLimitFailure(message) {
+  const error = new CloudPersistenceError(message);
+  error.code = "mutation_too_large";
+  return error;
+}
+
+function defaultRetryDelay(attempt) {
+  return Math.round((150 + Math.random() * 250) * 2 ** attempt);
+}
+
+function wait(milliseconds) {
+  if (!milliseconds) return Promise.resolve();
+  return new Promise((resolve) => globalThis.setTimeout(resolve, milliseconds));
 }
 
 function assertBackupSize(value) {
@@ -213,6 +278,7 @@ export function createEncryptedWorkspaceRepository(
     allowWrites = cloudWritesEnabled,
     legacyRepository = legacyWorkspaceRepository,
     deviceStore = deviceRecoveryStore,
+    retryDelay = defaultRetryDelay,
   } = {},
 ) {
   const cloud = () => requireCloudClient(client);
@@ -295,6 +361,7 @@ export function createEncryptedWorkspaceRepository(
     const workspace = {
       state: canonicalState(decrypted.state),
       versions: decrypted.versions,
+      positions: decrypted.positions,
       orderingRepairs: decrypted.orderingRepairs,
       revision: normalizeRevision(row.workspace_revision),
       updatedAt: row.updated_at || null,
@@ -385,24 +452,33 @@ export function createEncryptedWorkspaceRepository(
     return cache;
   }
 
-  async function prepareMutation({ state, previousState, workspace, session, operationId = createOperationId() }) {
-    const nextState = canonicalState(state);
-    const baseState = canonicalState(previousState || workspace.state);
-    const { patch } = buildWorkspacePatch(baseState, nextState, workspace.versions);
-    // A previous client may have committed authenticated but colliding positions.
-    // Repair only surviving affected records, using their current revisions.
-    for (const { collection, entityId } of workspace.orderingRepairs || []) {
-      const position = nextState[collection].findIndex((item) => String(item.id) === entityId);
-      if (position < 0) continue;
-      const changes = (patch[collection] ||= { upserts: [], deletes: [] });
-      if (!changes.upserts.some(({ data }) => String(data.id) === entityId)) {
-        changes.upserts.push({ data: nextState[collection][position], position });
-      }
+  async function prepareMutation({
+    state,
+    previousState = undefined,
+    workspace,
+    session,
+    operationId = createOperationId(),
+  }) {
+    const baseState = canonicalState(workspace.state);
+    let nextState = canonicalState(state);
+    if (previousState && previousState !== workspace.state) {
+      // The edit was made on an older view. Apply only the fields it changed.
+      const viewed = canonicalState(previousState);
+      if (!sameValue(viewed, baseState))
+        nextState = mergedState({ previousState: viewed, state: nextState }, workspace);
     }
-    if (!Object.keys(patch).length) return { empty: true, state: nextState };
+    // Order keys are sparse: only new or displaced records receive a new key.
+    // Collided keys signed by older clients are re-keyed as displaced records.
+    const diff = diffWorkspaceStates(baseState, nextState, orderKeysFor(workspace));
+    if (!diff.changeCount) return { empty: true, state: nextState };
+    if (diff.changeCount > MAX_SYNC_CHANGES) {
+      throw mutationLimitFailure(
+        "This change affects more than 500 records at once. Split it into smaller edits before saving.",
+      );
+    }
     const upserts = [];
     const deletes = [];
-    if (patch.settings) {
+    if (diff.settings) {
       upserts.push(
         await encryptEntity({
           masterKey: session.masterKey,
@@ -416,7 +492,7 @@ export function createEncryptedWorkspaceRepository(
       );
     }
     for (const collection of ENCRYPTED_COLLECTIONS) {
-      for (const { data, position } of patch[collection]?.upserts || []) {
+      for (const { data, position } of diff.collections[collection]?.upserts || []) {
         upserts.push(
           await encryptEntity({
             masterKey: session.masterKey,
@@ -429,13 +505,16 @@ export function createEncryptedWorkspaceRepository(
           }),
         );
       }
-      for (const entityId of patch[collection]?.deletes || []) {
+      for (const entityId of diff.collections[collection]?.deletes || []) {
         deletes.push({
           collection,
           entityId,
           expectedRevision: Number(workspace.versions[collection]?.[entityId] || 0),
         });
       }
+    }
+    if (byteLength(upserts) > MAX_MUTATION_BYTES) {
+      throw mutationLimitFailure("This single encrypted change is too large. Save it in smaller batches.");
     }
     const envelopes = envelopesAfterMutation(workspace.envelopes, upserts, deletes);
     const manifest = await createManifest({
@@ -447,25 +526,71 @@ export function createEncryptedWorkspaceRepository(
       operationId,
       keyVersion: session.keyVersion,
     });
-    const mutation = {
+    return {
       operationId,
       upserts,
       deletes,
       manifest,
       baseRevision: workspace.revision,
       baseRoot: workspace.manifest.root,
+      // The newest verified cloud revision under an optimistic chain.
+      confirmedBaseRevision: workspace.confirmedRevision ?? workspace.revision,
+      positions: diff.positions,
+      // Records whose content this operation changes (order-only rewrites excluded).
+      entityKeys: diff.entityKeys,
       state: nextState,
       previousState: baseState,
       empty: false,
     };
-    if (byteLength(mutation) > MAX_MUTATION_BYTES) {
-      throw new CloudPersistenceError("This single encrypted change is too large. Save it in smaller batches.");
+  }
+
+  // Applies only the fields an operation changed onto newer records. Fields
+  // changed differently on both sides, edits of removed records and broken
+  // domain rules are content conflicts that need a person to decide.
+  function mergedState(mutation, latest, prefer = "none") {
+    if (!mutation.previousState || !mutation.state) throw contentConflict(latest, { reason: "unknown" });
+    const merged = mergeWorkspaceStates({
+      base: mutation.previousState,
+      local: mutation.state,
+      remote: latest.state,
+      prefer,
+    });
+    if (merged.conflicts.length && prefer !== "local") throw contentConflict(latest, { conflicts: merged.conflicts });
+    try {
+      return canonicalState(merged.state);
+    } catch (validationError) {
+      throw contentConflict(latest, { cause: validationError, reason: "validation" });
     }
-    return mutation;
+  }
+
+  // A restore, import or reset changes the baseline itself. Edits prepared
+  // before it are never combined automatically, even when their fields merge.
+  async function replacedSince(mutation, latest, ownerId) {
+    const since = mutation.confirmedBaseRevision ?? mutationBaseRevision(mutation);
+    if (latest.revision <= since) return false;
+    const { data } = await retryAuthenticated(async () => {
+      const result = await cloud()
+        .from(E2EE_SNAPSHOTS_TABLE)
+        .select("source_revision")
+        .eq("owner_id", ownerId)
+        .in("reason", REPLACEMENT_REASONS)
+        .gte("source_revision", since)
+        .limit(1);
+      if (result.error) throw persistenceFailure("Encrypted restore history could not be checked.", result.error);
+      return result;
+    });
+    return Boolean(data?.length);
+  }
+
+  async function rebaseMutation(mutation, latest, session, ownerId) {
+    if (await replacedSince(mutation, latest, ownerId)) throw contentConflict(latest, { reason: "replacement" });
+    const state = mergedState(mutation, latest);
+    // Same operation ID: the server still consults its receipt before applying.
+    return prepareMutation({ state, workspace: latest, session, operationId: mutation.operationId });
   }
 
   async function submitMutation(mutation, workspace, session, ownerId) {
-    const expectedRevision = mutation.baseRevision ?? mutation.manifest.workspaceRevision - 1;
+    const expectedRevision = mutationBaseRevision(mutation);
     const { data, error } = await cloud().rpc(APPLY_E2EE_MUTATION_RPC, {
       p_expected_owner_id: ownerId,
       p_expected_workspace_revision: expectedRevision,
@@ -476,11 +601,12 @@ export function createEncryptedWorkspaceRepository(
     });
     if (error) throw error;
     const row = firstRow(data);
-    if (row?.already_applied || workspace.revision !== expectedRevision) return loadWorkspace(session, ownerId);
+    if (row?.already_applied || !matchesBase(workspace, mutation)) return loadWorkspace(session, ownerId);
     const envelopes = envelopesAfterMutation(workspace.envelopes, mutation.upserts, mutation.deletes);
     const next = {
       state: mutation.state,
       versions: versionsFromEnvelopes(envelopes),
+      positions: mutation.positions || indexOrderKeys(mutation.state),
       orderingRepairs: [],
       revision: normalizeRevision(row?.result_revision),
       updatedAt: row?.updated_at || null,
@@ -489,8 +615,60 @@ export function createEncryptedWorkspaceRepository(
       workspaceCryptoId: workspace.workspaceCryptoId,
       keyVersion: session.keyVersion,
     };
-    cache = next;
+    if (!cache || cache.workspaceCryptoId !== next.workspaceCryptoId || cache.revision <= next.revision) cache = next;
     return next;
+  }
+
+  // Submits the operation exactly as queued so the server consults its receipt.
+  // Returns null when the server proves it was not applied on a stale base.
+  async function submitForReceipt(mutation, latest, session, ownerId) {
+    try {
+      return await submitMutation(mutation, latest, session, ownerId);
+    } catch (error) {
+      if (isStaleBaseResponse(error)) return null;
+      if (providerText(error).includes("invalid_workspace_manifest")) {
+        // Equal revision numbers with another verified root: the optimistic
+        // base was replaced, not tampered with. Anything else stays an error.
+        const current = await loadWorkspace(session, ownerId);
+        if (
+          current.revision === mutationBaseRevision(mutation) &&
+          current.manifest.root !== mutationBaseRoot(mutation)
+        ) {
+          return null;
+        }
+      }
+      throw persistenceFailure("Encrypted cloud records could not be saved.", error);
+    }
+  }
+
+  async function rebaseAndSubmit(mutation, initial, session, ownerId, receiptChecked) {
+    let latest = initial;
+    for (let attempt = 0; ; attempt += 1) {
+      if (latest.manifest.operationId === mutation.operationId) return latest;
+      let rebased;
+      try {
+        rebased = await rebaseMutation(mutation, latest, session, ownerId);
+      } catch (error) {
+        if (!(error instanceof WorkspaceConflictError) || receiptChecked) throw error;
+        // A lost response can make an applied operation look like a conflict.
+        receiptChecked = true;
+        const applied = await submitForReceipt(mutation, latest, session, ownerId);
+        if (applied) return applied;
+        throw error;
+      }
+      // Every change is already present in the cloud.
+      if (rebased.empty) return latest;
+      try {
+        return await submitMutation(rebased, latest, session, ownerId);
+      } catch (error) {
+        if (!isStaleBaseResponse(error)) throw persistenceFailure("Encrypted cloud records could not be saved.", error);
+        // Another device saved first. This is contention, not a content conflict.
+        receiptChecked = true;
+        if (attempt + 1 >= CONTENTION_ATTEMPTS) throw contentionFailure(error);
+        await wait(retryDelay(attempt));
+        latest = await loadWorkspace(session, ownerId);
+      }
+    }
   }
 
   async function applyMutation(mutation, session, expectedOwnerId) {
@@ -498,87 +676,50 @@ export function createEncryptedWorkspaceRepository(
     const user = await requireUser(expectedOwnerId);
     const ownerId = expectedOwnerId || user.id;
     if (mutation.empty) return cache;
-    const base = cache || (await loadWorkspace(session, ownerId));
-    try {
-      const matchesBase =
-        base.revision === (mutation.baseRevision ?? mutation.manifest.workspaceRevision - 1) &&
-        base.manifest.root === (mutation.baseRoot ?? mutation.manifest.previousRoot);
-      // Always consult the server's operation receipt before treating a stale
-      // edit as a conflict. Its response may have been lost after a successful save.
-      // The original expected revision still prevents applying a stale manifest.
-      const ready =
-        matchesBase && base.orderingRepairs?.length
-          ? await prepareMutation({
-              state: mutation.state,
-              previousState: base.state,
-              workspace: base,
-              session,
-              operationId: mutation.operationId,
-            })
-          : mutation;
-      if (ready.empty) return base;
-      return await submitMutation(ready, base, session, ownerId);
-    } catch (error) {
-      const text = `${error?.code || ""} ${error?.message || ""}`.toLowerCase();
-      if (
-        !["40001", "PT409"].includes(error?.code) &&
-        !text.includes("workspace_revision_conflict") &&
-        !text.includes("workspace_entity_conflict")
-      ) {
-        throw persistenceFailure("Encrypted cloud records could not be saved.", error);
-      }
-      const latest = await loadWorkspace(session, ownerId);
-      if (latest.manifest.operationId === mutation.operationId) return latest;
-      if (!touchedEntitiesStillCurrent(mutation, latest)) {
-        throw new WorkspaceConflictError({
-          latestState: latest.state,
-          latestRevision: latest.revision,
-          latestUpdatedAt: latest.updatedAt,
-          cause: error,
-        });
-      }
-      let combinedState;
+    let latest = cache || (await loadWorkspace(session, ownerId));
+    let receiptChecked = false;
+    if (matchesBase(latest, mutation)) {
+      // A previous client may have committed authenticated but colliding
+      // positions. Re-key only those records, using their current revisions.
+      const ready = latest.orderingRepairs?.length
+        ? await prepareMutation({
+            state: mutation.state,
+            workspace: latest,
+            session,
+            operationId: mutation.operationId,
+          })
+        : mutation;
+      if (ready.empty) return latest;
       try {
-        combinedState = canonicalState(
-          applyWorkspacePatch(
-            latest.state,
-            buildWorkspacePatch(mutation.previousState, mutation.state, latest.versions).patch,
-          ),
-        );
-      } catch (validationError) {
-        throw new WorkspaceConflictError({
-          latestState: latest.state,
-          latestRevision: latest.revision,
-          latestUpdatedAt: latest.updatedAt,
-          cause: validationError,
-        });
+        return await submitMutation(ready, latest, session, ownerId);
+      } catch (error) {
+        // A manifest rejection on a verified, matching base is an integrity failure.
+        if (!isStaleBaseResponse(error)) throw persistenceFailure("Encrypted cloud records could not be saved.", error);
+        receiptChecked = true;
+        latest = await loadWorkspace(session, ownerId);
       }
-      // Diff the validated combination against the latest state so every changed
-      // position is encrypted with a fresh nonce and the current entity revision.
-      const rebased = await prepareMutation({
-        state: combinedState,
-        previousState: latest.state,
-        workspace: latest,
-        session,
-        operationId: mutation.operationId,
-      });
-      if (rebased.empty) return latest;
-      return submitMutation(rebased, latest, session, ownerId).catch((retryError) => {
-        throw persistenceFailure("The encrypted change conflicted again while rebasing.", retryError);
-      });
     }
+    // The base is stale: combine only this operation's fields with the newest
+    // verified records. Its receipt is consulted before any conflict is reported.
+    return rebaseAndSubmit(mutation, latest, session, ownerId, receiptChecked);
   }
 
   async function resolveMutation(mutation, latest, session) {
-    // Explicitly choosing the local operation applies only its delta, never its
-    // stale full workspace. Validation also catches deleted parent references.
-    const state = canonicalState(
-      applyWorkspacePatch(
-        latest.state,
-        buildWorkspacePatch(mutation.previousState, mutation.state, latest.versions).patch,
-      ),
-    );
-    return prepareMutation({ state, previousState: latest.state, workspace: latest, session });
+    // Keeping the local side applies only the fields this operation changed,
+    // over the newest cloud values. Validation still rejects broken references.
+    let state;
+    try {
+      state = mergedState(mutation, latest, "local");
+    } catch (error) {
+      if (!(error instanceof WorkspaceConflictError)) throw error;
+      const invalid = new CloudPersistenceError(
+        "This change cannot be kept because it no longer fits the current cloud records. Discard it or edit the record again.",
+        { cause: error.cause || error },
+      );
+      invalid.code = "resolution_invalid";
+      throw invalid;
+    }
+    return prepareMutation({ state, workspace: latest, session });
   }
 
   function optimisticWorkspace(workspace, mutation, session) {
@@ -587,12 +728,73 @@ export function createEncryptedWorkspaceRepository(
       ...workspace,
       state: mutation.state,
       versions: versionsFromEnvelopes(envelopes),
+      positions: mutation.positions || indexOrderKeys(mutation.state),
       orderingRepairs: [],
       revision: workspace.revision + 1,
+      confirmedRevision: workspace.confirmedRevision ?? workspace.revision,
       envelopes,
       manifest: mutation.manifest,
       keyVersion: session.keyVersion,
     };
+  }
+
+  /**
+   * The confirmed cloud workspace with every queued operation layered on top.
+   * Operations whose base moved are rebuilt with only their own fields. One that
+   * needs a decision is shown with this device's values but is not rewritten.
+   */
+  async function projectPendingWorkspace(confirmed, entries, session) {
+    let projected = confirmed;
+    const projectedEntries = [];
+    for (const entry of entries) {
+      const mutation = entry.mutation;
+      if (!mutation || mutation.empty || !mutation.state) {
+        projectedEntries.push(entry);
+        continue;
+      }
+      if (matchesBase(projected, mutation) && !projected.orderingRepairs?.length) {
+        projected = optimisticWorkspace(projected, mutation, session);
+        projectedEntries.push({ ...entry, workspace: projected, needsReview: false, satisfied: false });
+        continue;
+      }
+      let rebuilt = null;
+      try {
+        rebuilt = await prepareMutation({
+          state: mergedState(mutation, projected),
+          workspace: projected,
+          session,
+          operationId: mutation.operationId,
+        });
+      } catch (error) {
+        if (!(error instanceof CloudPersistenceError)) throw error;
+      }
+      if (rebuilt) {
+        if (!rebuilt.empty) projected = optimisticWorkspace(projected, rebuilt, session);
+        projectedEntries.push({
+          ...entry,
+          mutation: rebuilt.empty ? mutation : rebuilt,
+          workspace: projected,
+          needsReview: false,
+          satisfied: Boolean(rebuilt.empty),
+        });
+        continue;
+      }
+      try {
+        const shown = await prepareMutation({
+          state: mergedState(mutation, projected, "local"),
+          workspace: projected,
+          session,
+          operationId: mutation.operationId,
+        });
+        if (!shown.empty) projected = optimisticWorkspace(projected, shown, session);
+      } catch (error) {
+        // The local edit cannot be shown on the newest records (for example, a
+        // removed parent). The queued operation itself is kept unchanged.
+        if (!(error instanceof CloudPersistenceError)) throw error;
+      }
+      projectedEntries.push({ ...entry, workspace: projected, needsReview: true, satisfied: false });
+    }
+    return { workspace: projected, entries: projectedEntries };
   }
 
   async function replaceWorkspace(state, session, expectedOwnerId, reason = "replace", importMetadata = null) {
@@ -684,6 +886,8 @@ export function createEncryptedWorkspaceRepository(
     cache = {
       state: nextState,
       versions: versionsFromEnvelopes(envelopes),
+      positions: indexOrderKeys(nextState),
+      orderingRepairs: [],
       revision: normalizeRevision(row?.result_revision),
       updatedAt: row?.updated_at || null,
       envelopes,
@@ -1248,6 +1452,8 @@ export function createEncryptedWorkspaceRepository(
     cache = {
       state: current.state,
       versions: versionsFromEnvelopes(envelopes),
+      positions: indexOrderKeys(current.state),
+      orderingRepairs: [],
       revision: normalizeRevision(row?.result_revision),
       updatedAt: row?.updated_at || null,
       envelopes,
@@ -1311,6 +1517,7 @@ export function createEncryptedWorkspaceRepository(
           ...base,
           state: canonicalState(decrypted.state),
           versions: decrypted.versions,
+          positions: decrypted.positions,
           orderingRepairs: decrypted.orderingRepairs,
           revision: normalizeRevision(event.workspace_revision),
           updatedAt: event.created_at,
@@ -1326,7 +1533,11 @@ export function createEncryptedWorkspaceRepository(
   }
 
   async function subscribe(session, onChange, { userId = undefined, onStatus = undefined, onError = undefined } = {}) {
-    const ownerId = (await requireUser(userId)).id;
+    // With a known account, install the channel, polling and reconnect listeners
+    // before any network request. A failed first request is then retried by the
+    // same schedule instead of leaving the device without live updates. Reads stay
+    // scoped by row-level security, and full loads still verify the account.
+    const ownerId = userId || (await requireUser()).id;
     let active = true;
     let refreshTask;
     let refreshRetryTimer;
@@ -1491,6 +1702,7 @@ export function createEncryptedWorkspaceRepository(
     loadWorkspace,
     prepareMutation,
     optimisticWorkspace,
+    projectPendingWorkspace,
     applyMutation,
     resolveMutation,
     replaceWorkspace,

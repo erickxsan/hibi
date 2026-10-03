@@ -81,10 +81,12 @@ The server stores only those exterior fields, nonce, ciphertext, owner ID, and t
 contacts, class dates, grades, attendance, amounts, or payment dates.
 
 Schema v2 includes each non-settings entity's collection position inside the authenticated ciphertext. The browser uses
-that private position to reconstruct arrays after the server returns envelopes in collection/entity-ID order. Position
-changes are encrypted upserts, so migration verification, later loads, offline replay, and conflict merges preserve the
-original workspace order without exposing it as queryable server metadata. Schema v1 envelopes remain readable for
-compatibility but do not carry this ordering guarantee.
+that private position to reconstruct arrays after the server returns envelopes in collection/entity-ID order. Positions
+are sparse sort keys, not list indexes: deleting a record leaves a gap and rewrites no other record, and an appended
+record receives a key after the last one. Only a new, displaced, or repeated key is re-encrypted, as an order-only
+upsert that is never treated as an edit of the record's content. Migration verification, later loads, offline replay,
+and merges therefore preserve the original order without exposing it as queryable server metadata. Schema v1 envelopes
+remain readable for compatibility but do not carry this ordering guarantee.
 
 ## Global integrity and rollback witnesses
 
@@ -110,15 +112,34 @@ Retries submit the original operation UUID and expected revision so the server c
 write before the client considers rebasing. Losing a save response followed by another device's edit must not create a
 false conflict or replay the acknowledged change.
 
-On a global-revision conflict, the client downloads and verifies the remote envelopes. If touched entity revisions are
-unchanged, it merges the remote plaintext state locally, recalculates the manifest over the combined encrypted state,
-and retries. A changed touched entity remains a real conflict. Multiple offline edits keep predicted sequential
-revisions and replay in order.
+Every queued operation keeps its intent: the state its user saw and the state after the edit. When its base revision is
+no longer current, the client downloads and verifies the remote envelopes and performs a three-way merge in the browser
+(base, this device, cloud). Only the fields the operation changed are applied; values already present are satisfied;
+unordered ID lists such as group membership combine additions and removals; view preferences such as the selected month
+take the newest local value. A field changed to different values on both devices, an edit of a removed record, a
+removal of an edited record, a broken domain rule, or any edit prepared before a restore, import, or reset is a content
+conflict that needs a decision. The rebased operation keeps its UUID, so the server still consults its receipt first;
+before a content conflict is reported the original operation is submitted once so a lost acknowledgement is recognized.
+An equal revision number with a different verified root is a stale optimistic base, not a tampered manifest; a manifest
+rejection on a matching verified base remains an integrity error.
+
+A revision collision with another device is contention, not a conflict: the client re-reads, re-merges, and resubmits up
+to four times with jittered backoff, then retries automatically later. Operations are limited to the server's 500
+upserts plus deletions and 5 MiB of upserts before they are queued.
+
+The browser keeps the newest verified cloud revision separately from what it shows. The interface shows that confirmed
+revision with every queued edit layered on top, rebuilt on the newest base with only its own fields. Verified remote
+revisions keep arriving while edits are pending or awaiting a decision, and one received during a save is published when
+the save finishes. Keeping a conflicting edit applies only that operation's fields over the newest cloud values; keeping
+or discarding it rebuilds every later queued operation and persists the rebuilt queue with the projection in one
+IndexedDB transaction. Later edits of the same records wait for the decision; independent operations keep syncing.
 
 Realtime publishes only encrypted change events. Reconnect downloads recent encrypted events and decrypts/validates in
 the browser; it never asks the server to inspect content. A failed live refresh retries with bounded backoff, while a
 30-second encrypted-event poll provides an automatic fallback until the Realtime channel recovers. Successful polling
-also flushes locally queued encrypted mutations.
+also flushes locally queued encrypted mutations. The channel, poll, and reconnect listeners are installed before any
+network request; if creating the subscription still fails, the browser retries it with backoff, on reconnect, and on an
+explicit retry, without duplicate channels.
 
 ## Transactional legacy migration
 

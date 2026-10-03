@@ -9,7 +9,7 @@ const STATUS_DETAILS = {
   reconnecting: { label: "Cloud reconnecting", icon: CloudOff },
   offline: { label: "Offline — changes pending", icon: CloudOff },
   "offline-cached": { label: "Offline — device copy", icon: CloudOff },
-  conflict: { label: "Sync conflict — local copy safe", icon: AlertCircle },
+  conflict: { label: "Changes need review", icon: AlertCircle },
   error: { label: "Sync needs attention", icon: AlertCircle },
 };
 
@@ -81,7 +81,7 @@ export function AccountMenu({ email, syncStatus = "synced", syncMessage, signing
           <span className="account-email">{email || uiT("Account")}</span>
           <span className={`account-sync-inline is-${syncStatus}`}>
             <span aria-hidden="true" />
-            {status.label}
+            {uiT(status.label)}
           </span>
         </span>
         <ChevronDown className={open ? "is-open" : undefined} aria-hidden="true" size={16} />
@@ -102,8 +102,8 @@ export function AccountMenu({ email, syncStatus = "synced", syncMessage, signing
           <div className={`account-sync-detail is-${syncStatus}`} role="status">
             <StatusIcon aria-hidden="true" size={18} strokeWidth={1.9} />
             <span>
-              <strong>{status.label}</strong>
-              {syncMessage ? <small>{syncMessage}</small> : null}
+              <strong>{uiT(status.label)}</strong>
+              {syncMessage ? <small>{uiT(syncMessage)}</small> : null}
             </span>
           </div>
 

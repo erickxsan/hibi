@@ -13565,23 +13565,126 @@ tbody .attendance-student-column {
     background: var(--hibi-forest-dark);
   }
 }
+/* Encrypted sync review: only real conflicts ask for a decision. */
+.pending-operations-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
 .pending-operations {
-  margin: 1rem;
-  padding: 1rem;
-  border: 1px solid currentColor;
-  border-radius: 12px;
+  margin: 0 0 20px;
+  padding: 18px 20px;
+  border: 1px solid var(--mustard);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-small);
 }
-.pending-operations summary {
-  cursor: pointer;
+.pending-operations-heading {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
 }
-.pending-operations pre {
-  max-height: 20rem;
-  overflow: auto;
-  white-space: pre-wrap;
+.pending-operations-heading > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--mustard);
+}
+.pending-operations-heading h2 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 22px;
+}
+.pending-operations-heading p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+.pending-operations-error {
+  margin: 12px 0 0;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.pending-operations-list {
+  display: grid;
+  gap: 14px;
+  margin: 14px 0;
+  padding: 0;
+  list-style: none;
+}
+.pending-conflict {
+  padding: 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-strong);
+}
+.pending-conflict-meta,
+.pending-conflict-hint,
+.pending-operations-waiting {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.pending-conflict-record {
+  margin-top: 10px;
+}
+.pending-conflict-record h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+.pending-conflict-note {
+  margin: 0 0 6px;
+}
+.pending-conflict-table {
+  overflow-x: auto;
+}
+.pending-conflict-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.pending-conflict-table th,
+.pending-conflict-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-soft);
+  text-align: left;
+  vertical-align: top;
   overflow-wrap: anywhere;
 }
-.pending-operations button {
-  margin: 0.5rem 0.5rem 0.5rem 0;
+.pending-conflict-table thead th {
+  color: var(--muted);
+  font-weight: 600;
+  overflow-wrap: normal;
+  white-space: nowrap;
+}
+.pending-conflict-table tr.is-conflict {
+  background: var(--mustard-soft);
+}
+.pending-conflict-badge {
+  display: block;
+  color: var(--coral-strong);
+  font-size: 11px;
+  font-weight: 600;
+}
+.pending-conflict-hint {
+  margin-top: 10px;
+}
+.pending-conflict-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.pending-operations-waiting {
+  margin-bottom: 10px;
+}
+@media (max-width: 760px) {
+  .pending-operations {
+    padding: 14px;
+  }
 }
 
 /* Quiet, collapsed archive access below the student directory. */

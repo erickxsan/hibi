@@ -5,7 +5,37 @@ import { deviceRecoveryStore } from "./deviceRecoveryStore.js";
 import { encryptedWorkspaceRepository } from "./encryptedWorkspaceRepository.js";
 import { statusForOutbox } from "./workspaceOutbox.js";
 import { encryptedSyncFailure } from "./encryptedSyncErrors.js";
+import { describeOperation, operationEntityKeys } from "./workspaceMerge.js";
 import { createOperationId, WorkspaceConflictError } from "./workspaceRepository.js";
+
+const SUBSCRIBE_RETRY_INITIAL_MS = 2_000;
+const SUBSCRIBE_RETRY_MAX_MS = 30_000;
+
+// Queue entries as presented: only an operation whose own values contradict
+// the cloud needs review. Later edits of the same records wait for that decision.
+function presentQueue(entries, cloudState) {
+  const held = new Set();
+  return entries.map((entry) => {
+    const keys = operationEntityKeys(entry.mutation);
+    const conflict = entry.status === "conflict";
+    const blocked = !conflict && keys.some((key) => held.has(key));
+    if (conflict || blocked) keys.forEach((key) => held.add(key));
+    return {
+      ...entry,
+      blocked,
+      review: conflict ? describeOperation(entry.mutation, cloudState) : null,
+    };
+  });
+}
+
+// Edits rejected before they reach the durable queue do not change sync health.
+function rejectedBeforeQueue(error) {
+  return (
+    error instanceof WorkspaceConflictError ||
+    error?.code === "mutation_too_large" ||
+    error?.name === "DomainValidationError"
+  );
+}
 
 export function useEncryptedWorkspace(user, cryptoSession, security) {
   const [workspace, setWorkspace] = useState(null);
@@ -19,17 +49,25 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
   const resolvingRef = useRef(false);
   const replacingRef = useRef(false);
   const listenersRef = useRef(new Set());
-  const savePromiseRef = useRef(null);
+  // Tail of the serialized local writes: saves, projections and resolutions.
+  const savePromiseRef = useRef(Promise.resolve());
   const retryTimerRef = useRef(null);
   const retryDelayRef = useRef(2000);
+  // What the interface shows: the confirmed cloud records plus queued edits.
   const workspaceRef = useRef(null);
+  // The newest verified cloud workspace, kept separately from the projection so
+  // remote revisions received during a save or a conflict are never dropped.
+  const confirmedRef = useRef(null);
+  const publishedConfirmedRef = useRef(null);
   const syncStatusRef = useRef("reconnecting");
+  const syncMessageRef = useRef("");
   const flushPromiseRef = useRef(null);
   const forceFlushLoadRef = useRef(false);
   const mutationGenerationRef = useRef(0);
   const rerunFlushRef = useRef(false);
   const clearingDeviceRef = useRef(false);
   const storageWritesRef = useRef(new Set());
+  const subscriptionRestartsRef = useRef(new Set());
   const writeDevice = useCallback((operation) => {
     if (clearingDeviceRef.current) return Promise.resolve(null);
     const task = Promise.resolve().then(operation);
@@ -55,8 +93,36 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
 
   const updateSync = useCallback((status, message = "") => {
     syncStatusRef.current = status;
+    syncMessageRef.current = message;
     setSyncStatus(status);
     setSyncMessage(message);
+  }, []);
+
+  const serialize = useCallback(
+    /**
+     * @template T
+     * @param {() => T | Promise<T>} task
+     * @returns {Promise<T>}
+     */
+    (task) => {
+      const run = savePromiseRef.current.then(task);
+      savePromiseRef.current = run.then(
+        () => undefined,
+        () => undefined,
+      );
+      return run;
+    },
+    [],
+  );
+
+  // Keep the newest verified revision. Returns whether it advanced.
+  const acceptConfirmed = useCallback((incoming) => {
+    if (!incoming?.manifest) return false;
+    const current = confirmedRef.current;
+    if (current && current.workspaceCryptoId === incoming.workspaceCryptoId && incoming.revision <= current.revision)
+      return false;
+    confirmedRef.current = incoming;
+    return true;
   }, []);
 
   const writeWitness = useCallback(
@@ -97,6 +163,40 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
     return true;
   }, []);
 
+  // Publishes the newest verified revision with the durable queue layered on
+  // top. Run through serialize() so a concurrent save is never hidden.
+  const publishLatest = useCallback(
+    async ({ source = "remote" } = {}) => {
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        const confirmed = confirmedRef.current;
+        if (!confirmed || clearingDeviceRef.current) return null;
+        const queued = await deviceRecoveryStore.listMutations(user.id);
+        const projection = queued.length
+          ? await encryptedWorkspaceRepository.projectPendingWorkspace(confirmed, queued, cryptoSession)
+          : { workspace: confirmed, entries: [] };
+        // A newer verified revision arrived while projecting: rebuild on it.
+        if (confirmedRef.current !== confirmed) continue;
+        if (clearingDeviceRef.current) return null;
+        publishedConfirmedRef.current = confirmed;
+        applyWorkspace(projection.workspace, { allowOlder: true, notify: true, source });
+        setPendingOperations(presentQueue(projection.entries, confirmed.state));
+        await cacheWorkspace(projection.workspace);
+        await writeWitness(confirmed);
+        if (confirmedRef.current === confirmed) return projection;
+      }
+      return null;
+    },
+    [applyWorkspace, cacheWorkspace, cryptoSession, user.id, writeWitness],
+  );
+
+  // A revision received while a flush or resolution was running is published
+  // as soon as it finishes; repository polls will not deliver it again.
+  const publishIfBehind = useCallback(() => {
+    if (clearingDeviceRef.current || syncStatusRef.current === "error") return;
+    if (!confirmedRef.current || confirmedRef.current === publishedConfirmedRef.current) return;
+    void serialize(() => publishLatest({ source: "remote" })).catch(() => {});
+  }, [publishLatest, serialize]);
+
   const flushPending = useCallback(
     ({ onlyIfQueued = false } = {}) => {
       if (clearingDeviceRef.current) return Promise.resolve({ status: "paused" });
@@ -116,20 +216,26 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
       const task = (async () => {
         await savePromiseRef.current;
         const queued = await deviceRecoveryStore.listMutations(user.id);
-        setPendingOperations(queued);
+        setPendingOperations(presentQueue(queued, confirmedRef.current?.state));
+        const forced = forceFlushLoadRef.current;
         // A failed live integrity check can arrive while IndexedDB is pending.
         // A healthy heartbeat must not clear that newer terminal state.
-        if (!forceFlushLoadRef.current && ["conflict", "error"].includes(syncStatusRef.current)) {
-          return { status: syncStatusRef.current };
+        if (!forced && syncStatusRef.current === "error") return { status: "error" };
+        // Heartbeats send independent work but do not re-ask the server about
+        // operations that already need a decision (an explicit retry does).
+        if (!forced && syncStatusRef.current === "conflict") {
+          const held = new Set();
+          const sendable = queued.filter((entry) => {
+            const keys = operationEntityKeys(entry.mutation);
+            const hold = entry.status === "conflict" || keys.some((key) => held.has(key));
+            if (hold) keys.forEach((key) => held.add(key));
+            return !hold;
+          });
+          if (!sendable.length) return { status: "conflict" };
         }
         // Healthy channel heartbeats are not a reason to download every record.
         // Still inspect the durable outbox: another tab may have queued a write.
-        if (
-          !forceFlushLoadRef.current &&
-          !queued.length &&
-          previousStatus === "saved" &&
-          generation === mutationGenerationRef.current
-        ) {
+        if (!forced && !queued.length && previousStatus === "saved" && generation === mutationGenerationRef.current) {
           updateSync("saved");
           return { status: "saved" };
         }
@@ -139,34 +245,34 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
         const witness = await deviceKeyStore
           .readIntegrity({ ownerId: user.id, workspaceCryptoId: cryptoSession.workspaceCryptoId })
           .catch(() => null);
-        let latest = await encryptedWorkspaceRepository.loadWorkspace(cryptoSession, user.id, witness || {});
-        const blocked = new Set();
+        acceptConfirmed(await encryptedWorkspaceRepository.loadWorkspace(cryptoSession, user.id, witness || {}));
+        const held = new Set();
         for (const entry of queued) {
-          const keys = [...entry.mutation.upserts, ...entry.mutation.deletes].map(
-            (item) => `${item.collection}/${item.entityId}`,
-          );
-          // Retry previously flagged operations through the same receipt/version
-          // checks. A lost acknowledgement can have been mislabeled as a conflict.
-          if (keys.some((key) => blocked.has(key))) {
-            keys.forEach((key) => blocked.add(key));
+          const keys = operationEntityKeys(entry.mutation);
+          // Retry previously flagged operations on an explicit retry through the
+          // same receipt checks: a lost acknowledgement can look like a conflict.
+          if (keys.some((key) => held.has(key)) || (!forced && entry.status === "conflict")) {
+            keys.forEach((key) => held.add(key));
             continue;
           }
           try {
-            latest = await encryptedWorkspaceRepository.applyMutation(entry.mutation, cryptoSession, user.id);
+            const applied = await encryptedWorkspaceRepository.applyMutation(entry.mutation, cryptoSession, user.id);
+            acceptConfirmed(applied);
             await deviceRecoveryStore.completeMutation(user.id, entry.id);
-            await writeWitness(latest);
+            if (applied?.manifest) await writeWitness(applied);
           } catch (caught) {
             if (caught instanceof WorkspaceConflictError || caught?.latestState) {
               await deviceRecoveryStore.markMutationConflict(user.id, entry.id, caught.message);
-              keys.forEach((key) => blocked.add(key));
+              keys.forEach((key) => held.add(key));
               continue;
             }
             throw caught;
           }
         }
-        const remaining = await deviceRecoveryStore.listMutations(user.id);
-        setPendingOperations(remaining);
-        if (generation !== mutationGenerationRef.current) rerunFlushRef.current = true;
+        // Publish the newest verified revision (including remote revisions
+        // received meanwhile) with every remaining edit layered on top.
+        const projection = await serialize(() => publishLatest({ source: "remote" }));
+        const remaining = projection?.entries ?? (await deviceRecoveryStore.listMutations(user.id));
         if (remaining.some((entry) => entry.status === "conflict")) {
           updateSync("conflict", "Review pending operations. Changes to other records can still sync.");
           return { status: "conflict" };
@@ -176,17 +282,8 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
           updateSync("pending", "Encrypted changes are safe on this device and waiting to sync.");
           return { status: "pending" };
         }
-        if (latest) {
-          await cacheWorkspace(latest);
-          await writeWitness(latest);
-          if (generation !== mutationGenerationRef.current) {
-            rerunFlushRef.current = true;
-            updateSync("pending", "Encrypted changes are waiting to sync.");
-            return { status: "pending" };
-          }
-          applyWorkspace(latest, { allowOlder: true, notify: true });
-          void captureDeviceCopy(latest.state, latest.revision, "encrypted-cloud-sync", latest.updatedAt);
-        }
+        const latest = confirmedRef.current;
+        if (latest) void captureDeviceCopy(latest.state, latest.revision, "encrypted-cloud-sync", latest.updatedAt);
         setError(null);
         retryDelayRef.current = 2000;
         updateSync("saved");
@@ -194,7 +291,7 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
       })()
         .catch(async (caught) => {
           const queued = await deviceRecoveryStore.listMutations(user.id).catch(() => []);
-          setPendingOperations(queued);
+          setPendingOperations(presentQueue(queued, confirmedRef.current?.state));
           const failure = encryptedSyncFailure(caught);
           updateSync(failure.status, failure.message);
           if (!clearingDeviceRef.current && failure.status === "pending" && !retryTimerRef.current) {
@@ -208,6 +305,7 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
         })
         .finally(() => {
           flushPromiseRef.current = null;
+          publishIfBehind();
           if (!clearingDeviceRef.current && rerunFlushRef.current) {
             rerunFlushRef.current = false;
             globalThis.setTimeout?.(() => void flushPending(), 0);
@@ -216,7 +314,17 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
       flushPromiseRef.current = task;
       return task;
     },
-    [applyWorkspace, cacheWorkspace, captureDeviceCopy, cryptoSession, updateSync, user.id, writeWitness],
+    [
+      acceptConfirmed,
+      captureDeviceCopy,
+      cryptoSession,
+      publishIfBehind,
+      publishLatest,
+      serialize,
+      updateSync,
+      user.id,
+      writeWitness,
+    ],
   );
 
   useEffect(() => {
@@ -232,7 +340,7 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
           .catch(() => null),
       ]);
       const localWorkspace = cached || queued.at(-1)?.workspace;
-      setPendingOperations(queued);
+      setPendingOperations(presentQueue(queued, null));
       if (!active) return;
       if (localWorkspace?.workspaceCryptoId === cryptoSession.workspaceCryptoId) {
         applyWorkspace(localWorkspace, { allowOlder: true });
@@ -246,12 +354,14 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
         const generation = mutationGenerationRef.current;
         const loaded = await encryptedWorkspaceRepository.loadWorkspace(cryptoSession, user.id, witness || {});
         if (!active) return;
+        acceptConfirmed(loaded);
         if (queued.length || generation !== mutationGenerationRef.current) {
           void flushPending();
         } else {
-          applyWorkspace(loaded, { allowOlder: true });
-          await cacheWorkspace(loaded);
-          await writeWitness(loaded);
+          publishedConfirmedRef.current = confirmedRef.current;
+          applyWorkspace(confirmedRef.current, { allowOlder: true });
+          await cacheWorkspace(confirmedRef.current);
+          await writeWitness(confirmedRef.current);
           void captureDeviceCopy(loaded.state, loaded.revision, "encrypted-cloud-load", loaded.updatedAt);
           if (generation !== mutationGenerationRef.current) void flushPending();
           else updateSync("saved");
@@ -272,6 +382,7 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
       active = false;
     };
   }, [
+    acceptConfirmed,
     applyWorkspace,
     cacheWorkspace,
     captureDeviceCopy,
@@ -299,9 +410,14 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
       if (resolvingRef.current)
         return Promise.reject(new Error("Finish resolving the pending operation before editing."));
       mutationGenerationRef.current += 1;
-      updateSync("pending", "Encrypted changes are being saved on this device.");
-      const task = (async () => {
-        await savePromiseRef.current;
+      const before = { status: syncStatusRef.current, message: syncMessageRef.current };
+      const savingMessage = "Encrypted changes are being saved on this device.";
+      updateSync("pending", savingMessage);
+      const restoreStatus = () => {
+        if (syncStatusRef.current === "pending" && syncMessageRef.current === savingMessage)
+          updateSync(before.status, before.message);
+      };
+      const task = serialize(async () => {
         const current = workspaceRef.current;
         if (!current) throw new Error("The encrypted workspace is not ready.");
         const mutation = await encryptedWorkspaceRepository.prepareMutation({
@@ -312,7 +428,7 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
           operationId: createOperationId(),
         });
         if (mutation.empty) {
-          globalThis.setTimeout?.(() => void flushPending(), 0);
+          restoreStatus();
           return { state: current.state, pending: syncStatusRef.current !== "saved" };
         }
         const optimistic = encryptedWorkspaceRepository.optimisticWorkspace(current, mutation, cryptoSession);
@@ -322,14 +438,20 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
         updateSync("pending", "Encrypted changes are safe on this device and waiting to sync.");
         globalThis.setTimeout?.(() => void flushPending(), 0);
         return { state: optimistic.state, pending: true };
-      })();
-      savePromiseRef.current = task.catch((caught) => {
+      });
+      task.catch((caught) => {
+        // An edit of an outdated view is retried by the caller on the newest
+        // records; a change over the server limits is refused before queueing.
+        if (rejectedBeforeQueue(caught)) {
+          restoreStatus();
+          return;
+        }
         const failure = encryptedSyncFailure(caught);
         updateSync(failure.status, failure.message);
       });
       return task;
     },
-    [applyWorkspace, cryptoSession, flushPending, updateSync, user.id],
+    [applyWorkspace, cryptoSession, flushPending, serialize, updateSync, user.id],
   );
 
   const resolvePendingOperation = useCallback(
@@ -341,54 +463,56 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
       try {
         await savePromiseRef.current;
         await flushPromiseRef.current;
-        const queued = await deviceRecoveryStore.listMutations(user.id);
-        const entry = queued.find((item) => item.id === operationId);
-        if (!entry) throw new Error("This pending operation no longer exists.");
-        const witness = await deviceKeyStore.readIntegrity({
-          ownerId: user.id,
-          workspaceCryptoId: cryptoSession.workspaceCryptoId,
+        await serialize(async () => {
+          const queued = await deviceRecoveryStore.listMutations(user.id);
+          const entry = queued.find((item) => item.id === operationId);
+          if (!entry) throw new Error("This pending operation no longer exists.");
+          const witness = await deviceKeyStore.readIntegrity({
+            ownerId: user.id,
+            workspaceCryptoId: cryptoSession.workspaceCryptoId,
+          });
+          acceptConfirmed(await encryptedWorkspaceRepository.loadWorkspace(cryptoSession, user.id, witness || {}));
+          const latest = confirmedRef.current;
+          await captureDeviceCopy(
+            workspaceRef.current.state,
+            workspaceRef.current.revision,
+            "before-conflict-resolution",
+          );
+          const resolved =
+            choice === "local"
+              ? await encryptedWorkspaceRepository.resolveMutation(entry.mutation, latest, cryptoSession)
+              : null;
+          const ordered = queued.flatMap((item) =>
+            item.id !== operationId
+              ? [item]
+              : resolved && !resolved.empty
+                ? [{ ...item, id: resolved.operationId, mutation: resolved, status: "pending", replaces: item.id }]
+                : [],
+          );
+          // Rebuild every later operation on the new base with only the fields
+          // it changed, then persist the queue and the projection atomically.
+          const projection = await encryptedWorkspaceRepository.projectPendingWorkspace(latest, ordered, cryptoSession);
+          const remove = resolved && !resolved.empty ? [] : [operationId];
+          const put = [];
+          projection.entries.forEach((item, index) => {
+            const original = ordered[index];
+            const replaces = original.replaces ?? original.id;
+            if (item.satisfied) remove.push(replaces);
+            else if (original.replaces || (!item.needsReview && item.mutation !== original.mutation))
+              put.push({ replaces, mutation: item.mutation, workspace: item.workspace, status: "pending" });
+          });
+          await deviceRecoveryStore.rewriteMutations(user.id, { remove, put }, projection.workspace);
+          mutationGenerationRef.current += 1;
+          publishedConfirmedRef.current = latest;
+          applyWorkspace(projection.workspace, { allowOlder: true, notify: true, source: "local" });
+          setPendingOperations(presentQueue(await deviceRecoveryStore.listMutations(user.id), latest.state));
         });
-        const latest = await encryptedWorkspaceRepository.loadWorkspace(cryptoSession, user.id, witness || {});
-        await captureDeviceCopy(
-          workspaceRef.current.state,
-          workspaceRef.current.revision,
-          "before-conflict-resolution",
-        );
-        const mutation =
-          choice === "local"
-            ? await encryptedWorkspaceRepository.resolveMutation(entry.mutation, latest, cryptoSession)
-            : null;
-        const remaining = queued.flatMap((pending) =>
-          pending.id !== operationId
-            ? [pending]
-            : mutation && !mutation.empty
-              ? [{ ...pending, id: mutation.operationId, mutation }]
-              : [],
-        );
-        let projected = latest;
-        for (const pending of remaining) {
-          try {
-            const overlay = await encryptedWorkspaceRepository.resolveMutation(
-              pending.mutation,
-              projected,
-              cryptoSession,
-            );
-            if (!overlay.empty)
-              projected = encryptedWorkspaceRepository.optimisticWorkspace(projected, overlay, cryptoSession);
-          } catch (caught) {
-            await deviceRecoveryStore.markMutationConflict(user.id, pending.id, caught.message);
-          }
-        }
-        await deviceRecoveryStore.replaceMutation(user.id, operationId, mutation, projected);
-        mutationGenerationRef.current += 1;
-        applyWorkspace(projected, { allowOlder: true, notify: true, source: "local" });
-        setPendingOperations(await deviceRecoveryStore.listMutations(user.id));
       } finally {
         resolvingRef.current = false;
       }
       return flushPending();
     },
-    [applyWorkspace, captureDeviceCopy, cryptoSession, flushPending, user.id],
+    [acceptConfirmed, applyWorkspace, captureDeviceCopy, cryptoSession, flushPending, serialize, user.id],
   );
 
   const requireEmptyOutbox = useCallback(async () => {
@@ -415,6 +539,8 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
           reason,
           importMetadata,
         );
+        acceptConfirmed(replaced);
+        publishedConfirmedRef.current = replaced;
         applyWorkspace(replaced, { allowOlder: true, source: "local" });
         await cacheWorkspace(replaced);
         await writeWitness(replaced);
@@ -425,6 +551,7 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
       }
     },
     [
+      acceptConfirmed,
       applyWorkspace,
       cacheWorkspace,
       captureDeviceCopy,
@@ -484,30 +611,32 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
       listenersRef.current.add(onChange);
       if (workspaceRef.current) onChange(workspaceRef.current.state, { source: "initial" });
       let disposed = false;
-      let cleanup;
-      encryptedWorkspaceRepository
-        .subscribe(
-          cryptoSession,
-          async (incoming) => {
-            if (
-              disposed ||
-              clearingDeviceRef.current ||
-              ["pending", "conflict", "error"].includes(syncStatusRef.current)
-            )
-              return;
-            if (applyWorkspace(incoming, { notify: true })) {
-              await cacheWorkspace(incoming);
-              await writeWitness(incoming);
-            }
-          },
-          {
+      let cleanup = null;
+      let starting = false;
+      let retryTimer = null;
+      let retryDelay = SUBSCRIBE_RETRY_INITIAL_MS;
+      const receive = async (incoming) => {
+        // Integrity failures pause synchronization; nothing else freezes remote data.
+        if (disposed || clearingDeviceRef.current || syncStatusRef.current === "error") return;
+        if (!acceptConfirmed(incoming)) return;
+        // A running flush or resolution publishes the newest revision when it ends.
+        if (flushPromiseRef.current || resolvingRef.current) return;
+        await serialize(() => publishLatest({ source: "remote" }));
+      };
+      const start = () => {
+        if (disposed || cleanup || starting) return;
+        starting = true;
+        globalThis.clearTimeout(retryTimer);
+        retryTimer = null;
+        encryptedWorkspaceRepository
+          .subscribe(cryptoSession, receive, {
             userId: user.id,
             onStatus: (status) => {
               if (disposed) return;
               if (["SUBSCRIBED", "SYNCED"].includes(status)) {
                 setConnectionStatus("connected");
                 // Only a verified load and empty outbox may acknowledge persistence.
-                if (!["conflict", "error"].includes(syncStatusRef.current)) void flushPending({ onlyIfQueued: true });
+                if (syncStatusRef.current !== "error") void flushPending({ onlyIfQueued: true });
               }
               if (["CHANNEL_ERROR", "TIMED_OUT", "CLOSED"].includes(status)) {
                 setConnectionStatus("reconnecting");
@@ -522,23 +651,44 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
               }
               updateSync(failure.status, failure.message);
             },
-          },
-        )
-        .then((unsubscribe) => {
-          if (disposed) void unsubscribe();
-          else cleanup = unsubscribe;
-        })
-        .catch(() => {
-          if (!disposed) setConnectionStatus("reconnecting");
-        });
+          })
+          .then((unsubscribe) => {
+            starting = false;
+            if (disposed) void unsubscribe();
+            else {
+              cleanup = unsubscribe;
+              retryDelay = SUBSCRIBE_RETRY_INITIAL_MS;
+            }
+          })
+          .catch(() => {
+            starting = false;
+            if (disposed) return;
+            // The live channel was never installed. Retry its creation instead of
+            // waiting for a reload; online events and explicit retries skip the wait.
+            setConnectionStatus("reconnecting");
+            retryTimer = globalThis.setTimeout(start, retryDelay);
+            retryDelay = Math.min(retryDelay * 2, SUBSCRIBE_RETRY_MAX_MS);
+          });
+      };
+      subscriptionRestartsRef.current.add(start);
+      globalThis.addEventListener?.("online", start);
+      start();
       return () => {
         listenersRef.current.delete(onChange);
+        subscriptionRestartsRef.current.delete(start);
+        globalThis.removeEventListener?.("online", start);
+        globalThis.clearTimeout(retryTimer);
         disposed = true;
         if (cleanup) void cleanup();
       };
     },
-    [applyWorkspace, cacheWorkspace, cryptoSession, flushPending, updateSync, user.id, writeWitness],
+    [acceptConfirmed, cryptoSession, flushPending, publishLatest, serialize, updateSync, user.id],
   );
+
+  const retrySync = useCallback(() => {
+    for (const restart of subscriptionRestartsRef.current) restart();
+    return flushPending();
+  }, [flushPending]);
 
   const downloadEncryptedBackup = useCallback(async () => {
     if (!workspaceRef.current) throw new Error("The encrypted workspace is not ready.");
@@ -622,7 +772,7 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
             connectionStatus,
             pendingOperations,
             resolvePendingOperation,
-            retrySync: flushPending,
+            retrySync,
             save,
             replace,
             importRecords,
@@ -644,7 +794,7 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
       connectionStatus,
       pendingOperations,
       resolvePendingOperation,
-      flushPending,
+      retrySync,
       findImportJob,
       importEncryptedBackup,
       importEncryptedBackupWithPassword,

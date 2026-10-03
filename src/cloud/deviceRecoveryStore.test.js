@@ -77,6 +77,55 @@ describe("device recovery store", () => {
     expect((await reopened.listMutations("owner")).map((item) => item.id)).toEqual(["b"]);
     expect((await reopened.loadWorkspaceCache("owner")).revision).toBe(8);
   });
+
+  it("rewrites a resolved chain, its descendants and the projection in one transaction", async () => {
+    const indexedDb = new IDBFactory();
+    const store = createDeviceRecoveryStore(indexedDb, globalThis.crypto);
+    const workspace = { state: createStarterState(), revision: 1 };
+    for (const operationId of ["a", "b", "c"]) {
+      await store.stageMutation({ ownerId: "owner", workspace, mutation: { operationId } });
+    }
+    await store.markMutationConflict("owner", "a", "Conflict");
+    const projection = {
+      ...workspace,
+      revision: 4,
+      confirmedRevision: 2,
+      positions: { students: { s: 7 } },
+    };
+    // A missing target aborts the whole rewrite.
+    await expect(
+      store.rewriteMutations(
+        "owner",
+        { remove: ["c"], put: [{ replaces: "missing", mutation: { operationId: "x" } }] },
+        projection,
+      ),
+    ).rejects.toThrow("no longer exists");
+    expect((await store.listMutations("owner")).map((item) => item.id)).toEqual(["a", "b", "c"]);
+    await store.rewriteMutations(
+      "owner",
+      {
+        remove: ["c"],
+        put: [
+          { replaces: "a", mutation: { operationId: "a2", rebuilt: true }, workspace: projection },
+          { mutation: { operationId: "b", rebuilt: true }, workspace: projection },
+        ],
+      },
+      projection,
+    );
+    const reopened = createDeviceRecoveryStore(indexedDb, globalThis.crypto);
+    const queued = await reopened.listMutations("owner");
+    expect(queued.map((item) => [item.id, item.status, item.mutation.rebuilt])).toEqual([
+      ["a2", "pending", true],
+      ["b", "pending", true],
+    ]);
+    // Sparse order keys and the confirmed revision under the projection survive reopening.
+    expect(queued[0].workspace).toMatchObject({ confirmedRevision: 2, positions: { students: { s: 7 } } });
+    expect(await reopened.loadWorkspaceCache("owner")).toMatchObject({
+      revision: 4,
+      confirmedRevision: 2,
+      positions: { students: { s: 7 } },
+    });
+  });
   it("summarizes the records preserved in a recovery copy", () => {
     const state = createStarterState();
     state.students.push({});

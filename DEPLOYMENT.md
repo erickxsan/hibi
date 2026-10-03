@@ -73,6 +73,7 @@ Because `localStorage` is tied to an exact origin, use this safe sequence:
 
 - Supabase Free projects may pause after inactivity; monitor the project before a scheduled class.
 - Realtime replays encrypted entity envelopes; per-entity revision checks protect same-record edits without rejecting unrelated concurrent changes.
+- Concurrent edits combine field by field in the browser; only contradicting values, edit/delete collisions, broken domain rules, and edits prepared before a restore ask for a decision. Encrypted positions are sparse sort keys, so deleting a record rewrites no other record. The synchronization engine needs no database migration. After publishing it, reload every open Hibi tab and installed device: an older open tab still re-numbers positions after a deletion, which can exceed the 500-change limit in lists with more than 500 records.
 - Export periodic encrypted `.hibi` backups. A readable JSON/Excel export is outside E2EE once it leaves Hibi and must be protected by the user.
 - Do not remove Auth users from the dashboard. The protective `RESTRICT` constraints are intentional. Hibi's
   authenticated **Delete account and data** flow tombstones the account, removes owned Storage objects through the
