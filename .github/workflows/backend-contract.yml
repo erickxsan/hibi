@@ -1,0 +1,37 @@
+name: Published backend contract
+
+on:
+  workflow_dispatch:
+    inputs:
+      backend_url:
+        description: Supabase URL of the project being published
+        required: true
+        type: string
+      public_key:
+        description: Publishable frontend API key (never a service key)
+        required: true
+        type: string
+      app_origin:
+        description: Exact browser origin
+        default: https://usehibi.pages.dev
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Check deployed function, matching database contract and CORS
+        run: node scripts/check-backend-contract.mjs
+        env:
+          HIBI_BACKEND_URL: ${{ inputs.backend_url }}
+          HIBI_PUBLIC_KEY: ${{ inputs.public_key }}
+          HIBI_APP_ORIGIN: ${{ inputs.app_origin }}
