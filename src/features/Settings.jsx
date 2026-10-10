@@ -42,7 +42,7 @@ export default function Settings({
   onDeleteAccount,
   onOpenOnboarding,
 }) {
-  const { t: uiT } = useI18n();
+  const { t: uiT, locale } = useI18n();
   const { t } = useI18n();
   const [draft, setDraft] = useState(() => settingsDraft(state.settings));
   const [saving, setSaving] = useState(false);
@@ -456,7 +456,7 @@ export default function Settings({
                 {uiT("E2EE protocol v")}
                 {encryption.profile?.protocolVersion}
                 {uiT("; unlocked with ")}
-                {encryption.method || uiT("a local key")}
+                {uiT(encryption.method || "a local key")}
                 {uiT(
                   ". Your password wraps the same stable master key, so changing it does not re-encrypt your records.",
                 )}
@@ -467,12 +467,12 @@ export default function Settings({
                   .map((wrapper) => (
                     <div className="workspace-key-row" key={wrapper.wrapperId}>
                       <span>
-                        <strong>{wrapper.label}</strong>
+                        <strong>{uiT(wrapper.label)}</strong>
                         <small>
                           {wrapper.type === "password" ? uiT("Password-derived key") : uiT("Recovery key")}{" "}
-                          {uiT(" · added")} {new Date(wrapper.createdAt).toLocaleDateString()}
+                          {uiT(" · added")} {new Date(wrapper.createdAt).toLocaleDateString(locale)}
                           {wrapper.lastUsedAt
-                            ? uiT(" · last used {p0}", { p0: new Date(wrapper.lastUsedAt).toLocaleDateString() })
+                            ? uiT(" · last used {p0}", { p0: new Date(wrapper.lastUsedAt).toLocaleDateString(locale) })
                             : uiT(" · not used yet")}
                         </small>
                       </span>
@@ -508,8 +508,8 @@ export default function Settings({
                         <strong>{uiT("This remembered browser")}</strong>
                         <small>
                           {uiT("Added ")}
-                          {new Date(device.createdAt).toLocaleDateString()} {uiT(" · last used")}{" "}
-                          {new Date(device.lastUsedAt).toLocaleDateString()}
+                          {new Date(device.createdAt).toLocaleDateString(locale)} {uiT(" · last used")}{" "}
+                          {new Date(device.lastUsedAt).toLocaleDateString(locale)}
                         </small>
                       </span>
                     </div>
@@ -633,7 +633,7 @@ export default function Settings({
               ) : null}
               {securityError ? (
                 <p className="field-error" role="alert">
-                  {securityError}
+                  {uiT(securityError)}
                 </p>
               ) : null}
             </div>
@@ -751,7 +751,7 @@ export default function Settings({
                 <strong>{uiT("This exact file was already imported.")}</strong>
                 <span>
                   {uiT("Imported ")}
-                  {new Date(pendingRecordImport.previousImport.createdAt).toLocaleString()}
+                  {new Date(pendingRecordImport.previousImport.createdAt).toLocaleString(locale)}
                   {uiT(". Reusing it is blocked to prevent duplicate work.")}
                 </span>
               </div>
@@ -780,8 +780,10 @@ export default function Settings({
                 .map(([collection, counts]) => (
                   <div key={collection}>
                     <strong>
-                      {pendingRecordImport.entries.find((entry) => entry.collection === collection)?.collectionLabel ||
-                        collection}
+                      {uiT(
+                        pendingRecordImport.entries.find((entry) => entry.collection === collection)?.collectionLabel ||
+                          collection,
+                      )}
                     </strong>
                     <span>
                       {t(`${counts.added} new · ${counts.duplicates} duplicates · ${counts.conflicts} review`)}
@@ -802,7 +804,7 @@ export default function Settings({
                       <span>
                         <strong>{entry.label}</strong>
                         <small>
-                          {entry.collectionLabel} · {entry.reason}
+                          {uiT(entry.collectionLabel)} · {uiT(entry.reason)}
                         </small>
                       </span>
                       <Select
@@ -841,7 +843,7 @@ export default function Settings({
             <Button onClick={() => setPendingImport(null)}>{uiT("Cancel")}</Button>
             <Button
               variant="danger"
-              disabled={Boolean(pendingImport?.removals.length) && importConfirmation !== "RESTORE"}
+              disabled={Boolean(pendingImport?.removals.length) && importConfirmation !== uiT("RESTORE")}
               onClick={async () => {
                 const restored = pendingImport.sourcePassword
                   ? await actions.importEncryptedBackupWithPassword(pendingImport.text, pendingImport.sourcePassword)
@@ -1023,7 +1025,7 @@ export default function Settings({
             {recoveryPoints.map((point) => (
               <article className="recovery-row" key={`${point.source}:${point.id}`}>
                 <div>
-                  <strong>{new Date(point.capturedAt).toLocaleString()}</strong>
+                  <strong>{new Date(point.capturedAt).toLocaleString(locale)}</strong>
                   <small>
                     {point.source === "cloud-snapshot" ? uiT("Cloud snapshot") : uiT("Encrypted device copy")}
                     {point.revision !== null && point.revision !== undefined
@@ -1128,7 +1130,7 @@ export default function Settings({
               autoComplete="new-password"
             />
           </Field>
-          {securityError ? <p className="settings-inline-warning">{securityError}</p> : null}
+          {securityError ? <p className="settings-inline-warning">{uiT(securityError)}</p> : null}
         </div>
       </Drawer>
       <ConfirmDialog
@@ -1218,7 +1220,7 @@ export default function Settings({
             </Button>
             <Button
               variant="danger"
-              disabled={resetBusy || resetConfirmation !== "RESET"}
+              disabled={resetBusy || resetConfirmation !== uiT("RESET")}
               onClick={async () => {
                 setResetBusy(true);
                 try {
@@ -1262,12 +1264,13 @@ export default function Settings({
             </Button>
             <Button
               variant="danger"
-              disabled={deleteBusy || deleteConfirmation !== "DELETE MY ACCOUNT"}
+              disabled={deleteBusy || deleteConfirmation !== uiT("DELETE MY ACCOUNT")}
               onClick={async () => {
+                if (deleteConfirmation !== uiT("DELETE MY ACCOUNT")) return;
                 setDeleteBusy(true);
                 setDeleteError("");
                 try {
-                  await onDeleteAccount?.({ confirmation: deleteConfirmation });
+                  await onDeleteAccount?.({ confirmation: "DELETE MY ACCOUNT" });
                 } catch (error) {
                   setDeleteError(error?.message || "Account deletion could not be completed.");
                   setDeleteBusy(false);

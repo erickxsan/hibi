@@ -31,7 +31,7 @@ export function CloudError({ error, onRetry, onSignOut }) {
           <Cloud aria-hidden="true" />
         </span>
         <h1 id="cloud-error-title">{uiT("Cloud workspace unavailable")}</h1>
-        <p>{error?.message || uiT("The secure workspace could not be loaded. Check your connection and try again.")}</p>
+        <p>{uiT(error?.message || "The secure workspace could not be loaded. Check your connection and try again.")}</p>
         <p>
           {uiT(
             "Your saved records have not been replaced. Retry or sign out, then contact support if the problem continues.",
@@ -99,11 +99,12 @@ export function AccountDeletionPending({ busy = false, error = undefined, onResu
           <Button
             variant="danger"
             icon={Trash2}
-            disabled={busy || confirmation !== "DELETE MY ACCOUNT"}
+            disabled={busy || confirmation !== uiT("DELETE MY ACCOUNT")}
             onClick={async () => {
+              if (confirmation !== uiT("DELETE MY ACCOUNT")) return;
               setLocalError("");
               try {
-                await onResume({ confirmation });
+                await onResume({ confirmation: "DELETE MY ACCOUNT" });
               } catch (caught) {
                 setLocalError(caught?.message || "Deletion could not be resumed.");
               }
@@ -121,7 +122,7 @@ export function AccountDeletionPending({ busy = false, error = undefined, onResu
 }
 
 export function AccountDeletionComplete({ receipt, onRetryLocalPurge, onContinue }) {
-  const { t: uiT } = useI18n();
+  const { t: uiT, locale } = useI18n();
   const [purgeBusy, setPurgeBusy] = useState(false);
   const [purgeError, setPurgeError] = useState("");
   return (
@@ -142,7 +143,7 @@ export function AccountDeletionComplete({ receipt, onRetryLocalPurge, onContinue
         </p>
         {!receipt.localPurgeComplete ? (
           <div className="cloud-local-purge-warning" role="alert">
-            <p>{purgeError || uiT("Retry while this browser is still open to remove the remaining device copy.")}</p>
+            <p>{uiT(purgeError || "Retry while this browser is still open to remove the remaining device copy.")}</p>
             <Button
               icon={RefreshCw}
               disabled={purgeBusy}
@@ -173,7 +174,7 @@ export function AccountDeletionComplete({ receipt, onRetryLocalPurge, onContinue
           </div>
           <div>
             <dt>{uiT("Completed")}</dt>
-            <dd>{new Date(receipt.completedAt).toLocaleString()}</dd>
+            <dd>{new Date(receipt.completedAt).toLocaleString(locale)}</dd>
           </div>
         </dl>
         <div className="cloud-state-actions">
@@ -245,7 +246,7 @@ export function LocalDataMigration({ state, accountEmail, busy, error, recoveryM
         </div>
         {error ? (
           <p className="cloud-migration-error" role="alert">
-            {error}
+            {uiT(error)}
           </p>
         ) : null}
         <div className="cloud-state-actions cloud-migration-actions">

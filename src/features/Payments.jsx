@@ -138,9 +138,9 @@ export default function Payments({ state, derived, actions, openPage }) {
         {cards.map(({ icon: Icon, ...card }) => (
           <article className={`payment-metric ${card.tone}`} key={card.label}>
             <Icon size={20} />
-            <span>{card.label}</span>
+            <span>{uiT(card.label)}</span>
             <strong>{card.value}</strong>
-            <small>{card.note}</small>
+            <small>{uiT(card.note)}</small>
           </article>
         ))}
       </section>

@@ -131,7 +131,7 @@ export function AvatarPicker({ value, onChange }) {
         <StudentAvatar avatarId={selected} name="Selected student" size="small" decorative />
         <span>
           <strong>{uiT("Student avatar")}</strong>
-          <small>{AVATAR_META[selected].label}</small>
+          <small>{uiT(AVATAR_META[selected].label)}</small>
         </span>
         <span className="avatar-picker-change">{uiT("Change")}</span>
       </summary>
@@ -151,7 +151,7 @@ export function AvatarPicker({ value, onChange }) {
                 }}
               />
               <StudentAvatar avatarId={avatar.id} name={avatar.label} size="small" decorative />
-              <span>{avatar.label}</span>
+              <span>{uiT(avatar.label)}</span>
               {selected === avatar.id ? <Check size={14} aria-hidden="true" /> : null}
             </label>
           ))}

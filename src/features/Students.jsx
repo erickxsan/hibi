@@ -760,7 +760,9 @@ export default function Students({ state, derived, actions, intent, clearIntent,
                 <small>{uiT("Balance")}</small>
                 <strong>{money(itemSummary.outstanding)}</strong>
               </span>
-              <span className={item.status === "Active" ? "record-status active" : "record-status"}>{item.status}</span>
+              <span className={item.status === "Active" ? "record-status active" : "record-status"}>
+                {uiT(item.status)}
+              </span>
             </button>
           );
         })}

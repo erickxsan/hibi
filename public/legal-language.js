@@ -16,6 +16,11 @@
   function applyLanguage(language) {
     const next = language === "es" ? "es" : "en";
     document.documentElement.lang = next;
+    document.querySelector(".legal-language-toggle")?.setAttribute("aria-label", next === "es" ? "Idioma" : "Language");
+    const description = document.body.dataset.page === "privacy"
+      ? (next === "es" ? "Cómo trata Hibi los datos de tu cuenta y de tus clases." : "How hibi handles account and class-management data.")
+      : (next === "es" ? "Términos de uso de Hibi para la gestión de clases." : "Terms for using the hibi class-management service.");
+    document.querySelector('meta[name="description"]')?.setAttribute("content", description);
     for (const section of sections) section.hidden = section.dataset.language !== next;
     for (const button of buttons) {
       const active = button.dataset.setLanguage === next;

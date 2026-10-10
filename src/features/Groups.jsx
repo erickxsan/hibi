@@ -95,7 +95,7 @@ export function GroupEditor({ draft, setDraft, defaultHours, defaultRate }) {
                 >
                   {DAY_OPTIONS.map((day) => (
                     <option value={day.value} key={day.value}>
-                      {day.label}
+                      {uiT(day.label)}
                     </option>
                   ))}
                 </Select>

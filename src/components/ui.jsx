@@ -51,6 +51,7 @@ export function IconButton({ label, icon: Icon, className = "", ...props }) {
 
 /** @param {import("./ui.types").FieldProps} props */
 export function Field({ label, hint, error, required, children, className = "" }) {
+  const { t: uiT } = useI18n();
   const labelId = useId();
   const hintId = `${labelId}-hint`;
   const errorId = `${labelId}-error`;
@@ -85,7 +86,7 @@ export function Field({ label, hint, error, required, children, className = "" }
       {labelledChild}
       {error ? (
         <span className="field-error" role="alert" id={errorId}>
-          {error}
+          {uiT(error)}
         </span>
       ) : null}
       {!error && hint ? (

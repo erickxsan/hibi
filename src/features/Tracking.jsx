@@ -335,7 +335,7 @@ function InsightPanel({ title, insights, footer = undefined }) {
               <span>
                 <Icon size={15} aria-hidden="true" />
               </span>
-              <p>{insight.text}</p>
+              <p>{uiT(insight.text)}</p>
             </li>
           );
         })}
@@ -1393,8 +1393,16 @@ export default function Tracking({
     if (!exportRows.length) return actions.notify?.("There is nothing to export in this view.", "error");
     downloadExcel(
       `hibi-${tab}-${range.start}-${range.end}.xls`,
-      `Hibi ${tab} · ${range.start} to ${range.end}`,
-      exportRows,
+      uiT("Hibi {section} · {start} to {end}", {
+        section: uiT(TAB_ITEMS.find((item) => item.value === tab).label),
+        start: formatDate(range.start),
+        end: formatDate(range.end),
+      }),
+      exportRows.map((row) =>
+        Object.fromEntries(
+          Object.entries(row).map(([header, value]) => [uiT(header), header === "Status" ? uiT(value) : value]),
+        ),
+      ),
     );
     actions.notify?.("Excel export downloaded");
   };

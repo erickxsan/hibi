@@ -1,3 +1,5 @@
+import { SPANISH_COVERAGE } from "./spanishCoverage.js";
+
 export const LANGUAGE_STORAGE_KEY = "hibi:language:v1";
 
 export const SUPPORTED_LANGUAGES = Object.freeze({
@@ -6,6 +8,7 @@ export const SUPPORTED_LANGUAGES = Object.freeze({
 });
 
 export const SPANISH_TRANSLATIONS = Object.freeze({
+  ...SPANISH_COVERAGE,
   Page: "Página",
   Previous: "Anterior",
   "The new date must be within the series end date.": "La nueva fecha debe estar dentro del periodo de la serie.",
@@ -915,8 +918,8 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "Delete permanently": "Eliminar permanentemente",
   "Reset this workspace?": "¿Restablecer este espacio?",
   "Permanently delete account and data?": "¿Eliminar permanentemente la cuenta y los datos?",
-  "Type RESET to confirm": "Escribe RESET para confirmar",
-  "Type DELETE MY ACCOUNT to confirm": "Escribe DELETE MY ACCOUNT para confirmar",
+  "Type RESET to confirm": "Escribe RESTABLECER para confirmar",
+  "Type DELETE MY ACCOUNT to confirm": "Escribe ELIMINAR MI CUENTA para confirmar",
   "Resetting…": "Restableciendo…",
   "Deleting…": "Eliminando…",
   "Account deletion is pending": "La eliminación de la cuenta está pendiente",
@@ -1070,7 +1073,7 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   "Restore copy": "Restaurar copia",
   "Recovery copy restored": "Copia de recuperación restaurada",
   "Recovery copy downloaded": "Copia de recuperación descargada",
-  "Type RESTORE to confirm record removal": "Escribe RESTORE para confirmar la eliminación de registros",
+  "Type RESTORE to confirm record removal": "Escribe RESTAURAR para confirmar la eliminación de registros",
   "The current version will be kept in recovery history first.":
     "La versión actual se guardará primero en el historial de recuperación.",
   "Hibi will not replace a populated workspace with an empty backup.":
@@ -1450,6 +1453,40 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
 
 const DYNAMIC_TRANSLATIONS = [
   [
+    /^Staging rotated records (\d+)\/(\d+)…$/,
+    (match) => `Preparando registros con la nueva clave ${match[1]}/${match[2]}…`,
+  ],
+  [
+    /^Re-encrypting recovery snapshots (\d+)\/(\d+)…$/,
+    (match) => `Volviendo a cifrar copias de recuperación ${match[1]}/${match[2]}…`,
+  ],
+  [
+    /^Encrypting and staging records (\d+)\/(\d+)…$/,
+    (match) => `Cifrando y preparando registros ${match[1]}/${match[2]}…`,
+  ],
+  [
+    /^The encrypted (.+) record failed authentication\.$/,
+    (match) => `Falló la autenticación del registro cifrado de ${translateToSpanish(match[1])}.`,
+  ],
+  [/^Invalid date-only value: (.+)$/, (match) => `Valor de fecha no válido: ${match[1]}`],
+  [/^(.+) must use HH:MM\.$/, (match) => `${translateToSpanish(match[1])} debe usar el formato HH:MM.`],
+  [
+    /^(.+) must be a valid email address\.$/,
+    (match) => `${translateToSpanish(match[1])} debe ser una dirección de correo válida.`,
+  ],
+  [/^(.+) must be an array\.$/, (match) => `${translateToSpanish(match[1])} debe ser una lista.`],
+  [/^Stable ID (.+) is duplicated\.$/, (match) => `El identificador estable ${match[1]} está duplicado.`],
+  [/^Only schema version (\d+) is supported\.$/, (match) => `Solo se admite la versión ${match[1]} del esquema.`],
+  [/^Check the score for (.+)\.$/, (match) => `Revisa la puntuación de ${match[1]}.`],
+  [/^Enter a score from 0 to (.+)\.$/, (match) => `Introduce una puntuación de 0 a ${match[1]}.`],
+  [
+    /^(\d+) (student already has|students already have) a record at this date and time\. Edit it in History instead\.$/,
+    (match) =>
+      `${match[1]} ${Number(match[1]) === 1 ? "alumno ya tiene" : "alumnos ya tienen"} un registro en esta fecha y hora. Edítalo en Historial.`,
+  ],
+  [/^Exception · (.+)$/, (match) => `Excepción · ${match[1]}`],
+  [/^Schedule change · (.+)$/, (match) => `Cambio de horario · ${match[1]}`],
+  [
     /^(\d+) changes are saved on this device and will sync when the connection returns\.$/,
     (match) => `${match[1]} cambios están guardados en este dispositivo y se sincronizarán cuando vuelva la conexión.`,
   ],
@@ -1460,7 +1497,8 @@ const DYNAMIC_TRANSLATIONS = [
   ],
   [
     /^Synchronization needs attention: (.+)\. Local changes are preserved\.$/,
-    (match) => `La sincronización necesita atención: ${match[1]}. Los cambios locales se conservan.`,
+    (match) =>
+      `La sincronización necesita atención: ${translateToSpanish(match[1])}. Los cambios locales se conservan.`,
   ],
   [
     /^Attendance in (\d+) (class|classes)$/,
@@ -1665,15 +1703,19 @@ const DYNAMIC_TRANSLATIONS = [
     /^Class saved for (\d+) students?$/,
     (match) => `Clase guardada para ${match[1]} ${Number(match[1]) === 1 ? "alumno" : "alumnos"}`,
   ],
-  [/^Another tab saved invalid data: (.+)$/, (match) => `Otra pestaña guardó datos no válidos: ${match[1]}`],
+  [
+    /^Another tab saved invalid data: (.+)$/,
+    (match) => `Otra pestaña guardó datos no válidos: ${translateToSpanish(match[1])}`,
+  ],
   [
     /^Cloud synchronization returned invalid data: (.+)$/,
-    (match) => `La sincronización en la nube devolvió datos no válidos: ${match[1]}`,
+    (match) => `La sincronización en la nube devolvió datos no válidos: ${translateToSpanish(match[1])}`,
   ],
   [/^(.+) is required\.$/, (match) => `${translateToSpanish(match[1])} es obligatorio.`],
   [
     /^(.+) must be one of: (.+)\.$/,
-    (match) => `${translateToSpanish(match[1])} debe ser uno de estos valores: ${match[2]}.`,
+    (match) =>
+      `${translateToSpanish(match[1])} debe ser uno de estos valores: ${match[2].split(", ").map(translateToSpanish).join(", ")}.`,
   ],
   [/^(.+) must be a finite number\.$/, (match) => `${translateToSpanish(match[1])} debe ser un número válido.`],
   [/^(.+) must be a whole number\.$/, (match) => `${translateToSpanish(match[1])} debe ser un número entero.`],

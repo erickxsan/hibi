@@ -1,6 +1,6 @@
 import { createContext, useContext, useLayoutEffect, useMemo, useState } from "react";
 import { Languages } from "lucide-react";
-import { LANGUAGE_STORAGE_KEY, SUPPORTED_LANGUAGES, translateUiText } from "./translations";
+import { LANGUAGE_STORAGE_KEY, SPANISH_TRANSLATIONS, SUPPORTED_LANGUAGES, translateUiText } from "./translations";
 
 const I18nContext = createContext(null);
 /** @type {"en" | "es"} */
@@ -25,6 +25,16 @@ function initialLanguage() {
 
 // Only UI sources are translated. String parameters remain opaque user data.
 export function translateMessage(key, parameters = {}, language = activeLanguage) {
+  const original = String(key ?? "");
+  const template = language === SUPPORTED_LANGUAGES.SPANISH ? SPANISH_TRANSLATIONS[original.trim()] : undefined;
+  if (template) {
+    const translated = template.replace(/\{(\w+)\}/g, (token, name) => {
+      if (!(name in parameters)) return token;
+      const value = parameters[name];
+      return value?.[UI_PARAMETER] ? translateUiText(value.value, language) : String(value ?? "");
+    });
+    return (original.match(/^\s*/)?.[0] ?? "") + translated + (original.match(/\s*$/)?.[0] ?? "");
+  }
   const values = [];
   const source = String(key ?? "").replace(/\{(\w+)\}/g, (token, name) => {
     if (!(name in parameters)) return token;

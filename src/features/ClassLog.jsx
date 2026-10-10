@@ -275,6 +275,7 @@ function SummaryLine({ label, value, strong = false, tone = "" }) {
 }
 
 function AttendanceSelect({ value, onChange, label, disabled = false }) {
+  const { t: uiT } = useI18n();
   return (
     <Select
       className={`attendance-picker attendance-control attendance-${String(ATTENDANCE_LABELS[value] || "none").toLowerCase()}`}
@@ -286,7 +287,7 @@ function AttendanceSelect({ value, onChange, label, disabled = false }) {
       <option value="">—</option>
       {ATTENDANCE_CODES.map((code) => (
         <option value={code} key={code}>
-          {ATTENDANCE_LABELS[code]} ({code})
+          {uiT(ATTENDANCE_LABELS[code])} ({code})
         </option>
       ))}
     </Select>
@@ -323,7 +324,7 @@ function ClassControls({ value, groups, hasIndividualStudents, onChange, onAdvan
           <Select value={value.classStatus} onChange={(event) => onChange("classStatus", event.target.value)}>
             {CLASS_STATUSES.map((status) => (
               <option value={status} key={status}>
-                {status}
+                {uiT(status)}
               </option>
             ))}
           </Select>
@@ -368,7 +369,7 @@ function MobileRosterCards({ rows, classStatus, currency, onChange }) {
                   <span>{row.studentCode || uiT("No ID")}</span>
                 </span>
               </div>
-              <StatusBadge tone={paymentTone(row.paymentStatus)}>{row.paymentStatus || "—"}</StatusBadge>
+              <StatusBadge tone={paymentTone(row.paymentStatus)}>{uiT(row.paymentStatus || "—")}</StatusBadge>
             </header>
 
             <div className="mobile-roster-field-grid mobile-roster-attendance-grid">
@@ -434,7 +435,7 @@ function MobileRosterCards({ rows, classStatus, currency, onChange }) {
                   <option value="">—</option>
                   {PAYMENT_METHODS.map((method) => (
                     <option value={method} key={method}>
-                      {method}
+                      {uiT(method)}
                     </option>
                   ))}
                 </Select>
@@ -585,13 +586,13 @@ function RosterTable({ rows, classStatus, currency, onChange, groupSelected = fa
                       <option value="">—</option>
                       {PAYMENT_METHODS.map((method) => (
                         <option value={method} key={method}>
-                          {method}
+                          {uiT(method)}
                         </option>
                       ))}
                     </Select>
                   </td>
                   <td>
-                    <StatusBadge tone={paymentTone(row.paymentStatus)}>{row.paymentStatus || "—"}</StatusBadge>
+                    <StatusBadge tone={paymentTone(row.paymentStatus)}>{uiT(row.paymentStatus || "—")}</StatusBadge>
                   </td>
                   <td className="numeric number-cell money-cell">{currency(row.outstanding)}</td>
                   <td>
@@ -639,9 +640,11 @@ function ReviewPanel({ classDraft, selectedGroup, rows, summary, issues, currenc
         <SummaryLine label={uiT("Group")} value={selectedGroup?.name || "—"} />
         <SummaryLine
           label={uiT("Status")}
-          value={<StatusBadge tone={classStatusTone(classDraft.classStatus)}>{classDraft.classStatus}</StatusBadge>}
+          value={
+            <StatusBadge tone={classStatusTone(classDraft.classStatus)}>{uiT(classDraft.classStatus)}</StatusBadge>
+          }
         />
-        <SummaryLine label={uiT("Hours")} value={`${effectiveNumber(classDraft.hours, 0)} hr`} />
+        <SummaryLine label={uiT("Hours")} value={uiT("{hours} hr", { hours: effectiveNumber(classDraft.hours, 0) })} />
         <SummaryLine label={uiT("Students")} value={rows.length} />
       </div>
 
@@ -651,7 +654,7 @@ function ReviewPanel({ classDraft, selectedGroup, rows, summary, issues, currenc
           <div className="legend-line" key={code}>
             <span>
               <i className={`legend-dot tone-${attendanceTone(code)}`} />
-              {ATTENDANCE_LABELS[code]}
+              {uiT(ATTENDANCE_LABELS[code])}
             </span>
             <strong>{summary.attendance[code] || 0}</strong>
           </div>
@@ -683,7 +686,7 @@ function ReviewPanel({ classDraft, selectedGroup, rows, summary, issues, currenc
             issues.map((issue) => (
               <div className={`validation-banner validation-${issue.blocking ? "error" : "warning"}`} key={issue.key}>
                 <AlertTriangle aria-hidden="true" size={17} />
-                <span>{issue.message}</span>
+                <span>{uiT(issue.message)}</span>
               </div>
             ))
           ) : (
@@ -908,7 +911,7 @@ function AdvancePaymentDrawer({
               <option value="">{uiT("Choose a method")}</option>
               {PAYMENT_METHODS.map((method) => (
                 <option key={method} value={method}>
-                  {method}
+                  {uiT(method)}
                 </option>
               ))}
             </Select>
@@ -1135,7 +1138,7 @@ function EditClassDrawer({
               >
                 {CLASS_STATUSES.map((status) => (
                   <option value={status} key={status}>
-                    {status}
+                    {uiT(status)}
                   </option>
                 ))}
               </Select>
@@ -1181,7 +1184,7 @@ function EditClassDrawer({
                 <option value="">—</option>
                 {PAYMENT_METHODS.map((method) => (
                   <option value={method} key={method}>
-                    {method}
+                    {uiT(method)}
                   </option>
                 ))}
               </Select>
@@ -1206,7 +1209,7 @@ function EditClassDrawer({
               label={uiT("Payment status")}
               value={
                 <StatusBadge tone={paymentTone(calculated.paymentStatus)}>
-                  {calculated.paymentStatus || "—"}
+                  {uiT(calculated.paymentStatus || "—")}
                 </StatusBadge>
               }
             />
@@ -1333,7 +1336,7 @@ function HistoryView({ rows, groups, students, context, currency, actions, regis
             <option value="">{uiT("All class statuses")}</option>
             {CLASS_STATUSES.map((status) => (
               <option value={status} key={status}>
-                {status}
+                {uiT(status)}
               </option>
             ))}
           </Select>
@@ -1345,7 +1348,7 @@ function HistoryView({ rows, groups, students, context, currency, actions, regis
             <option value="">{uiT("All payment statuses")}</option>
             {paymentStatuses.map((status) => (
               <option value={status} key={status}>
-                {status}
+                {uiT(status)}
               </option>
             ))}
           </Select>
@@ -1422,7 +1425,7 @@ function HistoryView({ rows, groups, students, context, currency, actions, regis
                     <td>
                       {row.attendance ? (
                         <StatusBadge tone={attendanceTone(row.attendance)}>
-                          {ATTENDANCE_LABELS[row.attendance] || row.attendance}
+                          {uiT(ATTENDANCE_LABELS[row.attendance] || row.attendance)}
                         </StatusBadge>
                       ) : (
                         "—"
@@ -1432,7 +1435,7 @@ function HistoryView({ rows, groups, students, context, currency, actions, regis
                     <td className="numeric number-cell money-cell">{currency(row.charge)}</td>
                     <td className="numeric number-cell money-cell">{currency(row.amountPaid)}</td>
                     <td>
-                      <StatusBadge tone={paymentTone(row.paymentStatus)}>{row.paymentStatus || "—"}</StatusBadge>
+                      <StatusBadge tone={paymentTone(row.paymentStatus)}>{uiT(row.paymentStatus || "—")}</StatusBadge>
                     </td>
                     <td className="numeric number-cell money-cell">{currency(row.outstanding)}</td>
                     <td>{row.paymentReference || "—"}</td>

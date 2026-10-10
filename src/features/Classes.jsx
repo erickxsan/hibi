@@ -849,7 +849,7 @@ function SessionEditor({
                 </Button>
               ) : null}
               <StatusBadge tone={statusTone(session.statusLabel)}>
-                {session.statusLabel === "Pending" ? uiT("Pending registration") : session.statusLabel}
+                {uiT(session.statusLabel === "Pending" ? "Pending registration" : session.statusLabel)}
               </StatusBadge>
             </div>
           </div>
@@ -1059,7 +1059,7 @@ function CalendarSessionCard({ session, onOpen, compact = false, selected = fals
       </div>
       {!compact ? (
         <div className="calendar-session-actions">
-          <StatusBadge tone={statusTone(session.statusLabel)}>{session.statusLabel}</StatusBadge>
+          <StatusBadge tone={statusTone(session.statusLabel)}>{uiT(session.statusLabel)}</StatusBadge>
           <Button
             variant={selected ? "primary" : undefined}
             onClick={(event) => {
@@ -1570,7 +1570,9 @@ function HistoryList({ sessions, selectedKey, onSelect, filters, setFilters }) {
           >
             <option value="">{uiT("Status")}</option>
             {["Pending", "Registered", "Cancelled", "Rescheduled"].map((status) => (
-              <option key={status}>{status}</option>
+              <option key={status} value={status}>
+                {uiT(status)}
+              </option>
             ))}
           </Select>
         </label>
@@ -1600,7 +1602,7 @@ function HistoryList({ sessions, selectedKey, onSelect, filters, setFilters }) {
               <small>{session.format === "group" ? uiT("Group") : session.studentName || uiT("Individual")}</small>
             </span>
             <span>{session.format === "group" ? <UsersRound size={18} /> : <UserRound size={18} />}</span>
-            <StatusBadge tone={statusTone(session.statusLabel)}>{session.statusLabel}</StatusBadge>
+            <StatusBadge tone={statusTone(session.statusLabel)}>{uiT(session.statusLabel)}</StatusBadge>
             <span>
               <b>
                 {session.studentCount || 1} {session.studentCount === 1 ? uiT("student") : uiT("students")}

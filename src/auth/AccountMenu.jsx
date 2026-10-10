@@ -70,7 +70,7 @@ export function AccountMenu({ email, syncStatus = "synced", syncMessage, signing
         className="account-menu-trigger"
         type="button"
         onClick={() => setOpen((current) => !current)}
-        aria-label={uiT("Account menu for {p0}", { p0: email || "current account" })}
+        aria-label={uiT("Account menu for {p0}", { p0: email || uiT("current account") })}
         aria-expanded={open}
         aria-controls={panelId}
       >
@@ -109,7 +109,7 @@ export function AccountMenu({ email, syncStatus = "synced", syncMessage, signing
 
           {signOutError ? (
             <p className="account-menu-error" role="alert">
-              {signOutError}
+              {uiT(signOutError)}
             </p>
           ) : null}
 

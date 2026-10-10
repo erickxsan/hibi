@@ -183,7 +183,7 @@ function ScheduleRows({ rows, setRows }) {
               >
                 {ONBOARDING_DAYS.map((day) => (
                   <option value={day.value} key={day.value}>
-                    {day.label}
+                    {uiT(day.label)}
                   </option>
                 ))}
               </select>

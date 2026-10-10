@@ -166,7 +166,7 @@ function ProgressTabs({ value, onChange }) {
           className={value === tab.value ? "active" : ""}
           onClick={() => onChange(tab.value)}
         >
-          {tab.label}
+          {uiT(tab.label)}
         </button>
       ))}
     </div>
@@ -622,7 +622,9 @@ function RecordView({
         <Field label={uiT("Category")}>
           <Select value={context.category} onChange={(event) => onAssessmentChange({ category: event.target.value })}>
             {CATEGORIES.map((category) => (
-              <option key={category}>{category}</option>
+              <option key={category} value={category}>
+                {uiT(category)}
+              </option>
             ))}
           </Select>
         </Field>
@@ -1164,7 +1166,9 @@ function GradebookView({ state, groups, students, studentsById, gradeRows, actio
                   onChange={(event) => setBatchDraft({ ...batchDraft, category: event.target.value })}
                 >
                   {CATEGORIES.map((category) => (
-                    <option key={category}>{category}</option>
+                    <option key={category} value={category}>
+                      {uiT(category)}
+                    </option>
                   ))}
                 </Select>
               </Field>
@@ -1253,7 +1257,9 @@ function GradebookView({ state, groups, students, studentsById, gradeRows, actio
                   onChange={(event) => setEditDraft({ ...editDraft, category: event.target.value })}
                 >
                   {CATEGORIES.map((category) => (
-                    <option key={category}>{category}</option>
+                    <option key={category} value={category}>
+                      {uiT(category)}
+                    </option>
                   ))}
                 </Select>
               </Field>
@@ -1290,7 +1296,9 @@ function GradebookView({ state, groups, students, studentsById, gradeRows, actio
                 onChange={(event) => setEditDraft({ ...editDraft, workStatus: event.target.value })}
               >
                 {WORK_STATUSES.map((status) => (
-                  <option key={status}>{status}</option>
+                  <option key={status} value={status}>
+                    {uiT(status)}
+                  </option>
                 ))}
               </Select>
             </Field>

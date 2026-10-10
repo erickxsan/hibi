@@ -142,7 +142,7 @@ function PasswordRequirements({ password, id }) {
         return (
           <span key={rule.id} className={met ? "is-met" : undefined}>
             <Check aria-hidden="true" size={13} strokeWidth={2.4} />
-            {rule.label}
+            {uiT(rule.label)}
           </span>
         );
       })}
@@ -177,7 +177,7 @@ export function AuthScreen({
   onForgotPassword = undefined,
   onResetPassword = undefined,
 }) {
-  const { t: uiT } = useI18n();
+  const { t: uiT, language } = useI18n();
   const [internalMode, setInternalMode] = useState(initialMode);
   const [email, setEmail] = useState(defaultEmail);
   const [password, setPassword] = useState("");
@@ -343,18 +343,18 @@ export function AuthScreen({
           ) : null}
 
           <div className="auth-heading">
-            <h1 id={`${formId}-title`}>{copy.title}</h1>
-            <p>{copy.description}</p>
+            <h1 id={`${formId}-title`}>{uiT(copy.title)}</h1>
+            <p>{uiT(copy.description)}</p>
           </div>
 
           {messageError ? (
             <div id={feedbackId} className="auth-feedback auth-feedback-error" role="alert">
-              {messageError}
+              {uiT(messageError)}
             </div>
           ) : null}
           {!messageError && messageSuccess ? (
             <div id={feedbackId} className="auth-feedback auth-feedback-success" role="status">
-              {messageSuccess}
+              {uiT(messageSuccess)}
             </div>
           ) : null}
 
@@ -423,6 +423,7 @@ export function AuthScreen({
                 <HCaptcha
                   ref={captchaRef}
                   sitekey={captchaSiteKey}
+                  languageOverride={language}
                   size="compact"
                   reCaptchaCompat={false}
                   onVerify={(token) => {
@@ -440,7 +441,7 @@ export function AuthScreen({
 
             <button className="auth-submit-button" type="submit" disabled={busy}>
               {busy ? <span className="auth-spinner" aria-hidden="true" /> : null}
-              {busy ? uiT("Please wait…") : copy.action}
+              {busy ? uiT("Please wait…") : uiT(copy.action)}
             </button>
           </form>
 

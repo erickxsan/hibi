@@ -125,7 +125,7 @@ export function WorkspaceEncryptionGate({
         {progress ? (
           <div className="encryption-progress" role="status" aria-live="polite">
             <span className="cloud-state-spinner" aria-hidden="true" />
-            <span>{progress}</span>
+            <span>{uiT(progress)}</span>
           </div>
         ) : null}
         {error || formError ? (
@@ -133,7 +133,7 @@ export function WorkspaceEncryptionGate({
             <strong>
               {bootstrapKnown ? uiT("Workspace remains safe.") : uiT("Encryption settings could not be checked.")}
             </strong>
-            <span>{formError || error?.message || uiT("The workspace could not be unlocked.")}</span>
+            <span>{uiT(formError || error?.message || "The workspace could not be unlocked.")}</span>
           </div>
         ) : null}
 

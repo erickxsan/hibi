@@ -14,7 +14,10 @@ function TourFocus({ focus, context }) {
         <UsersRound aria-hidden="true" size={17} />
         <span>{uiT("Your group")}</span>
         <strong>
-          {`${context.groupName} · ${context.studentCount} ${context.studentCount === 1 ? "student" : "students"}`}
+          {uiT(context.studentCount === 1 ? "{title} · {count} student" : "{title} · {count} students", {
+            title: context.groupName,
+            count: context.studentCount,
+          })}
         </strong>
       </p>
     );
@@ -196,7 +199,7 @@ export default function ContextualTour({
         className="onboarding-context-callout"
         role="dialog"
         aria-modal="true"
-        aria-label={config.label + " tour"}
+        aria-label={uiT(config.label + " tour")}
         aria-describedby={descriptionId}
         data-placement={layout?.side || "none"}
         style={
@@ -212,12 +215,12 @@ export default function ContextualTour({
               {t(config.label) + " · " + ordinal + " " + t("of") + " " + tourLength}
             </p>
             <h2 ref={headingRef} tabIndex={-1}>
-              {config.title}
+              {uiT(config.title)}
             </h2>
           </div>
         </header>
         <p id={descriptionId} className="onboarding-tour-description">
-          {config.description}
+          {uiT(config.description)}
         </p>
         <TourFocus focus={config.focus} context={context} />
         {!targetReady ? (

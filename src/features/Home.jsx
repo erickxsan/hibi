@@ -237,7 +237,10 @@ export function AttendancePanel({ title, sessions, previousSessions, onOpen }) {
                 >
                   {selected ? (
                     <span className="home-attendance-tooltip" role="status">
-                      {`${session.title} · ${session.attended} ${session.attended === 1 ? "student" : "students"}`}
+                      {uiT(session.attended === 1 ? "{title} · {count} student" : "{title} · {count} students", {
+                        title: session.title,
+                        count: session.attended,
+                      })}
                     </span>
                   ) : null}
                   <span className="home-attendance-session-label">{uiT("Class {p0}", { p0: index + 1 })}</span>
@@ -258,7 +261,7 @@ export function AttendancePanel({ title, sessions, previousSessions, onOpen }) {
       <footer className={`home-attendance-footer ${filteredSessions.length ? "" : "empty"}`}>
         {filteredSessions.length ? (
           <span className={insight.tone}>
-            <InsightIcon aria-hidden="true" size={15} /> {insight.message}
+            <InsightIcon aria-hidden="true" size={15} /> {uiT(insight.message)}
           </span>
         ) : null}
         <button type="button" onClick={onOpen}>
@@ -314,7 +317,11 @@ function RevenueRhythm({ dashboard, period, locale, onOpen }) {
       <div className="home-revenue-value home-revenue-rhythm-value">
         <strong>{money(dashboard.collected)}</strong>
         <Delta value={dashboard.collectedDelta} />
-        <span>{`${dashboard.collectionRecordCount} ${dashboard.collectionRecordCount === 1 ? "payment recorded" : "payments recorded"}`}</span>
+        <span>
+          {uiT(dashboard.collectionRecordCount === 1 ? "{count} payment recorded" : "{count} payments recorded", {
+            count: dashboard.collectionRecordCount,
+          })}
+        </span>
       </div>
       <RevenueChart series={dashboard.collectionSeries} period={period} locale={locale} />
       <footer className="home-revenue-footer">
@@ -367,11 +374,15 @@ function RevenueProjection({ dashboard, onOpen }) {
       <div className="home-revenue-projection-meta">
         <span>
           <i className="complete" aria-hidden="true" />
-          {`${dashboard.collectionRecordCount} ${dashboard.collectionRecordCount === 1 ? "payment recorded" : "payments recorded"}`}
+          {uiT(dashboard.collectionRecordCount === 1 ? "{count} payment recorded" : "{count} payments recorded", {
+            count: dashboard.collectionRecordCount,
+          })}
         </span>
         <span>
           <i aria-hidden="true" />
-          {`${dashboard.projectedClassCount} ${dashboard.projectedClassCount === 1 ? "class to teach" : "classes to teach"}`}
+          {uiT(dashboard.projectedClassCount === 1 ? "{count} class to teach" : "{count} classes to teach", {
+            count: dashboard.projectedClassCount,
+          })}
         </span>
       </div>
       <footer className="home-revenue-projection-footer">
@@ -406,7 +417,9 @@ function RevenueGroups({ dashboard, onOpen }) {
             <div key={item.id}>
               <span>
                 <strong>{item.name}</strong>
-                <small>{`${item.paymentCount} ${item.paymentCount === 1 ? "payment" : "payments"}`}</small>
+                <small>
+                  {uiT(item.paymentCount === 1 ? "{count} payment" : "{count} payments", { count: item.paymentCount })}
+                </small>
               </span>
               <i>
                 <b style={{ width: `${maximum ? Math.round((item.value / maximum) * 100) : 0}%` }} />
@@ -530,9 +543,9 @@ export function RevenuePanel({ dashboard, period, locale, noun, onOpen }) {
           </div>
           <span
             className="home-period-label"
-            aria-label={uiT("Collection period: {p0}", { p0: PERIOD_LABELS[period] })}
+            aria-label={uiT("Collection period: {p0}", { p0: uiText(PERIOD_LABELS[period]) })}
           >
-            {PERIOD_LABELS[period]} <ChevronDown aria-hidden="true" size={14} />
+            {uiT(PERIOD_LABELS[period])} <ChevronDown aria-hidden="true" size={14} />
           </span>
         </div>
       </header>
@@ -569,7 +582,7 @@ function SessionCard({ session, onOpen }) {
   return (
     <button className={session.isNext ? "home-session next" : "home-session"} type="button" onClick={onOpen}>
       {session.isNext ? <span className="next-class-label">{uiT("Next class")}</span> : null}
-      <time>{formatTime(session.startTime)}</time>
+      <time>{uiT(formatTime(session.startTime))}</time>
       <ClassGlyph title={session.title} />
       <span className="home-session-copy">
         <strong>{session.title}</strong>
@@ -577,7 +590,7 @@ function SessionCard({ session, onOpen }) {
           {session.attended} / {session.expected} {uiT(" students")}
         </small>
       </span>
-      <span className={`home-session-status ${session.status.toLowerCase()}`}>{session.status}</span>
+      <span className={`home-session-status ${session.status.toLowerCase()}`}>{uiT(session.status)}</span>
     </button>
   );
 }
@@ -768,7 +781,7 @@ export default function Home({ state, derived, openPage, navigate }) {
               aria-pressed={period === item}
               onClick={() => setPeriod(item)}
             >
-              {PERIOD_LABELS[item]}
+              {uiT(PERIOD_LABELS[item])}
             </button>
           ))}
         </div>
@@ -830,14 +843,14 @@ export default function Home({ state, derived, openPage, navigate }) {
 
       <section className="home-academic-grid" aria-label={uiT("Academic overview")}>
         <AttendancePanel
-          title={uiT("Average attendance {p0}", { p0: noun })}
+          title={uiT("Average attendance {p0}", { p0: uiText(noun) })}
           sessions={dashboard.attendanceSessions}
           previousSessions={dashboard.previousAttendanceSessions}
           onOpen={openAttendanceOverview}
         />
         <MetricPanel
           icon={Star}
-          title={uiT("Average grade {p0}", { p0: noun })}
+          title={uiT("Average grade {p0}", { p0: uiText(noun) })}
           value={gradeValue}
           suffix="/ 10"
           delta={dashboard.gradeDelta}
