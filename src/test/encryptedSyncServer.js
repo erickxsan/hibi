@@ -85,6 +85,10 @@ export async function createEncryptedSyncServer(state, versions = {}, transformE
           error: null,
         };
       },
+      maybeSingle: async () => {
+        const source = table === E2EE_SNAPSHOTS_TABLE ? snapshots : events;
+        return { data: source.find((item) => filters.every((filter) => filter(item))) || null, error: null };
+      },
     };
     if (![E2EE_EVENTS_TABLE, E2EE_SNAPSHOTS_TABLE].includes(table)) throw new Error(`Unexpected table: ${table}`);
     return builder;
