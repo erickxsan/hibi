@@ -936,11 +936,13 @@ export function createEncryptedWorkspaceRepository(
   }
 
   async function listSnapshots(expectedOwnerId) {
+    // The server's separately activated retention policy decides eligibility.
+    // Filtering by date here would hide copies during the preservation phase.
     const user = await requireUser(expectedOwnerId);
     const ownerId = expectedOwnerId || user.id;
     const { data, error } = await cloud()
       .from(E2EE_SNAPSHOTS_TABLE)
-      .select("id, owner_id, source_revision, reason, original_created_at, created_at")
+      .select("id, owner_id, source_revision, reason, original_created_at, created_at, expires_at")
       .eq("owner_id", ownerId)
       .order("created_at", { ascending: false })
       .limit(20);

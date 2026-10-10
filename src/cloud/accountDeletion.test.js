@@ -12,6 +12,7 @@ function memoryStorage(entries) {
   const values = new Map(Object.entries(entries));
   return {
     getItem: vi.fn((key) => values.get(key) ?? null),
+    setItem: vi.fn((key, value) => values.set(key, value)),
     removeItem: vi.fn((key) => values.delete(key)),
     values,
   };
@@ -34,7 +35,7 @@ describe("account deletion client", () => {
       auth: { getUser: vi.fn(async () => ({ data: { user: { id: "user-a" } }, error: null })) },
       functions: { invoke },
     };
-    const service = createAccountDeletionService(client, { randomUUID: vi.fn(() => ids.shift()) });
+    const service = createAccountDeletionService(client, { randomUUID: vi.fn(() => ids.shift()) }, memoryStorage({}));
 
     await expect(service.removeAccount({ confirmation: ACCOUNT_DELETION_CONFIRMATION })).resolves.toEqual({
       ownerId: "user-a",

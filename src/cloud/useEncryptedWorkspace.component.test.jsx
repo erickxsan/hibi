@@ -6,12 +6,17 @@ import { WorkspaceConflictError } from "./workspaceRepository.js";
 import { useClassManager } from "../hooks/useClassManager.js";
 import { createStarterState } from "../domain/index.js";
 
-const mocks = vi.hoisted(() => ({ store: {}, repository: {}, writeIntegrity: vi.fn(async () => true) }));
+const mocks = vi.hoisted(() => ({
+  store: {},
+  repository: {},
+  writeIntegrity: vi.fn(async () => true),
+  readIntegrity: vi.fn(async () => null),
+}));
 vi.mock("./deviceRecoveryStore.js", () => ({ deviceRecoveryStore: mocks.store }));
 vi.mock("./encryptedWorkspaceRepository.js", () => ({ encryptedWorkspaceRepository: mocks.repository }));
 vi.mock("../crypto/index.js", async (importOriginal) => ({
   ...(await importOriginal()),
-  deviceKeyStore: { readIntegrity: async () => null, writeIntegrity: mocks.writeIntegrity },
+  deviceKeyStore: { readIntegrity: mocks.readIntegrity, writeIntegrity: mocks.writeIntegrity },
 }));
 const user = { id: "owner" };
 const session = { workspaceCryptoId: "workspace" };
@@ -32,6 +37,7 @@ function entry(id, entity, status = "pending") {
 }
 let queue;
 beforeEach(() => {
+  mocks.readIntegrity.mockReset().mockResolvedValue(null);
   queue = [];
   Object.assign(mocks.store, {
     listMutations: vi.fn(async () => [...queue]),
@@ -64,6 +70,17 @@ beforeEach(() => {
   });
 });
 describe("encrypted offline queue", () => {
+  it("pauses sync without querying the server when the saved integrity witness is invalid", async () => {
+    const { WorkspaceCryptoError } = await import("../crypto/index.js");
+    mocks.readIntegrity.mockRejectedValue(
+      new WorkspaceCryptoError("Invalid witness", { code: "integrity_witness_invalid" }),
+    );
+    const cloud = renderHook(() => useEncryptedWorkspace(user, session, security));
+    await waitFor(() => expect(cloud.result.current.syncStatus).toBe("error"));
+    expect(mocks.repository.loadWorkspace).not.toHaveBeenCalled();
+    expect(mocks.repository.applyMutation).not.toHaveBeenCalled();
+    expect(cloud.result.current.workspace.state).toEqual(workspace.state);
+  });
   it("blocks overlapping restores and local purging until the restore completes", async () => {
     const cloud = renderHook(() => useEncryptedWorkspace(user, session, security));
     await waitFor(() => expect(cloud.result.current.syncStatus).toBe("saved"));
