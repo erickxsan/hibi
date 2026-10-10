@@ -616,8 +616,8 @@ export default function Setup({
                   value={studentDraft.status}
                   onChange={(event) => setStudentDraft({ ...studentDraft, status: event.target.value })}
                 >
-                  <option>{uiT("Active")}</option>
-                  <option>{uiT("Inactive")}</option>
+                  <option value="Active">{uiT("Active")}</option>
+                  <option value="Inactive">{uiT("Inactive")}</option>
                 </Select>
               </Field>
             </div>

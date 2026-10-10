@@ -736,8 +736,8 @@ function StudentDetail({ student, draft, setDraft, groupsById, state, onEdit, on
           </Field>
           <Field label={uiT("Status")}>
             <Select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value })}>
-              <option>{uiT("Active")}</option>
-              <option>{uiT("Inactive")}</option>
+              <option value="Active">{uiT("Active")}</option>
+              <option value="Inactive">{uiT("Inactive")}</option>
             </Select>
           </Field>
           <Field label={uiT("Brief notes")}>
