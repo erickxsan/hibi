@@ -1,10 +1,6 @@
 import { useI18n } from "../i18n/index.jsx";
-import { useEffect, useId, useRef, useState } from "react";
-import { Ellipsis, X } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { BrandMark } from "./BrandMark";
-import { closeOverlayHistory, pushOverlayHistory, subscribeToAppHistory } from "../navigation/appHistory";
-
-const MOBILE_PRIMARY = new Set(["home", "community", "classes", "grades"]);
 
 export function AppShell({
   navItems,
@@ -17,11 +13,6 @@ export function AppShell({
 }) {
   const { t: uiT } = useI18n();
   const mainRef = useRef(null);
-  const moreRef = useRef(null);
-  const moreButtonRef = useRef(null);
-  const ownsMoreHistory = useRef(false);
-  const moreHistoryId = useId();
-  const [moreOpen, setMoreOpen] = useState(false);
   const go = (event, page) => {
     if (
       event?.defaultPrevented ||
@@ -29,7 +20,6 @@ export function AppShell({
     )
       return;
     event?.preventDefault();
-    setMoreOpen(false);
     onNavigate(page);
   };
 
@@ -39,77 +29,6 @@ export function AppShell({
     if (navigationReason === "push" || navigationReason === "replace")
       window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }, [activePage, navigationReason, guidedNavigation]);
-
-  const closeMore = () => {
-    if (!moreOpen) return;
-    if (ownsMoreHistory.current && closeOverlayHistory(moreHistoryId)) return;
-    setMoreOpen(false);
-  };
-
-  useEffect(() => {
-    if (!moreOpen) return undefined;
-    const moreButton = moreButtonRef.current;
-    const historyTimer = window.setTimeout(() => {
-      ownsMoreHistory.current = Boolean(pushOverlayHistory(moreHistoryId));
-    }, 0);
-    const unsubscribe = subscribeToAppHistory({
-      beforePop: ({ previous, next }) => {
-        const wasOpen = previous?.overlays?.includes(moreHistoryId);
-        const remainsOpen = next?.overlays?.includes(moreHistoryId);
-        if (wasOpen && !remainsOpen) {
-          ownsMoreHistory.current = false;
-          setMoreOpen(false);
-        }
-        return true;
-      },
-    });
-    const handleKeyDown = (event) => {
-      if (event.key === "Escape") {
-        closeMore();
-        return;
-      }
-      if (event.key !== "Tab" || !moreRef.current) return;
-      const focusable = [
-        ...moreRef.current.querySelectorAll("a[href], button:not([disabled]), [tabindex]:not([tabindex='-1'])"),
-      ];
-      if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    const handlePointerDown = (event) => {
-      if (moreRef.current?.contains(event.target) || moreButtonRef.current?.contains(event.target)) return;
-      closeMore();
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    document.addEventListener("pointerdown", handlePointerDown);
-    document.documentElement.classList.add("mobile-more-open");
-    document.body.classList.add("mobile-more-open");
-    moreRef.current?.querySelector("a, button")?.focus();
-    return () => {
-      window.clearTimeout(historyTimer);
-      unsubscribe();
-      document.removeEventListener("keydown", handleKeyDown);
-      document.removeEventListener("pointerdown", handlePointerDown);
-      document.documentElement.classList.remove("mobile-more-open");
-      document.body.classList.remove("mobile-more-open");
-      if (ownsMoreHistory.current) closeOverlayHistory(moreHistoryId);
-      ownsMoreHistory.current = false;
-      moreButton?.focus?.({ preventScroll: true });
-    };
-    // `closeMore` reads only current state and the stable history id.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [moreHistoryId, moreOpen]);
-
-  const primary = navItems.filter((item) => MOBILE_PRIMARY.has(item.id));
-  const secondary = navItems.filter((item) => !MOBILE_PRIMARY.has(item.id));
-  const secondaryActive = secondary.some((item) => item.id === activePage);
 
   return (
     <div className={`hibi-shell page-${activePage}`}>
@@ -161,67 +80,24 @@ export function AppShell({
       <nav
         className="hibi-mobile-nav"
         aria-label={uiT("Mobile navigation")}
-        style={/** @type {import("react").CSSProperties} */ ({ "--mobile-nav-count": primary.length + 1 })}
+        style={/** @type {import("react").CSSProperties} */ ({ "--mobile-nav-count": navItems.length })}
       >
-        {primary.map((item) => {
-          const Icon = item.mobileIcon || item.icon;
+        {navItems.map((item) => {
+          const Icon = item.icon;
           return (
             <a
               key={item.id}
               href={item.href}
               onClick={(event) => go(event, item.id)}
-              className={`${activePage === item.id ? "mobile-link active" : "mobile-link"} ${
-                item.id === "classes" ? "mobile-record-link" : ""
-              }`.trim()}
+              className={activePage === item.id ? "mobile-link active" : "mobile-link"}
+              aria-current={activePage === item.id ? "page" : undefined}
             >
-              <Icon size={item.id === "classes" ? 24 : 20} />
-              <span>{uiT(item.mobileLabel || item.label)}</span>
+              <Icon size={20} />
+              <span>{uiT(item.label)}</span>
             </a>
           );
         })}
-        <button
-          ref={moreButtonRef}
-          className={secondaryActive || moreOpen ? "mobile-link active" : "mobile-link"}
-          type="button"
-          aria-expanded={moreOpen}
-          aria-controls={moreHistoryId}
-          onClick={() => (moreOpen ? closeMore() : setMoreOpen(true))}
-        >
-          <Ellipsis size={21} />
-          <span>{uiT("More")}</span>
-        </button>
       </nav>
-      {moreOpen ? (
-        <div
-          ref={moreRef}
-          id={moreHistoryId}
-          className="mobile-more"
-          role="dialog"
-          aria-modal="true"
-          aria-label={uiT("More navigation")}
-        >
-          <div className="mobile-more-head">
-            <strong>{uiT("More")}</strong>
-            <button type="button" aria-label={uiT("Close menu")} onClick={closeMore}>
-              <X size={18} />
-            </button>
-          </div>
-          {secondary.map((item) => {
-            const Icon = item.icon;
-            return (
-              <a
-                key={item.id}
-                href={item.href}
-                onClick={(event) => go(event, item.id)}
-                className={activePage === item.id ? "sidebar-link active" : "sidebar-link"}
-              >
-                <Icon size={19} />
-                {uiT(item.label)}
-              </a>
-            );
-          })}
-        </div>
-      ) : null}
     </div>
   );
 }

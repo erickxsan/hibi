@@ -2,7 +2,6 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import {
   BarChart3,
   CalendarDays,
-  CirclePlus,
   CloudOff,
   Home as HomeIcon,
   Settings as SettingsIcon,
@@ -29,10 +28,8 @@ const NAV_ITEMS = [
   {
     id: "classes",
     label: "Classes",
-    mobileLabel: "Record",
     href: "/classes",
     icon: CalendarDays,
-    mobileIcon: CirclePlus,
   },
   { id: "grades", label: "Tracking", href: "/progress", icon: BarChart3 },
   { id: "settings", label: "Settings", href: "/settings", icon: SettingsIcon },

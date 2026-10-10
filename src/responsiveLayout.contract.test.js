@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 
 const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 const designSystem = readFileSync(new URL("./design-system.css", import.meta.url), "utf8");
-const appShell = readFileSync(new URL("./components/AppShell.jsx", import.meta.url), "utf8");
 const ui = readFileSync(new URL("./components/ui.jsx", import.meta.url), "utf8");
 
 describe("mobile responsive layout contracts", () => {
@@ -29,18 +28,13 @@ describe("mobile responsive layout contracts", () => {
     );
   });
 
-  it("locks the root scroller for drawers and the mobile More menu", () => {
+  it("locks the root scroller for drawers", () => {
     expect(ui).toContain('document.documentElement.classList.add("drawer-open")');
     expect(ui).toContain('document.documentElement.classList.remove("drawer-open")');
-    expect(appShell).toContain('document.documentElement.classList.add("mobile-more-open")');
-    expect(appShell).toContain('event.key !== "Tab"');
   });
 
-  it("keeps the mobile Record action prominent above locked choice sheets", () => {
-    expect(appShell).toContain("item.mobileIcon || item.icon");
-    expect(appShell).toContain('item.id === "classes" ? "mobile-record-link"');
+  it("keeps mobile navigation above locked choice sheets", () => {
     expect(styles).toMatch(/body\.select-sheet-open \.hibi-mobile-nav\s*\{/);
-    expect(styles).toMatch(/\.mobile-record-link\s*>\s*svg\s*\{/);
   });
 
   it("retains compact calendar, settings, and home overrides", () => {

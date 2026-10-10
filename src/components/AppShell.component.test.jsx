@@ -12,7 +12,7 @@ function testIcon(name) {
 }
 
 describe("AppShell mobile navigation", () => {
-  it("keeps Tracking visible and presents Classes as the primary Record action", async () => {
+  it("uses the same five destinations, labels, and icons as desktop", async () => {
     const user = userEvent.setup();
     const onNavigate = vi.fn();
     const navItems = [
@@ -21,10 +21,8 @@ describe("AppShell mobile navigation", () => {
       {
         id: "classes",
         label: "Classes",
-        mobileLabel: "Record",
         href: "/classes",
         icon: testIcon("classes"),
-        mobileIcon: testIcon("record"),
       },
       { id: "grades", label: "Tracking", href: "/progress", icon: testIcon("tracking") },
       { id: "settings", label: "Settings", href: "/settings", icon: testIcon("settings") },
@@ -37,13 +35,22 @@ describe("AppShell mobile navigation", () => {
     );
 
     const mobileNav = screen.getByRole("navigation", { name: "Mobile navigation" });
-    const recordLink = within(mobileNav).getByRole("link", { name: "Record" });
-    expect(recordLink).toHaveClass("mobile-record-link", "active");
-    expect(recordLink.querySelector('[data-icon="record"]')).toHaveAttribute("data-size", "24");
-    expect(within(mobileNav).getByRole("link", { name: "Tracking" })).toBeInTheDocument();
-    expect(within(mobileNav).getByRole("button", { name: "More" })).toBeInTheDocument();
-
-    await user.click(recordLink);
-    expect(onNavigate).toHaveBeenCalledWith("classes");
+    const desktopNav = screen.getByRole("navigation", { name: "Primary navigation" });
+    const mobileLinks = within(mobileNav).getAllByRole("link");
+    const desktopLinks = within(desktopNav).getAllByRole("link");
+    expect(mobileLinks).toHaveLength(5);
+    expect(mobileLinks.map((link) => link.textContent)).toEqual(desktopLinks.map((link) => link.textContent));
+    for (const [index, link] of mobileLinks.entries()) {
+      expect(link).toHaveAttribute("href", desktopLinks[index].getAttribute("href"));
+      expect(link.querySelector("svg").dataset.icon).toBe(desktopLinks[index].querySelector("svg").dataset.icon);
+      await user.click(link);
+      expect(onNavigate).toHaveBeenLastCalledWith(navItems[index].id);
+    }
+    expect(within(mobileNav).getByRole("link", { name: "Classes" })).toHaveAttribute("aria-current", "page");
+    expect(
+      within(mobileNav).getByRole("link", { name: "Settings" }).querySelector('[data-icon="settings"]'),
+    ).toBeInTheDocument();
+    expect(within(mobileNav).queryByRole("button")).not.toBeInTheDocument();
+    expect(within(mobileNav).queryByText("Record")).not.toBeInTheDocument();
   });
 });

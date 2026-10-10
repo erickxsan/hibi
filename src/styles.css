@@ -177,8 +177,7 @@ body,
   margin: 0;
   padding: 0;
 }
-.hibi-mobile-nav,
-.mobile-more {
+.hibi-mobile-nav {
   display: none;
 }
 .route-loading {
@@ -1972,7 +1971,7 @@ body,
     inset: auto 10px max(8px, env(safe-area-inset-bottom)) 10px;
     min-height: 64px;
     display: grid;
-    grid-template-columns: repeat(var(--mobile-nav-count, 4), 1fr);
+    grid-template-columns: repeat(var(--mobile-nav-count, 5), 1fr);
     padding: 5px;
     border: 1px solid var(--hibi-border);
     border-radius: 17px;
@@ -1998,30 +1997,6 @@ body,
     background: #eaf0e2;
     color: var(--hibi-forest);
     font-weight: 800;
-  }
-  .mobile-more {
-    position: fixed;
-    z-index: 70;
-    right: 14px;
-    bottom: 82px;
-    width: min(260px, calc(100vw - 28px));
-    display: grid;
-    gap: 4px;
-    padding: 12px;
-    border: 1px solid var(--hibi-border);
-    border-radius: 15px;
-    background: var(--hibi-surface);
-    box-shadow: 0 16px 42px rgba(44, 35, 23, 0.2);
-  }
-  .mobile-more-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 5px 8px 8px;
-  }
-  .mobile-more-head button {
-    border: 0;
-    background: none;
   }
   .welcome-row {
     margin: 8px 0 18px;
@@ -3912,9 +3887,7 @@ body {
 }
 
 html.drawer-open,
-body.drawer-open,
-html.mobile-more-open,
-body.mobile-more-open {
+body.drawer-open {
   overflow: hidden;
   overscroll-behavior: none;
 }
@@ -13000,7 +12973,7 @@ tbody .attendance-student-column {
     inset: auto 10px max(8px, env(safe-area-inset-bottom)) 10px;
     min-height: 64px;
     display: grid;
-    grid-template-columns: repeat(var(--mobile-nav-count, 4), 1fr);
+    grid-template-columns: repeat(var(--mobile-nav-count, 5), 1fr);
     padding: 5px;
     border: 1px solid var(--hibi-border);
     border-radius: 17px;
@@ -13541,28 +13514,6 @@ tbody .attendance-student-column {
   }
   .select-sheet .select-options {
     max-height: calc(68dvh - 156px);
-  }
-  .mobile-record-link {
-    position: relative;
-    overflow: visible;
-    color: var(--hibi-forest);
-    font-weight: 800;
-  }
-  .mobile-record-link > svg {
-    width: 40px;
-    height: 40px;
-    margin-top: -18px;
-    padding: 8px;
-    border-radius: 50%;
-    background: var(--hibi-forest);
-    color: #fff;
-    box-shadow: 0 6px 16px rgba(32, 84, 64, 0.24);
-  }
-  .mobile-record-link.active {
-    background: transparent;
-  }
-  .mobile-record-link.active > svg {
-    background: var(--hibi-forest-dark);
   }
 }
 /* Encrypted sync review: only real conflicts ask for a decision. */
