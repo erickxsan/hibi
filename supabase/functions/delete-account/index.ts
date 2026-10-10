@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 
 const DELETE_CONFIRMATION = "DELETE MY ACCOUNT";
+const BACKEND_VERSION = "data-lifecycle-2026-10-09-staged-v1";
 const RECENT_AUTH_SECONDS = 10 * 60;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -53,6 +54,8 @@ function corsHeaders(origin: string | null) {
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Origin": allowedOrigin,
     Vary: "Origin",
+    "X-Hibi-Backend-Version": BACKEND_VERSION,
+    "Access-Control-Expose-Headers": "X-Hibi-Backend-Version",
   };
 }
 
@@ -167,9 +170,16 @@ async function handleVerification(origin: string | null, requestId: string, rece
     });
   }
 
-  if (receipt.status === "data_erased" && receipt.owner_id) {
+  if (receipt.owner_id) {
     try {
       await purgeOwnedStorageObjects(receipt.owner_id);
+      if (receipt.status === "pending") {
+        const { error: eraseError } = await serviceClient.rpc("erase_account_data", {
+          p_request_id: receipt.request_id,
+          p_owner_id: receipt.owner_id,
+        });
+        if (eraseError) throw eraseError;
+      }
       await hardDeleteAuthUser(receipt.owner_id);
       const completed = await completeDeletion(receipt.request_id, receipt.owner_id);
       return json(origin, 200, {
@@ -182,7 +192,8 @@ async function handleVerification(origin: string | null, requestId: string, rece
       await recordFailure(receipt.request_id, receipt.owner_id, safeErrorCode("auth"));
       return json(origin, 503, {
         code: "account_deletion_incomplete",
-        status: "data_erased",
+        status: receipt.status,
+        requestId: receipt.request_id,
         retryable: true,
       });
     }
@@ -201,6 +212,11 @@ Deno.serve(async (request) => {
   if (request.method === "OPTIONS") {
     if (origin && !allowedOrigins.has(origin)) return json(origin, 403, { code: "origin_not_allowed" });
     return new Response(null, { status: 204, headers: corsHeaders(origin) });
+  }
+  if (request.method === "GET") {
+    const { data, error } = await serviceClient.rpc("get_hibi_backend_contract");
+    if (error || data !== BACKEND_VERSION) return json(origin, 503, { code: "backend_contract_unavailable" });
+    return json(origin, 405, { code: "method_not_allowed", backendVersion: BACKEND_VERSION, schemaVersion: data });
   }
   if (request.method !== "POST") return json(origin, 405, { code: "method_not_allowed" });
   if (origin && !allowedOrigins.has(origin)) return json(origin, 403, { code: "origin_not_allowed" });
@@ -271,6 +287,7 @@ Deno.serve(async (request) => {
     await recordFailure(effectiveRequestId, ownerId, "storage_deletion_failed");
     return json(origin, 503, {
       code: "account_storage_deletion_failed",
+      requestId: effectiveRequestId,
       status: "pending",
       retryable: true,
     });
@@ -284,6 +301,7 @@ Deno.serve(async (request) => {
     await recordFailure(effectiveRequestId, ownerId, safeErrorCode("data"));
     return json(origin, 503, {
       code: "account_data_deletion_failed",
+      requestId: effectiveRequestId,
       status: "pending",
       retryable: true,
     });
@@ -295,6 +313,7 @@ Deno.serve(async (request) => {
     await recordFailure(effectiveRequestId, ownerId, safeErrorCode("auth"));
     return json(origin, 503, {
       code: "account_auth_deletion_failed",
+      requestId: effectiveRequestId,
       status: "data_erased",
       retryable: true,
     });
@@ -312,6 +331,7 @@ Deno.serve(async (request) => {
   } catch {
     return json(origin, 503, {
       code: safeErrorCode("complete"),
+      requestId: effectiveRequestId,
       status: "data_erased",
       retryable: true,
     });
