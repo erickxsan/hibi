@@ -37,6 +37,10 @@ jobs:
         run: supabase test db
       - name: Register and unlock client-generated recovery material through SQL
         run: node scripts/test-recovery-sql.mjs
+      - name: Race key revocations, password changes and key rotation
+        run: node scripts/test-data-lifecycle-sql.mjs --concurrency
+        env:
+          HIBI_SQL_TEST_CONTAINER: supabase_db_class-manager-data-safety
       - name: Stop local stack
         if: always()
         run: supabase stop --no-backup

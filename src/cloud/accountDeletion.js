@@ -3,20 +3,13 @@ import { deviceKeyStore } from "../crypto/index.js";
 import { requireCloudClient, supabase } from "./client.js";
 import { deviceRecoveryStore } from "./deviceRecoveryStore.js";
 import { createOperationId } from "./workspaceRepository.js";
+import { AccountDeletionError, createAccountDeletionReceiptStore } from "./accountDeletionReceiptStore.js";
+export { AccountDeletionError, PENDING_ACCOUNT_DELETION_KEY } from "./accountDeletionReceiptStore.js";
 
 export const ACCOUNT_DELETION_CONFIRMATION = "DELETE MY ACCOUNT";
 export const MIGRATION_MARKER_PREFIX = "minimal-class-manager:cloud-migration-dismissed:v1:";
 export const LEGACY_DATA_CLAIM_KEY = "minimal-class-manager:legacy-data-claimed:v1";
 const UI_STORAGE_PREFIX = "minimal-class-manager:ui:v1:";
-
-export class AccountDeletionError extends Error {
-  constructor(message, { code = "account_deletion_failed", retryable = false, cause = undefined } = {}) {
-    super(message, { cause });
-    this.name = "AccountDeletionError";
-    this.code = code;
-    this.retryable = retryable;
-  }
-}
 
 async function errorPayload(error) {
   try {
@@ -43,7 +36,7 @@ function messageForCode(code) {
 }
 
 function normalizeReceipt(data, fallback) {
-  if (!data || data.status !== "completed") return null;
+  if (!data || data.status !== "completed" || data.verified !== true) return null;
   return {
     requestId: data.requestId || fallback.requestId,
     receiptSecret: data.receiptSecret || fallback.receiptSecret,
@@ -53,8 +46,9 @@ function normalizeReceipt(data, fallback) {
   };
 }
 
-export function createAccountDeletionService(client = supabase, cryptoApi = globalThis.crypto) {
+export function createAccountDeletionService(client = supabase, cryptoApi = globalThis.crypto, storage = undefined) {
   const cloud = () => requireCloudClient(client);
+  const { getPending, savePending, clearPending } = createAccountDeletionReceiptStore(storage);
 
   async function verify({ requestId, receiptSecret }) {
     const { data, error } = await cloud().functions.invoke("delete-account", {
@@ -64,11 +58,28 @@ export function createAccountDeletionService(client = supabase, cryptoApi = glob
       const payload = await errorPayload(error);
       throw new AccountDeletionError(messageForCode(payload.code), {
         code: payload.code || "receipt_verification_failed",
-        retryable: Boolean(payload.retryable),
+        retryable: payload.code !== "deletion_receipt_not_found",
         cause: error,
       });
     }
     return normalizeReceipt(data, { requestId, receiptSecret }) || data;
+  }
+
+  async function reconcile() {
+    const pending = getPending();
+    if (!pending) return null;
+    const verified = await verify(pending);
+    // Save the server's effective ID even for an unfinished operation.
+    const effective = savePending({ ...pending, requestId: verified?.requestId || pending.requestId });
+    const receipt = normalizeReceipt(verified, effective);
+    if (receipt) return { ...receipt, ownerId: pending.ownerId };
+    throw new AccountDeletionError(
+      "Account deletion is pending. Retry with this browser to finish removing the account and its local copies.",
+      {
+        code: "account_deletion_incomplete",
+        retryable: true,
+      },
+    );
   }
 
   async function removeAccount({ confirmation }) {
@@ -77,6 +88,14 @@ export function createAccountDeletionService(client = supabase, cryptoApi = glob
         code: "account_deletion_not_confirmed",
       });
     }
+    let pending = getPending();
+    if (pending) {
+      try {
+        return await reconcile();
+      } catch (caught) {
+        if (caught.code !== "deletion_receipt_not_found") throw caught;
+      }
+    }
     const { data: userData, error: userError } = await cloud().auth.getUser();
     if (userError || !userData?.user) {
       throw new AccountDeletionError("Sign in before deleting the account.", {
@@ -84,8 +103,16 @@ export function createAccountDeletionService(client = supabase, cryptoApi = glob
         cause: userError,
       });
     }
-    const requestId = createOperationId(cryptoApi);
-    const receiptSecret = createOperationId(cryptoApi);
+    if (pending && pending.ownerId !== userData.user.id)
+      throw new AccountDeletionError("Sign in to the account whose deletion is pending.", { code: "account_changed" });
+    pending = savePending(
+      pending || {
+        ownerId: userData.user.id,
+        requestId: createOperationId(cryptoApi),
+        receiptSecret: createOperationId(cryptoApi),
+      },
+    );
+    const { requestId, receiptSecret } = pending;
     const { data, error } = await cloud().functions.invoke("delete-account", {
       body: {
         action: "delete",
@@ -100,17 +127,10 @@ export function createAccountDeletionService(client = supabase, cryptoApi = glob
     }
 
     const payload = await errorPayload(error);
-    if (payload.status === "data_erased" || (!payload.code && error)) {
+    if (payload.requestId) pending = savePending({ ...pending, requestId: payload.requestId });
+    if (payload.retryable || payload.status === "data_erased" || (!payload.code && error)) {
       try {
-        const verified = await verify({ requestId, receiptSecret });
-        const receipt = normalizeReceipt(verified, { requestId, receiptSecret });
-        if (receipt) return { ...receipt, ownerId: userData.user.id };
-        if (verified?.retryable || verified?.status === "pending") {
-          throw new AccountDeletionError(
-            "Account deletion is pending. Hibi has blocked new writes; retry the verified deletion.",
-            { code: "account_deletion_incomplete", retryable: true },
-          );
-        }
+        return await reconcile();
       } catch (verificationError) {
         if (verificationError.code !== "deletion_receipt_not_found") throw verificationError;
       }
@@ -118,12 +138,12 @@ export function createAccountDeletionService(client = supabase, cryptoApi = glob
     const code = payload.code || "account_deletion_failed";
     throw new AccountDeletionError(messageForCode(code), {
       code,
-      retryable: Boolean(payload.retryable),
+      retryable: Boolean(payload.retryable) || !payload.code,
       cause: error,
     });
   }
 
-  return { removeAccount, verify };
+  return { removeAccount, verify, reconcile, getPending, clearPending };
 }
 
 export async function purgeLocalAccountData(

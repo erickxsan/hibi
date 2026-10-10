@@ -11,6 +11,7 @@ import { WorkspaceEncryptionGate } from "./cloud/WorkspaceEncryptionGate";
 import { useCloudWorkspace } from "./cloud/useCloudWorkspace";
 import { useEncryptedWorkspace } from "./cloud/useEncryptedWorkspace";
 import { useWorkspaceEncryption } from "./cloud/useWorkspaceEncryption";
+import { AccountDeletionRecovery } from "./cloud/AccountDeletionRecovery.jsx";
 import { safeLoadStateWithMigrations } from "./domain";
 const ClassManagerApplication = lazy(() => import("./ClassManagerApplication"));
 let inMemoryLegacyClaim = "";
@@ -317,6 +318,14 @@ function LegacyCloudWorkspaceApplication({ session, onDeletionCompleted }) {
 
 function WorkspaceApplication({ session, onDeletionCompleted }) {
   const encryption = useWorkspaceEncryption(session.user);
+  if (encryption.error?.code === "account_deletion_pending") {
+    return (
+      <AccountDeletionRecovery
+        onDeletionCompleted={onDeletionCompleted}
+        onSignOut={() => cloudAuth.signOut({ scope: "local" })}
+      />
+    );
+  }
   if (
     !encryption.loading &&
     encryption.bootstrap &&

@@ -242,9 +242,10 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
         if (!["conflict", "error"].includes(syncStatusRef.current)) {
           updateSync("pending", "Verifying encrypted changes and pending operations.");
         }
-        const witness = await deviceKeyStore
-          .readIntegrity({ ownerId: user.id, workspaceCryptoId: cryptoSession.workspaceCryptoId })
-          .catch(() => null);
+        const witness = await deviceKeyStore.readIntegrity({
+          ownerId: user.id,
+          workspaceCryptoId: cryptoSession.workspaceCryptoId,
+        });
         acceptConfirmed(await encryptedWorkspaceRepository.loadWorkspace(cryptoSession, user.id, witness || {}));
         const held = new Set();
         for (const entry of queued) {
@@ -332,12 +333,9 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
     setLoading(true);
     setError(null);
     (async () => {
-      const [cached, queued, witness] = await Promise.all([
+      const [cached, queued] = await Promise.all([
         deviceRecoveryStore.loadWorkspaceCache(user.id).catch(() => null),
         deviceRecoveryStore.listMutations(user.id).catch(() => []),
-        deviceKeyStore
-          .readIntegrity({ ownerId: user.id, workspaceCryptoId: cryptoSession.workspaceCryptoId })
-          .catch(() => null),
       ]);
       const localWorkspace = cached || queued.at(-1)?.workspace;
       setPendingOperations(presentQueue(queued, null));
@@ -351,6 +349,10 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
         setLoading(false);
       }
       try {
+        const witness = await deviceKeyStore.readIntegrity({
+          ownerId: user.id,
+          workspaceCryptoId: cryptoSession.workspaceCryptoId,
+        });
         const generation = mutationGenerationRef.current;
         const loaded = await encryptedWorkspaceRepository.loadWorkspace(cryptoSession, user.id, witness || {});
         if (!active) return;

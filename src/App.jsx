@@ -1,16 +1,24 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { AUTH_MODES, AuthScreen } from "./auth";
 import { cloudAuth, hCaptchaSiteKey, isCloudConfigured, isLocalModeAllowed } from "./cloud/client";
 import { AccountDeletionComplete, CloudConfigurationRequired, CloudLoading } from "./cloud/CloudStates";
 import { useI18n } from "./i18n";
+import { pendingAccountDeletionStore } from "./cloud/accountDeletionReceiptStore.js";
 export const ClassManagerApplication = lazy(() => import("./ClassManagerApplication"));
 const CloudWorkspaceApplication = lazy(() => import("./CloudWorkspaceApplication"));
+const AccountDeletionRecovery = lazy(() => import("./cloud/AccountDeletionRecovery.jsx"));
 function AuthenticatedCloudApplication() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [recoveryMode, setRecoveryMode] = useState(false);
   const [bootstrapError, setBootstrapError] = useState("");
   const [deletionReceipt, setDeletionReceipt] = useState(null);
+  const [deletionRecoveryDismissed, setDeletionRecoveryDismissed] = useState(false);
+  const completeDeletion = useCallback((receipt) => {
+    if (receipt.localPurgeComplete) pendingAccountDeletionStore.clearPending(receipt);
+    setDeletionReceipt(receipt);
+    setSession(null);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -19,6 +27,7 @@ function AuthenticatedCloudApplication() {
       if (event === "PASSWORD_RECOVERY") setRecoveryMode(true);
       if (event === "SIGNED_OUT" || event === "USER_DELETED") setRecoveryMode(false);
       if (nextSession) setBootstrapError("");
+      if (event === "SIGNED_IN") setDeletionRecoveryDismissed(false);
       setSession(nextSession);
       setLoading(false);
     });
@@ -39,7 +48,6 @@ function AuthenticatedCloudApplication() {
     };
   }, []);
 
-  if (loading) return <CloudLoading message="Checking your secure session…" />;
   if (deletionReceipt) {
     return (
       <AccountDeletionComplete
@@ -47,12 +55,25 @@ function AuthenticatedCloudApplication() {
         onRetryLocalPurge={async () => {
           const { purgeLocalAccountData } = await import("./cloud/accountDeletion");
           await purgeLocalAccountData(deletionReceipt.ownerId);
+          pendingAccountDeletionStore.clearPending(deletionReceipt);
           setDeletionReceipt((current) => ({ ...current, localPurgeComplete: true }));
         }}
         onContinue={() => setDeletionReceipt(null)}
       />
     );
   }
+  if (!deletionRecoveryDismissed && pendingAccountDeletionStore.getPending()) {
+    return (
+      <AccountDeletionRecovery
+        onDeletionCompleted={completeDeletion}
+        onSignOut={async () => {
+          await cloudAuth.signOut({ scope: "local" });
+          setDeletionRecoveryDismissed(true);
+        }}
+      />
+    );
+  }
+  if (loading) return <CloudLoading message="Checking your secure session…" />;
   if (recoveryMode) {
     return (
       <AuthScreen
@@ -85,16 +106,7 @@ function AuthenticatedCloudApplication() {
     );
   }
 
-  return (
-    <CloudWorkspaceApplication
-      key={session.user.id}
-      session={session}
-      onDeletionCompleted={(receipt) => {
-        setDeletionReceipt(receipt);
-        setSession(null);
-      }}
-    />
-  );
+  return <CloudWorkspaceApplication key={session.user.id} session={session} onDeletionCompleted={completeDeletion} />;
 }
 
 export default function App() {

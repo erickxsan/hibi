@@ -63,6 +63,50 @@ isolation, preserved `RESTRICT` constraints, and a 90-day pseudonymous completio
 
 ## Account deletion operations
 
+### Staged data lifecycle remediation (2026-10-09)
+
+Production deployment is split into two reviewed dashboard transactions in `supabase/deployments/`.
+The local audit report and restore-evidence form remain under `outputs/auditoria-datos-2026-10-07` in the parent workspace. Do not apply all migration files directly to this production
+project: that would include retention activation. The old combined package is retired and deliberately raises an error.
+
+**Phase one**, [`deployments/2026-10-09-phase-1.sql`](deployments/2026-10-09-phase-1.sql), applies the three missing historical migrations, both
+October 7 corrections, and `202610090001_defer_recovery_retention.sql` in one transaction. Its exact-history preflight
+expects the 18 versions observed in the dashboard and refuses duplicate active password wrappers. The existing
+September conflict correction is restored after older definitions. Do not execute fragments individually.
+
+The transaction preserves every pre-existing revoked wrapper in a session-local temporary table, installs the final
+non-deleting revocation trigger, restores the full rows, and verifies their equality before committing. Thus the older
+purge migration cannot permanently remove that material in phase one. Any preservation failure rolls back the entire
+transaction. Revoked credentials remain inactive; their physical removal waits for phase two.
+
+Phase one records stable snapshot clocks but leaves old encrypted copies readable to their owner. The frontend relies
+on the server's policy instead of hiding copies by their date. The existing legacy snapshot purge, normal snapshot-count
+limits and local-device cleanup remain in place. Key changes share the profile lock; staged rotation blocks competing
+changes, the last current key is protected, and stale password replacement returns HTTP 409.
+
+**Phase two**, [`deployments/2026-10-09-phase-2-BLOCKED.sql`](deployments/2026-10-09-phase-2-BLOCKED.sql), applies
+`202610090002_activate_recovery_retention.sql`. It activates expiry-based RLS and the encrypted-copy purge in the
+15-minute cron, and removes revoked cryptographic wrapper material. The delivered transaction raises an error while its
+restore-test reference remains the placeholder. Document a tested restore in `RESPALDO-Y-RESTAURACION.md`, verify fresh
+remote counts and obtain explicit action-time approval before replacing that marker. A local synthetic SQL test is not
+evidence of a production backup. A backup of the current workspace alone does not preserve its historical recovery copies.
+
+Deploy the corrected `delete-account/index.ts` through the dashboard editor after phase one is applied. Keep its exact
+origin allowlist and the configured JWT-middleware exemption: new deletion still validates Auth and recent login,
+while a durable receipt resumes every previously authorized deletion phase without an Auth or encryption session.
+The browser stores only the owner ID, request ID and receipt secret before its first request; treat the secret as a
+reconciliation credential. Keep it until verified completion and successful local cleanup. Clearing browser storage
+before reconciliation removes this device's ability to resume with that receipt.
+
+Before publishing the matching frontend, run the **Published backend contract** workflow (or
+`node scripts/check-backend-contract.mjs` with `HIBI_BACKEND_URL`, `HIBI_PUBLIC_KEY`, and `HIBI_APP_ORIGIN`). It performs
+only OPTIONS and GET, checks the deployed function and its matching database contract, and never sends deletion requests.
+The existing Database gate also runs actual concurrent key operations in its disposable local database.
+Both phases expose `data-lifecycle-2026-10-09-staged-v1`; that handshake proves application compatibility, not retention
+activation. Check the cron and RLS directly for the latter. Disposable database gates apply all 25 migrations and test
+the final activated schema. `phase-tests/deferred_retention.test.sql` is a separate 14-assertion preservation check for
+the exact phase-one bundle and its historical-copy fixture.
+
 Deploy `functions/delete-account` with `verify_jwt = false` as configured in `config.toml`. The function still verifies
 the bearer token with Auth for a new deletion; JWT middleware is disabled only so a high-entropy receipt can reconcile
 a response lost after Auth was already deleted. Set the exact browser origins as a function secret:
