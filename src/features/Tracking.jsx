@@ -1,4 +1,5 @@
 const EMPTY_ROWS = Object.freeze([]);
+import { ArchivedGroupsScope } from "../components/ArchivedGroupsScope";
 import { useI18n } from "../i18n/index.jsx";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -1189,9 +1190,10 @@ export default function Tracking({
   openPage,
   intent,
   clearIntent,
+  archiveScope,
 }) {
   const { t: uiT } = useI18n();
-  const groups = (state.groups || []).filter((group) => group.status !== "Inactive");
+  const groups = state.groups || EMPTY_ROWS;
   const students = (state.students || []).filter((student) => student.status !== "Inactive");
   const gradeRows = derived.gradeRows || state.grades || EMPTY_ROWS;
   const classRows = derived.classLogRows || derived.classLog || state.classLog || EMPTY_ROWS;
@@ -1205,6 +1207,9 @@ export default function Tracking({
   const [paymentScope, setPaymentScope] = useState("overview");
   const [paymentChart, setPaymentChart] = useState("projection");
   const [groupId, setGroupId] = useState(groups[0]?.id || "");
+  useEffect(() => {
+    if (!groups.some((group) => group.id === groupId)) setGroupId(groups[0]?.id || "");
+  }, [groups, groupId]);
   const [studentId, setStudentId] = useState(students[0]?.id || "");
   const [assessmentKey, setAssessmentKey] = useState("");
   const [sessionKey, setSessionKey] = useState("");
@@ -1397,7 +1402,9 @@ export default function Tracking({
         section: uiT(TAB_ITEMS.find((item) => item.value === tab).label),
         start: formatDate(range.start),
         end: formatDate(range.end),
-      }),
+      }) +
+        " · " +
+        uiT(archiveScope?.included ? "Includes archived groups" : "Archived groups excluded"),
       exportRows.map((row) =>
         Object.fromEntries(
           Object.entries(row).map(([header, value]) => [uiT(header), header === "Status" ? uiT(value) : value]),
@@ -1453,6 +1460,7 @@ export default function Tracking({
           </div>
         </header>
         <TrackingTabs value={tab} onChange={changeTab} />
+        <ArchivedGroupsScope scope={archiveScope} />
         {historicalDate ? (
           <div className="tracking-historical-banner" role="status">
             <span>
@@ -1507,6 +1515,7 @@ export default function Tracking({
                       {groups.map((group) => (
                         <option key={group.id} value={group.id}>
                           {group.name}
+                          {group.status === "Inactive" ? " · " + uiT("Archived group") : ""}
                         </option>
                       ))}
                     </TrackingSelect>
@@ -1568,6 +1577,7 @@ export default function Tracking({
                       {groups.map((group) => (
                         <option key={group.id} value={group.id}>
                           {group.name}
+                          {group.status === "Inactive" ? " · " + uiT("Archived group") : ""}
                         </option>
                       ))}
                     </TrackingSelect>
@@ -1601,6 +1611,7 @@ export default function Tracking({
                   {groups.map((group) => (
                     <option key={group.id} value={group.id}>
                       {group.name}
+                      {group.status === "Inactive" ? " · " + uiT("Archived group") : ""}
                     </option>
                   ))}
                 </TrackingSelect>

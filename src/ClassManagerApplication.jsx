@@ -15,6 +15,9 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { useClassManager } from "./hooks/useClassManager";
 import { usePageNavigation } from "./hooks/useHistoryNavigation";
 import { useI18n } from "./i18n";
+import { deriveAll } from "./domain";
+import { sumMoney } from "./domain/money";
+import { isGroupArchived, statisticsStateForGroups } from "./domain/groupArchiving";
 import {
   onboardingStep,
   ONBOARDING_TOUR_START_STEP,
@@ -78,6 +81,30 @@ export default function ClassManagerApplication({
   const { t: uiT } = useI18n();
   useI18n();
   const manager = useClassManager({ persistence });
+  const archivedGroupIds = useMemo(
+    () => new Set(manager.state.groups.filter(isGroupArchived).map((group) => group.id)),
+    [manager.state.groups],
+  );
+  const archivedPendingBalance = useMemo(
+    () =>
+      sumMoney(
+        manager.derived.classLog.filter((row) => archivedGroupIds.has(row.groupId)),
+        (row) => row.outstanding,
+      ),
+    [manager.derived.classLog, archivedGroupIds],
+  );
+  const [includeArchivedGroups, setIncludeArchivedGroups] = useState(false);
+  const statisticsState = useMemo(
+    () => statisticsStateForGroups(manager.state, includeArchivedGroups),
+    [manager.state, includeArchivedGroups],
+  );
+  const statisticsDerived = useMemo(
+    () =>
+      statisticsState === manager.state
+        ? manager.derived
+        : deriveAll(statisticsState, statisticsState.settings.asOfDate),
+    [statisticsState, manager.state, manager.derived],
+  );
   const [intent, setIntent] = useState(null);
   const [signingOut, setSigningOut] = useState(false);
   const [onboarding, setOnboarding] = useState(() => ({
@@ -155,6 +182,14 @@ export default function ClassManagerApplication({
       registerNavigationBlocker,
       onDeleteAccount,
       onOpenOnboarding: openOnboarding,
+      archiveScope: {
+        count: archivedGroupIds.size,
+        pendingBalance: archivedPendingBalance,
+        currency: manager.state.settings.currency,
+        included: includeArchivedGroups,
+        onChange: setIncludeArchivedGroups,
+        onOpen: () => openPage("community", { type: "open-group-archives" }),
+      },
     };
     if (page === "community" || page === "students" || page === "groups") {
       return (
@@ -165,13 +200,19 @@ export default function ClassManagerApplication({
       );
     }
     if (page === "classes") return <Classes {...common} />;
-    if (page === "grades" || page === "payments") return <Tracking {...common} />;
+    if (page === "grades" || page === "payments")
+      return <Tracking {...common} state={statisticsState} derived={statisticsDerived} />;
     if (page === "settings") return <Settings {...common} />;
-    return <Home {...common} />;
+    return <Home {...common} state={statisticsState} derived={statisticsDerived} />;
   }, [
     clearIntent,
     intent,
     manager,
+    archivedGroupIds,
+    archivedPendingBalance,
+    includeArchivedGroups,
+    statisticsState,
+    statisticsDerived,
     navigate,
     onDeleteAccount,
     openOnboarding,

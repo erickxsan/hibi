@@ -29,6 +29,9 @@ export function createGroup(overrides = {}) {
     plannedSessionsPerMonth: 8,
     assistantContact: "",
     notes: "",
+    status: "Active",
+    archivedAt: "",
+    scheduleResumeDate: "",
     ...overrides,
   };
 }

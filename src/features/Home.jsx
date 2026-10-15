@@ -1,4 +1,5 @@
 import { uiText } from "../i18n/index.jsx";
+import { ArchivedGroupsScope } from "../components/ArchivedGroupsScope";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
@@ -712,7 +713,10 @@ function GroupList({ groups, onOpen }) {
           {groups.map((group, index) => (
             <button type="button" key={group.id} onClick={onOpen}>
               <span>{index + 1}</span>
-              <strong>{group.name}</strong>
+              <strong>
+                {group.name}
+                {group.status === "Inactive" ? " · " + uiT("Archived group") : ""}
+              </strong>
               <i>
                 <b style={{ width: `${Math.round(group.attendance * 100)}%` }} />
               </i>
@@ -727,7 +731,7 @@ function GroupList({ groups, onOpen }) {
   );
 }
 
-export default function Home({ state, derived, openPage, navigate }) {
+export default function Home({ state, derived, openPage, navigate, archiveScope }) {
   const { t: uiT } = useI18n();
   const { locale } = useI18n();
   const [period, setPeriod] = useState("weekly");
@@ -787,6 +791,7 @@ export default function Home({ state, derived, openPage, navigate }) {
         </div>
       </header>
 
+      <ArchivedGroupsScope scope={archiveScope} />
       <section className="home-today-panel" aria-labelledby="home-today-title" data-onboarding-tour="home">
         <header>
           <span>

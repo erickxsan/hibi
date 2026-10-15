@@ -114,7 +114,7 @@ describe("Community archived students", () => {
     const user = userEvent.setup();
     render(<CommunityHarness />);
     await user.click(screen.getByRole("tab", { name: "Students", exact: true }));
-    const archive = screen.getByRole("button", { name: /Archived/ });
+    const archive = document.querySelector('[aria-controls="community-archived-students"]');
     expect(archive).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByText("Inactive student")).not.toBeInTheDocument();
     await user.click(archive);
@@ -137,7 +137,7 @@ describe("Community archived students", () => {
     const dialog = await screen.findByRole("dialog", { name: "Deactivate Active student?" });
     await user.click(within(dialog).getByRole("button", { name: "Deactivate student" }));
     expect(screen.queryByRole("button", { name: "Open Active student" })).not.toBeInTheDocument();
-    const archive = screen.getByRole("button", { name: /Archived/ });
+    const archive = document.querySelector('[aria-controls="community-archived-students"]');
     expect(archive).toHaveAttribute("aria-expanded", "false");
     expect(archive).toHaveTextContent("2");
     await user.click(archive);

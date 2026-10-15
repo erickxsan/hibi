@@ -1,6 +1,7 @@
 import { addDays, todayDateOnly } from "../domain/dates";
 import { generateScheduledOccurrences } from "../domain/schedule";
 import { classSessionIdentity } from "../domain/semanticIdentity";
+import { isGroupArchived } from "../domain/groupArchiving";
 import { minutesFromTime } from "./classesCalendarModel";
 
 function studentGroupIds(student) {
@@ -44,6 +45,11 @@ function assembleSessions(state, occurrences, classLog, asOfDate) {
     const student = studentsById.get(row.studentId);
     const groupId = row.groupId || "";
     const group = groupsById.get(groupId);
+    if (
+      isGroupArchived(group) &&
+      (row.classDate > asOfDate || (row.classDate === asOfDate && row.classStatus !== "Completed"))
+    )
+      continue;
     const key = classWorkspaceSessionKey({ ...row, groupId, studentId: groupId ? "" : row.studentId });
     const current = sessions.get(key) || {
       key,

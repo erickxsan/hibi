@@ -32,7 +32,7 @@ for (const width of [360, 390, 768, 1024, 1440]) {
         const content = await page.locator(".community-page").boundingBox();
         expect(content.x).toBeGreaterThanOrEqual(sidebar.x + sidebar.width);
       }
-      const archive = page.locator(".community-archive-toggle");
+      const archive = page.locator('[aria-controls="community-archived-students"]');
       await expect(archive).toContainText("Archivados");
       await expect(archive).toHaveAttribute("aria-expanded", "false");
       await expect(page.locator(".community-archived-row")).toHaveCount(0);

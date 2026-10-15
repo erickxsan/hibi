@@ -90,7 +90,7 @@ function statusTone(status) {
 }
 
 function initialScheduleDraft(asOfDate, state) {
-  const firstGroup = state.groups?.[0];
+  const firstGroup = state.groups?.find((group) => group.status !== "Inactive");
   const firstStudent = state.students?.find((student) => student.status !== "Inactive");
   return {
     recurrence: "weekly",
@@ -311,7 +311,7 @@ function EditClassModal({ open, session, state, actions, asOfDate, onClose }) {
                   onClick={() =>
                     update({
                       format: "group",
-                      groupId: draft.groupId || state.groups?.[0]?.id || "",
+                      groupId: draft.groupId || state.groups?.find((group) => group.status !== "Inactive")?.id || "",
                       studentId: "",
                       participantMode: "default",
                       participantIds: [],
@@ -348,11 +348,13 @@ function EditClassModal({ open, session, state, actions, asOfDate, onClose }) {
                 }
               >
                 <option value="">{uiT("Choose a group")}</option>
-                {(state.groups || []).map((group) => (
-                  <option key={group.id} value={group.id}>
-                    {group.name}
-                  </option>
-                ))}
+                {(state.groups || [])
+                  .filter((group) => group.status !== "Inactive")
+                  .map((group) => (
+                    <option key={group.id} value={group.id}>
+                      {group.name}
+                    </option>
+                  ))}
               </Select>
             </Field>
           ) : (
@@ -519,11 +521,13 @@ function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
           <Field label={uiT("Group")} required>
             <Select value={draft.groupId} onChange={(event) => update({ groupId: event.target.value })}>
               <option value="">{uiT("Choose a group")}</option>
-              {state.groups.map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.name}
-                </option>
-              ))}
+              {state.groups
+                .filter((group) => group.status !== "Inactive")
+                .map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.name}
+                  </option>
+                ))}
             </Select>
           </Field>
         ) : (
