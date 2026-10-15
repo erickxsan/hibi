@@ -37,6 +37,7 @@ import {
   removeOnboardingStudents,
 } from "../onboarding/onboardingModel";
 import { canonicalStringify } from "../crypto/canonical.js";
+import { setGroupArchived } from "../domain/groupArchiving.js";
 
 const UI_STORAGE_KEY = "minimal-class-manager:ui:v1";
 
@@ -94,6 +95,9 @@ export function canonicalGroup(draft) {
     plannedSessionsPerMonth: Number(draft.plannedSessionsPerMonth ?? 0),
     assistantContact: draft.assistantContact ?? "",
     notes: draft.notes ?? "",
+    status: draft.status ?? "Active",
+    archivedAt: draft.archivedAt ?? "",
+    scheduleResumeDate: draft.scheduleResumeDate ?? "",
   };
 }
 
@@ -720,6 +724,15 @@ export function useClassManager({ persistence } = {}) {
     [commit, notify],
   );
 
+  const archiveGroup = useCallback(
+    (id) => commit((current) => setGroupArchived(current, id, true), "Group archived"),
+    [commit],
+  );
+  const reactivateGroup = useCallback(
+    (id) => commit((current) => setGroupArchived(current, id, false), "Group reactivated"),
+    [commit],
+  );
+
   const deleteGroup = useCallback(
     (id) => {
       if (stateRef.current.students.some((student) => student.groupIds?.includes(id))) {
@@ -1277,6 +1290,8 @@ export function useClassManager({ persistence } = {}) {
       saveOnboardingGroup,
       saveOnboardingStudents,
       upsertGroup,
+      archiveGroup,
+      reactivateGroup,
       deleteGroup,
       upsertStudent,
       archiveStudent,
@@ -1314,6 +1329,8 @@ export function useClassManager({ persistence } = {}) {
       addClassLogs,
       addGrades,
       archiveStudent,
+      archiveGroup,
+      reactivateGroup,
       clearLegacyLocalData,
       deleteClassLog,
       deleteGrade,

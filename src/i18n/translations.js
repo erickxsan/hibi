@@ -9,6 +9,44 @@ export const SUPPORTED_LANGUAGES = Object.freeze({
 
 export const SPANISH_TRANSLATIONS = Object.freeze({
   ...SPANISH_COVERAGE,
+  "Archived groups": "Grupos archivados",
+  "Archived group": "Archivado",
+  "Archive group": "Archivar grupo",
+  "Archived group details": "Detalle del grupo archivado",
+  "Archive group {name}?": "¿Archivar el grupo {name}?",
+  "Group archived": "Grupo archivado",
+  "Group reactivated": "Grupo reactivado",
+  "Reactivate group": "Reactivar grupo",
+  "Keep its students, grades, attendance, and payments. The group will be hidden from active groups, upcoming classes, and general statistics.":
+    "Conservarás sus alumnos, calificaciones, asistencia y pagos. El grupo se ocultará de los grupos activos, las próximas clases y las estadísticas generales.",
+  "You can include its history manually from statistics. Its students remain available in other groups and individual classes.":
+    "Podrás incluir su historial manualmente desde las estadísticas. Sus alumnos seguirán disponibles en otros grupos y clases individuales.",
+  "Archiving does not delete pending balances. You can check them in the group history.":
+    "Archivar no elimina los saldos pendientes. Podrás consultarlos en el historial del grupo.",
+  "Archived groups in statistics": "Grupos archivados en estadísticas",
+  "Include archived groups": "Incluir grupos archivados",
+  "Includes {count} archived groups · This session only": "Incluye {count} grupos archivados · Solo esta sesión",
+  "{count} archived groups excluded from statistics": "{count} grupos archivados excluidos de las estadísticas",
+  "Exclude again": "Volver a excluir",
+  "View archive": "Ver archivo",
+  "Excluded from general statistics": "Fuera de las estadísticas generales",
+  "Includes archived groups": "Incluye grupos archivados",
+  "Archived groups excluded": "Grupos archivados excluidos",
+  "No archived groups found.": "No se encontraron grupos archivados.",
+  "Group history": "Historial del grupo",
+  "All saved records are preserved.": "Todos los registros guardados se conservan.",
+  "This group is excluded from general statistics. You can include its history manually.":
+    "Este grupo no cuenta en las estadísticas generales. Puedes incluir su historial manualmente.",
+  "This group's history is included in statistics for this session. The group remains archived.":
+    "El historial de este grupo está incluido en las estadísticas durante esta sesión. El grupo sigue archivado.",
+  "Archived on {date}": "Archivado el {date}",
+  "Students in this group": "Alumnos del grupo",
+  "Class and payment history": "Historial de clases y pagos",
+  "View history": "Ver historial",
+  "Hide history": "Ocultar historial",
+  "No classes recorded yet.": "Aún no hay clases registradas.",
+  "Outstanding balance": "Saldo pendiente",
+  "Included in statistics for this session": "Incluidos en las estadísticas durante esta sesión",
   Page: "Página",
   Previous: "Anterior",
   "The new date must be within the series end date.": "La nueva fecha debe estar dentro del periodo de la serie.",
@@ -1452,6 +1490,24 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
 });
 
 const DYNAMIC_TRANSLATIONS = [
+  [/^Pending balances in the archive: (.+)$/, (match) => "Saldos pendientes en el archivo: " + match[1]],
+  [/^Archived on (.+)$/, (match) => "Archivado el " + match[1]],
+  [/^Archive group (.+)\?$/, (match) => "¿Archivar el grupo " + match[1] + "?"],
+  [
+    /^Includes (\d+) archived groups · This session only$/,
+    (match) =>
+      "Incluye " +
+      match[1] +
+      (Number(match[1]) === 1 ? " grupo archivado" : " grupos archivados") +
+      " · Solo esta sesión",
+  ],
+  [
+    /^(\d+) archived groups excluded from statistics$/,
+    (match) =>
+      match[1] +
+      (Number(match[1]) === 1 ? " grupo archivado excluido" : " grupos archivados excluidos") +
+      " de las estadísticas",
+  ],
   [
     /^Staging rotated records (\d+)\/(\d+)…$/,
     (match) => `Preparando registros con la nueva clave ${match[1]}/${match[2]}…`,

@@ -102,6 +102,9 @@ export function validateGroup(group, state = null) {
   if (!isRecord(group)) return result([issue("", "invalid_type", "Group must be an object.")]);
   requiredText(errors, group.id, "id", "Stable group ID");
   requiredText(errors, group.name, "name", "Group name");
+  enumValue(errors, group.status, STUDENT_STATUSES, "status", "Group status", { optional: true });
+  dateOnly(errors, group.archivedAt, "archivedAt", "Archive date", { optional: true });
+  dateOnly(errors, group.scheduleResumeDate, "scheduleResumeDate", "Schedule resume date", { optional: true });
   finiteNumber(errors, group.plannedSessionsPerMonth, "plannedSessionsPerMonth", "Planned sessions per month", {
     min: 0,
     integer: true,
@@ -401,6 +404,9 @@ export function normalizeState(input) {
       plannedSessionsPerMonth: normalizeNumber(group?.plannedSessionsPerMonth, 0),
       assistantContact: normalizeText(group?.assistantContact),
       notes: normalizeText(group?.notes),
+      status: group?.status ?? "Active",
+      archivedAt: normalizeText(group?.archivedAt),
+      scheduleResumeDate: normalizeText(group?.scheduleResumeDate),
     })),
     students: normalizedStudents,
     grades: (Array.isArray(source.grades) ? source.grades : []).map((grade) => ({

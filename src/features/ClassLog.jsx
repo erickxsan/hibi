@@ -1530,7 +1530,7 @@ export default function ClassLog({
   onPrefillConsumed,
 }) {
   const { t: uiT } = useI18n();
-  const groups = useMemo(() => asArray(state.groups), [state.groups]);
+  const groups = useMemo(() => asArray(state.groups).filter((group) => group.status !== "Inactive"), [state.groups]);
   const students = useMemo(() => asArray(state.students), [state.students]);
   const classLogs = useMemo(() => asArray(state.classLog ?? state.classLogs), [state.classLog, state.classLogs]);
   const settings = state.settings || {};
