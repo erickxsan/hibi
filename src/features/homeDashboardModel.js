@@ -9,6 +9,7 @@ import {
   startOfWeek,
 } from "../domain/dates";
 import { generateScheduledOccurrences, resolveHourlyRate } from "../domain/schedule";
+import { isGroupArchived, statisticsStateForGroups } from "../domain/groupArchiving";
 import { classWorkspaceSessionKey, rosterForClassSession } from "./classesWorkspaceModel";
 
 export const HOME_PERIODS = Object.freeze(["today", "weekly", "monthly", "yearly"]);
@@ -373,7 +374,12 @@ export function buildHomeDashboard(state, derived, period = "weekly") {
   const monthRange = rangeFor(asOf, "monthly");
   const monthlyCollected = collectedFor(state.classLog || [], monthRange);
   const previousMonthlyCollected = collectedFor(state.classLog || [], monthRange, true);
-  const sessions = todaySessions(state, derived, asOf);
+  const agendaState = statisticsStateForGroups(state, false);
+  const agendaDerived = {
+    ...derived,
+    classLog: classRows.filter((row) => !isGroupArchived(groupsById.get(row.groupId))),
+  };
+  const sessions = todaySessions(agendaState, agendaDerived, asOf);
   const students = derived.students || [];
   const groups = (derived.groups || [])
     .filter((group) => !group.isUnassigned && finite(group.attendance))

@@ -1,4 +1,5 @@
 import { addDays, isDateInRange, isDateOnly, parseDateOnly } from "./dates.js";
+import { isGroupArchived } from "./groupArchiving.js";
 
 export const DAY_OPTIONS = Object.freeze([
   { value: 1, label: "Monday", short: "Mon" },
@@ -121,6 +122,7 @@ export function generateScheduledOccurrences(state, startDate, endDate) {
   const scanEnd = addDays(endDate, 7);
 
   for (const group of groups) {
+    if (isGroupArchived(group)) continue;
     for (const slot of group.weeklySchedule || []) {
       for (let date = scanStart; date <= scanEnd; date = addDays(date, 1)) {
         const rule = resolvedSlot(state, group, slot, date);
@@ -189,6 +191,7 @@ export function generateScheduledOccurrences(state, startDate, endDate) {
       const occurrence = {
         id: `${schedule.id}:${date}`,
         classScheduleId: schedule.id,
+        sourceGroupId: schedule.groupId || "",
         ...owner,
         scheduleSlotId: schedule.id,
         occurrenceDate: date,
@@ -250,6 +253,16 @@ export function generateScheduledOccurrences(state, startDate, endDate) {
   }
 
   return result
+    .filter((item) => {
+      const source = groups.find((group) => group.id === item.sourceGroupId);
+      const target = groups.find((group) => group.id === item.groupId);
+      return (
+        !isGroupArchived(source) &&
+        !isGroupArchived(target) &&
+        (!source?.scheduleResumeDate || item.classDate >= source.scheduleResumeDate) &&
+        (!target?.scheduleResumeDate || item.classDate >= target.scheduleResumeDate)
+      );
+    })
     .filter((item, index, all) => all.findIndex((candidate) => candidate.id === item.id) === index)
     .sort(
       (left, right) => left.classDate.localeCompare(right.classDate) || left.startTime.localeCompare(right.startTime),

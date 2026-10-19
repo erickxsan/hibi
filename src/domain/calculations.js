@@ -13,6 +13,7 @@ import {
   todayDateOnly,
 } from "./dates.js";
 import { gradeGroupId } from "./semanticIdentity.js";
+import { isGroupArchived } from "./groupArchiving.js";
 import { generateScheduledOccurrences, resolveHourlyRate } from "./schedule.js";
 
 function isRecord(value) {
@@ -373,7 +374,13 @@ export function deriveGroup(state, groupId, asOfDate, suppliedContext) {
   const activeStudents = activeStudentRecords.length;
   const groupGrades = context.gradesByGroup.get(groupId) || [];
   const groupLog = context.logsByGroup.get(groupId) || [];
-  const studentMetrics = activeStudentRecords.map((student) =>
+  const historicalStudentIds = new Set([...groupGrades, ...groupLog].map((row) => row.studentId));
+  const metricStudents = isGroupArchived(group)
+    ? [...new Set([...students.map((student) => student.id), ...historicalStudentIds])]
+        .map((id) => context.studentsById.get(id))
+        .filter(Boolean)
+    : activeStudentRecords;
+  const studentMetrics = metricStudents.map((student) =>
     studentMetricsForRows(
       context,
       student,
@@ -389,29 +396,32 @@ export function deriveGroup(state, groupId, asOfDate, suppliedContext) {
   const scheduledOccurrences = selectedMonthOccurrences(context, selectedMonth).filter(
     (item) => item.groupId === groupId && item.status !== "Cancelled",
   );
-  const idealRevenue = scheduledOccurrences.length
-    ? sumMoney(scheduledOccurrences, (occurrence) => {
-        const participants =
-          occurrence.participantMode === "custom"
-            ? activeStudentRecords.filter((student) => occurrence.participantIds?.includes(student.id))
-            : activeStudentRecords;
-        return sumMoney(
-          participants,
-          (student) => numberOrZero(resolveHourlyRate(state, student, group)) * numberOrZero(occurrence.durationHours),
+  const idealRevenue = isGroupArchived(group)
+    ? 0
+    : scheduledOccurrences.length
+      ? sumMoney(scheduledOccurrences, (occurrence) => {
+          const participants =
+            occurrence.participantMode === "custom"
+              ? activeStudentRecords.filter((student) => occurrence.participantIds?.includes(student.id))
+              : activeStudentRecords;
+          return sumMoney(
+            participants,
+            (student) =>
+              numberOrZero(resolveHourlyRate(state, student, group)) * numberOrZero(occurrence.durationHours),
+          );
+        })
+      : sumMoney(
+          activeStudentRecords,
+          (student) =>
+            numberOrZero(group.plannedSessionsPerMonth) *
+            numberOrZero(config.defaultClassHours) *
+            numberOrZero(resolveHourlyRate(state, student, group)),
         );
-      })
-    : sumMoney(
-        activeStudentRecords,
-        (student) =>
-          numberOrZero(group.plannedSessionsPerMonth) *
-          numberOrZero(config.defaultClassHours) *
-          numberOrZero(resolveHourlyRate(state, student, group)),
-      );
 
   const derived = {
     ...group,
     group,
-    studentCount: students.length,
+    studentCount: isGroupArchived(group) ? metricStudents.length : students.length,
     activeStudents,
     activeStudentCount: activeStudents,
     averageGrade: average(studentMetrics.map((metrics) => metrics.gradeAverage)),

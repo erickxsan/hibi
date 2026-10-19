@@ -70,8 +70,17 @@ export function inTrackingRange(date, range) {
 }
 
 export function studentsForGroup(state, groupId) {
+  const archived = state.groups?.some((group) => group.id === groupId && group.status === "Inactive");
+  const historyIds = archived
+    ? new Set([
+        ...(state.classLog || []).filter((row) => row.groupId === groupId).map((row) => row.studentId),
+        ...(state.grades || []).filter((row) => gradeGroupId(row) === groupId).map((row) => row.studentId),
+      ])
+    : new Set();
   return (state.students || []).filter(
-    (student) => student.status !== "Inactive" && studentGroupIds(student).includes(groupId),
+    (student) =>
+      (archived || student.status !== "Inactive") &&
+      (studentGroupIds(student).includes(groupId) || historyIds.has(student.id)),
   );
 }
 
@@ -422,7 +431,13 @@ export function buildPaymentTracking(
 ) {
   const asOfDate = state.settings?.asOfDate || range.end;
   const useStudentOwner = mode === "student" || (mode === "class" && !groupId);
-  const activeStudents = (state.students || []).filter((student) => student.status !== "Inactive");
+  const archivedIds = new Set(
+    (state.groups || []).filter((group) => group.status === "Inactive").map((group) => group.id),
+  );
+  const historicalIds = new Set(classRows.filter((row) => archivedIds.has(row.groupId)).map((row) => row.studentId));
+  const activeStudents = (state.students || []).filter(
+    (student) => student.status !== "Inactive" || historicalIds.has(student.id),
+  );
   const roster =
     mode === "overview"
       ? activeStudents

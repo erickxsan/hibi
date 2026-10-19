@@ -30,6 +30,9 @@ import { useI18n } from "../i18n";
 import { normalizeSearchText } from "../utils/searchText";
 import { EnrollmentTags, StudentEditor } from "./Students";
 import { GroupEditor } from "./Groups";
+import { ArchivedGroupDetail } from "./ArchivedGroupDetail";
+import { isGroupArchived } from "../domain/groupArchiving";
+import { gradeGroupId } from "../domain/semanticIdentity";
 import {
   CONTACT_VIEWS,
   groupContactRows,
@@ -328,7 +331,7 @@ function GroupMemberPicker({ students, group, onToggle }) {
   );
 }
 
-function RowMenu({ label, onEdit, onDelete, onArchive = undefined }) {
+function RowMenu({ label, onEdit, onDelete, onArchive = undefined, archiveLabel = "Deactivate" }) {
   const { t: uiT } = useI18n();
   return (
     <details className="community-row-menu">
@@ -342,7 +345,8 @@ function RowMenu({ label, onEdit, onDelete, onArchive = undefined }) {
         </button>
         {onArchive ? (
           <button type="button" onClick={onArchive}>
-            {uiT("Deactivate")}
+            <Archive size={14} aria-hidden="true" />
+            {uiT(archiveLabel)}
           </button>
         ) : null}
         <button type="button" className="danger" onClick={onDelete}>
@@ -415,7 +419,7 @@ function StudentRows({ students, selectedId, onSelect, onEdit, onArchive, onDele
   );
 }
 
-function GroupRows({ groups, summaries, selectedId, onSelect, onEdit, onDelete }) {
+function GroupRows({ groups, summaries, selectedId, onSelect, onEdit, onDelete, onArchive }) {
   const { t: uiT } = useI18n();
   return (
     <div className="community-table community-group-table" role="table" aria-label={uiT("Groups")}>
@@ -454,7 +458,13 @@ function GroupRows({ groups, summaries, selectedId, onSelect, onEdit, onDelete }
               <Button icon={Pencil} onClick={() => onEdit(group)}>
                 {uiT("Edit")}
               </Button>
-              <RowMenu label={group.name} onEdit={() => onEdit(group)} onDelete={() => onDelete(group)} />
+              <RowMenu
+                label={group.name}
+                onEdit={() => onEdit(group)}
+                onDelete={() => onDelete(group)}
+                onArchive={() => onArchive(group)}
+                archiveLabel="Archive group"
+              />
             </span>
           </div>
         );
@@ -481,6 +491,12 @@ function ListPanel({
   onArchiveStudent,
   onDeleteStudent,
   onDeleteGroup,
+  onArchiveGroup,
+  archivedGroups,
+  groupArchivesOpen,
+  onToggleGroupArchives,
+  includedInStatistics,
+  onReactivateGroup,
   groupsById,
   state,
   status,
@@ -631,6 +647,7 @@ function ListPanel({
               onSelect={onSelectGroup}
               onEdit={onEditGroup}
               onDelete={onDeleteGroup}
+              onArchive={onArchiveGroup}
             />
           ) : (
             <div className="community-empty">
@@ -666,6 +683,62 @@ function ListPanel({
               </button>
             </div>
           </footer>
+          <button
+            type="button"
+            className="community-archive-toggle"
+            aria-label={uiT("Archived groups") + " · " + archivedGroups.length}
+            aria-expanded={groupArchivesOpen}
+            aria-controls="community-archived-groups"
+            onClick={onToggleGroupArchives}
+          >
+            <Archive size={15} aria-hidden="true" />
+            <span>{uiT("Archived")}</span>
+            <span>· {archivedGroups.length}</span>
+            <ChevronRight size={16} className={groupArchivesOpen ? "expanded" : ""} aria-hidden="true" />
+          </button>
+          <div id="community-archived-groups" hidden={!groupArchivesOpen}>
+            <p className="community-group-archive-helper">
+              {uiT(
+                includedInStatistics ? "Included in statistics for this session" : "Excluded from general statistics",
+              )}
+            </p>
+            {groupArchivesOpen
+              ? archivedGroups.map((group) => (
+                  <div
+                    className={
+                      "community-archived-row community-archived-group-row " +
+                      (selected.type === "group" && selected.id === group.id ? "selected" : "")
+                    }
+                    key={group.id}
+                  >
+                    <button type="button" className="community-row-primary" onClick={() => onSelectGroup(group.id)}>
+                      <span className="community-group-emblem">
+                        <Archive size={19} aria-hidden="true" />
+                      </span>
+                      <span>
+                        <strong>{group.name}</strong>
+                        <small>
+                          {group.archivedAt
+                            ? uiT("Archived on {date}", { date: group.archivedAt })
+                            : uiT("Archived group")}
+                        </small>
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="community-reactivate"
+                      disabled={saving}
+                      onClick={() => onReactivateGroup(group)}
+                    >
+                      {uiT("Reactivate")}
+                    </button>
+                  </div>
+                ))
+              : null}
+            {groupArchivesOpen && !archivedGroups.length ? (
+              <p className="community-archive-empty">{uiT("No archived groups found.")}</p>
+            ) : null}
+          </div>
         </section>
       ) : null}
     </section>
@@ -963,7 +1036,7 @@ function GroupContactDirectory({ members }) {
   );
 }
 
-function GroupDetail({ group, members, onEdit, onManage }) {
+function GroupDetail({ group, members, onEdit, onManage, onArchive }) {
   const { t: uiT } = useI18n();
   return (
     <section className="community-detail-panel" aria-labelledby="community-group-detail-title">
@@ -985,6 +1058,9 @@ function GroupDetail({ group, members, onEdit, onManage }) {
         <GroupContactDirectory members={members} />
       </div>
       <footer className="community-directory-footer">
+        <Button icon={Archive} onClick={onArchive}>
+          {uiT("Archive group")}
+        </Button>
         <Button icon={UsersRound} onClick={onManage}>
           {uiT("Manage students")}
         </Button>
@@ -1004,10 +1080,12 @@ export default function Community({
   clearIntent,
   initialView,
   registerNavigationBlocker,
+  archiveScope,
 }) {
   const { t: uiT } = useI18n();
   const [view, setView] = useState(() => initialCommunityView(initialView));
   const [archivesOpen, setArchivesOpen] = useState(false);
+  const [groupArchivesOpen, setGroupArchivesOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [filters, setFilters] = useState({ groupIds: [], groupMatch: "any", enrollment: [] });
@@ -1113,9 +1191,15 @@ export default function Community({
       })),
     [state.groups],
   );
-  const visibleGroups = useMemo(
+  const matchingGroups = useMemo(
     () => groupSearchEntries.filter(({ text }) => text.includes(needle)).map(({ group }) => group),
     [groupSearchEntries, needle],
+  );
+  const activeGroups = useMemo(() => matchingGroups.filter((group) => !isGroupArchived(group)), [matchingGroups]);
+  const archivedGroups = useMemo(() => matchingGroups.filter(isGroupArchived), [matchingGroups]);
+  const visibleGroups = useMemo(
+    () => (groupArchivesOpen ? [...activeGroups, ...archivedGroups] : activeGroups),
+    [activeGroups, archivedGroups, groupArchivesOpen],
   );
 
   const selectedStudent = selected.type === "student" ? state.students.find((item) => item.id === selected.id) : null;
@@ -1123,11 +1207,15 @@ export default function Community({
   const groupMembers = useMemo(
     () =>
       selectedGroup
-        ? state.students.filter(
-            (student) => student.status === "Active" && (student.groupIds || []).includes(selectedGroup.id),
+        ? state.students.filter((student) =>
+            isGroupArchived(selectedGroup)
+              ? (student.groupIds || []).includes(selectedGroup.id) ||
+                state.classLog.some((row) => row.groupId === selectedGroup.id && row.studentId === student.id) ||
+                state.grades.some((row) => gradeGroupId(row) === selectedGroup.id && row.studentId === student.id)
+              : student.status === "Active" && (student.groupIds || []).includes(selectedGroup.id),
           )
         : [],
-    [selectedGroup, state.students],
+    [selectedGroup, state.students, state.classLog, state.grades],
   );
   const membersGroup = state.groups.find((group) => group.id === membersGroupId);
 
@@ -1191,6 +1279,11 @@ export default function Community({
   };
 
   useEffect(() => {
+    if (intent?.type === "open-group-archives") {
+      setGroupArchivesOpen(true);
+      changeView("groups", { replace: true });
+      setSelected({ type: "group", id: state.groups.find(isGroupArchived)?.id || "" });
+    }
     if (intent === "students" || intent === "groups" || intent === "all") changeView(intent, { replace: true });
     if (intent === "add-student") openStudentEditor();
     if (intent === "add-group") openGroupEditor();
@@ -1255,6 +1348,7 @@ export default function Community({
     if (!target) return;
     let completed = false;
     if (target.action === "archive-student") completed = await actions.archiveStudent(target.item.id);
+    if (target.action === "archive-group") completed = await actions.archiveGroup(target.item.id);
     if (target.action === "delete-student") completed = await actions.deleteStudent(target.item.id);
     if (target.action === "delete-group") completed = await actions.deleteGroup(target.item.id);
     if (completed) {
@@ -1314,7 +1408,16 @@ export default function Community({
             return runSave(() => actions.upsertStudent({ ...student, status: "Active" }));
           }}
           saving={saving}
-          groups={visibleGroups}
+          groups={activeGroups}
+          archivedGroups={archivedGroups}
+          includedInStatistics={archiveScope?.included}
+          groupArchivesOpen={groupArchivesOpen}
+          onToggleGroupArchives={() => {
+            if (!confirmDiscard(studentDirty || groupDirty, "Discard your unsaved community changes?")) return;
+            setGroupArchivesOpen((open) => !open);
+          }}
+          onReactivateGroup={(group) => runSave(() => actions.reactivateGroup(group.id))}
+          onArchiveGroup={(item) => setConfirmTarget({ action: "archive-group", item })}
           derived={derived}
           selected={selected}
           onSelectStudent={(id) => selectRecord("student", id)}
@@ -1344,12 +1447,24 @@ export default function Community({
             saving={saving}
           />
         ) : null}
-        {selectedGroup && groupDraft ? (
+        {selectedGroup && isGroupArchived(selectedGroup) ? (
+          <ArchivedGroupDetail
+            key={selectedGroup.id}
+            group={selectedGroup}
+            members={groupMembers}
+            state={state}
+            derived={derived}
+            saving={saving}
+            includedInStatistics={archiveScope?.included}
+            onReactivate={() => runSave(() => actions.reactivateGroup(selectedGroup.id))}
+          />
+        ) : selectedGroup && groupDraft ? (
           <GroupDetail
             group={selectedGroup}
             members={groupMembers}
             onEdit={() => openGroupEditor(selectedGroup)}
             onManage={() => setMembersGroupId(selectedGroup.id)}
+            onArchive={() => setConfirmTarget({ action: "archive-group", item: selectedGroup })}
           />
         ) : null}
         {!selectedStudent && !selectedGroup ? (
@@ -1427,28 +1542,48 @@ export default function Community({
       <ConfirmDialog
         open={Boolean(confirmTarget)}
         title={
-          confirmTarget?.action === "archive-student"
-            ? uiT("Deactivate {p0}?", { p0: confirmTarget.item.fullName })
-            : uiT("Delete {p0}?", { p0: confirmTarget?.item?.fullName || confirmTarget?.item?.name })
+          confirmTarget?.action === "archive-group"
+            ? uiT("Archive group {name}?", { name: confirmTarget.item.name })
+            : confirmTarget?.action === "archive-student"
+              ? uiT("Deactivate {p0}?", { p0: confirmTarget.item.fullName })
+              : uiT("Delete {p0}?", { p0: confirmTarget?.item?.fullName || confirmTarget?.item?.name })
         }
         description={
-          confirmTarget?.action === "archive-student"
-            ? uiT("The student becomes inactive while grades, attendance, and payment history stay available.")
-            : confirmTarget?.action === "delete-student"
-              ? uiT("Students with grades or class history cannot be deleted; deactivate them instead.")
-              : uiT("Groups with assigned students cannot be deleted. Existing class history remains protected.")
+          confirmTarget?.action === "archive-group"
+            ? uiT(
+                "Keep its students, grades, attendance, and payments. The group will be hidden from active groups, upcoming classes, and general statistics.",
+              )
+            : confirmTarget?.action === "archive-student"
+              ? uiT("The student becomes inactive while grades, attendance, and payment history stay available.")
+              : confirmTarget?.action === "delete-student"
+                ? uiT("Students with grades or class history cannot be deleted; deactivate them instead.")
+                : uiT("Groups with assigned students cannot be deleted. Existing class history remains protected.")
         }
         confirmLabel={
-          confirmTarget?.action === "archive-student"
-            ? uiT("Deactivate student")
-            : confirmTarget?.action === "delete-group"
-              ? uiT("Delete group")
-              : uiT("Delete student")
+          confirmTarget?.action === "archive-group"
+            ? uiT("Archive group")
+            : confirmTarget?.action === "archive-student"
+              ? uiT("Deactivate student")
+              : confirmTarget?.action === "delete-group"
+                ? uiT("Delete group")
+                : uiT("Delete student")
         }
-        tone={confirmTarget?.action === "archive-student" ? "primary" : "danger"}
+        tone={confirmTarget?.action.startsWith("archive-") ? "primary" : "danger"}
         onClose={() => setConfirmTarget(null)}
-        onConfirm={confirmAction}
-      />
+        onConfirm={() => runSave(confirmAction)}
+        busy={saving}
+      >
+        {confirmTarget?.action === "archive-group" ? (
+          <div className="archive-confirmation-note">
+            <p>
+              {uiT(
+                "You can include its history manually from statistics. Its students remain available in other groups and individual classes.",
+              )}
+            </p>
+            <p>{uiT("Archiving does not delete pending balances. You can check them in the group history.")}</p>
+          </div>
+        ) : null}
+      </ConfirmDialog>
     </div>
   );
 }

@@ -45,7 +45,7 @@ test("updates the active student count after deactivation", async ({ page }) => 
   await expect(counter).toHaveText("0");
 
   await expect(page.getByRole("button", { name: "Open Active Student", exact: true })).toHaveCount(0);
-  const archive = page.getByRole("button", { name: /Archived/ });
+  const archive = page.locator('[aria-controls="community-archived-students"]');
   await expect(archive).toHaveAttribute("aria-expanded", "false");
   await page.screenshot({ path: "test-results/archive-desktop.png", fullPage: true });
   await archive.click();
