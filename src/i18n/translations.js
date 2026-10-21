@@ -1,12 +1,7 @@
 import { SPANISH_COVERAGE } from "./spanishCoverage.js";
 import { PICKER_TRANSLATIONS } from "./pickerTranslations.js";
 import { REDESIGN_TRANSLATIONS } from "./redesignTranslations.js";
-import { HOME_TRANSLATIONS } from "./homeTranslations.js";
-import { COMMUNITY_TRANSLATIONS } from "./communityTranslations.js";
-import { TRACKING_TRANSLATIONS } from "./trackingTranslations.js";
-import { SETTINGS_TRANSLATIONS } from "./settingsTranslations.js";
 import { AUTH_TRANSLATIONS } from "./authTranslations.js";
-import { TUTORIAL_TRANSLATIONS } from "./tutorialTranslations.js";
 
 export const LANGUAGE_STORAGE_KEY = "hibi:language:v1";
 
@@ -15,16 +10,8 @@ export const SUPPORTED_LANGUAGES = Object.freeze({
   SPANISH: "es",
 });
 
-export const SPANISH_TRANSLATIONS = Object.freeze({
-  ...SPANISH_COVERAGE,
-  ...PICKER_TRANSLATIONS,
-  ...REDESIGN_TRANSLATIONS,
-  ...HOME_TRANSLATIONS,
-  ...COMMUNITY_TRANSLATIONS,
-  ...TRACKING_TRANSLATIONS,
-  ...SETTINGS_TRANSLATIONS,
-  ...AUTH_TRANSLATIONS,
-  ...TUTORIAL_TRANSLATIONS,
+// Entries written here win over every table, including the screen tables registered later.
+const EXPLICIT_TRANSLATIONS = Object.freeze({
   "Archived groups": "Grupos archivados",
   "Archived group": "Archivado",
   "Archive group": "Archivar grupo",
@@ -1504,6 +1491,23 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
     "1 cambio más está seguro en este dispositivo y se sincronizará automáticamente.",
   "This change could not be resolved. Try again.": "No se pudo resolver este cambio. Inténtalo de nuevo.",
 });
+// Shared copy ships with the first download; each lazy screen registers its own table
+// (see screenTranslations.js) so its copy travels with the screen.
+export const SPANISH_TRANSLATIONS = {
+  ...SPANISH_COVERAGE,
+  ...PICKER_TRANSLATIONS,
+  ...REDESIGN_TRANSLATIONS,
+  ...AUTH_TRANSLATIONS,
+  ...EXPLICIT_TRANSLATIONS,
+};
+
+/** Adds a screen's Spanish copy. Later tables win over earlier ones; explicit entries above always win. */
+export function registerSpanishTranslations(table) {
+  for (const [key, value] of Object.entries(table)) {
+    if (!Object.hasOwn(EXPLICIT_TRANSLATIONS, key)) SPANISH_TRANSLATIONS[key] = value;
+  }
+}
+
 
 const DYNAMIC_TRANSLATIONS = [
   [/^Pending balances in the archive: (.+)$/, (match) => "Saldos pendientes en el archivo: " + match[1]],

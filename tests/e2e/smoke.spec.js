@@ -33,16 +33,16 @@ test("updates the active student count after deactivation", async ({ page }) => 
   await page.getByLabel("Full name").fill("Active Student");
   await page.getByRole("button", { name: "Save student" }).click();
 
-  const counter = page.locator(".community-active-count strong");
-  await expect(counter).toHaveText("1");
+  const counter = page.getByText(/^\d+ active students? in /);
+  await expect(counter).toHaveText(/^1 active student in /);
 
   await page.getByRole("button", { name: "Deactivate student" }).click();
   const dialog = page.getByRole("dialog", { name: /Deactivate .+\?/ });
   await dialog.getByRole("button", { name: "Deactivate student" }).click();
 
-  await expect(counter).toHaveText("0");
+  await expect(counter).toHaveText(/^0 active students in /);
   await page.reload();
-  await expect(counter).toHaveText("0");
+  await expect(counter).toHaveText(/^0 active students in /);
 
   await expect(page.getByRole("button", { name: "Open Active Student", exact: true })).toHaveCount(0);
   const archive = page.locator('[aria-controls="community-archived-students"]');
@@ -50,7 +50,7 @@ test("updates the active student count after deactivation", async ({ page }) => 
   await page.screenshot({ path: "test-results/archive-desktop.png", fullPage: true });
   await archive.click();
   await page.getByRole("button", { name: "Reactivate", exact: true }).click();
-  await expect(counter).toHaveText("1");
+  await expect(counter).toHaveText(/^1 active student in /);
   await page.reload();
-  await expect(counter).toHaveText("1");
+  await expect(counter).toHaveText(/^1 active student in /);
 });

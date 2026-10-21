@@ -17,6 +17,7 @@ import {
   setupResumeStep,
   shouldAutoStartOnboarding,
 } from "./onboarding/onboardingModel";
+import "./i18n/screenTranslations.js";
 const OnboardingTutorial = lazy(() => import("./onboarding/OnboardingTutorial"));
 const NAV_ITEMS = [
   { id: "home", label: "Home", href: "/", icon: HomeIcon },

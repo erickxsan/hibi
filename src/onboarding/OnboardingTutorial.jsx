@@ -23,6 +23,7 @@ import {
   splitPastedStudentNames,
   upcomingClasses,
 } from "./onboardingModel";
+import "../i18n/screenTranslations.js";
 import "./onboarding.css";
 
 const SETUP_LABELS = ["Group", "Students", "Agenda"];

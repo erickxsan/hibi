@@ -30,6 +30,7 @@ import {
 import { rosterForClassSession } from "./classesWorkspaceModel";
 import { ClassCard, TodayAgenda, TodayTimeline } from "./HomeToday";
 import { metricSummary, MetricCard, MetricExplorer, MetricRows, thresholds } from "./HomeMetrics";
+import "../i18n/screenTranslations.js";
 import "./home.css";
 
 const PERIOD_ITEMS = [

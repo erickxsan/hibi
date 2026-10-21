@@ -20,12 +20,10 @@ const assets = readdirSync("dist/assets");
 const largestChunk = Math.max(
   ...assets.filter((file) => file.endsWith(".js")).map((file) => statSync(`dist/assets/${file}`).size),
 );
-const illustrations = readdirSync("dist/onboarding").reduce(
-  (sum, file) => sum + statSync(`dist/onboarding/${file}`).size,
-  0,
-);
+// The drawn seal and logo replaced the onboarding watercolours; they keep the same budget.
+const illustrations = readdirSync("dist/brand").reduce((sum, file) => sum + statSync(`dist/brand/${file}`).size, 0);
 assert.ok(initialBytes <= 650_000, `Initial JavaScript graph exceeds 650 kB: ${initialBytes}`);
 assert.ok(initialGzip <= 190_000, `Initial JavaScript gzip exceeds 190 kB: ${initialGzip}`);
 assert.ok(largestChunk <= 500_000, `A JavaScript chunk exceeds 500 kB: ${largestChunk}`);
-assert.ok(illustrations <= 300_000, `Published onboarding assets exceed 300 kB: ${illustrations}`);
+assert.ok(illustrations <= 300_000, `Published brand illustrations exceed 300 kB: ${illustrations}`);
 console.log(JSON.stringify({ initialBytes, initialGzip, largestChunk, illustrations, initial: sizes }));

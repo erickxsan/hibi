@@ -39,6 +39,7 @@ import {
 } from "../utils/displayFormat";
 import { shortNames } from "./homeDashboardModel";
 import { settingsEffects } from "./settingsModel";
+import "../i18n/screenTranslations.js";
 import "./settings.css";
 import { importState, MAX_BACKUP_BYTES } from "../domain";
 import { draftChanged, useUnsavedChanges } from "../hooks/useUnsavedChanges";

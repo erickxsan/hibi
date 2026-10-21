@@ -1,10 +1,12 @@
 import { useI18n } from "../i18n/index.jsx";
-import { useEffect, useId, useRef, useState } from "react";
-import HCaptcha from "@hcaptcha/react-hcaptcha";
+import { lazy, Suspense, useEffect, useId, useRef, useState } from "react";
 import { ArrowLeft, Check, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
 import { HibiLogo, HibiStamp } from "../components/BrandMark";
 import { LanguageToggle } from "../i18n";
 import "./auth.css";
+
+// The security check only renders when a site key is configured, so it loads on demand.
+const HCaptcha = lazy(() => import("@hcaptcha/react-hcaptcha"));
 
 function GoogleMark() {
   return (
@@ -422,22 +424,24 @@ export function AuthScreen({
 
             {needsCaptcha ? (
               <div className="auth-captcha" aria-label={uiT("Security check")}>
-                <HCaptcha
-                  ref={captchaRef}
-                  sitekey={captchaSiteKey}
-                  languageOverride={language}
-                  size="compact"
-                  reCaptchaCompat={false}
-                  onVerify={(token) => {
-                    setCaptchaToken(token);
-                    setLocalError("");
-                  }}
-                  onExpire={() => setCaptchaToken("")}
-                  onError={() => {
-                    setCaptchaToken("");
-                    setLocalError("The security check could not load. Check your connection and try again.");
-                  }}
-                />
+                <Suspense fallback={null}>
+                  <HCaptcha
+                    ref={captchaRef}
+                    sitekey={captchaSiteKey}
+                    languageOverride={language}
+                    size="compact"
+                    reCaptchaCompat={false}
+                    onVerify={(token) => {
+                      setCaptchaToken(token);
+                      setLocalError("");
+                    }}
+                    onExpire={() => setCaptchaToken("")}
+                    onError={() => {
+                      setCaptchaToken("");
+                      setLocalError("The security check could not load. Check your connection and try again.");
+                    }}
+                  />
+                </Suspense>
               </div>
             ) : null}
 

@@ -49,6 +49,7 @@ import {
   groupPaymentLine,
   JoinGroupSheet,
 } from "./CommunityGroup";
+import "../i18n/screenTranslations.js";
 import "./community.css";
 
 const COMMUNITY_VIEWS = Object.freeze(["all", "students", "groups"]);

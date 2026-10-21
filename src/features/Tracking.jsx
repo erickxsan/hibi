@@ -40,6 +40,7 @@ import {
   trackingRecords,
   trackingStudents,
 } from "./trackingModel";
+import "../i18n/screenTranslations.js";
 import "../components/charts.css";
 import "./tracking.css";
 

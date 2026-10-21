@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { translateToSpanish } from "./translations.js";
+import "./screenTranslations.js";
 
 const sourceRoot = fileURLToPath(new URL("../", import.meta.url));
 const neutralCopy = new Set([

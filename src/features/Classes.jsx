@@ -62,6 +62,7 @@ import { ClassCalendar } from "./ClassCalendar";
 import { ClassHistory } from "./ClassHistory";
 import { NewClassDrawer } from "./NewClassDrawer";
 import { EditClassDrawer } from "./EditClassDrawer";
+import "../i18n/screenTranslations.js";
 import "./classes.css";
 
 const TABS = [
