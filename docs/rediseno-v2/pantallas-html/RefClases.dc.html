@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>UI actual · Clases</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@400;600;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#C23B22}a:hover{color:#992D18}
+figure{margin:0;display:flex;flex-direction:column;gap:10px}
+figure img{width:100%;height:auto;display:block;border-radius:10px;border:1px solid #E0D6C4;background:#FFFFFF}
+figcaption{font-size:15px;line-height:22px;color:#3D3731}
+</style>
+</helmet>
+<div style="width:1280px;height:1660px;box-sizing:border-box;background:#F6F1E8;color:#1E1C20;font-family:'Albert Sans',system-ui,sans-serif;padding:64px;display:flex;flex-direction:column;gap:32px">
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <span style="font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#5A524A">UI actual · escritorio 1440 px</span>
+    <h1 style="margin:0;font-size:40px;line-height:46px;font-weight:800">Clases</h1>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:32px;align-items:start">
+    <figure><img src="/_blob/fbdbcf79b89cea391809d858bdaef3fb" width="1120" height="840" alt="Clases, próxima clase"><figcaption><strong>Próxima clase</strong> · registro de asistencia y pago (Primaria 5A, 5 alumnos)</figcaption></figure>
+    <figure><img src="/_blob/9bffdcff65c1d305b6afecaea6e07f9c" width="1120" height="793" alt="Clases, calendario"><figcaption><strong>Calendario</strong> · vista de mes</figcaption></figure>
+    <figure><img src="/_blob/fb345d7a401630b86ec9857cf08a8925" width="1120" height="857" alt="Clases, historial"><figcaption><strong>Historial</strong></figcaption></figure>
+    <figure><img src="/_blob/97e522d648aee5224b349a23d36b9974" width="1120" height="857" alt="Panel Nueva clase"><figcaption><strong>Nueva clase</strong> · panel lateral</figcaption></figure>
+    <figure><img src="/_blob/b4ac2b43e39d540762b0e66d7467237e" width="1120" height="700" alt="Clases sin datos"><figcaption><strong>Vacío</strong> · sin clases programadas</figcaption></figure>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1660}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,678 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Comunidad · Grupo</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/hibi/components/bundle.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&amp;family=Albert+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+:root{--bermellon:#D9472C;--bermellon-strong:#C23B22;--bermellon-ink:#A8321C;--bermellon-soft:#F9E3DE;--sumi:#1E1C20;--sumi-muted:#5A524A;--sumi-subtle:#9A8F80;--washi:#F6F1E8;--papel:#FFFFFF;--kraft:#EFE8DB;--line:#E8DFCF;--line-soft:#F1EBE0;--line-control:#8F8475;--indigo:#34437F;--indigo-soft:#E5E8F2;--jade:#2E8C7E;--jade-strong:#23705F;--jade-soft:#E3F1EE;--ocre:#D9A23A;--ocre-ink:#7E5A12;--ocre-soft:#F8EDD5;--focus:#34437F;--overlay:rgba(30,28,32,.45);--space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:20px;--space-6:24px;--space-8:32px;--space-10:40px;--space-12:48px;--radius-sm:8px;--radius-md:10px;--radius-lg:12px;--radius-xl:16px;--radius-pill:999px;--shadow-card:0 1px 2px rgba(30,28,32,.05);--shadow-overlay:0 16px 40px rgba(30,28,32,.16);--control-height:44px;--segment-height:36px;--sidebar-width:232px;--topbar-height:60px;--drawer-width:480px;--font-display:"Dela Gothic One","Arial Black",system-ui,sans-serif;--font-sans:"Albert Sans","Segoe UI",system-ui,sans-serif}
+body{margin:0}
+sc-if,sc-for{display:contents}
+a{color:#C23B22}a:hover{color:#A8321C}
+.side{flex:1 1 220px;max-width:220px;padding:28px 14px 24px;display:flex;flex-direction:column;gap:28px}
+.side .sidebar-link:hover{background:var(--papel)}
+.sheet{flex:999 1 560px;min-width:0;margin:12px 12px 12px 0;background:var(--papel);border:1px solid var(--line);border-radius:16px;padding:40px clamp(20px,4vw,56px) 48px;display:flex;flex-direction:column}
+.ov{margin:0;font:800 12px/16px var(--font-sans);letter-spacing:.12em;text-transform:uppercase;color:var(--sumi-muted)}
+.lk{font:700 13px/18px var(--font-sans);text-decoration:none;white-space:nowrap;background:none;border:0;padding:0;color:#C23B22;cursor:pointer}
+.st{display:inline-flex;align-items:center;gap:7px;font:700 13px/18px var(--font-sans);white-space:nowrap}
+.st::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;flex:none}
+.st-ok{color:var(--jade-strong)}.st-ok::before{background:var(--jade)}
+.st-pend{color:var(--ocre-ink)}.st-pend::before{background:var(--ocre)}
+.st-venc{color:var(--bermellon-ink)}.st-venc::before{background:var(--bermellon)}
+.st-muted{color:var(--sumi-muted)}.st-muted::before{background:var(--sumi-subtle)}
+.cols{display:flex;flex-wrap:wrap;padding-top:24px;flex:1}
+.list{flex:1 1 280px;max-width:340px;min-width:0;padding-right:32px;display:flex;flex-direction:column;gap:6px}
+.gi{display:flex;flex-direction:column;gap:6px;width:100%;padding:14px 14px;margin:0 -14px;border:0;border-radius:12px;background:transparent;text-align:left;cursor:pointer;font-family:var(--font-sans);color:var(--sumi);box-sizing:content-box}
+.gi:hover,.gi.on{background:var(--washi)}
+.gi strong{font:800 16px/22px var(--font-sans)}
+.gi small{font:500 13px/18px var(--font-sans);color:var(--sumi-muted)}
+.bar{height:4px;border-radius:2px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--sumi);border-radius:2px;transition:width .5s cubic-bezier(.2,.8,.2,1)}
+.detail{flex:999 1 560px;min-width:0;padding-left:40px;border-left:1px solid var(--line-soft);display:flex;flex-direction:column;animation:d-in .3s ease-out both}
+@keyframes d-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.blk{padding:26px 0;border-top:1px solid var(--line-soft)}
+.figs{display:flex;flex-wrap:wrap;row-gap:16px}
+.fig{flex:1 1 140px;display:flex;flex-direction:column;gap:4px;padding:0 22px;border-left:1px solid var(--line-soft)}
+.fig:first-child{border-left:0;padding-left:0}
+.fig > span:first-child{font:700 14px/20px var(--font-sans);color:var(--sumi-muted)}
+.fig b{font:800 28px/34px var(--font-sans);font-variant-numeric:tabular-nums}
+.mx{display:grid;gap:4px 6px;align-items:center}
+.mx .nm{font:700 13px/18px var(--font-sans);padding:4px 8px;margin-left:-8px;border-radius:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mx .nm.on{background:var(--washi)}
+.mx .hd{font:700 11px/14px var(--font-sans);color:var(--sumi-muted);text-align:center;white-space:nowrap}
+.cell{height:28px;border-radius:7px;display:grid;place-items:center;font:800 11px/1 var(--font-sans);transition:transform .15s}
+.cell.P{background:var(--sumi);color:var(--papel)}
+.cell.A{background:var(--bermellon-soft);color:var(--bermellon-ink);box-shadow:inset 0 0 0 1.5px var(--bermellon-ink)}
+.cell.U{background:transparent;color:var(--sumi-subtle);box-shadow:inset 0 0 0 1.5px var(--line-control);border-radius:7px;opacity:.6}
+.cell.dim{opacity:.25}
+.dir{display:flex;flex-direction:column}
+.dr{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1.4fr) 90px minmax(0,1.2fr);gap:14px;align-items:center;padding:10px 10px;margin:0 -10px;border:0;border-top:1px solid var(--line-soft);background:transparent;text-align:left;cursor:pointer;font-family:var(--font-sans);color:var(--sumi);border-radius:0}
+.dr:hover,.dr.on{background:var(--washi);border-radius:10px}
+.dr.th{cursor:default;font:700 12px/16px var(--font-sans);color:var(--sumi-muted);border-top:0;padding-bottom:6px}
+.dr.th:hover{background:transparent}
+.person{display:flex;align-items:center;gap:10px;min-width:0}
+.person .student-animal-avatar{width:34px;height:34px;border-radius:10px;flex:none}
+.person .student-animal-avatar svg{width:24px;height:24px}
+.person strong{display:block;font:700 15px/20px var(--font-sans)}
+.person small{display:block;font:500 12px/16px var(--font-sans);color:var(--sumi-muted)}
+.ct{font:500 13px/18px var(--font-sans);color:var(--sumi-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));gap:16px}
+.cpd{font:700 13px/18px var(--font-sans);color:var(--jade-strong)}
+
+.archT{display:flex;align-items:center;gap:10px;width:100%;margin-top:18px;padding:12px 0 6px;border:0;border-top:1px solid var(--line);background:transparent;text-align:left;cursor:pointer;font:700 14px/20px var(--font-sans);color:var(--sumi-muted)}
+.hibi-ds .archT svg.ico{width:18px;height:18px}
+.archT .chev{margin-left:auto;transition:transform .2s}
+.archT.open .chev{transform:rotate(90deg)}
+.archHelp{margin:0 0 6px;font:500 13px/18px var(--font-sans);color:var(--sumi-muted)}
+.gi.ar strong{color:var(--sumi-muted)}
+.tag{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:999px;background:var(--kraft);font:700 12px/16px var(--font-sans);color:var(--sumi-muted)}
+.emb{width:48px;height:48px;border-radius:14px;background:var(--kraft);display:grid;place-items:center;color:var(--sumi-muted);flex:none}
+.hibi-ds .emb svg.ico{width:24px;height:24px}
+.anote{margin:0;display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:12px;background:var(--washi);font:500 14px/20px var(--font-sans);color:var(--sumi-muted)}
+.anote.warn{background:var(--ocre-soft);color:var(--ocre-ink);font-weight:600}
+.anote i{width:7px;height:7px;border-radius:50%;margin-top:7px;flex:none;background:var(--sumi-subtle)}
+.anote.warn i{background:var(--ocre)}
+.hrow{display:grid;grid-template-columns:110px minmax(0,1fr) auto;gap:12px;align-items:center;min-height:44px;border-top:1px solid var(--line-soft);font:500 14px/20px var(--font-sans)}
+.hrow:first-child{border-top:0}
+.hrow .d{font:700 13px/18px var(--font-sans);color:var(--sumi-muted)}
+.hrow b{font:800 15px/20px var(--font-sans);font-variant-numeric:tabular-nums}
+.seg2{display:inline-grid;grid-auto-flow:column;grid-auto-columns:1fr;height:44px;min-width:300px;padding:3px;box-sizing:border-box;border-radius:10px;background:var(--washi);border:1px solid var(--line)}
+.seg2 button{border:0;border-radius:7px;background:transparent;font:700 14px/18px var(--font-sans);color:var(--sumi-muted);cursor:pointer;padding:0 16px}
+.seg2 button.on{background:var(--papel);color:var(--sumi);box-shadow:0 1px 2px rgba(30,28,32,.14)}
+.cobro{display:flex;flex-direction:column;gap:18px;margin-top:20px;padding-top:20px;border-top:1px solid var(--line-soft)}
+.cur{display:flex;align-items:center;gap:6px;height:44px;box-sizing:border-box;padding:0 12px;border:1.5px solid var(--line-control);border-radius:10px;background:var(--papel);max-width:260px}
+.cur span{font:700 14px/20px var(--font-sans);color:var(--sumi-muted);white-space:nowrap}
+.cur input{flex:1;min-width:0;border:0;outline:0;background:transparent;font:800 17px/22px var(--font-sans);font-variant-numeric:tabular-nums;color:var(--sumi);padding:0}
+.hint{font:500 13px/18px var(--font-sans);color:var(--sumi-muted)}
+.stp{display:inline-grid;grid-template-columns:44px 140px 44px;height:44px;border:1.5px solid var(--line-control);border-radius:10px;overflow:hidden;background:var(--papel)}
+.stp button{border:0;background:transparent;font:700 18px/1 var(--font-sans);color:var(--sumi);cursor:pointer}
+.stp span{display:grid;place-items:center;font:700 14px/18px var(--font-sans)}
+.row2{display:flex;flex-wrap:wrap;gap:20px 28px;align-items:flex-start}
+.mt{display:flex;flex-direction:column}
+.mtr{display:grid;grid-template-columns:minmax(0,1.3fr) 170px 150px minmax(0,1fr);gap:12px;align-items:center;min-height:52px;border-top:1px solid var(--line-soft);font:500 14px/20px var(--font-sans)}
+.mtr.th{min-height:28px;border-top:0;font:700 12px/16px var(--font-sans);color:var(--sumi-muted)}
+.mtr select{height:38px;border:1.5px solid var(--line-control);border-radius:8px;background:var(--papel);font:600 13px/16px var(--font-sans);padding:0 8px}
+.mtr input{width:100%;height:38px;box-sizing:border-box;border:1.5px solid var(--line-control);border-radius:8px;padding:0 10px;font:700 14px/18px var(--font-sans)}
+.mtr .muted{color:var(--sumi-muted)}
+.ros{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));gap:10px}
+.ro{display:grid;grid-template-columns:22px minmax(0,1fr);gap:12px;align-items:flex-start;padding:14px;border:1.5px solid var(--line);border-radius:12px;background:var(--papel);text-align:left;cursor:pointer;font-family:var(--font-sans);color:var(--sumi)}
+.ro.on{border-color:var(--sumi);box-shadow:inset 0 0 0 1px var(--sumi)}
+.ro i{width:20px;height:20px;border-radius:50%;border:2px solid var(--line-control);box-sizing:border-box;margin-top:1px}
+.ro.on i{border:6px solid var(--sumi)}
+.ro b{display:block;font:800 15px/20px var(--font-sans)}
+.ro small{display:block;margin-top:2px;font:500 13px/18px var(--font-sans);color:var(--sumi-muted)}
+.calc{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px 20px;padding:12px 14px;border-radius:12px;background:var(--washi);font:600 13px/18px var(--font-sans);color:var(--sumi-muted)}
+.calc span b{color:var(--sumi);font-weight:800;margin-left:6px}
+.tot{display:flex;align-items:baseline;gap:10px;font:600 14px/20px var(--font-sans);color:var(--sumi-muted)}
+.tot b{font:800 22px/28px var(--font-sans);color:var(--sumi);font-variant-numeric:tabular-nums}
+
+/* ---- Selectores Hibi ---- */
+.pk{position:relative;min-width:0}
+.trg{display:flex;align-items:center;gap:10px;width:100%;min-width:0;height:44px;padding:0 10px 0 12px;box-sizing:border-box;border:1.5px solid var(--line-control);border-radius:10px;background:var(--papel);font:600 15px/20px var(--font-sans);color:var(--sumi);text-align:left;cursor:pointer;font-variant-numeric:tabular-nums}
+.trg:hover{border-color:var(--sumi)}
+.trg.open{border-color:var(--sumi);box-shadow:0 0 0 3px rgba(30,28,32,.08)}
+.trg .tv{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trg .tv small{display:block;font:600 12px/16px var(--font-sans);color:var(--sumi-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trg.two{height:56px}
+.trg.two .tv{font-weight:800}
+.trg .ti{flex:none;width:18px;height:18px;color:var(--sumi-muted)}
+.trg .cv{flex:none;width:18px;height:18px;color:var(--sumi-muted);transition:transform .18s}
+.trg.open .cv{transform:rotate(180deg)}
+.catch{position:fixed;inset:0;z-index:40;border:0;padding:0;background:transparent;cursor:default}
+.pop{position:absolute;top:calc(100% + 6px);left:0;z-index:41;min-width:100%;box-sizing:border-box;background:var(--papel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-overlay);padding:6px;animation:popin .16s cubic-bezier(.2,.8,.2,1) both}
+.pop.r{left:auto;right:0}
+.pop.up{top:auto;bottom:calc(100% + 6px)}
+@keyframes popin{from{opacity:0;transform:translateY(-4px) scale(.98)}to{opacity:1;transform:none}}
+.ph2{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 6px 8px}
+.ph2 b{font:800 15px/20px var(--font-sans);color:var(--sumi)}
+.cap{display:block;padding:8px 8px 4px;font:800 11px/14px var(--font-sans);letter-spacing:.1em;text-transform:uppercase;color:var(--sumi-muted)}
+.li{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:6px 10px;box-sizing:border-box;border:0;border-radius:8px;background:transparent;text-align:left;cursor:pointer;font-family:var(--font-sans);color:var(--sumi)}
+.li:hover{background:var(--washi)}
+.li.on{background:var(--washi)}
+.li .lt{flex:1;min-width:0}
+.li .lt strong{display:block;font:700 14px/18px var(--font-sans);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.li .lt small{display:block;font:500 12px/16px var(--font-sans);color:var(--sumi-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.li .lv{flex:none;font:700 12px/16px var(--font-sans);color:var(--sumi-muted);font-variant-numeric:tabular-nums}
+.li .ck{flex:none;width:18px;height:18px;color:var(--sumi);visibility:hidden}
+.li.on .ck{visibility:visible}
+.li.on .lt strong{font-weight:800}
+.li .student-animal-avatar{width:32px;height:32px;border-radius:9px;flex:none}
+.li .student-animal-avatar svg{width:23px;height:23px}
+.gm{flex:none;width:32px;height:32px;border-radius:9px;display:grid;place-items:center;background:var(--kraft);font:800 12px/1 var(--font-sans);color:var(--sumi)}
+.sr2{display:flex;align-items:center;gap:8px;height:40px;margin:2px 2px 6px;padding:0 10px;border-radius:9px;background:var(--washi);color:var(--sumi-muted)}
+.sr2 input{flex:1;min-width:0;border:0;outline:0;background:transparent;font:600 14px/18px var(--font-sans);color:var(--sumi)}
+.sr2 svg{width:16px;height:16px}
+.lsc{max-height:264px;overflow:auto}
+/* Calendario */
+.cal{width:300px;padding:10px}
+.cnav{width:32px;height:32px;border:0;border-radius:8px;background:transparent;display:grid;place-items:center;cursor:pointer;color:var(--sumi)}
+.cnav:hover{background:var(--washi)}
+.cnav:disabled{color:var(--line-control);cursor:default;background:transparent}
+.cnav svg{width:18px;height:18px}
+.cwk{display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:2px}
+.cwk span{text-align:center;font:700 11px/24px var(--font-sans);color:var(--sumi-muted)}
+.cgr{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.cd{position:relative;height:38px;border:0;border-radius:9px;background:transparent;font:700 14px/1 var(--font-sans);color:var(--sumi);cursor:pointer;font-variant-numeric:tabular-nums}
+.cd:hover{background:var(--washi)}
+.cd.out{color:var(--sumi-subtle);font-weight:500}
+.cd.past{color:var(--line-control);font-weight:500;cursor:default;background:transparent}
+.cd.today{box-shadow:inset 0 0 0 1.5px var(--bermellon)}
+.cd.on{background:var(--sumi);color:var(--papel);box-shadow:none}
+.cd.rep{background:var(--kraft)}
+.cd i{position:absolute;left:50%;bottom:5px;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:var(--line-control)}
+.cd.on i{background:var(--papel)}
+.cft{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;padding:8px 2px 0;border-top:1px solid var(--line-soft);font:500 12px/16px var(--font-sans);color:var(--sumi-muted)}
+.cft .lg{display:flex;align-items:center;gap:12px}
+.cft .lg span{display:inline-flex;align-items:center;gap:5px}
+.cft .lg i{width:4px;height:4px;border-radius:50%;background:var(--line-control)}
+.cft .lg em{width:12px;height:12px;border-radius:4px;background:var(--kraft);font-style:normal}
+.chipb{height:30px;padding:0 10px;border:1.5px solid var(--line-control);border-radius:8px;background:var(--papel);font:700 12px/16px var(--font-sans);color:var(--sumi);cursor:pointer;white-space:nowrap}
+.chipb:hover{background:var(--washi)}
+/* Hora */
+.tpk{width:304px;padding:10px}
+.hg{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.hc{position:relative;height:38px;border:1.5px solid var(--line);border-radius:9px;background:var(--papel);font:700 14px/1 var(--font-sans);color:var(--sumi);cursor:pointer;font-variant-numeric:tabular-nums}
+.hc:hover{border-color:var(--sumi)}
+.hc.on{background:var(--sumi);border-color:var(--sumi);color:var(--papel)}
+.hc.busy{color:var(--bermellon-ink);border-color:var(--bermellon-soft);background:var(--bermellon-soft)}
+.hc.busy.on{background:var(--bermellon-ink);border-color:var(--bermellon-ink);color:var(--papel)}
+.mg{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:3px;border-radius:10px;background:var(--washi);border:1px solid var(--line)}
+.mg button{height:32px;border:0;border-radius:7px;background:transparent;font:700 13px/16px var(--font-sans);color:var(--sumi-muted);cursor:pointer;font-variant-numeric:tabular-nums}
+.mg button.on{background:var(--papel);color:var(--sumi);box-shadow:0 1px 2px rgba(30,28,32,.14)}
+.tft{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;padding:10px 2px 0;border-top:1px solid var(--line-soft);font:700 13px/18px var(--font-sans);color:var(--sumi);font-variant-numeric:tabular-nums}
+.tft .st{font-size:12px}
+.tlg{display:flex;align-items:center;gap:6px;margin:8px 2px 0;font:500 12px/16px var(--font-sans);color:var(--sumi-muted)}
+.tlg i{width:12px;height:12px;border-radius:4px;background:var(--bermellon-soft)}
+
+.pk.in{display:inline-block}
+.trg.sm{height:36px;width:auto;max-width:100%;padding:0 8px 0 10px;gap:6px;border-radius:9px;font:700 13px/16px var(--font-sans)}
+.trg.sm .cv{width:16px;height:16px}
+.trg.sm.add{border-style:dashed;color:var(--sumi-muted);font-weight:600}
+.pop.mini{min-width:180px;padding:4px}
+.pop.mini .li{min-height:38px;padding:6px 8px}
+.pop.mini .li .lt strong{font-size:13px;line-height:16px}
+.pop.gd7{width:252px;padding:8px}
+.gd7 .gg{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.gd7 .gg button{height:32px;border:0;border-radius:8px;background:transparent;font:700 13px/1 var(--font-sans);color:var(--sumi);cursor:pointer;font-variant-numeric:tabular-nums}
+.gd7 .gg button:hover{background:var(--washi)}
+.gd7 .gg button.on{background:var(--sumi);color:var(--papel)}
+.gd7 p{margin:8px 2px 0;padding-top:8px;border-top:1px solid var(--line-soft);font:500 12px/16px var(--font-sans);color:var(--sumi-muted)}
+
+.cb2{display:flex;flex-direction:column}
+.cb2 .dl{display:grid;grid-template-columns:var(--dtw,150px) minmax(0,1fr);gap:8px 16px;align-items:center;min-height:52px;padding:8px 0;border-top:1px solid var(--line-soft)}
+.cb2 .dl:first-child{border-top:0}
+.cb2 .dt{font:700 13px/18px var(--font-sans);color:var(--sumi-muted);padding-top:9px;align-self:start}
+.cb2 .dd{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;min-width:0}
+.cb2 .dd.col{flex-direction:column;align-items:flex-start}
+.cb2 .sg3{display:inline-grid;grid-auto-flow:column;grid-auto-columns:1fr;height:36px;padding:2px;box-sizing:border-box;border-radius:9px;background:var(--washi);border:1px solid var(--line)}
+.cb2 .sg3 button{border:0;border-radius:7px;background:transparent;padding:0 14px;font:700 13px/16px var(--font-sans);color:var(--sumi-muted);cursor:pointer;white-space:nowrap}
+.cb2 .sg3 button.on{background:var(--papel);color:var(--sumi);box-shadow:0 1px 2px rgba(30,28,32,.14)}
+.cb2 .mo{display:inline-flex;align-items:center;gap:4px;height:36px;box-sizing:border-box;padding:0 10px;border:1.5px solid var(--line-control);border-radius:9px;background:var(--papel)}
+.cb2 .mo span{font:700 13px/16px var(--font-sans);color:var(--sumi-muted);white-space:nowrap}
+.cb2 .mo input{width:72px;border:0;outline:0;background:transparent;font:800 15px/18px var(--font-sans);font-variant-numeric:tabular-nums;color:var(--sumi);padding:0}
+.cb2 .mo.xs input{width:56px}
+.cb2 select.se{height:36px;box-sizing:border-box;border:1.5px solid var(--line-control);border-radius:9px;background:var(--papel);padding:0 8px;font:700 13px/16px var(--font-sans);color:var(--sumi);max-width:100%}
+.cb2 select.add{border-style:dashed;color:var(--sumi-muted);font-weight:600}
+.cb2 .ht{font:500 13px/18px var(--font-sans);color:var(--sumi-muted)}
+.cb2 .ht b{color:var(--sumi);font-weight:700}
+.cb2 .adj{display:flex;flex-wrap:wrap;align-items:center;gap:8px;width:100%;padding:6px 0;border-top:1px dashed var(--line)}
+.cb2 .adj > b{min-width:120px;font:700 14px/18px var(--font-sans)}
+.cb2 .xq{width:30px;height:30px;border:0;border-radius:8px;background:transparent;color:var(--sumi-muted);cursor:pointer;display:grid;place-items:center;margin-left:auto}
+.cb2 .xq:hover{background:var(--washi)}
+.cb2 .cl{display:flex;flex-wrap:wrap;gap:4px 16px;font:600 13px/18px var(--font-sans);color:var(--sumi-muted)}
+.cb2 .cl b{color:var(--sumi);font-weight:800;margin-left:4px}
+.cb2 .tt{font:800 20px/24px var(--font-sans);font-variant-numeric:tabular-nums}
+.cobro{margin-top:20px;padding-top:12px;border-top:1px solid var(--line-soft)}
+.ovl{position:fixed;inset:0;z-index:40;background:var(--overlay);display:grid;place-items:center;padding:16px;animation:fade .2s ease-out both}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.dlg{width:min(480px,100%);background:var(--papel);border-radius:16px;box-shadow:var(--shadow-overlay);padding:28px;display:flex;flex-direction:column;gap:16px;animation:pop .25s cubic-bezier(.2,.8,.2,1.2) both}
+@keyframes pop{from{transform:scale(.96);opacity:0}to{transform:none;opacity:1}}
+.dlg h2{margin:0;font:800 22px/28px var(--font-sans)}
+.dlg ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px}
+.dlg li{display:flex;gap:10px;font:500 15px/22px var(--font-sans)}
+.dlg li::before{content:"";width:7px;height:7px;border-radius:50%;margin-top:8px;flex:none;background:var(--sumi-subtle)}
+.dlg .acts{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}
+@media (max-width:980px){.dr{grid-template-columns:minmax(0,1fr) 80px minmax(0,1fr)}.dr .ct{display:none}}
+@media (max-width:780px){.side{max-width:none;flex-basis:100%;padding:16px}.side .sidebar-companion{display:none}.sheet{margin:0;border-radius:0;border-left:0;border-right:0}.list{max-width:none;padding-right:0}.detail{padding-left:0;border-left:0;border-top:1px solid var(--line);padding-top:24px}.fig{padding:0 14px}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+span.sc-interp{display:inline!important;position:static!important;font:inherit!important;color:inherit!important;letter-spacing:inherit!important;text-transform:inherit!important;background:none!important;padding:0!important;margin:0!important;border:0!important;box-shadow:none!important;width:auto!important;height:auto!important;min-width:0!important;transform:none!important;opacity:1!important;animation:none!important}
+</style>
+</helmet>
+<div class="hibi-ds" style="min-height:100vh;display:flex;flex-wrap:wrap;background:var(--washi)">
+  <aside class="side">
+    <a class="hibi-brand" href="#" aria-label="Inicio de Hibi"><img src="/_blob/19d7de209d497968ffcc94f1e708a867" alt="hibi" style="height:40px"></a>
+    <nav class="sidebar-nav" aria-label="Navegación principal">
+      <a class="sidebar-link" href="FluidoInicioC.dc.html"><svg class="ico" viewBox="0 0 24 24"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Inicio</a>
+      <a class="sidebar-link active" href="FluidoComunidad.dc.html" aria-current="page"><svg class="ico" viewBox="0 0 24 24"><path d="M18 21a8 8 0 0 0-16 0"/><circle cx="10" cy="8" r="5"/><path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3"/></svg>Comunidad</a>
+      <a class="sidebar-link" href="FluidoClases.dc.html"><svg class="ico" viewBox="0 0 24 24"><path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M8 13h.01"/><path d="M12 13h.01"/><path d="M16 13h.01"/><path d="M8 17h.01"/><path d="M12 17h.01"/><path d="M16 17h.01"/></svg>Clases</a>
+      <a class="sidebar-link" href="FluidoSeguimiento.dc.html"><svg class="ico" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>Seguimiento</a>
+      <a class="sidebar-link" href="FluidoConfig.dc.html"><svg class="ico" viewBox="0 0 24 24"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg>Configuración</a>
+    </nav>
+    <div class="sidebar-companion" style="gap:12px"><img src="/_blob/f94d92622e26d07cb8c2035979131ea0" alt="" style="width:52px;height:52px"><span class="sync-pill" style="align-self:flex-start">Sincronizado</span></div>
+  </aside>
+
+  <main class="sheet">
+    <div class="page-heading" style="flex-wrap:wrap;align-items:flex-end">
+      <div><h1>Comunidad</h1><p>3 grupos y 1 clase individual. Elige un grupo para ver cómo va y a quién contactar.</p></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <a class="button button-secondary" href="FluidoComunidad.dc.html"><svg class="ico" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Agregar alumno</a>
+        <sc-if value="{{showCreate}}"><button type="button" class="button button-primary" onClick="{{openNew}}"><svg class="ico" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Crear grupo</button></sc-if>
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-top:24px;border-bottom:1px solid var(--line)">
+      <nav class="tabs" aria-label="Vistas de comunidad" style="border-bottom:0">
+        <a class="tab" href="FluidoComunidad.dc.html" style="display:inline-flex;align-items:center;text-decoration:none">Todos</a>
+        <a class="tab" href="FluidoComunidad.dc.html" style="display:inline-flex;align-items:center;text-decoration:none">Alumnos</a>
+        <a class="tab is-active" href="FluidoComunidadGrupo.dc.html" aria-current="page" style="display:inline-flex;align-items:center;text-decoration:none">Grupos</a>
+      </nav>
+      <label class="search-control" style="width:300px;max-width:100%;margin-bottom:8px"><svg class="ico" viewBox="0 0 24 24" style="width:18px;height:18px"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg><input type="search" placeholder="Buscar alumno o grupo" aria-label="Buscar alumno o grupo"></label>
+    </div>
+
+    <div class="cols">
+      <nav class="list" aria-label="Grupos">
+        <sc-for list="{{groups}}" as="g">
+          <button type="button" class="{{g.cls}}" aria-current="{{g.on}}" onClick="{{g.pick}}">
+            <span style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><strong>{{g.name}}</strong><span style="font:800 14px/20px var(--font-sans)">{{g.asis}}</span></span>
+            <small>{{g.sub}}</small>
+            <span class="bar" aria-hidden="true"><i style="width:{{g.asis}};"></i></span>
+            <span class="{{g.stCls}}">{{g.st}}</span>
+          </button>
+        </sc-for>
+        <a class="lk" href="FluidoComunidad.dc.html" style="margin-top:14px">Ana Rivera · individual →</a>
+        <button type="button" class="{{archCls}}" aria-expanded="{{archOpen}}" onClick="{{toggleArch}}"><svg class="ico" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg><span>Archivados · {{archN}}</span><svg class="ico chev" viewBox="0 0 24 24" style="width:16px;height:16px"><path d="m9 18 6-6-6-6"/></svg></button>
+        <sc-if value="{{archOpen}}">
+          <p class="archHelp">{{archHelp}}</p>
+          <sc-for list="{{archived}}" as="g"><button type="button" class="{{g.cls}}" onClick="{{g.pick}}"><span style="display:flex;justify-content:space-between;align-items:center;gap:8px"><strong>{{g.name}}</strong><span class="tag">Archivado</span></span><small>{{g.sub}}</small></button></sc-for>
+        </sc-if>
+      </nav>
+
+      <section class="detail" aria-label="Detalle del grupo">
+        <sc-if value="{{isActive}}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;padding-bottom:24px">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <h2 id="gr-t" style="margin:0;font:800 28px/34px var(--font-sans)">{{G.name}}</h2>
+            <span style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;font:600 14px/20px var(--font-sans);color:var(--sumi-muted)"><span>{{G.when}}</span><span>{{G.n}} alumnos</span><span class="st st-ok">Activo</span></span>
+          </div>
+          <div style="text-align:right;display:flex;flex-direction:column;gap:2px">
+            <span style="font:700 12px/16px var(--font-sans);color:var(--sumi-muted)">Próxima clase</span>
+            <a href="FluidoClases.dc.html" style="font:800 15px/20px var(--font-sans);text-decoration:none">{{G.next}}</a>
+          </div>
+        </div>
+
+        <div class="blk" style="padding-top:24px">
+          <h3 class="ov" style="margin-bottom:16px">Este mes</h3>
+          <div class="figs">
+            <div class="fig"><span>Asistencia</span><b>{{G.asis}}</b><span class="{{G.asisCls}}">{{G.asisNote}}</span></div>
+            <div class="fig"><span>Promedio</span><b>{{G.prom}}<small style="font-size:15px;color:var(--sumi-muted)"> /10</small></b><span class="{{G.promCls}}">{{G.promNote}}</span></div>
+            <div class="fig"><span>Por cobrar</span><b>{{G.owe}}</b><span class="{{G.oweCls}}">{{G.oweNote}}</span></div>
+          </div>
+        </div>
+
+        <div class="blk">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;gap:12px;flex-wrap:wrap"><h3 class="ov">Asistencia por clase</h3><span style="font:500 13px/18px var(--font-sans);color:var(--sumi-muted)">Toca un alumno para resaltarlo</span></div>
+          <div class="mx" role="table" aria-label="Asistencia por clase" style="grid-template-columns:{{G.cols}};">
+            <span role="columnheader"></span>
+            <sc-for list="{{G.heads}}" as="h"><span class="hd" role="columnheader">{{h.t}}</span></sc-for>
+            <sc-for list="{{G.rows}}" as="r">
+              <span class="{{r.nmCls}}" role="rowheader">{{r.first}}</span>
+              <sc-for list="{{r.cells}}" as="c"><span class="{{c.cls}}" role="cell" aria-label="{{c.aria}}">{{c.t}}</span></sc-for>
+            </sc-for>
+          </div>
+        </div>
+
+        <div class="blk">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;gap:12px"><h3 class="ov">Directorio</h3><span style="display:flex;gap:14px;align-items:baseline"><sc-if value="{{copied}}"><span class="cpd">Correos copiados</span></sc-if><button type="button" class="lk" onClick="{{copy}}">Copiar correos</button></span></div>
+          <div class="dir" role="table" aria-label="Directorio del grupo">
+            <div class="dr th" role="row"><span role="columnheader">Alumno</span><span role="columnheader" class="ct">Contacto</span><span role="columnheader">Asistencia</span><span role="columnheader">Pagos</span></div>
+            <sc-for list="{{G.rows}}" as="r">
+              <button type="button" class="{{r.cls}}" role="row" aria-pressed="{{r.on}}" onClick="{{r.pick}}">
+                <span class="person" role="cell">
+                  <sc-if value="{{r.a.oso}}"><span class="{{r.av}}" aria-hidden="true"><svg viewBox="0 0 48 48"><circle cx="24" cy="27.2" r="13.4"></circle><path d="M13.6 19.2A5 5 0 1 1 19.9 14.4M34.4 19.2A5 5 0 1 0 28.1 14.4"></path><circle cx="18.8" cy="25.2" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="29.2" cy="25.2" r="1.8" fill="currentColor" stroke="none"></circle><ellipse cx="24" cy="31.4" rx="5.2" ry="3.9"></ellipse><ellipse cx="24" cy="30" rx="1.9" ry="1.3" fill="currentColor" stroke="none"></ellipse><path d="M24 31.2v1.5"></path><ellipse cx="15.2" cy="30.2" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><ellipse cx="32.8" cy="30.2" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse></svg></span></sc-if>
+                  <sc-if value="{{r.a.perro}}"><span class="{{r.av}}" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M13.5 22C13.5 15 18 11 24 11S34.5 15 34.5 22V27.5C34.5 34 29.8 38.8 24 38.8S13.5 34 13.5 27.5Z"></path><path d="M14.2 16.5C9.5 14.8 6.5 18.5 7.2 24.6 7.6 28.4 10.6 29.6 13.5 27.3M33.8 16.5C38.5 14.8 41.5 18.5 40.8 24.6 40.4 28.4 37.4 29.6 34.5 27.3"></path><circle cx="19.2" cy="24.2" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="28.8" cy="24.2" r="1.8" fill="currentColor" stroke="none"></circle><ellipse cx="24" cy="30.8" rx="4.6" ry="3.6"></ellipse><ellipse cx="24" cy="29.3" rx="1.9" ry="1.3" fill="currentColor" stroke="none"></ellipse><path d="M24 30.4v1.4"></path><ellipse cx="16" cy="29.2" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><ellipse cx="32" cy="29.2" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse></svg></span></sc-if>
+                  <sc-if value="{{r.a.conejo}}"><span class="{{r.av}}" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M19.2 17.4C15.8 12.4 15.2 5.6 17.8 4.3S22.8 9.2 22.1 16.5M28.8 17.4C32.2 12.4 32.8 5.6 30.2 4.3S25.2 9.2 25.9 16.5"></path><ellipse cx="24" cy="28" rx="13" ry="11.6"></ellipse><circle cx="19.2" cy="27" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="28.8" cy="27" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="24" cy="30.2" r="1.1" fill="currentColor" stroke="none"></circle><path d="M22 32.1q1 1 2 0q1 1 2 0"></path><ellipse cx="15.6" cy="31" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><ellipse cx="32.4" cy="31" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse></svg></span></sc-if>
+                  <sc-if value="{{r.a.buho}}"><span class="{{r.av}}" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M11.5 18C11.5 13.5 13 10.6 15.2 9.2 16.8 11 18.2 12.2 19.8 13 22.6 12.2 25.4 12.2 28.2 13 29.8 12.2 31.2 11 32.8 9.2 35 10.6 36.5 13.5 36.5 18V28C36.5 35.2 31 40 24 40S11.5 35.2 11.5 28Z"></path><circle cx="18.7" cy="22.8" r="4.9"></circle><circle cx="29.3" cy="22.8" r="4.9"></circle><circle cx="19.3" cy="23.4" r="2.1" fill="currentColor" stroke="none"></circle><circle cx="28.7" cy="23.4" r="2.1" fill="currentColor" stroke="none"></circle><path d="M22.8 28.2Q24 31 25.2 28.2Z" fill="currentColor"></path><ellipse cx="15.6" cy="31" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><ellipse cx="32.4" cy="31" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><path d="M21 40v1.6M27 40v1.6"></path></svg></span></sc-if>
+                  <sc-if value="{{r.a.pinguino}}"><span class="{{r.av}}" aria-hidden="true"><svg viewBox="0 0 48 48"><ellipse cx="24" cy="26" rx="13" ry="17"></ellipse><ellipse cx="24" cy="29" rx="8" ry="11"></ellipse><circle cx="20" cy="21" r="1.4" fill="currentColor" stroke="none"></circle><circle cx="28" cy="21" r="1.4" fill="currentColor" stroke="none"></circle><path d="m21 25 3 2 3-2-3-2-3 2ZM11 26l-5 7M37 26l5 7M18 42l-4 2M30 42l4 2"></path></svg></span></sc-if>
+                  <sc-if value="{{r.a.gato}}"><span class="{{r.av}}" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M11 25C11 17 13 12.2 14.5 9.6Q15.3 8.3 16.4 9.2L20.4 12.6C22.7 12 25.3 12 27.6 12.6L31.6 9.2Q32.7 8.3 33.5 9.6C35 12.2 37 17 37 25C37 33.5 31.2 39 24 39S11 33.5 11 25Z"></path><circle cx="19" cy="25.5" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="29" cy="25.5" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="24" cy="28.6" r="1.1" fill="currentColor" stroke="none"></circle><path d="M22 30.5q1 1 2 0q1 1 2 0"></path><ellipse cx="15.8" cy="29.4" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><ellipse cx="32.2" cy="29.4" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse></svg></span></sc-if>
+                  <sc-if value="{{r.a.zorro}}"><span class="{{r.av}}" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M9 9.6C9 8.6 10 8 10.8 8.6L18.4 14.6C22 13.6 26 13.6 29.6 14.6L37.2 8.6C38 8 39 8.6 39 9.6L38 22C37.4 30.5 31.5 37.5 24 39.5 16.5 37.5 10.6 30.5 10 22Z"></path><path d="M11.6 26.4C16.4 26.9 20.8 29.8 24 33.2 27.2 29.8 31.6 26.9 36.4 26.4"></path><circle cx="18.8" cy="23.8" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="29.2" cy="23.8" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="24" cy="36.2" r="1.5" fill="currentColor" stroke="none"></circle></svg></span></sc-if>
+                  <sc-if value="{{r.a.rana}}"><span class="{{r.av}}" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M9.5 19.5A6.5 6.5 0 1 1 20.8 18.9C23 18.3 25 18.3 27.2 18.9A6.5 6.5 0 1 1 38.5 19.5C42 25 41.5 34 35.5 37.5 29.5 41 18.5 41 12.5 37.5 6.5 34 6 25 9.5 19.5Z"></path><circle cx="15" cy="16.2" r="2.3" fill="currentColor" stroke="none"></circle><circle cx="33" cy="16.2" r="2.3" fill="currentColor" stroke="none"></circle><path d="M19.6 29.4C22.2 31.6 25.8 31.6 28.4 29.4"></path><ellipse cx="13.4" cy="28.4" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><ellipse cx="34.6" cy="28.4" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse></svg></span></sc-if>
+                  <span style="min-width:0"><strong>{{r.name}}</strong><small>{{r.sub}}</small></span>
+                </span>
+                <span class="ct" role="cell">{{r.mail}}<br>Tutor · {{r.tel}}</span>
+                <span role="cell" style="font:800 15px/20px var(--font-sans);color:{{r.pctCol}}">{{r.pct}}</span>
+                <span role="cell"><span class="{{r.payCls}}">{{r.pay}}</span></span>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+
+        <div class="blk" style="padding-bottom:0">
+          <h3 class="ov" style="margin-bottom:16px">Datos del grupo</h3>
+          <div class="form">
+            <label class="field"><span class="field-label">Nombre del grupo <span class="req">*</span></span><input class="control" value="{{G.name}}"></label>
+            <label class="field"><span class="field-label">Horario</span><input class="control" value="{{G.when}}"></label>
+            <label class="field"><span class="field-label">Duración por clase</span><input class="control" value="{{G.dur}}"></label>
+          </div>
+          <div class="cobro">
+          <div class="cb2"><sc-if value="{{F.anyPop}}"><button type="button" class="catch" aria-label="Cerrar selector" onClick="{{F.popClose}}"></button></sc-if>
+            <div class="dl"><span class="dt">Forma de cobro</span><div class="dd"><div class="sg3" role="group" aria-label="Forma de cobro"><button type="button" class="{{F.cClase}}" aria-pressed="{{F.isClase}}" onClick="{{F.toClase}}">Por clase</button><button type="button" class="{{F.cMes}}" aria-pressed="{{F.isMes}}" onClick="{{F.toMes}}">Mensual</button></div></div></div>
+            <sc-if value="{{F.isClase}}">
+              <div class="dl"><span class="dt">Tarifa</span><div class="dd"><span class="mo"><span>$</span><input inputmode="decimal" value="{{F.rate}}" onInput="{{F.setRate}}" aria-label="Tarifa por hora"><span>/ hora</span></span><span class="ht">{{F.rateHint}}</span></div></div>
+            </sc-if>
+            <sc-if value="{{F.isMes}}">
+              <div class="dl"><span class="dt">Cuota</span><div class="dd"><span class="mo"><span>$</span><input inputmode="decimal" value="{{F.fee}}" onInput="{{F.setFee}}" aria-label="Cuota mensual por alumno"><span>/ mes</span></span><sc-if value="{{F.hasSug}}"><span class="ht">{{F.sug}} <button type="button" class="lk" onClick="{{F.useSug}}">Usar</button></span></sc-if></div></div>
+              <div class="dl"><span class="dt">Vence</span><div class="dd">
+                <div class="pk in"><button type="button" class="{{F.ddType.cls}}" aria-haspopup="listbox" aria-expanded="{{F.ddType.open}}" aria-label="Cómo vence" onClick="{{F.ddType.t}}"><span class="tv">{{F.ddType.l}}</span><svg class="ico cv" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button><sc-if value="{{F.ddType.open}}"><div class="pop mini" role="listbox" aria-label="Cómo vence"><sc-for list="{{F.ddType.opts}}" as="o"><button type="button" role="option" aria-selected="{{o.on}}" class="{{o.cls}}" onClick="{{o.pick}}"><span class="lt"><strong>{{o.l}}</strong><sc-if value="{{o.hasS}}"><small>{{o.s}}</small></sc-if></span><svg class="ico ck" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></button></sc-for></div></sc-if></div>
+                <sc-if value="{{F.isDay}}"><div class="pk in"><button type="button" class="{{F.ddDay.cls}}" aria-haspopup="listbox" aria-expanded="{{F.ddDay.open}}" aria-label="Día del mes" onClick="{{F.ddDay.t}}"><span class="tv">{{F.ddDay.l}}</span><svg class="ico cv" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button><sc-if value="{{F.ddDay.open}}"><div class="pop gd7" role="listbox" aria-label="Día del mes"><div class="gg"><sc-for list="{{F.ddDay.opts}}" as="o"><button type="button" role="option" aria-selected="{{o.on}}" class="{{o.gcls}}" onClick="{{o.pick}}">{{o.l}}</button></sc-for></div><p>Hasta el 28, para que exista en todos los meses.</p></div></sc-if></div><span class="ht">de cada mes</span></sc-if>
+                <sc-if value="{{F.isCls}}"><div class="pk in"><button type="button" class="{{F.ddNth.cls}}" aria-haspopup="listbox" aria-expanded="{{F.ddNth.open}}" aria-label="Qué clase" onClick="{{F.ddNth.t}}"><span class="tv">{{F.ddNth.l}}</span><svg class="ico cv" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button><sc-if value="{{F.ddNth.open}}"><div class="pop mini" role="listbox" aria-label="Qué clase"><sc-for list="{{F.ddNth.opts}}" as="o"><button type="button" role="option" aria-selected="{{o.on}}" class="{{o.cls}}" onClick="{{o.pick}}"><span class="lt"><strong>{{o.l}}</strong><sc-if value="{{o.hasS}}"><small>{{o.s}}</small></sc-if></span><svg class="ico ck" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></button></sc-for></div></sc-if></div><span class="ht">del mes</span></sc-if>
+                <span class="ht">· {{F.nextDue}}</span>
+              </div></div>
+              <sc-if value="{{F.hasMembers}}">
+                <div class="dl"><span class="dt">Alumnos</span><div class="dd col">
+                  <span class="ht">{{F.adjSummary}}</span>
+                  <sc-for list="{{F.adjusted}}" as="m"><div class="adj"><b>{{m.name}}</b>
+                    <div class="pk in"><button type="button" class="{{m.dd.cls}}" aria-haspopup="listbox" aria-expanded="{{m.dd.open}}" aria-label="Cómo paga" onClick="{{m.dd.t}}"><span class="tv">{{m.dd.l}}</span><svg class="ico cv" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button><sc-if value="{{m.dd.open}}"><div class="pop mini" role="listbox" aria-label="Cómo paga"><sc-for list="{{m.dd.opts}}" as="o"><button type="button" role="option" aria-selected="{{o.on}}" class="{{o.cls}}" onClick="{{o.pick}}"><span class="lt"><strong>{{o.l}}</strong><sc-if value="{{o.hasS}}"><small>{{o.s}}</small></sc-if></span><svg class="ico ck" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></button></sc-for></div></sc-if></div>
+                    <sc-if value="{{m.isFee}}"><span class="mo xs"><span>$</span><input inputmode="decimal" value="{{m.fee}}" onInput="{{m.setFee}}" aria-label="{{m.ariaFee}}"></span></sc-if>
+                    <sc-if value="{{m.isClase}}"><span class="ht">{{m.amt}}</span></sc-if>
+                    <button type="button" class="xq" aria-label="{{m.ariaDel}}" onClick="{{m.del}}"><svg class="ico" viewBox="0 0 24 24" style="width:16px;height:16px"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div></sc-for>
+                  <sc-if value="{{F.canAdd}}"><div class="pk in"><button type="button" class="{{F.ddAdd.cls}}" aria-haspopup="listbox" aria-expanded="{{F.ddAdd.open}}" aria-label="Ajustar a un alumno" onClick="{{F.ddAdd.t}}"><span class="tv">{{F.ddAdd.l}}</span><svg class="ico cv" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button><sc-if value="{{F.ddAdd.open}}"><div class="pop mini" role="listbox" aria-label="Ajustar a un alumno"><sc-for list="{{F.ddAdd.opts}}" as="o"><button type="button" role="option" aria-selected="{{o.on}}" class="{{o.cls}}" onClick="{{o.pick}}"><span class="lt"><strong>{{o.l}}</strong><sc-if value="{{o.hasS}}"><small>{{o.s}}</small></sc-if></span><svg class="ico ck" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></button></sc-for></div></sc-if></div></sc-if>
+                </div></div>
+              </sc-if>
+              <sc-if value="{{F.switching}}">
+                <div class="dl"><span class="dt">Aplicar desde</span><div class="dd col">
+                  <div class="sg3" role="group" aria-label="Aplicar desde"><button type="button" class="{{F.cNov}}" aria-pressed="{{F.isNov}}" onClick="{{F.toNov}}">Noviembre</button><button type="button" class="{{F.cOct}}" aria-pressed="{{F.isOct}}" onClick="{{F.toOct}}">Este mes</button></div>
+                  <span class="ht">{{F.fromHint}}</span>
+                  <sc-if value="{{F.isOct}}"><div class="cl"><sc-for list="{{F.octRows}}" as="r"><span>{{r.n}}<b>{{r.v}}</b></span></sc-for></div></sc-if>
+                </div></div>
+              </sc-if>
+            </sc-if>
+            <div class="dl"><span class="dt">{{F.sumT}}</span><div class="dd"><span class="tt">{{F.sumV}}</span><span class="ht">{{F.sumL}}</span></div></div>
+          </div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:24px">
+            <button class="button button-ghost" type="button" style="padding:0;color:var(--bermellon-ink)" onClick="{{askArchive}}"><svg class="ico" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg>Archivar grupo</button>
+            <span style="display:flex;align-items:center;gap:12px"><sc-if value="{{savedMsg}}"><span class="cpd">Cambios guardados</span></sc-if><button class="button button-secondary" type="button" onClick="{{save}}">Guardar cambios</button></span>
+          </div>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{isArch}}">
+          <div style="display:flex;align-items:center;gap:16px;padding-bottom:20px">
+            <span class="emb"><svg class="ico" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></span>
+            <div style="flex:1;min-width:0"><h2 style="margin:0;font:800 28px/34px var(--font-sans)">{{A.name}}</h2><span style="font:600 14px/20px var(--font-sans);color:var(--sumi-muted)">{{A.n}} alumnos · archivado el {{A.date}}</span></div>
+            <span class="tag">Archivado</span>
+          </div>
+          <p class="anote"><i></i><span>Fuera de Inicio y Seguimiento. Puedes incluir su historial desde Seguimiento, solo durante la sesión. Todo lo guardado se conserva.</span></p>
+          <div class="blk" style="padding-top:24px;border-top:0">
+            <h3 class="ov" style="margin-bottom:16px">Historial del grupo</h3>
+            <div class="figs"><sc-for list="{{A.figs}}" as="f"><div class="fig"><span>{{f.l}}</span><b>{{f.v}}</b><span style="font:600 13px/18px var(--font-sans);color:{{f.c}}">{{f.n}}</span></div></sc-for></div>
+          </div>
+          <sc-if value="{{A.hasOwe}}"><p class="anote warn"><i></i><span>{{A.owe}}</span></p></sc-if>
+          <div class="blk">
+            <h3 class="ov" style="margin-bottom:8px">Alumnos de este grupo</h3>
+            <div class="dir"><sc-for list="{{A.members}}" as="r"><div class="dr" style="cursor:default;grid-template-columns:minmax(0,1fr) auto"><span class="person"><sc-if value="{{r.a.oso}}"><span class="{{r.av}}" aria-hidden="true"><svg viewBox="0 0 48 48"><circle cx="24" cy="27.2" r="13.4"></circle><path d="M13.6 19.2A5 5 0 1 1 19.9 14.4M34.4 19.2A5 5 0 1 0 28.1 14.4"></path><circle cx="18.8" cy="25.2" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="29.2" cy="25.2" r="1.8" fill="currentColor" stroke="none"></circle><ellipse cx="24" cy="31.4" rx="5.2" ry="3.9"></ellipse><ellipse cx="24" cy="30" rx="1.9" ry="1.3" fill="currentColor" stroke="none"></ellipse><path d="M24 31.2v1.5"></path><ellipse cx="15.2" cy="30.2" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><ellipse cx="32.8" cy="30.2" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse></svg></span></sc-if>
+                  <sc-if value="{{r.a.perro}}"><span class="{{r.av}}" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M13.5 22C13.5 15 18 11 24 11S34.5 15 34.5 22V27.5C34.5 34 29.8 38.8 24 38.8S13.5 34 13.5 27.5Z"></path><path d="M14.2 16.5C9.5 14.8 6.5 18.5 7.2 24.6 7.6 28.4 10.6 29.6 13.5 27.3M33.8 16.5C38.5 14.8 41.5 18.5 40.8 24.6 40.4 28.4 37.4 29.6 34.5 27.3"></path><circle cx="19.2" cy="24.2" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="28.8" cy="24.2" r="1.8" fill="currentColor" stroke="none"></circle><ellipse cx="24" cy="30.8" rx="4.6" ry="3.6"></ellipse><ellipse cx="24" cy="29.3" rx="1.9" ry="1.3" fill="currentColor" stroke="none"></ellipse><path d="M24 30.4v1.4"></path><ellipse cx="16" cy="29.2" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><ellipse cx="32" cy="29.2" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse></svg></span></sc-if>
+                  <sc-if value="{{r.a.conejo}}"><span class="{{r.av}}" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M19.2 17.4C15.8 12.4 15.2 5.6 17.8 4.3S22.8 9.2 22.1 16.5M28.8 17.4C32.2 12.4 32.8 5.6 30.2 4.3S25.2 9.2 25.9 16.5"></path><ellipse cx="24" cy="28" rx="13" ry="11.6"></ellipse><circle cx="19.2" cy="27" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="28.8" cy="27" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="24" cy="30.2" r="1.1" fill="currentColor" stroke="none"></circle><path d="M22 32.1q1 1 2 0q1 1 2 0"></path><ellipse cx="15.6" cy="31" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><ellipse cx="32.4" cy="31" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse></svg></span></sc-if>
+                  <sc-if value="{{r.a.buho}}"><span class="{{r.av}}" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M11.5 18C11.5 13.5 13 10.6 15.2 9.2 16.8 11 18.2 12.2 19.8 13 22.6 12.2 25.4 12.2 28.2 13 29.8 12.2 31.2 11 32.8 9.2 35 10.6 36.5 13.5 36.5 18V28C36.5 35.2 31 40 24 40S11.5 35.2 11.5 28Z"></path><circle cx="18.7" cy="22.8" r="4.9"></circle><circle cx="29.3" cy="22.8" r="4.9"></circle><circle cx="19.3" cy="23.4" r="2.1" fill="currentColor" stroke="none"></circle><circle cx="28.7" cy="23.4" r="2.1" fill="currentColor" stroke="none"></circle><path d="M22.8 28.2Q24 31 25.2 28.2Z" fill="currentColor"></path><ellipse cx="15.6" cy="31" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><ellipse cx="32.4" cy="31" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><path d="M21 40v1.6M27 40v1.6"></path></svg></span></sc-if>
+                  <sc-if value="{{r.a.pinguino}}"><span class="{{r.av}}" aria-hidden="true"><svg viewBox="0 0 48 48"><ellipse cx="24" cy="26" rx="13" ry="17"></ellipse><ellipse cx="24" cy="29" rx="8" ry="11"></ellipse><circle cx="20" cy="21" r="1.4" fill="currentColor" stroke="none"></circle><circle cx="28" cy="21" r="1.4" fill="currentColor" stroke="none"></circle><path d="m21 25 3 2 3-2-3-2-3 2ZM11 26l-5 7M37 26l5 7M18 42l-4 2M30 42l4 2"></path></svg></span></sc-if>
+                  <sc-if value="{{r.a.gato}}"><span class="{{r.av}}" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M11 25C11 17 13 12.2 14.5 9.6Q15.3 8.3 16.4 9.2L20.4 12.6C22.7 12 25.3 12 27.6 12.6L31.6 9.2Q32.7 8.3 33.5 9.6C35 12.2 37 17 37 25C37 33.5 31.2 39 24 39S11 33.5 11 25Z"></path><circle cx="19" cy="25.5" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="29" cy="25.5" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="24" cy="28.6" r="1.1" fill="currentColor" stroke="none"></circle><path d="M22 30.5q1 1 2 0q1 1 2 0"></path><ellipse cx="15.8" cy="29.4" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><ellipse cx="32.2" cy="29.4" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse></svg></span></sc-if>
+                  <sc-if value="{{r.a.zorro}}"><span class="{{r.av}}" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M9 9.6C9 8.6 10 8 10.8 8.6L18.4 14.6C22 13.6 26 13.6 29.6 14.6L37.2 8.6C38 8 39 8.6 39 9.6L38 22C37.4 30.5 31.5 37.5 24 39.5 16.5 37.5 10.6 30.5 10 22Z"></path><path d="M11.6 26.4C16.4 26.9 20.8 29.8 24 33.2 27.2 29.8 31.6 26.9 36.4 26.4"></path><circle cx="18.8" cy="23.8" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="29.2" cy="23.8" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="24" cy="36.2" r="1.5" fill="currentColor" stroke="none"></circle></svg></span></sc-if>
+                  <sc-if value="{{r.a.rana}}"><span class="{{r.av}}" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M9.5 19.5A6.5 6.5 0 1 1 20.8 18.9C23 18.3 25 18.3 27.2 18.9A6.5 6.5 0 1 1 38.5 19.5C42 25 41.5 34 35.5 37.5 29.5 41 18.5 41 12.5 37.5 6.5 34 6 25 9.5 19.5Z"></path><circle cx="15" cy="16.2" r="2.3" fill="currentColor" stroke="none"></circle><circle cx="33" cy="16.2" r="2.3" fill="currentColor" stroke="none"></circle><path d="M19.6 29.4C22.2 31.6 25.8 31.6 28.4 29.4"></path><ellipse cx="13.4" cy="28.4" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><ellipse cx="34.6" cy="28.4" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse></svg></span></sc-if><span><strong>{{r.name}}</strong><small>{{r.sub}}</small></span></span><span style="font:700 13px/18px var(--font-sans);color:{{r.vc}}">{{r.v}}</span></div></sc-for></div>
+          </div>
+          <sc-if value="{{A.histOpen}}">
+            <div class="blk"><h3 class="ov" style="margin-bottom:8px">Clases y pagos</h3><sc-for list="{{A.hist}}" as="x"><div class="hrow"><span class="d">{{x.d}}</span><span>{{x.t}} <span style="color:var(--sumi-muted)">· {{x.s}}</span></span><b>{{x.v}}</b></div></sc-for></div>
+          </sc-if>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:24px;padding-top:20px;border-top:1px solid var(--line-soft)">
+            <button type="button" class="button button-ghost" style="padding:0" onClick="{{A.toggleHist}}">{{A.histL}}</button>
+            <span style="display:flex;align-items:center;gap:12px"><span class="hint">Sus horarios vuelven desde hoy</span><button type="button" class="button button-secondary" onClick="{{A.react}}"><svg class="ico" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>Reactivar grupo</button></span>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{isNew}}">
+          <div style="padding-bottom:8px"><span class="ov">Nuevo grupo</span><h2 style="margin:4px 0 0;font:800 28px/34px var(--font-sans)">Crear grupo</h2></div>
+          <div class="form" style="margin-top:12px">
+            <label class="field"><span class="field-label">Nombre del grupo <span class="req">*</span></span><input class="control" placeholder="Ej. Inglés 3B" value="{{F.name}}" onInput="{{F.setName}}"></label>
+            <label class="field"><span class="field-label">Grado o materia</span><input class="control" placeholder="Opcional"></label>
+          </div>
+          <div class="cobro">
+          <div class="cb2"><sc-if value="{{F.anyPop}}"><button type="button" class="catch" aria-label="Cerrar selector" onClick="{{F.popClose}}"></button></sc-if>
+            <div class="dl"><span class="dt">Forma de cobro</span><div class="dd"><div class="sg3" role="group" aria-label="Forma de cobro"><button type="button" class="{{F.cClase}}" aria-pressed="{{F.isClase}}" onClick="{{F.toClase}}">Por clase</button><button type="button" class="{{F.cMes}}" aria-pressed="{{F.isMes}}" onClick="{{F.toMes}}">Mensual</button></div></div></div>
+            <sc-if value="{{F.isClase}}">
+              <div class="dl"><span class="dt">Tarifa</span><div class="dd"><span class="mo"><span>$</span><input inputmode="decimal" value="{{F.rate}}" onInput="{{F.setRate}}" aria-label="Tarifa por hora"><span>/ hora</span></span><span class="ht">{{F.rateHint}}</span></div></div>
+            </sc-if>
+            <sc-if value="{{F.isMes}}">
+              <div class="dl"><span class="dt">Cuota</span><div class="dd"><span class="mo"><span>$</span><input inputmode="decimal" value="{{F.fee}}" onInput="{{F.setFee}}" aria-label="Cuota mensual por alumno"><span>/ mes</span></span><sc-if value="{{F.hasSug}}"><span class="ht">{{F.sug}} <button type="button" class="lk" onClick="{{F.useSug}}">Usar</button></span></sc-if></div></div>
+              <div class="dl"><span class="dt">Vence</span><div class="dd">
+                <div class="pk in"><button type="button" class="{{F.ddType.cls}}" aria-haspopup="listbox" aria-expanded="{{F.ddType.open}}" aria-label="Cómo vence" onClick="{{F.ddType.t}}"><span class="tv">{{F.ddType.l}}</span><svg class="ico cv" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button><sc-if value="{{F.ddType.open}}"><div class="pop mini" role="listbox" aria-label="Cómo vence"><sc-for list="{{F.ddType.opts}}" as="o"><button type="button" role="option" aria-selected="{{o.on}}" class="{{o.cls}}" onClick="{{o.pick}}"><span class="lt"><strong>{{o.l}}</strong><sc-if value="{{o.hasS}}"><small>{{o.s}}</small></sc-if></span><svg class="ico ck" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></button></sc-for></div></sc-if></div>
+                <sc-if value="{{F.isDay}}"><div class="pk in"><button type="button" class="{{F.ddDay.cls}}" aria-haspopup="listbox" aria-expanded="{{F.ddDay.open}}" aria-label="Día del mes" onClick="{{F.ddDay.t}}"><span class="tv">{{F.ddDay.l}}</span><svg class="ico cv" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button><sc-if value="{{F.ddDay.open}}"><div class="pop gd7" role="listbox" aria-label="Día del mes"><div class="gg"><sc-for list="{{F.ddDay.opts}}" as="o"><button type="button" role="option" aria-selected="{{o.on}}" class="{{o.gcls}}" onClick="{{o.pick}}">{{o.l}}</button></sc-for></div><p>Hasta el 28, para que exista en todos los meses.</p></div></sc-if></div><span class="ht">de cada mes</span></sc-if>
+                <sc-if value="{{F.isCls}}"><div class="pk in"><button type="button" class="{{F.ddNth.cls}}" aria-haspopup="listbox" aria-expanded="{{F.ddNth.open}}" aria-label="Qué clase" onClick="{{F.ddNth.t}}"><span class="tv">{{F.ddNth.l}}</span><svg class="ico cv" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button><sc-if value="{{F.ddNth.open}}"><div class="pop mini" role="listbox" aria-label="Qué clase"><sc-for list="{{F.ddNth.opts}}" as="o"><button type="button" role="option" aria-selected="{{o.on}}" class="{{o.cls}}" onClick="{{o.pick}}"><span class="lt"><strong>{{o.l}}</strong><sc-if value="{{o.hasS}}"><small>{{o.s}}</small></sc-if></span><svg class="ico ck" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></button></sc-for></div></sc-if></div><span class="ht">del mes</span></sc-if>
+                <span class="ht">· {{F.nextDue}}</span>
+              </div></div>
+              <sc-if value="{{F.hasMembers}}">
+                <div class="dl"><span class="dt">Alumnos</span><div class="dd col">
+                  <span class="ht">{{F.adjSummary}}</span>
+                  <sc-for list="{{F.adjusted}}" as="m"><div class="adj"><b>{{m.name}}</b>
+                    <div class="pk in"><button type="button" class="{{m.dd.cls}}" aria-haspopup="listbox" aria-expanded="{{m.dd.open}}" aria-label="Cómo paga" onClick="{{m.dd.t}}"><span class="tv">{{m.dd.l}}</span><svg class="ico cv" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button><sc-if value="{{m.dd.open}}"><div class="pop mini" role="listbox" aria-label="Cómo paga"><sc-for list="{{m.dd.opts}}" as="o"><button type="button" role="option" aria-selected="{{o.on}}" class="{{o.cls}}" onClick="{{o.pick}}"><span class="lt"><strong>{{o.l}}</strong><sc-if value="{{o.hasS}}"><small>{{o.s}}</small></sc-if></span><svg class="ico ck" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></button></sc-for></div></sc-if></div>
+                    <sc-if value="{{m.isFee}}"><span class="mo xs"><span>$</span><input inputmode="decimal" value="{{m.fee}}" onInput="{{m.setFee}}" aria-label="{{m.ariaFee}}"></span></sc-if>
+                    <sc-if value="{{m.isClase}}"><span class="ht">{{m.amt}}</span></sc-if>
+                    <button type="button" class="xq" aria-label="{{m.ariaDel}}" onClick="{{m.del}}"><svg class="ico" viewBox="0 0 24 24" style="width:16px;height:16px"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div></sc-for>
+                  <sc-if value="{{F.canAdd}}"><div class="pk in"><button type="button" class="{{F.ddAdd.cls}}" aria-haspopup="listbox" aria-expanded="{{F.ddAdd.open}}" aria-label="Ajustar a un alumno" onClick="{{F.ddAdd.t}}"><span class="tv">{{F.ddAdd.l}}</span><svg class="ico cv" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button><sc-if value="{{F.ddAdd.open}}"><div class="pop mini" role="listbox" aria-label="Ajustar a un alumno"><sc-for list="{{F.ddAdd.opts}}" as="o"><button type="button" role="option" aria-selected="{{o.on}}" class="{{o.cls}}" onClick="{{o.pick}}"><span class="lt"><strong>{{o.l}}</strong><sc-if value="{{o.hasS}}"><small>{{o.s}}</small></sc-if></span><svg class="ico ck" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></button></sc-for></div></sc-if></div></sc-if>
+                </div></div>
+              </sc-if>
+              <sc-if value="{{F.switching}}">
+                <div class="dl"><span class="dt">Aplicar desde</span><div class="dd col">
+                  <div class="sg3" role="group" aria-label="Aplicar desde"><button type="button" class="{{F.cNov}}" aria-pressed="{{F.isNov}}" onClick="{{F.toNov}}">Noviembre</button><button type="button" class="{{F.cOct}}" aria-pressed="{{F.isOct}}" onClick="{{F.toOct}}">Este mes</button></div>
+                  <span class="ht">{{F.fromHint}}</span>
+                  <sc-if value="{{F.isOct}}"><div class="cl"><sc-for list="{{F.octRows}}" as="r"><span>{{r.n}}<b>{{r.v}}</b></span></sc-for></div></sc-if>
+                </div></div>
+              </sc-if>
+            </sc-if>
+            <div class="dl"><span class="dt">{{F.sumT}}</span><div class="dd"><span class="tt">{{F.sumV}}</span><span class="ht">{{F.sumL}}</span></div></div>
+          </div>
+          </div>
+          <p class="hint" style="margin:16px 0 0">Los alumnos y los horarios se agregan después de crear el grupo.</p>
+          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px"><button type="button" class="button button-secondary" onClick="{{cancelNew}}">Cancelar</button><button type="button" class="button button-primary" onClick="{{createNew}}">Crear grupo</button></div>
+        </sc-if>
+      </section>
+    </div>
+  </main>
+  <sc-if value="{{C.on}}">
+    <div class="ovl" role="dialog" aria-modal="true" aria-labelledby="dlg-t">
+      <div class="dlg">
+        <span class="ov">Archivar</span>
+        <h2 id="dlg-t">¿Archivar {{C.name}}?</h2>
+        <ul><sc-for list="{{C.items}}" as="b"><li>{{b.t}}</li></sc-for></ul>
+        <sc-if value="{{C.hasOwe}}"><p class="anote warn"><i></i><span>{{C.owe}}</span></p></sc-if>
+        <div class="acts"><button type="button" class="button button-secondary" onClick="{{C.cancel}}">Cancelar</button><button type="button" class="button button-primary" onClick="{{C.go}}"><svg class="ico" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg>Archivar grupo</button></div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1700}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { g: 'p5a', stu: null, copied: false, archOpen: false, arch: {}, cfg: {}, draft: null, confirm: null, hist: false, created: [], saved: false }; }
+  renderVals() {
+    const ST = {
+      'Diego Soto': ['oso', 'kraft', 'diego.soto', '55 0100 0104'], 'Emilio Ruiz': ['perro', 'kraft', 'emilio.ruiz', '55 0100 0107'], 'Luna López': ['conejo', 'bermellon', 'luna.lopez', '55 0123 4567'],
+      'Sofía Martín': ['buho', 'ocre', 'sofia.martin', '55 0100 0105'], 'Valeria Gómez': ['pinguino', 'indigo', 'valeria.gomez', '55 0100 0106'], 'Ana Rivera': ['gato', 'indigo', 'ana.rivera', '55 0100 0101'],
+      'Mateo Cruz': ['zorro', 'ocre', 'mateo.cruz', '55 0100 0102'], 'Camila Torres': ['gato', 'jade', 'camila.torres', '55 0100 0108'], 'Santiago Reyes': ['oso', 'indigo', 'santiago.reyes', '55 0100 0109'], 'Regina Flores': ['rana', 'jade', 'regina.flores', '55 0100 0110']
+    };
+    const GR = {
+      p5a: { name: 'Primaria 5A', when: 'Lunes y jueves · 4:00 – 6:00 p. m.', dur: '2 horas', next: 'Hoy · 4:00 p. m. · Lectura cap. 3', m: ['Diego Soto', 'Emilio Ruiz', 'Luna López', 'Sofía Martín', 'Valeria Gómez'], ses: [['lun 5', ['Luna López', 'Valeria Gómez']], ['jue 8', []]], up: ['hoy'], grades: [8.5, 9, 9.5, 9, 8.8, 8.5, 9.6], gradeNote: ['1 tarea sin calificar', 'st st-pend'], owe: { 'Sofía Martín': ['Debe $150 · 8 oct', 'st st-pend', 150] } },
+      s810: { name: 'Secundaria 8–10', when: 'Lunes y miércoles · 10:00 a. m. – 12:00 p. m.', dur: '2 horas', next: 'Mié 14 oct · 10:00 a. m.', m: ['Ana Rivera', 'Mateo Cruz', 'Luna López'], ses: [['lun 5', []], ['mié 7', ['Luna López']], ['lun 12', ['Luna López']]], up: ['mié 14'], grades: [9, 8, 9, 9, 8.4, 9.5, 9.5], gradeNote: ['Todas calificadas', 'st st-ok'], owe: { 'Ana Rivera': ['Vencido $210 · 12 oct', 'st st-venc', 210], 'Mateo Cruz': ['Vencido $200 · 7 oct', 'st st-venc', 200] } },
+      pa: { name: 'Prepa · Álgebra', when: 'Martes y viernes · 5:00 – 6:30 p. m.', dur: '1.5 horas', next: 'Mañana · 5:00 p. m.', m: ['Camila Torres', 'Santiago Reyes', 'Regina Flores'], ses: [['mar 6', ['Regina Flores']], ['vie 9', []]], up: ['mar 13'], grades: [8.8, 8.6, 9, 8.5, 6.5], gradeNote: ['Regina sacó 6.5', 'st st-venc'], owe: {} }
+    };
+    const calc = (k) => {
+      const g = GR[k];
+      const tot = g.ses.length * g.m.length, abs = g.ses.reduce((a, s) => a + s[1].length, 0);
+      const pct = Math.round(((tot - abs) / tot) * 100);
+      const owe = Object.values(g.owe).reduce((a, o) => a + o[2], 0);
+      return { pct, abs, tot, owe };
+    };
+    const st = this.state;
+    const money = (v) => '$' + Math.round(v).toLocaleString('es-MX');
+    const RATE = { p5a: 75, s810: 50, pa: 90 }, DURH = { p5a: 2, s810: 2, pa: 1.5 }, NOCT = 8;
+    const PAIDOCT = { 'Diego Soto': 300, 'Emilio Ruiz': 300, 'Luna López': 300, 'Sofía Martín': 150, 'Valeria Gómez': 150, 'Ana Rivera': 210, 'Mateo Cruz': 100, 'Camila Torres': 270, 'Santiago Reyes': 270, 'Regina Flores': 135 };
+    const cfg = (x) => st.cfg[x] || { type: 'clase', rate: RATE[x] };
+    const draftFor = (x) => { const c2 = cfg(x); return { k: x, name: GR[x] ? GR[x].name : '', type: c2.type, rate: String(c2.rate || RATE[x] || 50), fee: String(c2.fee || ''), dueType: c2.dueType || 'day', dueDay: c2.dueDay || 5, dueNth: c2.dueNth || '3', from: c2.from || 'nov', over: JSON.parse(JSON.stringify(c2.over || {})) }; };
+    const sel = st.g;
+    const isNew = sel === 'new', isArch = sel === 'eng' || !!st.arch[sel], isActive = !isNew && !isArch;
+    const k = isActive ? sel : (Object.keys(GR).filter((x) => !st.arch[x])[0] || 'p5a'), g = GR[k], c = calc(k);
+    const low = g.m.filter((m) => { const a = g.ses.filter((s) => s[1].indexOf(m) >= 0).length; return a / g.ses.length >= 0.5; });
+    const vencido = Object.values(g.owe).some((o) => o[1] === 'st st-venc');
+    const rows = g.m.map((m) => {
+      const s = ST[m];
+      const a = g.ses.filter((x) => x[1].indexOf(m) >= 0).length;
+      const p = Math.round(((g.ses.length - a) / g.ses.length) * 100);
+      const on = this.state.stu === m;
+      const other = Object.keys(GR).filter((x) => x !== k && GR[x].m.indexOf(m) >= 0).map((x) => GR[x].name);
+      const a2 = {}; a2[s[0]] = true;
+      return {
+        name: m, first: m.split(' ')[0], on, a: a2, av: 'student-animal-avatar avatar-tone-' + s[1],
+        sub: other.length ? 'También en ' + other[0] : m === 'Ana Rivera' ? 'También individual' : 'Solo este grupo',
+        mail: s[2] + '@example.com', tel: s[3],
+        pct: p + '%', pctCol: p < 70 ? 'var(--bermellon-ink)' : 'var(--sumi)',
+        pay: g.owe[m] ? g.owe[m][0] : 'Al día', payCls: g.owe[m] ? g.owe[m][1] : 'st st-ok',
+        cls: 'dr' + (on ? ' on' : ''), nmCls: 'nm' + (on ? ' on' : ''),
+        cells: g.ses.map((x) => { const ab = x[1].indexOf(m) >= 0; return { t: ab ? 'A' : 'P', cls: 'cell ' + (ab ? 'A' : 'P') + (this.state.stu && !on ? ' dim' : ''), aria: x[0] + ' oct · ' + (ab ? 'Ausente' : 'Presente') }; }).concat(g.up.map((u) => ({ t: '', cls: 'cell U' + (this.state.stu && !on ? ' dim' : ''), aria: u + ' · por venir, sin marcar' }))),
+        pick: () => this.setState({ stu: this.state.stu === m ? null : m })
+      };
+    });
+    const prom = g.grades.reduce((a, b) => a + b, 0) / g.grades.length;
+
+    const buildCobro = (d, setD, o) => {
+      const money = (v) => '$' + Math.round(v).toLocaleString('es-MX');
+      const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'], WSD = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+      const WDS = { p5a: [1, 4], s810: [1, 3], pa: [2, 5] }, RT = { p5a: 75, s810: 50, pa: 90 }, DH = { p5a: 2, s810: 2, pa: 1.5 };
+      const PAID = { 'Diego Soto': 300, 'Emilio Ruiz': 300, 'Luna López': 300, 'Sofía Martín': 150, 'Valeria Gómez': 150, 'Ana Rivera': 210, 'Mateo Cruz': 100, 'Camila Torres': 270, 'Santiago Reyes': 270, 'Regina Flores': 135 };
+      const k = o.k, isNew = o.isNew, members = o.members || [];
+      const mkDD = (pop, setPop) => (id, val, opts, pick, extra) => { const open = pop === id, cur = opts.find((x) => x.v === String(val));
+        return { open, t: () => setPop(open ? null : id), cls: 'trg sm' + (extra || '') + (open ? ' open' : ''), l: (extra === ' add' ? opts.label : cur ? cur.l : '—'),
+          opts: opts.map((x) => ({ l: x.l, s: x.s || '', hasS: !!x.s, on: String(val) === x.v, cls: 'li' + (String(val) === x.v ? ' on' : ''), gcls: String(val) === x.v ? 'on' : '', pick: () => { setPop(null); pick(x.v); } })) }; };
+      const pop = o.setPop ? o.pop : d.pop, setPop = o.setPop || ((v) => setD({ pop: v })), dd = mkDD(pop, setPop);
+      const wds = isNew ? [] : WDS[k] || [];
+      const classDays = (y, m) => { const r = []; const last = new Date(y, m + 1, 0).getDate(); for (let i = 1; i <= last; i++) { const dt = new Date(y, m, i); if (wds.indexOf(dt.getDay()) >= 0) r.push(dt); } return r; };
+      const fee = parseFloat(d.fee) || 0, rate = parseFloat(d.rate) || 0;
+      const perClass = isNew ? rate * 2 : RT[k] * DH[k];
+      const nOct = classDays(2026, 9).length;
+      const sug = isNew ? 0 : perClass * nOct;
+      const ov = (n) => d.over[n] || { m: 'grp', fee: '' };
+      const feeOf = (n) => { const x = ov(n); return x.m === 'fee' ? parseFloat(x.fee) || 0 : x.m === 'clase' ? null : fee; };
+      const setOv = (n, p) => { const over = Object.assign({}, d.over); over[n] = Object.assign({}, ov(n), p); setD({ over }); };
+      const delOv = (n) => { const over = Object.assign({}, d.over); delete over[n]; setD({ over }); };
+      const dueIn = (y, m) => { if (d.dueType === 'day') return new Date(y, m, Math.min(+d.dueDay, 28)); const c = classDays(y, m); if (!c.length) return null; return d.dueNth === 'last' ? c[c.length - 1] : c[Math.min(+d.dueNth, c.length) - 1]; };
+      const fmtD = (dt) => WSD[dt.getDay()] + ' ' + dt.getDate() + ' ' + MES[dt.getMonth()];
+      const nd = [10, 11].map((m) => dueIn(2026, m)).filter(Boolean);
+      const nextDue = d.dueType === 'class' && !wds.length ? 'se calcula al agregar horario' : 'próximas: ' + nd.map(fmtD).join(', ');
+      const adjusted = members.filter((n) => ov(n).m !== 'grp');
+      const monthly = members.filter((n) => feeOf(n) !== null), nClase = members.length - monthly.length;
+      const total = monthly.reduce((a, n) => a + feeOf(n), 0);
+      const ord = { 1: '1.ª', 2: '2.ª', 3: '3.ª', 4: '4.ª', last: 'última' };
+      return {
+        isClase: d.type === 'clase', isMes: d.type === 'mes', cClase: d.type === 'clase' ? 'on' : '', cMes: d.type === 'mes' ? 'on' : '',
+        toClase: () => setD({ type: 'clase' }), toMes: () => setD({ type: 'mes', fee: d.fee || String(sug || 600) }),
+        rate: d.rate, setRate: (e) => setD({ rate: e.target.value }), rateHint: isNew ? 'La general es $50.' : 'Clase de ' + DH[k] + ' h = ' + money(rate * DH[k]) + ' por alumno',
+        fee: d.fee, setFee: (e) => setD({ fee: e.target.value }), hasSug: !!sug && fee !== sug, sug: 'Sugerida ' + money(sug) + ' (' + nOct + ' clases × ' + money(perClass) + ')', useSug: () => setD({ fee: String(sug) }),
+        dueType: d.dueType, isDay: d.dueType === 'day', isCls: d.dueType === 'class', setDueType: (e) => setD({ dueType: e.target.value }),
+        dueDay: String(d.dueDay), days: Array.from({ length: 28 }, (_, i) => ({ v: String(i + 1) })), setDueDay: (e) => setD({ dueDay: +e.target.value }),
+        dueNth: String(d.dueNth), setDueNth: (e) => setD({ dueNth: e.target.value }), nextDue,
+        anyPop: !!pop, popClose: () => setPop(null),
+        ddType: dd('type', d.dueType, [{ v: 'day', l: 'el día', s: 'Una fecha fija del mes' }, { v: 'class', l: 'en la clase', s: 'Según el horario del grupo' }], (v) => setD({ dueType: v })),
+        ddDay: dd('day', d.dueDay, Array.from({ length: 28 }, (_, i) => ({ v: String(i + 1), l: String(i + 1) })), (v) => setD({ dueDay: +v })),
+        ddNth: dd('nth', d.dueNth, [{ v: '1', l: '1.ª' }, { v: '2', l: '2.ª' }, { v: '3', l: '3.ª' }, { v: '4', l: '4.ª' }, { v: 'last', l: 'última' }].map((x) => { const c = classDays(2026, 10); const dt = x.v === 'last' ? c[c.length - 1] : c[Math.min(+x.v, c.length) - 1]; return Object.assign(x, { s: dt ? 'En noviembre: ' + fmtD(dt) : '' }); }), (v) => setD({ dueNth: v })),
+        ddAdd: dd('add', '', Object.assign(members.filter((n) => ov(n).m === 'grp').map((v) => ({ v, l: v })), { label: '+ Ajustar a un alumno' }), (v) => setOv(v, { m: 'fee', fee: String(fee) }), ' add'),
+        dueTxt: d.dueType === 'day' ? 'vence el día ' + d.dueDay : 'vence en la ' + ord[d.dueNth] + ' clase',
+        hasMembers: members.length > 0,
+        adjSummary: adjusted.length ? (members.length - adjusted.length) + ' pagan la cuota del grupo · ' + adjusted.length + ' con ajuste:' : 'Todos pagan la cuota del grupo.',
+        adjusted: adjusted.map((n) => { const x = ov(n); return { name: n, mode: x.m, isFee: x.m === 'fee', isClase: x.m === 'clase', fee: x.fee, amt: money(perClass) + ' por clase asistida', aria: 'Cómo paga ' + n, ariaFee: 'Cuota de ' + n, ariaDel: 'Quitar ajuste de ' + n,
+          dd: dd('m:' + n, x.m, [{ v: 'fee', l: 'Otra cuota', s: 'Monto fijo propio' }, { v: 'clase', l: 'Por clase', s: money(perClass) + ' por clase asistida' }], (v) => setOv(n, { m: v, fee: x.fee || String(fee) })),
+          setMode: (e) => setOv(n, { m: e.target.value, fee: x.fee || String(fee) }), setFee: (e) => setOv(n, { fee: e.target.value }), del: () => delOv(n) }; }),
+        canAdd: members.length > adjusted.length, addOpts: members.filter((n) => ov(n).m === 'grp').map((v) => ({ v })),
+        addAdj: (e) => { if (e.target.value) setOv(e.target.value, { m: 'fee', fee: String(fee) }); },
+        switching: !isNew && o.saved.type === 'clase' && d.type === 'mes',
+        cNov: d.from === 'nov' ? 'on' : '', cOct: d.from === 'oct' ? 'on' : '', isNov: d.from === 'nov', isOct: d.from === 'oct',
+        toNov: () => setD({ from: 'nov' }), toOct: () => setD({ from: 'oct' }),
+        fromHint: d.from === 'oct' ? 'Se crea la mensualidad de octubre y se descuenta lo que ya pagaron por clase:' : 'Octubre sigue por clase. La primera mensualidad es la de noviembre.',
+        octRows: monthly.map((n) => ({ n: n.split(' ')[0] + ' ' + money(feeOf(n)) + ' − ' + money(PAID[n] || 0) + ' =', v: money(Math.max(0, feeOf(n) - (PAID[n] || 0))) })),
+        sumT: d.type === 'mes' ? 'Al mes' : 'Por clase',
+        sumV: d.type === 'mes' ? money(isNew ? fee : total) : money(rate * (isNew ? 2 : DH[k])),
+        sumL: d.type === 'mes' ? (isNew ? 'por alumno' : monthly.length + ' mensualidades' + (nClase ? ' + ' + nClase + ' por clase' : '')) : 'por alumno'
+      };
+    };
+    const extra = () => {
+      // Formulario de cobro (editar o crear)
+      const dk = isNew ? 'new' : k;
+      const d = st.draft && st.draft.k === dk ? st.draft : (isNew ? { k: 'new', name: '', type: 'clase', rate: '50', fee: '600', dueType: 'day', dueDay: 5, dueNth: '3', from: 'nov', over: {} } : draftFor(k));
+      const setD = (p) => this.setState({ draft: Object.assign({}, this.state.draft && this.state.draft.k === dk ? this.state.draft : d, p), saved: false });
+      const F = Object.assign(buildCobro(d, setD, { pop: this.state.cpop, setPop: (v) => this.setState({ cpop: v }), k, isNew, members: isNew ? [] : g.m, saved: isNew ? { type: 'clase' } : cfg(k) }), { name: d.name, setName: (e) => setD({ name: e.target.value }) });
+      // Archivados
+      const ENG = { name: 'Inglés · conversación', date: '9 oct', n: '2', figs: [{ l: 'Clases', v: '2', n: 'registradas', c: 'var(--sumi-muted)' }, { l: 'Asistencia', v: '50%', n: '2 faltas', c: 'var(--bermellon-ink)' }, { l: 'Cobrado', v: '$150', n: 'en total', c: 'var(--jade-strong)' }, { l: 'Promedio', v: '9.0', n: '1 tarea', c: 'var(--indigo)' }],
+        hasOwe: true, owe: 'Quedó un saldo de $150 (Mariana Paz). Se conserva, pero no aparece en tus cobros mientras el grupo esté archivado.',
+        members: [{ name: 'Mariana Paz', sub: 'MAR-011 · asistió 2 de 2', v: 'Debe $150', vc: 'var(--ocre-ink)', a: { zorro: true }, av: 'student-animal-avatar avatar-tone-jade' }, { name: 'Tomás Vega', sub: 'TOM-012 · faltó 2 de 2', v: 'Al día', vc: 'var(--sumi-muted)', a: { perro: true }, av: 'student-animal-avatar avatar-tone-ocre' }],
+        hist: [{ d: 'mié 7 oct', t: 'Presentaciones', s: '1 de 2 presentes', v: '$0' }, { d: 'vie 2 oct', t: 'Diagnóstico', s: '1 de 2 presentes', v: '$150' }] };
+      const archKeys = Object.keys(GR).filter((x) => st.arch[x]);
+      const archived = [{ key: 'eng', name: ENG.name, sub: 'Archivado el 9 oct · 2 alumnos' }].concat(archKeys.map((x) => ({ key: x, name: GR[x].name, sub: 'Archivado hoy · ' + GR[x].m.length + ' alumnos' })))
+        .map((a) => ({ name: a.name, sub: a.sub, cls: 'gi ar' + (sel === a.key ? ' on' : ''), pick: () => this.setState({ g: a.key, hist: false }) }));
+      let A = { histOpen: false };
+      const react = () => { const ar = Object.assign({}, this.state.arch); if (sel !== 'eng') { delete ar[sel]; this.setState({ arch: ar, g: sel, draft: draftFor(sel) }); } else this.setState({ g: 'p5a' }); };
+      if (isArch) {
+        if (sel === 'eng') A = Object.assign({}, ENG);
+        else { const ga = GR[sel], ca = calc(sel); const gp = ga.grades.reduce((a, b) => a + b, 0) / ga.grades.length;
+          A = { name: ga.name, date: 'hoy', n: String(ga.m.length), figs: [{ l: 'Clases', v: String(ga.ses.length), n: 'registradas', c: 'var(--sumi-muted)' }, { l: 'Asistencia', v: ca.pct + '%', n: ca.abs + ' faltas', c: ca.pct < 80 ? 'var(--bermellon-ink)' : 'var(--jade-strong)' }, { l: 'Promedio', v: gp.toFixed(1), n: ga.grades.length + ' calificaciones', c: 'var(--indigo)' }, { l: 'Saldo', v: money(ca.owe), n: ca.owe ? 'por cobrar' : 'al día', c: ca.owe ? 'var(--ocre-ink)' : 'var(--jade-strong)' }],
+            hasOwe: !!ca.owe, owe: 'Quedó un saldo de ' + money(ca.owe) + '. Se conserva, pero no aparece en tus cobros mientras el grupo esté archivado.',
+            members: ga.m.map((n) => { const a2 = {}; a2[ST[n][0]] = true; return { name: n, sub: 'Sigue activo como alumno', v: ga.owe[n] ? ga.owe[n][0] : 'Al día', vc: ga.owe[n] ? 'var(--ocre-ink)' : 'var(--sumi-muted)', a: a2, av: 'student-animal-avatar avatar-tone-' + ST[n][1] }; }), hist: ga.ses.map((x) => ({ d: x[0] + ' oct', t: 'Clase', s: (ga.m.length - x[1].length) + ' de ' + ga.m.length + ' presentes', v: '' })) }; }
+        A.histOpen = !!st.hist; A.histL = st.hist ? 'Ocultar historial' : 'Ver historial de clases y pagos'; A.toggleHist = () => this.setState({ hist: !this.state.hist }); A.react = react;
+      }
+      // Confirmación
+      let C = { on: false };
+      if (st.confirm) { const x = st.confirm, gx = GR[x], cx = calc(x);
+        C = { on: true, name: gx.name,
+          items: [{ t: 'Se conservan sus ' + gx.m.length + ' alumnos, ' + gx.ses.length + ' clases registradas, calificaciones y pagos.' }, { t: 'Sus próximas clases (' + gx.when.split(' · ')[0].toLowerCase() + ') salen de tu agenda.' }, { t: 'Deja de contar en Inicio y Seguimiento. Lo encuentras en Archivados y puedes reactivarlo cuando quieras.' }],
+          hasOwe: !!cx.owe, owe: 'Tiene ' + money(cx.owe) + ' por cobrar. El saldo se guarda, pero ya no aparecerá en tus cobros.',
+          cancel: () => this.setState({ confirm: null }),
+          go: () => { const ar = Object.assign({}, this.state.arch); ar[x] = true; this.setState({ arch: ar, confirm: null, g: x, archOpen: true, hist: false }); } }; }
+      return {
+        isActive, isArch, isNew, F, A, C, archived, archN: String(archived.length), archOpen: !!st.archOpen, archCls: 'archT' + (st.archOpen ? ' open' : ''),
+        archHelp: 'No cuentan en Inicio ni en Seguimiento. Su historial se conserva.',
+        toggleArch: () => this.setState({ archOpen: !this.state.archOpen }),
+        showCreate: !isNew, openNew: () => this.setState({ g: 'new', draft: null }), cancelNew: () => this.setState({ g: 'p5a', draft: null }),
+        createNew: () => { const dd = this.state.draft && this.state.draft.k === 'new' ? this.state.draft : d; this.setState({ created: this.state.created.concat([{ name: dd.name || 'Grupo nuevo', type: dd.type, rate: parseFloat(dd.rate) || 50, fee: parseFloat(dd.fee) || 0 }]), g: 'p5a', draft: null }); },
+        askArchive: () => this.setState({ confirm: k }),
+        savedMsg: !!st.saved,
+        save: () => { const dd = this.state.draft && this.state.draft.k === k ? this.state.draft : d; const c3 = Object.assign({}, this.state.cfg); c3[k] = { type: dd.type, rate: parseFloat(dd.rate) || RATE[k], fee: parseFloat(dd.fee) || 0, dueType: dd.dueType, dueDay: dd.dueDay, dueNth: dd.dueNth, from: dd.from, over: dd.over }; this.setState({ cfg: c3, saved: true }); }
+      };
+    };
+    return {
+      groups: Object.keys(GR).filter((x) => !st.arch[x]).map((x) => {
+        const cc = calc(x), gg = GR[x];
+        const v = Object.values(gg.owe).some((o) => o[1] === 'st st-venc');
+        const cf = cfg(x);
+        return { name: gg.name, sub: gg.m.length + ' alumnos · ' + (cf.type === 'mes' ? 'mensual ' + money(cf.fee) : gg.when.split(' · ')[0]), asis: cc.pct + '%', on: isActive && x === k, cls: 'gi' + (isActive && x === k ? ' on' : ''),
+          st: cc.owe ? (v ? 'Pagos vencidos · $' + cc.owe : 'Por cobrar · $' + cc.owe) : 'Pagos al día', stCls: cc.owe ? (v ? 'st st-venc' : 'st st-pend') : 'st st-ok',
+          pick: () => this.setState({ g: x, stu: null, copied: false, draft: draftFor(x), saved: false }) };
+      }).concat(st.created.map((cr) => ({ name: cr.name, sub: '0 alumnos · ' + (cr.type === 'mes' ? 'mensual ' + money(cr.fee) : money(cr.rate) + ' la hora'), asis: '0%', on: false, cls: 'gi', st: 'Nuevo · sin horario', stCls: 'st st-muted', pick: () => {} }))),
+      G: {
+        key: k, name: g.name, when: g.when, dur: g.dur, next: g.next, n: String(g.m.length),
+        asis: c.pct + '%', asisNote: c.abs ? c.abs + (c.abs === 1 ? ' falta' : ' faltas') + ' en ' + g.ses.length + ' clases' : 'Sin faltas', asisCls: c.pct < 80 ? 'st st-venc' : c.abs ? 'st st-pend' : 'st st-ok',
+        prom: prom.toFixed(1), promNote: g.gradeNote[0], promCls: g.gradeNote[1],
+        owe: '$' + c.owe, oweNote: c.owe ? Object.keys(g.owe).map((x) => x.split(' ')[0]).join(' y ') + (vencido ? ' · vencido' : ' · pendiente') : 'Todos al día', oweCls: c.owe ? (vencido ? 'st st-venc' : 'st st-pend') : 'st st-ok',
+        cols: '96px repeat(' + (g.ses.length + g.up.length) + ', minmax(36px, 56px))',
+        heads: g.ses.map((x) => ({ t: x[0] })).concat(g.up.map((u) => ({ t: u }))),
+        rows
+      },
+      copied: this.state.copied,
+      ...extra(),
+      copy: () => { this.setState({ copied: true }); clearTimeout(this._t); this._t = setTimeout(() => this.setState({ copied: false }), 1800); }
+    };
+  }
+}
+</script>
+</body>
+</html>

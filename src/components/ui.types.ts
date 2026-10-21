@@ -25,6 +25,13 @@ export interface DrawerProps {
   footer?: ReactNode;
   size?: string;
   className?: string;
+  presentation?: "drawer" | "sheet" | "popover";
+  backLabel?: string;
+  onBack?: () => unknown;
+  panelStyle?: import("react").CSSProperties;
+  showHeader?: boolean;
+  onKeyDown?: import("react").KeyboardEventHandler<HTMLElement>;
+  kicker?: ReactNode;
 }
 export interface EmptyStateProps {
   icon?: ElementType;

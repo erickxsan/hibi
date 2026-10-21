@@ -6,6 +6,7 @@ import { I18nProvider } from "./i18n";
 import "./styles.css";
 import "./design-system.css";
 import "./group-archive.css";
+import "./components/base-components.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

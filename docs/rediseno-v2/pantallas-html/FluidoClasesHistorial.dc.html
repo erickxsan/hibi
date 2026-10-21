@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Clases · Historial</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/hibi/components/bundle.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&amp;family=Albert+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+:root{--bermellon:#D9472C;--bermellon-strong:#C23B22;--bermellon-ink:#A8321C;--bermellon-soft:#F9E3DE;--sumi:#1E1C20;--sumi-muted:#5A524A;--sumi-subtle:#9A8F80;--washi:#F6F1E8;--papel:#FFFFFF;--kraft:#EFE8DB;--line:#E8DFCF;--line-soft:#F1EBE0;--line-control:#8F8475;--indigo:#34437F;--indigo-soft:#E5E8F2;--jade:#2E8C7E;--jade-strong:#23705F;--jade-soft:#E3F1EE;--ocre:#D9A23A;--ocre-ink:#7E5A12;--ocre-soft:#F8EDD5;--focus:#34437F;--overlay:rgba(30,28,32,.45);--space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:20px;--space-6:24px;--space-8:32px;--space-10:40px;--space-12:48px;--radius-sm:8px;--radius-md:10px;--radius-lg:12px;--radius-xl:16px;--radius-pill:999px;--shadow-card:0 1px 2px rgba(30,28,32,.05);--shadow-overlay:0 16px 40px rgba(30,28,32,.16);--control-height:44px;--segment-height:36px;--sidebar-width:232px;--topbar-height:60px;--drawer-width:480px;--font-display:"Dela Gothic One","Arial Black",system-ui,sans-serif;--font-sans:"Albert Sans","Segoe UI",system-ui,sans-serif}
+body{margin:0}
+sc-if,sc-for{display:contents}
+a{color:#C23B22}a:hover{color:#A8321C}
+.side{flex:1 1 220px;max-width:220px;padding:28px 14px 24px;display:flex;flex-direction:column;gap:28px}
+.side .sidebar-link:hover{background:var(--papel)}
+.sheet{flex:999 1 560px;min-width:0;margin:12px 12px 12px 0;background:var(--papel);border:1px solid var(--line);border-radius:16px;padding:40px clamp(20px,4vw,56px) 48px;display:flex;flex-direction:column;gap:22px}
+.ov{margin:0;font:800 12px/16px var(--font-sans);letter-spacing:.12em;text-transform:uppercase;color:var(--sumi-muted)}
+.lk{font:700 13px/18px var(--font-sans);text-decoration:none;white-space:nowrap}
+.st{display:inline-flex;align-items:center;gap:7px;font:700 13px/18px var(--font-sans);white-space:nowrap}
+.st::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;flex:none}
+.st-ok{color:var(--jade-strong)}.st-ok::before{background:var(--jade)}
+.st-pend{color:var(--ocre-ink)}.st-pend::before{background:var(--ocre)}
+.st-venc{color:var(--bermellon-ink)}.st-venc::before{background:var(--bermellon)}
+.st-done{color:var(--indigo)}
+.st-muted{color:var(--sumi-muted)}.st-muted::before{background:var(--sumi-subtle)}
+@keyframes d-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.frow{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.chips{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.chip{min-height:36px;padding:0 14px;border-radius:999px;border:1.5px solid var(--line-control);background:var(--papel);font:700 13px/18px var(--font-sans);color:var(--sumi);cursor:pointer}
+.chip.on{background:var(--sumi);border-color:var(--sumi);color:var(--papel)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(170px,100%),1fr));border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.kpi{display:flex;flex-direction:column;gap:2px;padding:14px 20px;border-left:1px solid var(--line-soft)}
+.kpi:first-child{border-left:0;padding-left:0}
+.kpi span{font:700 13px/18px var(--font-sans);color:var(--sumi-muted)}
+.kpi b{font:800 26px/32px var(--font-sans)}
+.wk{display:flex;flex-direction:column}
+.wh{display:flex;justify-content:space-between;align-items:baseline;padding:18px 0 8px}
+.row{display:grid;grid-template-columns:110px minmax(0,1.3fr) minmax(0,1fr) minmax(0,1.3fr) 130px 24px;gap:16px;align-items:center;width:100%;padding:12px 12px;margin:0 -12px;border:0;border-top:1px solid var(--line-soft);border-radius:0;background:transparent;text-align:left;cursor:pointer;font-family:var(--font-sans);color:var(--sumi);font-size:14px;box-sizing:content-box}
+.row:hover{background:var(--washi)}
+.row.open{background:var(--washi);border-radius:10px 10px 0 0}
+.row .d b{display:block;font:800 14px/18px var(--font-sans)}
+.row .d span{font:600 12px/16px var(--font-sans);color:var(--sumi-muted)}
+.row strong{display:block;font:700 15px/20px var(--font-sans)}
+.row small{display:block;font:500 12px/16px var(--font-sans);color:var(--sumi-muted)}
+.sq{display:flex;gap:3px;flex-wrap:wrap}
+.sq span{width:18px;height:18px;border-radius:5px;display:grid;place-items:center;font:800 9px/1 var(--font-sans)}
+.row svg{transition:transform .2s;color:var(--sumi-muted)}
+.row.open svg{transform:rotate(90deg)}
+.exp{margin:0 -12px 6px;padding:6px 12px 14px;background:var(--washi);border-radius:0 0 10px 10px;animation:d-in .25s ease-out both}
+.er{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:center;padding:8px 12px;border-top:1px solid var(--line);font-size:13px;line-height:18px;background:var(--papel)}
+.er:first-child{border-top:0;border-radius:8px 8px 0 0}
+.er:last-child{border-radius:0 0 8px 8px}
+.er.th{background:transparent;font:700 11px/14px var(--font-sans);color:var(--sumi-muted);text-transform:uppercase;letter-spacing:.08em;border-top:0}
+@media (max-width:980px){.row{grid-template-columns:90px minmax(0,1fr) minmax(0,1fr) 24px}.row .hide{display:none}}
+@media (max-width:780px){.side{max-width:none;flex-basis:100%;padding:16px}.side .sidebar-companion{display:none}.sheet{margin:0;border-radius:0;border-left:0;border-right:0}.kpi{border-left:0;padding-left:0}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+span.sc-interp{display:inline!important;position:static!important;font:inherit!important;color:inherit!important;letter-spacing:inherit!important;text-transform:inherit!important;background:none!important;padding:0!important;margin:0!important;border:0!important;box-shadow:none!important;width:auto!important;height:auto!important;min-width:0!important;transform:none!important;opacity:1!important;animation:none!important}
+</style>
+</helmet>
+<div class="hibi-ds" style="min-height:100vh;display:flex;flex-wrap:wrap;background:var(--washi)">
+  <aside class="side">
+    <a class="hibi-brand" href="#" aria-label="Inicio de Hibi"><img src="/_blob/19d7de209d497968ffcc94f1e708a867" alt="hibi" style="height:40px"></a>
+    <nav class="sidebar-nav" aria-label="Navegación principal">
+      <a class="sidebar-link" href="FluidoInicioC.dc.html"><svg class="ico" viewBox="0 0 24 24"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Inicio</a>
+      <a class="sidebar-link" href="FluidoComunidad.dc.html"><svg class="ico" viewBox="0 0 24 24"><path d="M18 21a8 8 0 0 0-16 0"/><circle cx="10" cy="8" r="5"/><path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3"/></svg>Comunidad</a>
+      <a class="sidebar-link active" href="FluidoClases.dc.html" aria-current="page"><svg class="ico" viewBox="0 0 24 24"><path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M8 13h.01"/><path d="M12 13h.01"/><path d="M16 13h.01"/><path d="M8 17h.01"/><path d="M12 17h.01"/><path d="M16 17h.01"/></svg>Clases</a>
+      <a class="sidebar-link" href="FluidoSeguimiento.dc.html"><svg class="ico" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>Seguimiento</a>
+      <a class="sidebar-link" href="FluidoConfig.dc.html"><svg class="ico" viewBox="0 0 24 24"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg>Configuración</a>
+    </nav>
+    <div class="sidebar-companion" style="gap:12px"><img src="/_blob/f94d92622e26d07cb8c2035979131ea0" alt="" style="width:52px;height:52px"><span class="sync-pill" style="align-self:flex-start">Sincronizado</span></div>
+  </aside>
+
+  <main class="sheet">
+    <div class="page-heading" style="flex-wrap:wrap;align-items:flex-end">
+      <div><h1>Clases</h1><p>Todo lo que ya pasó, clase por clase. Toca una para ver a cada alumno.</p></div>
+      <a class="button button-secondary" href="FluidoClasesNueva.dc.html"><svg class="ico" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Nueva clase</a>
+    </div>
+    <nav class="tabs" aria-label="Vistas de clases">
+      <a class="tab" href="FluidoClases.dc.html" style="display:inline-flex;align-items:center;text-decoration:none">Próxima clase</a>
+      <a class="tab" href="FluidoClasesCalendario.dc.html" style="display:inline-flex;align-items:center;text-decoration:none">Calendario</a>
+      <a class="tab is-active" href="FluidoClasesHistorial.dc.html" aria-current="page" style="display:inline-flex;align-items:center;text-decoration:none">Historial</a>
+    </nav>
+
+    <div class="frow">
+      <div class="chips" role="group" aria-label="Grupo"><sc-for list="{{groups}}" as="g"><button type="button" class="{{g.cls}}" aria-pressed="{{g.on}}" onClick="{{g.pick}}">{{g.label}}</button></sc-for></div>
+      <label class="search-control" style="width:280px;max-width:100%"><svg class="ico" viewBox="0 0 24 24" style="width:18px;height:18px"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg><input type="search" placeholder="Buscar clase, tarea o alumno" aria-label="Buscar en el historial"></label>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi"><span>Clases completadas</span><b>{{k.done}}</b></div>
+      <div class="kpi"><span>Sin registrar</span><b style="color:{{k.unregColor}}">{{k.unreg}}</b></div>
+      <div class="kpi"><span>Asistencia</span><b>{{k.asis}}</b></div>
+      <div class="kpi"><span>Promedio de tareas</span><b>{{k.prom}}</b></div>
+      <div class="kpi"><span>Clases sin pagar</span><b style="color:{{k.oweColor}}">{{k.owe}}</b></div>
+    </div>
+
+    <sc-for list="{{weeks}}" as="w" hint-placeholder-count="3">
+      <section class="wk" aria-label="{{w.title}}">
+        <div class="wh"><h2 class="ov">{{w.title}}</h2><span style="font:600 13px/18px var(--font-sans);color:var(--sumi-muted)">{{w.sum}}</span></div>
+        <sc-for list="{{w.rows}}" as="r">
+          <button type="button" class="{{r.cls}}" onClick="{{r.pick}}" aria-expanded="{{r.open}}">
+            <span class="d"><b>{{r.day}}</b><span>{{r.time}}</span></span>
+            <span><strong>{{r.group}}</strong><small>{{r.task}}</small></span>
+            <span class="sq" aria-label="{{r.sqAria}}"><sc-for list="{{r.sq}}" as="q"><span style="{{q.st}};">{{q.t}}</span></sc-for></span>
+            <span class="hide"><span class="{{r.noteCls}}">{{r.note}}</span></span>
+            <span class="hide"><span class="{{r.stCls}}">{{r.st}}</span></span>
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+          </button>
+          <sc-if value="{{r.open}}">
+            <div class="exp">
+              <div class="er th"><span>Alumno</span><span>Asistencia</span><span>Calificación</span><span>Pago</span></div>
+              <sc-for list="{{r.roster}}" as="p"><div class="er"><b>{{p.n}}</b><span class="{{p.aCls}}">{{p.a}}</span><span style="font-weight:800;color:{{p.gCol}}">{{p.g}}</span><span class="{{p.pCls}}">{{p.p}}</span></div></sc-for>
+              <sc-if value="{{r.unreg}}"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px;background:var(--papel);border-radius:8px"><span style="font:600 14px/20px var(--font-sans)">Esta clase no se registró.</span><a class="button button-secondary" href="FluidoClases.dc.html">Registrar ahora</a></div></sc-if>
+              <div style="display:flex;gap:16px;padding-top:10px"><a class="lk" href="FluidoClases.dc.html">Editar registro</a><a class="lk" href="FluidoSeguimiento.dc.html">Ver en Seguimiento</a></div>
+            </div>
+          </sc-if>
+        </sc-for>
+      </section>
+    </sc-for>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1240}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { grp: 'todos', open: 'lun 12 oct|s810' }; }
+  data() {
+    const G = { s810: ['Ana Rivera', 'Mateo Cruz', 'Luna López'], p5a: ['Diego Soto', 'Emilio Ruiz', 'Luna López', 'Sofía Martín', 'Valeria Gómez'], pa: ['Camila Torres', 'Santiago Reyes', 'Regina Flores'], ind: ['Ana Rivera'] };
+    const GL = { s810: 'Secundaria 8–10', p5a: 'Primaria 5A', pa: 'Prepa · Álgebra', ind: 'Ana Rivera · individual' };
+    const S = [
+      { d: 'lun 12 oct', wk: 'Semana del 12 de octubre', g: 's810', t: '10:00 a. m. · 2 h', abs: ['Luna López'], task: { n: 'Repaso de ecuaciones', gr: { 'Ana Rivera': 9.5, 'Mateo Cruz': 9.5 } } },
+      { d: 'vie 9 oct', wk: 'Semana del 5 de octubre', g: 'pa', t: '5:00 p. m. · 1.5 h', abs: [], task: { n: 'Productos notables', gr: { 'Camila Torres': 9, 'Santiago Reyes': 8.5, 'Regina Flores': 6.5 } } },
+      { d: 'jue 8 oct', wk: 'Semana del 5 de octubre', g: 'ind', t: '6:00 p. m. · 1 h', st: 'unreg' },
+      { d: 'jue 8 oct', wk: 'Semana del 5 de octubre', g: 'p5a', t: '4:00 p. m. · 2 h', abs: [], task: { n: 'Lectura cap. 2', gr: { 'Diego Soto': 9, 'Emilio Ruiz': 8.8, 'Luna López': 8.5, 'Sofía Martín': 9.6 }, miss: ['Valeria Gómez'] } },
+      { d: 'mié 7 oct', wk: 'Semana del 5 de octubre', g: 's810', t: '10:00 a. m. · 2 h', abs: ['Luna López'], task: { n: 'Sistemas de ecuaciones', gr: { 'Ana Rivera': 9, 'Mateo Cruz': 8.4 } } },
+      { d: 'mar 6 oct', wk: 'Semana del 5 de octubre', g: 'pa', t: '5:00 p. m. · 1.5 h', abs: ['Regina Flores'], task: { n: 'Factorización', gr: { 'Camila Torres': 8.8, 'Santiago Reyes': 8.6 } } },
+      { d: 'lun 5 oct', wk: 'Semana del 5 de octubre', g: 'ind', t: '6:00 p. m. · 1 h', abs: [] },
+      { d: 'lun 5 oct', wk: 'Semana del 5 de octubre', g: 'p5a', t: '4:00 p. m. · 2 h', abs: ['Luna López', 'Valeria Gómez'], task: { n: 'Problemas de fracciones', gr: { 'Diego Soto': 8.5, 'Emilio Ruiz': 9, 'Sofía Martín': 9.5 } } },
+      { d: 'lun 5 oct', wk: 'Semana del 5 de octubre', g: 's810', t: '10:00 a. m. · 2 h', abs: [], task: { n: 'Ecuaciones lineales', gr: { 'Ana Rivera': 9, 'Mateo Cruz': 8, 'Luna López': 9 } } },
+      { d: 'jue 1 oct', wk: 'Semana del 28 de septiembre', g: 'ind', t: '6:00 p. m. · 1 h', abs: [] }
+    ];
+    const OWE = { 'lun 5 oct|ind|Ana Rivera': ['Vencido', 210], 'lun 12 oct|s810|Ana Rivera': ['Vencido', 210], 'mié 7 oct|s810|Mateo Cruz': ['Vencido', 200], 'jue 8 oct|p5a|Sofía Martín': ['Pendiente', 150] };
+    return { G, GL, S, OWE };
+  }
+  renderVals() {
+    const { G, GL, S, OWE } = this.data();
+    const grp = this.state.grp;
+    const L = S.filter((s) => grp === 'todos' || s.g === grp);
+    const reg = L.filter((s) => !s.st);
+    const n = reg.reduce((a, s) => a + G[s.g].length, 0), p = reg.reduce((a, s) => a + G[s.g].length - s.abs.length, 0);
+    const grades = []; reg.forEach((s) => { if (s.task) Object.values(s.task.gr).forEach((g) => grades.push(g)); });
+    const owe = Object.keys(OWE).filter((k) => L.some((s) => k.indexOf(s.d + '|' + s.g + '|') === 0)).length;
+    const weeksMap = {};
+    L.forEach((s) => {
+      const key = s.d + '|' + s.g;
+      const open = this.state.open === key;
+      const members = G[s.g];
+      const row = {
+        day: s.d, time: s.t, group: GL[s.g], open, unreg: s.st === 'unreg',
+        task: s.st === 'unreg' ? 'Sin registrar' : s.task ? s.task.n + ' · promedio ' + (Object.values(s.task.gr).reduce((a, b) => a + b, 0) / Object.values(s.task.gr).length).toFixed(1) : 'Sin tarea',
+        sq: s.st ? [] : members.map((m) => (s.abs.indexOf(m) >= 0 ? { t: 'A', st: 'background:#F9E3DE;color:#A8321C;box-shadow:inset 0 0 0 1.5px #A8321C' } : { t: 'P', st: 'background:#1E1C20;color:#fff' })),
+        sqAria: s.st ? 'Sin registrar' : (members.length - s.abs.length) + ' de ' + members.length + ' presentes',
+        cls: 'row' + (open ? ' open' : ''),
+        pick: () => this.setState({ open: this.state.open === key ? null : key })
+      };
+      const issues = [];
+      if (s.abs && s.abs.length) issues.push('Faltó ' + s.abs.map((x) => x.split(' ')[0]).join(' y '));
+      if (s.task && s.task.miss) issues.push('Falta calificar a ' + s.task.miss[0].split(' ')[0]);
+      if (s.task && Object.values(s.task.gr).some((g) => g < 7)) issues.push('Una calificación baja');
+      const debts = Object.keys(OWE).filter((k) => k.indexOf(key + '|') === 0);
+      if (debts.length) issues.push(debts.length + (debts.length === 1 ? ' pago pendiente' : ' pagos pendientes'));
+      row.note = s.st === 'unreg' ? 'Registra asistencia y pago' : issues.length ? issues[0] : 'Todo en orden';
+      row.noteCls = s.st === 'unreg' ? 'st st-pend' : issues.length ? 'st st-venc' : 'st st-ok';
+      row.st = s.st === 'unreg' ? 'Sin registrar' : 'Completada';
+      row.stCls = s.st === 'unreg' ? 'st st-pend' : 'st st-done';
+      row.roster = s.st ? [] : members.map((m) => {
+        const ab = s.abs.indexOf(m) >= 0;
+        let g = '—', gCol = 'var(--sumi-muted)';
+        if (s.task && s.task.gr[m] != null) { g = s.task.gr[m].toFixed(1); gCol = s.task.gr[m] < 7 ? 'var(--bermellon-ink)' : 'var(--sumi)'; }
+        else if (s.task && s.task.miss && s.task.miss.indexOf(m) >= 0) { g = 'Sin calificar'; gCol = 'var(--ocre-ink)'; }
+        const o = OWE[key + '|' + m];
+        return { n: m, a: ab ? 'Ausente' : 'Presente', aCls: ab ? 'st st-venc' : 'st st-ok', g, gCol, p: ab ? '—' : o ? o[0] + ' $' + o[1] : 'Pagado', pCls: ab ? 'st st-muted' : o ? (o[0] === 'Vencido' ? 'st st-venc' : 'st st-pend') : 'st st-ok' };
+      });
+      (weeksMap[s.wk] = weeksMap[s.wk] || []).push({ row, s });
+    });
+    const weeks = Object.keys(weeksMap).map((wk) => {
+      const items = weeksMap[wk];
+      const r = items.filter((i) => !i.s.st);
+      const nn = r.reduce((a, i) => a + G[i.s.g].length, 0), pp = r.reduce((a, i) => a + G[i.s.g].length - i.s.abs.length, 0);
+      return { title: wk, sum: items.length + (items.length === 1 ? ' clase' : ' clases') + (nn ? ' · asistencia ' + Math.round((pp / nn) * 100) + '%' : ''), rows: items.map((i) => i.row) };
+    });
+    return {
+      groups: [['todos', 'Todos'], ['p5a', 'Primaria 5A'], ['s810', 'Secundaria 8–10'], ['pa', 'Prepa · Álgebra'], ['ind', 'Individuales']].map((g) => ({ label: g[1], on: grp === g[0], cls: 'chip' + (grp === g[0] ? ' on' : ''), pick: () => this.setState({ grp: g[0] }) })),
+      k: { done: String(reg.length), unreg: String(L.length - reg.length), unregColor: L.length - reg.length ? 'var(--ocre-ink)' : 'var(--jade-strong)', asis: n ? Math.round((p / n) * 100) + '%' : '—', prom: grades.length ? (grades.reduce((a, b) => a + b, 0) / grades.length).toFixed(1) : '—', owe: String(owe), oweColor: owe ? 'var(--bermellon-ink)' : 'var(--jade-strong)' },
+      weeks
+    };
+  }
+}
+</script>
+</body>
+</html>

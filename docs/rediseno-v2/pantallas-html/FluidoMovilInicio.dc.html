@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Inicio · móvil</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/hibi/components/bundle.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&amp;family=Albert+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+:root{--bermellon:#D9472C;--bermellon-strong:#C23B22;--bermellon-ink:#A8321C;--bermellon-soft:#F9E3DE;--sumi:#1E1C20;--sumi-muted:#5A524A;--sumi-subtle:#9A8F80;--washi:#F6F1E8;--papel:#FFFFFF;--kraft:#EFE8DB;--line:#E8DFCF;--line-soft:#F1EBE0;--line-control:#8F8475;--indigo:#34437F;--indigo-soft:#E5E8F2;--jade:#2E8C7E;--jade-strong:#23705F;--jade-soft:#E3F1EE;--ocre:#D9A23A;--ocre-ink:#7E5A12;--ocre-soft:#F8EDD5;--focus:#34437F;--overlay:rgba(30,28,32,.45);--space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:20px;--space-6:24px;--space-8:32px;--space-10:40px;--space-12:48px;--radius-sm:8px;--radius-md:10px;--radius-lg:12px;--radius-xl:16px;--radius-pill:999px;--shadow-card:0 1px 2px rgba(30,28,32,.05);--shadow-overlay:0 16px 40px rgba(30,28,32,.16);--control-height:44px;--segment-height:36px;--sidebar-width:232px;--topbar-height:60px;--drawer-width:480px;--font-display:"Dela Gothic One","Arial Black",system-ui,sans-serif;--font-sans:"Albert Sans","Segoe UI",system-ui,sans-serif}
+body{margin:0}
+sc-if,sc-for{display:contents}
+a{color:#C23B22}a:hover{color:#A8321C}
+.ov{margin:0;font:800 12px/16px var(--font-sans);letter-spacing:.12em;text-transform:uppercase;color:var(--sumi-muted)}
+.lk{font:700 13px/18px var(--font-sans);text-decoration:none;white-space:nowrap}
+.st{display:inline-flex;align-items:center;gap:6px;font:700 12px/16px var(--font-sans);white-space:nowrap}
+.st::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
+.st-ok{color:var(--jade-strong)}.st-ok::before{background:var(--jade)}
+.st-pend{color:var(--ocre-ink)}.st-pend::before{background:var(--ocre)}
+.st-venc{color:var(--bermellon-ink)}.st-venc::before{background:var(--bermellon)}
+.sec{padding:22px 0;border-top:1px solid var(--line-soft)}
+.sh{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px}
+.sh h2{margin:0;font:800 18px/24px var(--font-sans)}
+@keyframes tl-in{from{opacity:0;transform:translateX(10px)}to{opacity:1;transform:none}}
+@keyframes tl-grow{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+@keyframes tl-pulse{0%{transform:scale(1);opacity:.55}100%{transform:scale(3.2);opacity:0}}
+@keyframes tl-flow{to{background-position:0 12px}}
+@keyframes tl-breathe{0%,100%{box-shadow:0 0 0 0 rgba(217,71,44,0)}50%{box-shadow:0 0 0 6px rgba(217,71,44,.14)}}
+@keyframes d-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+@keyframes ch-draw{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+@keyframes ch-up{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+@keyframes ch-pop{from{opacity:0;transform:translate(-50%,50%) scale(.3)}to{opacity:1;transform:translate(-50%,50%) scale(1)}}
+
+/* Línea del día vertical */
+.vt{position:relative;height:452px;margin-left:58px}
+.vk{position:absolute;left:0;right:0;border-top:1px solid var(--line-soft)}
+.vk b{position:absolute;left:-58px;top:-8px;width:48px;text-align:right;font:600 11px/14px var(--font-sans);color:var(--sumi-muted);white-space:nowrap}
+.vrail{position:absolute;left:10px;top:0;bottom:0;width:2px;background:var(--line);border-radius:1px}
+.vpast{position:absolute;left:10px;top:0;width:2px;background:var(--sumi);border-radius:1px;transform-origin:top;animation:tl-grow 1.3s cubic-bezier(.2,.7,.2,1) both}
+.vfree{position:absolute;left:10px;width:2px;background-image:linear-gradient(180deg,var(--bermellon) 0 6px,transparent 6px 12px);background-size:2px 12px;animation:tl-flow 1.2s linear infinite;opacity:.55}
+.vfree b{position:absolute;left:14px;top:50%;transform:translateY(-50%);padding:3px 10px;border-radius:999px;background:var(--washi);font:700 12px/16px var(--font-sans);color:var(--sumi-muted);white-space:nowrap}
+.vb{position:absolute;left:26px;right:0;display:flex;flex-direction:column;justify-content:center;gap:1px;padding:0 12px;border-radius:12px;border:1.5px solid var(--line-control);background:var(--papel);text-align:left;font-family:var(--font-sans);color:var(--sumi);cursor:pointer;animation:tl-in .5s cubic-bezier(.2,.7,.2,1) both;min-height:44px}
+.vb .bt{font:700 11px/14px var(--font-sans);color:var(--sumi-muted)}
+.vb strong{font:800 14px/18px var(--font-sans);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vb .bl{font:700 11px/14px var(--font-sans)}
+.vb.done{background:var(--indigo-soft);border-color:var(--indigo-soft)}.vb.done .bl{color:var(--indigo)}
+.vb.next{border:2px solid var(--sumi);animation:tl-in .5s cubic-bezier(.2,.7,.2,1) both,tl-breathe 2.8s 1.2s ease-in-out infinite}.vb.next .bl{color:var(--bermellon-ink)}
+.vb.live{background:var(--bermellon-soft);border:2px solid var(--bermellon-strong)}.vb.live .bl{color:var(--bermellon-ink)}
+.vb.later .bl{color:var(--sumi-muted)}
+.vb.sel{box-shadow:0 0 0 3px var(--papel),0 0 0 5px var(--sumi)}
+.vb .badge{position:absolute;top:6px;right:8px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--bermellon);color:#fff;font:800 11px/18px var(--font-sans);text-align:center}
+.vnow{position:absolute;left:-58px;right:0;height:0;border-top:2px solid var(--bermellon);z-index:3;pointer-events:none}
+.vnow span{position:absolute;left:0;top:-11px;padding:2px 8px;border-radius:999px;background:var(--bermellon-strong);color:#fff;font:800 11px/16px var(--font-sans);white-space:nowrap}
+.vnow i{position:absolute;left:63px;top:-7px;width:12px;height:12px;border-radius:50%;background:var(--bermellon)}
+.vnow i::after{content:"";position:absolute;inset:0;border-radius:50%;background:var(--bermellon);animation:tl-pulse 2s ease-out infinite}
+.dcard{margin-top:16px;display:flex;flex-direction:column;gap:8px;padding:16px;border-radius:14px;background:var(--washi);animation:d-in .3s ease-out both}
+.dcard h3{margin:0;font:800 20px/26px var(--font-sans)}
+.dsub{font:500 13px/18px var(--font-sans);color:var(--sumi-muted)}
+.roster{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0}
+.rch{display:inline-flex;align-items:center;gap:6px;padding:3px 10px 3px 4px;border-radius:999px;background:var(--papel);font:700 12px/16px var(--font-sans)}
+.rch i{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font:800 10px/1 var(--font-sans);font-style:normal;color:#fff}
+.dnote{margin:0;display:flex;gap:8px;font-size:13px;line-height:18px}
+.dnote i{width:7px;height:7px;border-radius:50%;flex:none;margin-top:6px}
+
+/* Para atender */
+.al{display:flex;gap:10px;align-items:flex-start;width:100%;padding:12px 0;border:0;border-top:1px solid var(--line-soft);background:transparent;text-align:left;font:500 14px/20px var(--font-sans);color:var(--sumi);cursor:pointer;text-decoration:none}
+.al:first-child{border-top:0;padding-top:0}
+.al i{width:8px;height:8px;border-radius:50%;flex:none;margin-top:6px}
+.al small{display:block;font:700 12px/16px var(--font-sans);color:var(--bermellon-strong);margin-top:2px}
+
+/* Tarjetas de gráfica */
+.k-asis,.k-cobros{--c:#2E8C7E;--cs:#E3F1EE}.k-calif{--c:#34437F;--cs:#E5E8F2}
+.mini{display:flex;flex-direction:column;gap:4px;padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--papel);margin-top:12px}
+.mini .nm{display:flex;justify-content:space-between;align-items:center;font:700 15px/20px var(--font-sans)}
+.xbtn{display:inline-flex;align-items:center;gap:4px;min-height:32px;padding:0 6px;margin:-6px -6px 0 0;border:0;border-radius:8px;background:transparent;font:700 13px/18px var(--font-sans);color:var(--bermellon-strong);cursor:pointer;text-decoration:none}
+.xbtn svg{width:15px;height:15px}
+.mini .hl{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.mini .big{font:800 34px/40px var(--font-sans)}
+.mini .big small{font-size:15px;color:var(--sumi-muted)}
+.mini .dl{font:700 12px/16px var(--font-sans)}
+.mini .cnt{font:600 12px/16px var(--font-sans);color:var(--sumi-muted)}
+.mplot{position:relative;height:84px;margin:14px 8px 6px}
+.thr{position:absolute;left:0;right:0;border-top:1.5px dashed var(--bermellon);opacity:.7;pointer-events:none}
+svg.ln{position:absolute;inset:0;width:100%;height:100%;overflow:visible;animation:ch-draw 1s .1s both}
+svg.ln polyline{fill:none;stroke:var(--c);stroke-width:2;vector-effect:non-scaling-stroke;stroke-linejoin:round}
+svg.ln polygon{fill:var(--cs);opacity:.75}
+.dt{position:absolute;width:12px;height:12px;margin:0;padding:0;border-radius:50%;transform:translate(-50%,50%);background:var(--papel);border:2px solid var(--c);cursor:pointer;z-index:2;animation:ch-pop .4s cubic-bezier(.2,.7,.2,1.3) both}
+.dt::before{content:"";position:absolute;inset:-14px}
+.dt.low{border-color:var(--bermellon)}
+.dt.on{background:var(--c);box-shadow:0 0 0 3px var(--papel),0 0 0 5px var(--c)}
+.dt.low.on{background:var(--bermellon);box-shadow:0 0 0 3px var(--papel),0 0 0 5px var(--bermellon)}
+.dt.fut{width:9px;height:9px;border:1.5px dashed var(--sumi-subtle)}
+.dt.unreg{border:1.5px dashed var(--ocre);background:var(--ocre-soft)}
+.mbars{position:absolute;inset:0;display:flex;align-items:flex-end;gap:5px;border-bottom:1px solid var(--line)}
+.mb{position:relative;flex:1;height:100%;display:flex;align-items:flex-end;padding:0;border:0;background:transparent;cursor:pointer}
+.mb i{position:relative;display:block;width:100%;border-radius:4px 4px 0 0;background:var(--c);transform-origin:bottom;animation:ch-up .7s cubic-bezier(.2,.7,.2,1) both}
+.mb.dim i{opacity:.4}
+.mb.fut{cursor:default}.mb.fut i{background:transparent;border-top:2px dashed var(--line-control);height:2px!important;animation:none;border-radius:0}
+.mb.on::after{content:"";position:absolute;left:50%;bottom:-7px;width:5px;height:5px;margin-left:-2.5px;border-radius:50%;background:var(--sumi)}
+.mb .pk{position:absolute;top:-5px;left:50%;width:9px;height:9px;margin-left:-4.5px;border-radius:50%;background:var(--ocre);box-shadow:0 0 0 2px var(--papel)}
+.mcap{display:flex;justify-content:space-between;font:600 11px/14px var(--font-sans);color:var(--sumi-muted)}
+.mdet{display:flex;flex-direction:column;gap:4px;margin-top:10px;padding:12px;border-radius:10px;background:var(--washi);animation:d-in .25s ease-out both}
+.mdh{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.mdh .ov{font-size:11px;letter-spacing:.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mdh b{font:800 17px/22px var(--font-sans);white-space:nowrap}
+.mds{font:600 12px/16px var(--font-sans);color:var(--sumi-muted)}
+.mchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.mchip{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;background:var(--papel);font:700 12px/16px var(--font-sans)}
+.mchip i{width:7px;height:7px;border-radius:50%}
+.mchip b{color:var(--sumi-muted)}
+.ins{display:flex;gap:8px;align-items:baseline;margin-top:10px;padding-top:10px;border-top:1px solid var(--line-soft);font:600 12px/16px var(--font-sans)}
+.ins i{width:7px;height:7px;border-radius:50%;flex:none}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</helmet>
+<div class="hibi-ds" style="width:390px;min-height:2400px;position:relative;background:var(--papel);display:flex;flex-direction:column">
+
+  <header style="height:60px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 16px">
+    <img src="/_blob/19d7de209d497968ffcc94f1e708a867" alt="hibi" style="height:30px">
+    <span class="sync-pill" style="font-size:12px;padding:4px 10px">Sincronizado</span>
+  </header>
+
+  <main style="flex:1;padding:8px 18px 24px;display:flex;flex-direction:column">
+    <div style="display:flex;flex-direction:column;gap:6px;padding-bottom:20px">
+      <p class="ov">Lunes 12 de octubre · {{nowLbl}}</p>
+      <h1 style="margin:0;font:400 26px/32px var(--font-display)">¡Buenos días, profe!</h1>
+      <p style="margin:0;font-size:14px;line-height:20px;color:var(--sumi-muted)">{{headline}}</p>
+    </div>
+
+    <!-- Clases de hoy -->
+    <section class="sec" aria-labelledby="h-hoy" style="padding-top:20px">
+      <div class="sh"><h2 id="h-hoy">Clases de hoy</h2><a class="lk" href="FluidoClases.dc.html">Calendario</a></div>
+      <div class="vt" role="region" aria-label="Línea de tiempo de hoy">
+        <sc-for list="{{ticks}}" as="t" hint-placeholder-count="7"><span class="vk" style="top:{{t.top}}px"><b>{{t.l}}</b></span></sc-for>
+        <span class="vrail"></span>
+        <span class="vpast" style="height:{{nowTop}}px"></span>
+        <sc-if value="{{hasFree}}"><span class="vfree" style="top:{{freeTop}}px;height:{{freeH}}px"><b>{{freeLbl}}</b></span></sc-if>
+        <sc-for list="{{blocks}}" as="b" hint-placeholder-count="3">
+          <button type="button" class="{{b.cls}}" style="top:{{b.top}}px;height:{{b.h}}px;animation-delay:{{b.delay}}" onClick="{{b.pick}}" aria-label="{{b.aria}}" aria-pressed="{{b.isSel}}">
+            <span class="bt">{{b.range}}</span><strong>{{b.name}}</strong><span class="bl">{{b.lab}}</span>
+            <sc-if value="{{b.hasAlerts}}"><span class="badge" aria-hidden="true">{{b.alerts}}</span></sc-if>
+          </button>
+        </sc-for>
+        <span class="vnow" style="top:{{nowTop}}px"><span>{{nowLbl}}</span><i></i></span>
+      </div>
+
+      <div class="dcard" aria-live="polite">
+        <span class="ov" style="color:{{cd.color}}">{{cd.kicker}}</span>
+        <h3>{{cd.name}}</h3>
+        <span class="dsub">{{cd.sub}}</span>
+        <div class="roster"><sc-for list="{{cd.roster}}" as="r"><span class="rch"><i style="background:{{r.c}}">{{r.ini}}</i>{{r.n}}<sc-if value="{{r.hasSt}}"><span class="{{r.stCls}}">{{r.st}}</span></sc-if></span></sc-for></div>
+        <sc-for list="{{cd.notes}}" as="n"><p class="dnote"><i style="background:{{n.c}}"></i><span>{{n.t}}</span></p></sc-for>
+        <sc-if value="{{cd.primary}}"><a class="button button-primary" href="FluidoClases.dc.html" style="width:100%;min-height:48px;margin-top:6px">Registrar clase</a></sc-if>
+        <sc-if value="{{cd.secondary}}"><a class="button button-secondary" href="FluidoClases.dc.html" style="width:100%;margin-top:6px">{{cd.secLbl}}</a></sc-if>
+      </div>
+    </section>
+
+    <!-- Para atender -->
+    <section class="sec" aria-labelledby="h-at">
+      <div class="sh"><h2 id="h-at" class="ov">Para atender · 4</h2></div>
+      <div>
+        <a class="al" href="FluidoClases.dc.html"><i style="background:var(--ocre)"></i><span><b>Clase de Ana del jue 8 oct</b> sin registrar.<small>Registrar</small></span></a>
+        <button class="al" type="button" onClick="{{goAsis}}"><i style="background:var(--bermellon)"></i><span><b>Luna, Valeria y Regina</b> bajo el 80% este mes.<small>Ver en la gráfica</small></span></button>
+        <button class="al" type="button" onClick="{{goCalif}}"><i style="background:var(--bermellon)"></i><span><b>Regina sacó 6.5</b> en Productos notables.<small>Ver en la gráfica</small></span></button>
+        <button class="al" type="button" onClick="{{goCob}}"><i style="background:var(--bermellon)"></i><span><b>$620 vencidos</b> de Ana y Mateo.<small>Ver en la gráfica</small></span></button>
+      </div>
+    </section>
+
+    <!-- Tu periodo -->
+    <section class="sec" aria-labelledby="h-per">
+      <div class="sh"><h2 id="h-per">{{periodTitle}}</h2></div>
+      <div class="segmented" role="group" aria-label="Periodo" style="display:grid;grid-template-columns:repeat(4,1fr)">
+        <sc-for list="{{periods}}" as="p" hint-placeholder-count="4"><button type="button" class="{{p.cls}}" aria-pressed="{{p.pressed}}" onClick="{{p.pick}}" style="padding:0 4px">{{p.label}}</button></sc-for>
+      </div>
+      <sc-for list="{{metrics}}" as="m" hint-placeholder-count="3">
+        <article class="{{m.kcls}}" aria-label="{{m.name}}">
+          <div class="nm"><span>{{m.name}}</span><a class="xbtn" href="FluidoSeguimiento.dc.html">Ver detalle<svg class="ico" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></a></div>
+          <div class="hl"><span class="big">{{m.value}}<small>{{m.unit}}</small></span><span class="dl" style="color:{{m.dlColor}}">{{m.delta}}</span></div>
+          <span class="cnt">{{m.count}}</span>
+          <div class="mplot">
+            <sc-if value="{{m.c.hasThr}}"><span class="thr" style="bottom:{{m.c.thr}}%"></span></sc-if>
+            <sc-if value="{{m.c.isDot}}">
+              <svg class="ln" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polygon points="{{m.c.area}}"></polygon><polyline points="{{m.c.line}}"></polyline></svg>
+              <sc-for list="{{m.c.dots}}" as="d"><button type="button" class="{{d.cls}}" style="left:{{d.x}}%;bottom:{{d.y}}%;animation-delay:{{d.delay}}" onClick="{{d.pick}}" aria-label="{{d.tip}}" aria-pressed="{{d.on}}"></button></sc-for>
+            </sc-if>
+            <sc-if value="{{m.c.isBar}}">
+              <div class="mbars"><sc-for list="{{m.c.bars}}" as="b"><button type="button" class="{{b.cls}}" onClick="{{b.pick}}" aria-label="{{b.tip}}" aria-pressed="{{b.on}}"><i style="height:{{b.h}}%;animation-delay:{{b.delay}}"><sc-if value="{{b.peak}}"><span class="pk"></span></sc-if></i></button></sc-for></div>
+            </sc-if>
+          </div>
+          <div class="mcap"><span>{{m.c.capL}}</span><span>{{m.c.capR}}</span></div>
+          <div class="mdet" aria-live="polite">
+            <div class="mdh"><span class="ov">{{m.md.title}}</span><b style="color:{{m.md.color}}">{{m.md.big}}</b></div>
+            <span class="mds">{{m.md.sub}}</span>
+            <div class="mchips"><sc-for list="{{m.md.chips}}" as="c"><span class="mchip"><i style="background:{{c.c}}"></i>{{c.n}}<sc-if value="{{c.hasV}}"><b>{{c.v}}</b></sc-if></span></sc-for><sc-if value="{{m.md.hasMsg}}"><span style="font:700 12px/16px var(--font-sans);color:{{m.md.msgColor}}">{{m.md.msg}}</span></sc-if></div>
+          </div>
+          <div class="ins"><i style="background:{{m.insColor}}"></i><span>{{m.insight}}</span></div>
+        </article>
+      </sc-for>
+    </section>
+  </main>
+
+  <nav class="hibi-mobile-nav" aria-label="Navegación móvil" style="--mobile-nav-count:5;flex:none;position:sticky;bottom:0">
+    <a class="mobile-link active" href="#" aria-current="page"><svg class="ico" viewBox="0 0 24 24"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Inicio</a>
+    <a class="mobile-link" href="FluidoComunidad.dc.html"><svg class="ico" viewBox="0 0 24 24"><path d="M18 21a8 8 0 0 0-16 0"/><circle cx="10" cy="8" r="5"/><path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3"/></svg>Comunidad</a>
+    <a class="mobile-link" href="FluidoClases.dc.html"><svg class="ico" viewBox="0 0 24 24"><path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/></svg>Clases</a>
+    <a class="mobile-link" href="FluidoSeguimiento.dc.html"><svg class="ico" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>Seguimiento</a>
+    <a class="mobile-link" href="FluidoConfig.dc.html"><svg class="ico" viewBox="0 0 24 24"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg>Ajustes</a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":2400}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { period: 'sem', cls: 'p5a', now: 750, sel: {} };
+  }
+  componentDidMount() {
+    this.t0 = Date.now();
+    this.iv = setInterval(() => { const m = 750 + Math.floor((Date.now() - this.t0) / 60000); if (m !== this.state.now) this.setState({ now: m }); }, 15000);
+  }
+  componentWillUnmount() { clearInterval(this.iv); }
+
+  money(n) { return '$' + Math.round(n).toLocaleString('en-US'); }
+  first(names) { const f = names.map((n) => n.split(' ')[0]); return f.length > 1 ? f.slice(0, -1).join(', ') + ' y ' + f[f.length - 1] : f[0]; }
+  clock(m) { let h = Math.floor(m / 60); const mm = m % 60; const ap = h >= 12 ? 'p. m.' : 'a. m.'; h = h % 12 || 12; return h + ':' + String(mm).padStart(2, '0') + ' ' + ap; }
+  dur(m) { const h = Math.floor(m / 60), mm = m % 60; return h && mm ? h + ' h ' + mm + ' min' : h ? h + ' h' : mm + ' min'; }
+
+  B() {
+    if (this._b) return this._b;
+    const G = { s810: ['Ana Rivera', 'Mateo Cruz', 'Luna López'], p5a: ['Diego Soto', 'Emilio Ruiz', 'Luna López', 'Sofía Martín', 'Valeria Gómez'], pa: ['Camila Torres', 'Santiago Reyes', 'Regina Flores'], ind: ['Ana Rivera'] };
+    const GL = { s810: 'Secundaria 8–10', p5a: 'Primaria 5A', pa: 'Prepa · Álgebra', ind: 'Ana · individual' };
+    const S = [
+      { d: 'jue 1 oct', x: '1', wk: 'w40', g: 'ind', t: '6:00 p. m.', abs: [] },
+      { d: 'lun 5 oct', x: '5', wk: 'w41', g: 's810', t: '10:00 a. m.', abs: [], task: { n: 'Ecuaciones lineales', gr: { 'Ana Rivera': 9, 'Mateo Cruz': 8, 'Luna López': 9 } } },
+      { d: 'lun 5 oct', x: '5', wk: 'w41', g: 'p5a', t: '4:00 p. m.', abs: ['Luna López', 'Valeria Gómez'], task: { n: 'Problemas de fracciones', gr: { 'Diego Soto': 8.5, 'Emilio Ruiz': 9, 'Sofía Martín': 9.5 } } },
+      { d: 'lun 5 oct', x: '5', wk: 'w41', g: 'ind', t: '6:00 p. m.', abs: [] },
+      { d: 'mar 6 oct', x: '6', wk: 'w41', g: 'pa', t: '5:00 p. m.', abs: ['Regina Flores'], task: { n: 'Factorización', gr: { 'Camila Torres': 8.8, 'Santiago Reyes': 8.6 } } },
+      { d: 'mié 7 oct', x: '7', wk: 'w41', g: 's810', t: '10:00 a. m.', abs: ['Luna López'], task: { n: 'Sistemas de ecuaciones', gr: { 'Ana Rivera': 9, 'Mateo Cruz': 8.4 } } },
+      { d: 'jue 8 oct', x: '8', wk: 'w41', g: 'p5a', t: '4:00 p. m.', abs: [], task: { n: 'Lectura cap. 2', gr: { 'Diego Soto': 9, 'Emilio Ruiz': 8.8, 'Luna López': 8.5, 'Sofía Martín': 9.6 }, miss: ['Valeria Gómez'] } },
+      { d: 'jue 8 oct', x: '8', wk: 'w41', g: 'ind', t: '6:00 p. m.', st: 'unreg' },
+      { d: 'vie 9 oct', x: '9', wk: 'w41', g: 'pa', t: '5:00 p. m.', abs: [], task: { n: 'Productos notables', gr: { 'Camila Torres': 9, 'Santiago Reyes': 8.5, 'Regina Flores': 6.5 } } },
+      { d: 'lun 12 oct', x: '12', wk: 'w42', today: true, g: 's810', t: '10:00 a. m.', abs: ['Luna López'], task: { n: 'Repaso de ecuaciones', gr: { 'Ana Rivera': 9.5, 'Mateo Cruz': 9.5 } } },
+      { d: 'lun 12 oct', x: '12', wk: 'w42', today: true, g: 'p5a', t: '4:00 p. m.', st: 'fut', task: { n: 'Lectura cap. 3' } },
+      { d: 'lun 12 oct', x: '12', wk: 'w42', today: true, g: 'ind', t: '6:00 p. m.', st: 'fut' },
+      { d: 'mar 13 oct', x: '13', wk: 'w42', g: 'pa', t: '5:00 p. m.', st: 'fut' },
+      { d: 'mié 14 oct', x: '14', wk: 'w42', g: 's810', t: '10:00 a. m.', st: 'fut' },
+      { d: 'jue 15 oct', x: '15', wk: 'w42', g: 'p5a', t: '4:00 p. m.', st: 'fut' },
+      { d: 'jue 15 oct', x: '15', wk: 'w42', g: 'ind', t: '6:00 p. m.', st: 'fut' },
+      { d: 'vie 16 oct', x: '16', wk: 'w42', g: 'pa', t: '5:00 p. m.', st: 'fut' }
+    ];
+    S.forEach((s) => { s.reg = !s.st; if (s.reg) { s.n = G[s.g].length; s.p = s.n - s.abs.length; s.v = Math.round((s.p / s.n) * 100); } if (s.task && s.task.gr) { const v = Object.values(s.task.gr); s.task.avg = v.reduce((a, b) => a + b, 0) / v.length; } });
+    const P = [
+      { day: 1, h: 18, n: 'Ana Rivera', a: 210 }, { day: 1, h: 17, n: 'Camila Torres', a: 270 }, { day: 1, h: 17, n: 'Santiago Reyes', a: 270 },
+      { day: 5, h: 10, n: 'Ana Rivera', a: 210 }, { day: 5, h: 10, n: 'Mateo Cruz', a: 100 }, { day: 5, h: 16, n: 'Diego Soto', a: 300 }, { day: 5, h: 16, n: 'Emilio Ruiz', a: 300 }, { day: 5, h: 16, n: 'Sofía Martín', a: 150 },
+      { day: 6, h: 17, n: 'Regina Flores', a: 135 }, { day: 8, h: 16, n: 'Valeria Gómez', a: 150 }, { day: 12, h: 10, n: 'Luna López', a: 300 }
+    ];
+    this._b = { G, GL, S, P, M: ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct'], MF: ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre'], A_ASIS: [84, 86, 88, 85, 87, 89, 84, 88, 86], A_CAL: [8.4, 8.5, 8.6, 8.5, 8.5, 8.7, 8.6, 8.8, 8.8], A_COB: [7800, 8100, 8600, 7900, 8200, 8900, 7600, 9100, 8700] };
+    return this._b;
+  }
+  sess(period, calif, prev) { return this.B().S.filter((s) => { if (calif && (!s.task || s.st === 'unreg')) return false; if (prev) return period === 'hoy' ? s.d === 'lun 5 oct' : period === 'sem' ? s.wk === 'w41' : false; return period === 'hoy' ? !!s.today : period === 'sem' ? s.wk === 'w42' : s.st !== 'fut'; }); }
+  aStat(l) { const r = l.filter((s) => s.reg); const n = r.reduce((a, s) => a + s.n, 0), p = r.reduce((a, s) => a + s.p, 0); return n ? Math.round((p / n) * 100) : null; }
+  cStat(l) { const g = []; l.filter((s) => s.reg && s.task && s.task.gr).forEach((s) => Object.values(s.task.gr).forEach((v) => g.push(v))); return g.length ? g.reduce((a, b) => a + b, 0) / g.length : null; }
+  pays(period, prev) { return this.B().P.filter((p) => (period === 'hoy' ? p.day === (prev ? 5 : 12) : period === 'sem' ? (prev ? p.day >= 5 && p.day <= 11 : p.day >= 12 && p.day <= 18) : !prev)); }
+  pn(p) { return p === 'hoy' ? 'el lunes pasado' : p === 'sem' ? 'la semana pasada' : p === 'mes' ? 'septiembre' : '2025'; }
+  pick(id, i) { this.setState({ sel: Object.assign({}, this.state.sel, { [id]: i }) }); }
+
+  asis(period) {
+    const B = this.B(); const RED = '#D9472C';
+    let pts, v, prev, count, ins, insC = '#2E8C7E';
+    if (period === 'anual') { const arr = B.A_ASIS.concat([this.aStat(this.sess('mes'))]); v = Math.round(arr.reduce((a, b) => a + b, 0) / arr.length); prev = 86; pts = arr.map((x, i) => ({ k: 'reg', v: x, t: B.MF[i] })); count = 'Promedio de 10 meses'; ins = 'Junio fue tu mejor mes (89%)'; }
+    else {
+      const L = this.sess(period); v = this.aStat(L); prev = period === 'mes' ? 86 : this.aStat(this.sess(period, false, true));
+      pts = L.map((s) => ({ k: s.st || 'reg', v: s.v, s, t: s.d + ' · ' + s.t }));
+      const k = L.filter((s) => s.reg).length, f = L.filter((s) => s.st === 'fut').length;
+      count = 'Asistencia de ' + k + (k === 1 ? ' clase' : ' clases') + (f ? ' · ' + f + ' por venir' : '');
+      const last = L.filter((s) => s.reg).slice(-1)[0];
+      if (period === 'mes') { ins = 'Luna, Valeria y Regina están bajo el 80%'; insC = RED; }
+      else if (last && last.abs.length) { ins = this.first(last.abs) + ' faltó a la última clase'; insC = RED; }
+      else ins = 'Nadie faltó en la última clase';
+    }
+    const n = pts.length, lastReg = pts.reduce((a, p, i) => (p.k === 'reg' ? i : a), 0);
+    const si = this.state.sel.asis == null || this.state.sel.asis >= n ? lastReg : this.state.sel.asis;
+    const X = (i) => (n === 1 ? 50 : 4 + (i * 92) / (n - 1));
+    const reg = [];
+    const dots = pts.map((p, i) => { const y = p.k === 'reg' ? p.v : 0; if (p.k === 'reg') reg.push(X(i).toFixed(2) + ',' + (100 - y).toFixed(2)); return { x: X(i), y, on: i === si, delay: (0.1 + i * 0.05).toFixed(2) + 's', cls: 'dt' + (p.k !== 'reg' ? ' ' + p.k : '') + (p.k === 'reg' && p.v < 80 ? ' low' : '') + (i === si ? ' on' : ''), tip: p.t + ': ' + (p.k === 'reg' ? p.v + '%' : p.k === 'fut' ? 'por venir' : 'sin registrar'), pick: () => this.pick('asis', i) }; });
+    const p = pts[si];
+    let md;
+    if (!p.s) md = { title: p.t, big: p.v + '%', color: 'var(--sumi)', sub: 'Asistencia promedio del mes', chips: [], hasMsg: false };
+    else if (p.k === 'fut') md = { title: p.t, big: 'Por venir', color: 'var(--sumi-muted)', sub: B.GL[p.s.g], chips: [], hasMsg: true, msg: 'Se esperan ' + B.G[p.s.g].length + ' alumnos', msgColor: 'var(--sumi-muted)' };
+    else if (p.k === 'unreg') md = { title: p.t, big: 'Sin registrar', color: 'var(--ocre-ink)', sub: B.GL[p.s.g], chips: [], hasMsg: false };
+    else md = { title: p.t, big: p.v + '%', color: p.v < 80 ? 'var(--bermellon-ink)' : 'var(--jade-strong)', sub: B.GL[p.s.g] + ' · ' + p.s.p + ' de ' + p.s.n, chips: p.s.abs.map((a) => ({ n: a.split(' ')[0], c: RED, hasV: false })), hasMsg: !p.s.abs.length, msg: 'Nadie faltó', msgColor: 'var(--jade-strong)' };
+    const d = v != null && prev != null ? v - prev : null;
+    return { name: 'Asistencia', kcls: 'mini k-asis', value: v == null ? '—' : String(v), unit: v == null ? '' : '%', delta: d == null ? '' : d === 0 ? 'Igual que ' + this.pn(period) : (d > 0 ? '↑ ' : '↓ ') + Math.abs(d) + ' pp vs. ' + this.pn(period), dlColor: d != null && d < 0 ? 'var(--bermellon-ink)' : 'var(--jade-strong)', count, insight: ins, insColor: insC,
+      c: { isDot: true, isBar: false, dots, line: reg.join(' '), area: reg.length ? reg[0].split(',')[0] + ',100 ' + reg.join(' ') + ' ' + reg[reg.length - 1].split(',')[0] + ',100' : '', hasThr: true, thr: 80, capL: period === 'anual' ? 'ene' : pts[0] && pts[0].s ? pts[0].s.d : '', capR: period === 'anual' ? 'oct' : pts[n - 1] && pts[n - 1].s ? pts[n - 1].s.d : '' }, md };
+  }
+
+  calif(period) {
+    const B = this.B(); const RED = '#D9472C', IND = '#34437F', OC = '#D9A23A';
+    let pts, v, prev, count, ins = 'Vas por buen camino. ¡Excelente trabajo!', insC = IND;
+    if (period === 'anual') { const arr = B.A_CAL.concat([this.cStat(this.sess('mes', true))]); v = arr.reduce((a, b) => a + b, 0) / arr.length; prev = 8.7; pts = arr.map((x, i) => ({ k: 'reg', v: x, t: B.MF[i] })); count = 'Promedio de 10 meses'; }
+    else {
+      const L = this.sess(period, true); v = this.cStat(L); prev = period === 'mes' ? 8.8 : this.cStat(this.sess(period, true, true));
+      pts = L.map((s) => ({ k: s.st || 'reg', v: s.task.avg, s, t: s.task.n }));
+      const k = L.filter((s) => s.reg).length, f = L.filter((s) => s.st === 'fut').length;
+      count = k + (k === 1 ? ' tarea calificada' : ' tareas calificadas') + (f ? ' · ' + f + ' por calificar hoy' : '');
+      let low = null, miss = null;
+      L.filter((s) => s.reg).forEach((s) => { Object.keys(s.task.gr).forEach((n) => { if (s.task.gr[n] < 7) low = { n, g: s.task.gr[n], t: s.task.n }; }); if (s.task.miss) miss = { n: s.task.miss[0], t: s.task.n }; });
+      if (low) { ins = low.n.split(' ')[0] + ' sacó ' + low.g + ' en ' + low.t; insC = RED; } else if (miss) { ins = 'Falta calificar a ' + miss.n.split(' ')[0] + ' en ' + miss.t; insC = OC; }
+    }
+    const n = pts.length, lastReg = pts.reduce((a, p, i) => (p.k === 'reg' ? i : a), 0);
+    const si = this.state.sel.calif == null || this.state.sel.calif >= n ? lastReg : this.state.sel.calif;
+    const X = (i) => (n === 1 ? 50 : 4 + (i * 92) / (n - 1));
+    const reg = [];
+    const dots = pts.map((p, i) => { const y = p.k === 'reg' ? p.v * 10 : 0; if (p.k === 'reg') reg.push(X(i).toFixed(2) + ',' + (100 - y).toFixed(2)); return { x: X(i), y, on: i === si, delay: (0.1 + i * 0.05).toFixed(2) + 's', cls: 'dt' + (p.k !== 'reg' ? ' ' + p.k : '') + (p.k === 'reg' && p.v < 7 ? ' low' : '') + (i === si ? ' on' : ''), tip: p.t + ': ' + (p.k === 'reg' ? p.v.toFixed(1) : 'por calificar'), pick: () => this.pick('calif', i) }; });
+    const p = pts[si];
+    let md;
+    if (!p) md = { title: 'Sin tareas', big: '—', color: 'var(--sumi)', sub: '', chips: [], hasMsg: false };
+    else if (!p.s) md = { title: p.t, big: p.v.toFixed(1), color: 'var(--indigo)', sub: 'Promedio del mes', chips: [], hasMsg: false };
+    else if (p.k !== 'reg') md = { title: p.t, big: 'Por calificar', color: 'var(--sumi-muted)', sub: B.GL[p.s.g] + ' · hoy', chips: [], hasMsg: false };
+    else {
+      const gr = Object.keys(p.s.task.gr).map((nm) => ({ nm, g: p.s.task.gr[nm] })).sort((a, b) => a.g - b.g);
+      md = { title: p.t, big: p.v.toFixed(1), color: p.v < 7 ? 'var(--bermellon-ink)' : 'var(--indigo)', sub: B.GL[p.s.g] + ' · ' + p.s.d, chips: gr.slice(0, 3).map((x) => ({ n: x.nm.split(' ')[0], v: x.g.toFixed(1), hasV: true, c: x.g < 7 ? RED : IND })), hasMsg: !!p.s.task.miss, msg: p.s.task.miss ? 'Sin calificar: ' + this.first(p.s.task.miss) : '', msgColor: 'var(--ocre-ink)' };
+    }
+    const d = v != null && prev != null ? Math.round((v - prev) * 10) / 10 : null;
+    return { name: 'Calificación', kcls: 'mini k-calif', value: v == null ? '—' : v.toFixed(1), unit: v == null ? '' : ' /10', delta: d == null ? '' : d === 0 ? 'Igual que ' + this.pn(period) : (d > 0 ? '↑ ' : '↓ ') + Math.abs(d).toFixed(1) + ' vs. ' + this.pn(period), dlColor: d != null && d < 0 ? 'var(--bermellon-ink)' : 'var(--indigo)', count, insight: ins, insColor: insC,
+      c: { isDot: true, isBar: false, dots, line: reg.join(' '), area: reg.length ? reg[0].split(',')[0] + ',100 ' + reg.join(' ') + ' ' + reg[reg.length - 1].split(',')[0] + ',100' : '', hasThr: true, thr: 70, capL: period === 'anual' ? 'ene' : pts[0] && pts[0].s ? pts[0].s.d : '', capR: period === 'anual' ? 'oct' : pts[n - 1] && pts[n - 1].s ? pts[n - 1].s.d : '' }, md };
+  }
+
+  cobros(period) {
+    const B = this.B(); const JADE = '#2E8C7E';
+    let bk;
+    if (period === 'hoy') bk = [8, 10, 12, 14, 16, 18].map((h) => ({ l: (h % 12 || 12) + (h < 12 ? ' am' : ' pm'), t: 'Hoy, de ' + (h % 12 || 12) + ' a ' + ((h + 2) % 12 || 12), test: (p) => p.day === 12 && p.h >= h && p.h < h + 2, fut: h >= 14 }));
+    else if (period === 'sem') bk = ['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'].map((x, i) => ({ l: x, t: x + ' ' + (12 + i) + ' oct', test: (p) => p.day === 12 + i, fut: i > 0 }));
+    else if (period === 'mes') bk = [[1, 4], [5, 11], [12, 18], [19, 25], [26, 31]].map((r) => ({ l: r[0] + ' oct', t: 'Del ' + r[0] + ' al ' + r[1] + ' oct', test: (p) => p.day >= r[0] && p.day <= r[1], fut: r[0] > 12 }));
+    else bk = B.M.map((x, i) => ({ l: x, t: B.MF[i], fut: false, month: i }));
+    const mesTot = this.pays('mes').reduce((a, p) => a + p.a, 0);
+    const vals = bk.map((b, i) => (period === 'anual' ? (i < 9 ? B.A_COB[i] : mesTot) : B.P.filter(b.test).reduce((a, p) => a + p.a, 0)));
+    const ps = period === 'anual' ? [] : this.pays(period);
+    const v = period === 'anual' ? B.A_COB.reduce((a, b) => a + b, 0) + mesTot : ps.reduce((a, p) => a + p.a, 0);
+    const prev = period === 'anual' ? 80100 : period === 'mes' ? 4355 : this.pays(period, true).reduce((a, p) => a + p.a, 0);
+    const lastPaid = bk.reduce((a, b, i) => (!b.fut && vals[i] > 0 ? i : a), 0);
+    const si = this.state.sel.cobros == null || this.state.sel.cobros >= bk.length || bk[this.state.sel.cobros].fut ? lastPaid : this.state.sel.cobros;
+    const max = Math.max.apply(null, vals.concat([1])) * 1.15;
+    const peak = vals.indexOf(Math.max.apply(null, vals));
+    const bars = bk.map((b, i) => ({ h: (vals[i] / max) * 100, on: i === si, delay: (0.1 + i * 0.05).toFixed(2) + 's', peak: !b.fut && i === peak && vals[i] > 0, cls: 'mb' + (b.fut ? ' fut' : i === si ? ' on' : ' dim'), tip: b.t + ': ' + (b.fut ? 'por venir' : this.money(vals[i])), pick: () => { if (!b.fut) this.pick('cobros', i); } }));
+    const b = bk[si];
+    const inB = period === 'anual' ? [] : B.P.filter(b.test);
+    const days = {}; ps.forEach((p) => { days[p.day] = 1; }); const dn = Object.keys(days).length;
+    const d = prev ? Math.round(((v - prev) / prev) * 100) : null;
+    return { name: 'Cobros', kcls: 'mini k-cobros', value: this.money(v), unit: '', delta: d == null ? '' : (d >= 0 ? '↑ ' : '↓ ') + Math.abs(d) + '% vs. ' + (period === 'mes' ? 'el mismo día de sep.' : this.pn(period)), dlColor: d != null && d < 0 ? 'var(--bermellon-ink)' : 'var(--jade-strong)',
+      count: period === 'anual' ? 'Enero a octubre' : ps.length + (ps.length === 1 ? ' pago registrado' : ' pagos registrados'),
+      insight: period === 'anual' ? 'Agosto fue tu mejor mes ($9,100)' : dn ? 'Los cobros se concentraron en ' + dn + (dn === 1 ? ' día' : ' días') + ' de pago' : 'Aún no hay cobros', insColor: '#D9A23A',
+      c: { isDot: false, isBar: true, bars, hasThr: false, capL: bk[0].l, capR: bk[bk.length - 1].l },
+      md: { title: b.t, big: this.money(vals[si]), color: 'var(--sumi)', sub: period === 'anual' ? 'Cobrado en el mes' : inB.length + (inB.length === 1 ? ' pago' : ' pagos'), chips: inB.slice(0, 3).map((p) => ({ n: p.n.split(' ')[0], v: this.money(p.a), hasV: true, c: JADE })), hasMsg: inB.length > 3, msg: '+' + (inB.length - 3) + ' más', msgColor: 'var(--bermellon-strong)' } };
+  }
+
+  timeline() {
+    const now = this.state.now, S = 480, PX = 0.62;
+    const y = (m) => Math.max(0, Math.min(720, m - S)) * PX;
+    const defs = [
+      { id: 's810', s: 600, e: 720, name: 'Secundaria 8–10', alerts: 2, done: true },
+      { id: 'p5a', s: 960, e: 1080, name: 'Primaria 5A', alerts: 3 },
+      { id: 'ana', s: 1080, e: 1140, name: 'Ana Rivera', alerts: 2 }
+    ];
+    const next = defs.find((d) => d.s > now), live = defs.find((d) => d.s <= now && d.e > now);
+    const blocks = defs.map((d, i) => {
+      let st = 'later', lab = 'Programada';
+      if (d.e <= now) { st = d.done ? 'done' : 'live'; lab = d.done ? 'Completada' : 'Por registrar'; }
+      else if (d.s <= now) { st = 'live'; lab = 'En curso'; }
+      else if (next && next.id === d.id) { st = 'next'; lab = 'Próxima · en ' + this.dur(d.s - now); }
+      return { name: d.name, lab, alerts: d.alerts, hasAlerts: d.alerts > 0, top: y(d.s), h: y(d.e) - y(d.s) - 4, delay: (0.2 + i * 0.12).toFixed(2) + 's', range: this.clock(d.s).replace(' a. m.', '').replace(' p. m.', '') + '–' + this.clock(d.e), isSel: this.state.cls === d.id, cls: 'vb ' + st + (this.state.cls === d.id ? ' sel' : ''), aria: d.name + ', ' + lab + ', ' + d.alerts + ' avisos', pick: () => this.setState({ cls: d.id }) };
+    });
+    const ticks = [8, 10, 12, 14, 16, 18, 20].map((h) => ({ top: y(h * 60), l: this.clock(h * 60).replace(':00', '') }));
+    const free = next && !live ? next.s - now : 0;
+    const RED = '#A8321C', TON = { Ana: '#34437F', Mateo: '#7E5A12', Luna: '#A8321C', Diego: '#5A524A', Emilio: '#5A524A', 'Sofía': '#7E5A12', Valeria: '#34437F' };
+    const r = (n, st, cls) => ({ n, ini: n[0], c: TON[n] || '#5A524A', hasSt: !!st, st: st || '', stCls: cls || '' });
+    const p5 = defs[1];
+    const cards = {
+      s810: { kicker: 'Completada · 10:00 a. m. – 12:00 p. m.', color: 'var(--indigo)', name: 'Secundaria 8–10', sub: '2 de 3 presentes · promedio 9.5', roster: [r('Ana', 'No pagó', 'st st-pend'), r('Mateo', 'Presente', 'st st-ok'), r('Luna', 'Faltó', 'st st-venc')], notes: [{ c: '#D9472C', t: 'Luna faltó: su segunda falta en las últimas 3 clases.' }, { c: '#D9A23A', t: 'Ana no pagó esta clase ($210). Tiene otra hoy a las 6:00 p. m.' }], primary: false, secondary: true, secLbl: 'Ver registro' },
+      p5a: { kicker: now >= p5.e ? 'Terminó · por registrar' : now >= p5.s ? 'En curso' : 'Próxima · empieza en ' + this.dur(p5.s - now), color: 'var(--bermellon-ink)', name: 'Primaria 5A', sub: '4:00 – 6:00 p. m. · 5 alumnos · Lectura cap. 3', roster: [r('Diego'), r('Emilio'), r('Luna', '2 faltas', 'st st-venc'), r('Sofía', 'Debe $150', 'st st-pend'), r('Valeria', 'Sin calificar', 'st st-pend')], notes: [], primary: true, secondary: false, secLbl: '' },
+      ana: { kicker: 'Programada · 6:00 – 7:00 p. m.', color: 'var(--sumi-muted)', name: 'Ana Rivera', sub: 'Individual · asistencia 100% · promedio 9.2', roster: [r('Ana', 'Debe $420', 'st st-venc')], notes: [{ c: '#D9472C', t: 'Debe $420 de 2 clases (5 y 12 oct).' }, { c: '#D9A23A', t: 'La clase del jue 8 oct sigue sin registrar.' }], primary: false, secondary: true, secLbl: 'Registrar la del jue 8' }
+    };
+    return {
+      ticks, blocks, nowTop: y(now), nowLbl: this.clock(now), hasFree: free > 0, freeTop: y(now), freeH: next ? y(next.s) - y(now) : 0, freeLbl: 'Libre · ' + this.dur(free),
+      headline: live ? 'Ahora estás en ' + live.name + '.' : next ? 'La siguiente clase es ' + next.name + ', en ' + this.dur(next.s - now) + '.' : 'Terminaste tus clases de hoy.',
+      cd: cards[this.state.cls]
+    };
+  }
+
+  renderVals() {
+    const per = this.state.period;
+    const P = [['hoy', 'Hoy', 'Hoy'], ['sem', 'Semanal', 'Tu semana'], ['mes', 'Mensual', 'Tu mes'], ['anual', 'Anual', 'Tu año']];
+    return Object.assign(this.timeline(), {
+      periods: P.map((p) => ({ label: p[1], cls: p[0] === per ? 'active' : '', pressed: p[0] === per, pick: () => this.setState({ period: p[0], sel: {} }) })),
+      periodTitle: P.find((p) => p[0] === per)[2],
+      metrics: [this.asis(per), this.calif(per), this.cobros(per)],
+      goAsis: () => this.setState({ period: 'mes', sel: {} }),
+      goCalif: () => this.setState({ period: 'mes', sel: { calif: 5 } }),
+      goCob: () => this.setState({ period: 'mes', sel: {} })
+    });
+  }
+}
+</script>
+</body>
+</html>

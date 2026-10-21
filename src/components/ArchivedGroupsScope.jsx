@@ -1,5 +1,6 @@
 import { Archive, Info } from "lucide-react";
 import { useI18n } from "../i18n";
+import { Switch } from "./ui";
 
 export function ArchivedGroupsScope({ scope }) {
   const { t, locale } = useI18n();
@@ -7,7 +8,7 @@ export function ArchivedGroupsScope({ scope }) {
   const included = scope.included;
   return (
     <section
-      className={"archive-statistics-scope " + (included ? "is-included" : "")}
+      className={"archive-statistics-scope scope-notice " + (included ? "is-included is-on" : "")}
       aria-label={t("Archived groups in statistics")}
     >
       <div className="archive-statistics-control">
@@ -15,16 +16,7 @@ export function ArchivedGroupsScope({ scope }) {
           <Archive size={18} aria-hidden="true" />
           {t("Include archived groups")}
         </span>
-        <button
-          type="button"
-          role="switch"
-          aria-label={t("Include archived groups")}
-          aria-checked={included}
-          className="archive-statistics-switch"
-          onClick={() => scope.onChange(!included)}
-        >
-          <span />
-        </button>
+        <Switch label={t("Include archived groups")} checked={included} onChange={scope.onChange} />
       </div>
       <div className="archive-statistics-notice" role="status">
         <Info size={16} aria-hidden="true" />

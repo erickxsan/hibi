@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Clases · fluido</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/hibi/components/bundle.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&amp;family=Albert+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+:root{--bermellon:#D9472C;--bermellon-strong:#C23B22;--bermellon-ink:#A8321C;--bermellon-soft:#F9E3DE;--sumi:#1E1C20;--sumi-muted:#5A524A;--sumi-subtle:#9A8F80;--washi:#F6F1E8;--papel:#FFFFFF;--kraft:#EFE8DB;--line:#E8DFCF;--line-soft:#F1EBE0;--line-control:#8F8475;--indigo:#34437F;--indigo-soft:#E5E8F2;--jade:#2E8C7E;--jade-strong:#23705F;--jade-soft:#E3F1EE;--ocre:#D9A23A;--ocre-ink:#7E5A12;--ocre-soft:#F8EDD5;--focus:#34437F;--overlay:rgba(30,28,32,.45);--space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:20px;--space-6:24px;--space-8:32px;--space-10:40px;--space-12:48px;--radius-sm:8px;--radius-md:10px;--radius-lg:12px;--radius-xl:16px;--radius-pill:999px;--shadow-card:0 1px 2px rgba(30,28,32,.05);--shadow-overlay:0 16px 40px rgba(30,28,32,.16);--control-height:44px;--segment-height:36px;--sidebar-width:232px;--topbar-height:60px;--drawer-width:480px;--font-display:"Dela Gothic One","Arial Black",system-ui,sans-serif;--font-sans:"Albert Sans","Segoe UI",system-ui,sans-serif}
+body{margin:0}
+a{color:#C23B22}a:hover{color:#A8321C}
+.side{flex:1 1 220px;max-width:220px;padding:28px 14px 24px;display:flex;flex-direction:column;gap:28px}
+.side .sidebar-link:hover{background:var(--papel)}
+.sheet{flex:999 1 560px;min-width:0;margin:12px 12px 12px 0;background:var(--papel);border:1px solid var(--line);border-radius:16px;padding:40px clamp(20px,4vw,56px) 0;display:flex;flex-direction:column}
+.ov{margin:0;font:800 12px/16px var(--font-sans);letter-spacing:.12em;text-transform:uppercase;color:var(--sumi-muted)}
+.st{display:inline-flex;align-items:center;gap:7px;font:700 13px/18px var(--font-sans);white-space:nowrap}
+.st::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;flex:none}
+.st-ok{color:var(--jade-strong)}.st-ok::before{background:var(--jade)}
+.st-pend{color:var(--ocre-ink)}.st-pend::before{background:var(--ocre)}
+.st-venc{color:var(--bermellon-ink)}.st-venc::before{background:var(--bermellon)}
+.st-done{color:var(--indigo)}
+.st-prog{color:var(--sumi-muted)}.st-prog::before{background:var(--sumi-subtle)}
+.cols{display:flex;flex-wrap:wrap;column-gap:48px;row-gap:32px;padding-top:28px;flex:1}
+.rail{flex:1 1 260px;max-width:300px;min-width:0;display:flex;flex-direction:column;gap:20px}
+.week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));text-align:center}
+.week span{display:flex;flex-direction:column;align-items:center;gap:4px;font:700 12px/16px var(--font-sans);color:var(--sumi-muted)}
+.week b{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font:700 14px/1 var(--font-sans);color:var(--sumi);font-variant-numeric:tabular-nums}
+.week b.on{background:var(--sumi);color:var(--papel)}
+.week i{width:5px;height:5px;border-radius:50%;background:var(--indigo)}
+.week i.no{background:transparent}
+.ag{display:flex;flex-direction:column}
+.ag h3{margin:12px 0 4px;font:800 12px/16px var(--font-sans);letter-spacing:.12em;text-transform:uppercase;color:var(--sumi-muted)}
+.it{display:flex;gap:14px;padding:12px 12px;margin:0 -12px;border-radius:10px;text-decoration:none;color:var(--sumi)}
+.it:hover{background:var(--washi)}
+.it.sel{background:var(--washi)}
+.it time{width:72px;flex:none;font:700 14px/20px var(--font-sans);font-variant-numeric:tabular-nums;color:var(--sumi-muted)}
+.it.sel time{color:var(--sumi)}
+.it strong{display:block;font:700 15px/20px var(--font-sans)}
+.it small{display:block;font:500 13px/18px var(--font-sans);color:var(--sumi-muted)}
+.main{flex:999 1 560px;min-width:0;display:flex;flex-direction:column}
+.task{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;padding:20px 0;border-top:1px solid var(--line-soft);border-bottom:1px solid var(--line-soft)}
+.rs{width:100%;border-collapse:collapse;min-width:680px}
+.rs th{text-align:left;padding:18px 16px 10px 0;font:700 12px/16px var(--font-sans);color:var(--sumi-muted);white-space:nowrap}
+.rs td,.rs tbody th{padding:12px 16px 12px 0;border-top:1px solid var(--line-soft);vertical-align:middle;text-align:left}
+.rs .person small{letter-spacing:0;font-weight:500;font-size:13px}
+.note{color:var(--bermellon-ink)!important;font-weight:600!important}
+.bar{position:sticky;bottom:0;background:var(--papel);border-top:1px solid var(--line);margin:24px calc(-1 * clamp(20px,4vw,56px)) 0;padding:16px clamp(20px,4vw,56px) 20px;border-radius:0 0 16px 16px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+.sm{display:flex;flex-wrap:wrap;column-gap:18px;row-gap:4px;font:600 14px/20px var(--font-sans);color:var(--sumi-muted)}
+.sm b{color:var(--sumi);font-variant-numeric:tabular-nums}
+@media (max-width:780px){.side{max-width:none;flex-basis:100%;padding:16px}.side .sidebar-companion{display:none}.sheet{margin:0;border-radius:0;border-left:0;border-right:0}.rail{max-width:none}.bar{border-radius:0}}
+
+.rg{display:flex;flex-direction:column;min-width:680px}
+.rgh,.rgr{display:grid;grid-template-columns:minmax(220px,1.4fr) 112px minmax(210px,1.3fr) 128px;gap:16px;align-items:center}
+.rgh{padding:0 0 10px;font:700 12px/16px var(--font-sans);color:var(--sumi-muted);border-bottom:1px solid var(--line)}
+.rgr{min-height:66px;border-bottom:1px solid var(--line-soft)}
+.rgr .person small{letter-spacing:0;font-weight:500;font-size:13px}
+.mpay{display:flex;flex-direction:column;gap:2px;align-items:flex-start}
+.mpay small{font:500 12px/16px var(--font-sans);color:var(--sumi-muted)}
+.mk{border:0;background:none;padding:0;font:700 13px/18px var(--font-sans);color:#C23B22;cursor:pointer}
+.mut{color:var(--sumi-muted);font-weight:600;font-size:14px}
+.gin{display:inline-flex;align-items:center;gap:6px}
+.gin input{width:64px;min-height:36px;text-align:right}
+.mbadge{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:999px;background:var(--indigo-soft);color:var(--indigo);font:700 12px/16px var(--font-sans)}
+span.sc-interp{display:inline!important;position:static!important;font:inherit!important;color:inherit!important;letter-spacing:inherit!important;text-transform:inherit!important;background:none!important;padding:0!important;margin:0!important;border:0!important;box-shadow:none!important;width:auto!important;height:auto!important;min-width:0!important;transform:none!important;opacity:1!important;animation:none!important}
+</style>
+</helmet>
+<div class="hibi-ds" style="min-height:100vh;display:flex;flex-wrap:wrap;background:var(--washi)">
+
+  <aside class="side">
+    <a class="hibi-brand" href="#" aria-label="Inicio de Hibi"><img src="/_blob/19d7de209d497968ffcc94f1e708a867" alt="hibi" style="height:40px"></a>
+    <nav class="sidebar-nav" aria-label="Navegación principal">
+      <a class="sidebar-link" href="FluidoInicioC.dc.html"><svg class="ico" viewBox="0 0 24 24"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"></path><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>Inicio</a>
+      <a class="sidebar-link" href="FluidoComunidad.dc.html"><svg class="ico" viewBox="0 0 24 24"><path d="M18 21a8 8 0 0 0-16 0"></path><circle cx="10" cy="8" r="5"></circle><path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3"></path></svg>Comunidad</a>
+      <a class="sidebar-link active" href="FluidoClases.dc.html" aria-current="page"><svg class="ico" viewBox="0 0 24 24"><path d="M8 2v3"></path><path d="M16 2v3"></path><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M3 9h18"></path><path d="M8 13h.01"></path><path d="M12 13h.01"></path><path d="M16 13h.01"></path><path d="M8 17h.01"></path><path d="M12 17h.01"></path><path d="M16 17h.01"></path></svg>Clases</a>
+      <a class="sidebar-link" href="FluidoSeguimiento.dc.html"><svg class="ico" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"></path><path d="M18 17V9"></path><path d="M13 17V5"></path><path d="M8 17v-3"></path></svg>Seguimiento</a>
+      <a class="sidebar-link" href="FluidoConfig.dc.html"><svg class="ico" viewBox="0 0 24 24"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"></path><circle cx="12" cy="12" r="3"></circle></svg>Configuración</a>
+    </nav>
+    <div class="sidebar-companion" style="gap:12px">
+      <img src="/_blob/f94d92622e26d07cb8c2035979131ea0" alt="" style="width:52px;height:52px">
+      <span class="sync-pill" style="align-self:flex-start">Sincronizado</span>
+    </div>
+  </aside>
+
+  <main class="sheet">
+    <div class="page-heading" style="flex-wrap:wrap;align-items:flex-end">
+      <div><h1>Clases</h1><p>Elige una clase de tu agenda y regístrala aquí mismo.</p></div>
+      <a class="button button-secondary" href="FluidoClasesNueva.dc.html"><svg class="ico" viewBox="0 0 24 24"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>Nueva clase</a>
+    </div>
+
+    <nav class="tabs" aria-label="Vistas de clases" style="margin-top:24px">
+      <a class="tab is-active" href="FluidoClases.dc.html" aria-current="page" style="display:inline-flex;align-items:center;text-decoration:none">Próxima clase</a>
+      <a class="tab" href="FluidoClasesCalendario.dc.html" style="display:inline-flex;align-items:center;text-decoration:none">Calendario</a>
+      <a class="tab" href="FluidoClasesHistorial.dc.html" style="display:inline-flex;align-items:center;text-decoration:none">Historial</a>
+    </nav>
+
+    <div class="cols">
+      <!-- Agenda -->
+      <aside class="rail" aria-label="Agenda de la semana">
+        <div style="display:flex;justify-content:space-between;align-items:center"><span style="font:700 15px/20px var(--font-sans)">12 – 18 de octubre</span><span style="font:600 13px/18px var(--font-sans);color:var(--sumi-muted)">7 clases</span></div>
+        <div class="week" role="group" aria-label="Días de la semana">
+          <span>L<b class="on" aria-current="date">12</b><i></i></span>
+          <span>M<b>13</b><i></i></span>
+          <span>M<b>14</b><i></i></span>
+          <span>J<b>15</b><i></i></span>
+          <span>V<b>16</b><i class="no"></i></span>
+          <span>S<b>17</b><i></i></span>
+          <span>D<b>18</b><i class="no"></i></span>
+        </div>
+        <div class="ag">
+          <h3>Hoy</h3>
+          <a class="it" href="#"><time>10:00 a. m.</time><span><strong>Secundaria 8–10</strong><small>2 de 3 presentes · faltó Luna</small><span class="st st-done" style="margin-top:4px">Completada</span></span></a>
+          <a class="it sel" href="#" aria-current="true"><time>4:00 p. m.</time><span><strong>Primaria 5A</strong><small>2 h · 5 alumnos</small><span class="st st-prog" style="margin-top:4px">Programada</span></span></a>
+          <a class="it" href="#"><time>6:00 p. m.</time><span><strong>Ana Rivera</strong><small>1 h · Individual</small></span></a>
+          <h3>Mañana · mar 13</h3>
+          <a class="it" href="#"><time>5:00 p. m.</time><span><strong>Prepa · Álgebra</strong><small>1.5 h · 3 alumnos</small></span></a>
+          <h3>Mié 14</h3>
+          <a class="it" href="#"><time>10:00 a. m.</time><span><strong>Secundaria 8–10</strong><small>2 h · 3 alumnos</small></span></a>
+        </div>
+      </aside>
+
+      <!-- Registro -->
+      <section class="main" aria-labelledby="cl-t">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;padding-bottom:20px">
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <span class="tnum" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;font:600 14px/20px var(--font-sans);color:var(--sumi-muted)">Hoy, lun 12 oct · 4:00 – 6:00 p. m. · Grupo<sc-if value="{{isMes}}"><span class="mbadge">Mensual · $1,200 · vence hoy (3.ª clase)</span></sc-if></span>
+            <h2 id="cl-t" style="margin:0;font:800 28px/34px var(--font-sans)">Primaria 5A</h2>
+          </div>
+          <button class="button button-ghost" type="button" style="color:var(--sumi)"><svg class="ico" viewBox="0 0 24 24"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"></path><path d="m15 5 4 4"></path></svg>Editar clase</button>
+        </div>
+
+        <div class="task">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <span class="field-label">¿Registrar tarea?</span>
+            <div class="segmented" role="group" aria-label="¿Registrar tarea?"><button type="button" class="{{t.yes}}" aria-pressed="{{t.on}}" onClick="{{t.setYes}}">Sí</button><button type="button" class="{{t.no}}" aria-pressed="{{t.off}}" onClick="{{t.setNo}}">No</button></div>
+          </div>
+          <sc-if value="{{t.on}}">
+            <label class="field" style="flex:1 1 260px"><span class="field-label">Nombre de la tarea</span><input class="control" value="Lectura cap. 3"></label>
+            <label class="field" style="width:140px"><span class="field-label">Puntaje máximo</span><input class="control tnum" value="10"></label>
+          </sc-if>
+        </div>
+
+        <div style="overflow-x:auto" role="region" aria-label="Lista de Primaria 5A" tabindex="0">
+          <div class="rg" role="table" aria-label="Lista de Primaria 5A">
+            <div class="rgh" role="row"><span role="columnheader">Alumno</span><span role="columnheader">Asistencia</span><span role="columnheader">{{payHead}}</span><span role="columnheader">Calificación</span></div>
+            <sc-for list="{{rows}}" as="r">
+              <div class="rgr" role="row">
+                <span role="rowheader" class="person"><sc-if value="{{r.a.oso}}"><span class="{{r.av}}" aria-hidden="true"><svg viewBox="0 0 48 48"><circle cx="24" cy="27.2" r="13.4"></circle><path d="M13.6 19.2A5 5 0 1 1 19.9 14.4M34.4 19.2A5 5 0 1 0 28.1 14.4"></path><circle cx="18.8" cy="25.2" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="29.2" cy="25.2" r="1.8" fill="currentColor" stroke="none"></circle><ellipse cx="24" cy="31.4" rx="5.2" ry="3.9"></ellipse><ellipse cx="24" cy="30" rx="1.9" ry="1.3" fill="currentColor" stroke="none"></ellipse><path d="M24 31.2v1.5"></path><ellipse cx="15.2" cy="30.2" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><ellipse cx="32.8" cy="30.2" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse></svg></span></sc-if><sc-if value="{{r.a.perro}}"><span class="{{r.av}}" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M13.5 22C13.5 15 18 11 24 11S34.5 15 34.5 22V27.5C34.5 34 29.8 38.8 24 38.8S13.5 34 13.5 27.5Z"></path><path d="M14.2 16.5C9.5 14.8 6.5 18.5 7.2 24.6 7.6 28.4 10.6 29.6 13.5 27.3M33.8 16.5C38.5 14.8 41.5 18.5 40.8 24.6 40.4 28.4 37.4 29.6 34.5 27.3"></path><circle cx="19.2" cy="24.2" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="28.8" cy="24.2" r="1.8" fill="currentColor" stroke="none"></circle><ellipse cx="24" cy="30.8" rx="4.6" ry="3.6"></ellipse><ellipse cx="24" cy="29.3" rx="1.9" ry="1.3" fill="currentColor" stroke="none"></ellipse><path d="M24 30.4v1.4"></path><ellipse cx="16" cy="29.2" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><ellipse cx="32" cy="29.2" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse></svg></span></sc-if><sc-if value="{{r.a.conejo}}"><span class="{{r.av}}" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M19.2 17.4C15.8 12.4 15.2 5.6 17.8 4.3S22.8 9.2 22.1 16.5M28.8 17.4C32.2 12.4 32.8 5.6 30.2 4.3S25.2 9.2 25.9 16.5"></path><ellipse cx="24" cy="28" rx="13" ry="11.6"></ellipse><circle cx="19.2" cy="27" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="28.8" cy="27" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="24" cy="30.2" r="1.1" fill="currentColor" stroke="none"></circle><path d="M22 32.1q1 1 2 0q1 1 2 0"></path><ellipse cx="15.6" cy="31" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><ellipse cx="32.4" cy="31" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse></svg></span></sc-if><sc-if value="{{r.a.buho}}"><span class="{{r.av}}" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M11.5 18C11.5 13.5 13 10.6 15.2 9.2 16.8 11 18.2 12.2 19.8 13 22.6 12.2 25.4 12.2 28.2 13 29.8 12.2 31.2 11 32.8 9.2 35 10.6 36.5 13.5 36.5 18V28C36.5 35.2 31 40 24 40S11.5 35.2 11.5 28Z"></path><circle cx="18.7" cy="22.8" r="4.9"></circle><circle cx="29.3" cy="22.8" r="4.9"></circle><circle cx="19.3" cy="23.4" r="2.1" fill="currentColor" stroke="none"></circle><circle cx="28.7" cy="23.4" r="2.1" fill="currentColor" stroke="none"></circle><path d="M22.8 28.2Q24 31 25.2 28.2Z" fill="currentColor"></path><ellipse cx="15.6" cy="31" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><ellipse cx="32.4" cy="31" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><path d="M21 40v1.6M27 40v1.6"></path></svg></span></sc-if><sc-if value="{{r.a.pinguino}}"><span class="{{r.av}}" aria-hidden="true"><svg viewBox="0 0 48 48"><ellipse cx="24" cy="26" rx="13" ry="17"></ellipse><ellipse cx="24" cy="29" rx="8" ry="11"></ellipse><circle cx="20" cy="21" r="1.4" fill="currentColor" stroke="none"></circle><circle cx="28" cy="21" r="1.4" fill="currentColor" stroke="none"></circle><path d="m21 25 3 2 3-2-3-2-3 2ZM11 26l-5 7M37 26l5 7M18 42l-4 2M30 42l4 2"></path></svg></span></sc-if><span><strong>{{r.name}}</strong><small style="color:{{r.noteC}};">{{r.note}}</small></span></span>
+                <span role="cell"><span class="choice-group attendance-choice" role="group" aria-label="{{r.ariaA}}"><button type="button" class="{{r.pCls}}" aria-pressed="{{r.isP}}" aria-label="Presente" onClick="{{r.setP}}">P</button><button type="button" class="{{r.aCls}}" aria-pressed="{{r.isA}}" aria-label="Ausente" onClick="{{r.setA}}">A</button></span></span>
+                <span role="cell">
+                  <sc-if value="{{r.showPay}}"><span class="choice-group payment-choice" role="group" aria-label="{{r.ariaP}}"><button type="button" class="{{r.paidCls}}" aria-pressed="{{r.isPaid}}" aria-label="Pagado" onClick="{{r.setPaid}}"><svg class="ico" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"></path></svg></button><button type="button" class="{{r.pendCls}}" aria-pressed="{{r.isPend}}" aria-label="Pendiente" onClick="{{r.setPend}}"><svg class="ico" viewBox="0 0 24 24"><path d="M5 12h14"></path></svg></button><button type="button" class="{{r.noCls}}" aria-pressed="{{r.isNo}}" aria-label="No pagado" onClick="{{r.setNo}}"><svg class="ico" viewBox="0 0 24 24"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button></span></sc-if>
+                  <sc-if value="{{r.showMes}}"><span class="mpay"><span class="{{r.mCls}}">{{r.mTxt}}</span><small>{{r.mSub}}</small><sc-if value="{{r.canMark}}"><button type="button" class="mk" onClick="{{r.mark}}">{{r.markL}}</button></sc-if></span></sc-if>
+                  <sc-if value="{{r.payDash}}"><span class="mut">{{r.dashTxt}}</span></sc-if>
+                </span>
+                <span role="cell"><sc-if value="{{r.gradeOn}}"><span class="gin"><input class="control tnum" value="{{r.g}}" onInput="{{r.setG}}" aria-label="{{r.ariaG}}"><span style="color:var(--sumi-muted)">/10</span></span></sc-if><sc-if value="{{r.gradeOff}}"><span class="mut">{{r.gOff}}</span></sc-if></span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div class="bar" style="margin-top:auto">
+          <div class="sm" aria-live="polite"><sc-for list="{{sum}}" as="x"><span><b>{{x.v}}</b> {{x.l}}</span></sc-for></div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="button button-ghost" type="button" style="color:var(--sumi-muted)">Marcar cancelada</button>
+            <button class="button button-primary" type="button"><svg class="ico" viewBox="0 0 24 24"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"></path><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"></path><path d="M7 3v4a1 1 0 0 0 1 1h7"></path></svg>Guardar clase</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1040}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { mode: 'clase', att: {}, pay: {}, gr: {}, mpaid: {}, task: true }; }
+  renderVals() {
+    const st = this.state, isMes = st.mode === 'mes';
+    const ST = { 'Diego Soto': ['oso', 'kraft'], 'Emilio Ruiz': ['perro', 'kraft'], 'Luna López': ['conejo', 'bermellon'], 'Sofía Martín': ['buho', 'ocre'], 'Valeria Gómez': ['pinguino', 'indigo'] };
+    const M = Object.keys(ST);
+    const NOTE = isMes
+      ? { 'Diego Soto': ['Al día', ''], 'Emilio Ruiz': ['Mensualidad pendiente', 'var(--ocre-ink)'], 'Luna López': ['Paga por clase · faltó a 3 de 5', 'var(--bermellon-ink)'], 'Sofía Martín': ['Mensualidad pendiente', 'var(--ocre-ink)'], 'Valeria Gómez': ['Cuota propia $1,000', ''] }
+      : { 'Diego Soto': ['Al día', ''], 'Emilio Ruiz': ['Al día', ''], 'Luna López': ['Faltó a 3 de sus últimas 5 clases', 'var(--bermellon-ink)'], 'Sofía Martín': ['Debe $150 de la clase del 8 oct', 'var(--ocre-ink)'], 'Valeria Gómez': ['Falta calificar Lectura cap. 2', ''] };
+    // Mensualidades de octubre (escenario mensual): fee, pagada desde antes
+    const MES = { 'Diego Soto': [1200, 'pagada el 5 oct'], 'Emilio Ruiz': [1200, null], 'Sofía Martín': [1200, null], 'Valeria Gómez': [1000, 'pagada el 8 oct'] };
+    const PER = 150;
+    const set = (k, n, v) => { const o = Object.assign({}, this.state[k]); o[n] = o[n] === v ? undefined : v; const u = {}; u[k] = o; this.setState(u); };
+    const money = (v) => '$' + v.toLocaleString('es-MX');
+    let cobrado = 0, pend = 0;
+    const rows = M.map((n) => {
+      const a = st.att[n], p = st.pay[n], av = {}; av[ST[n][0]] = true;
+      const monthly = isMes && MES[n];
+      const r = { name: n, a: av, av: 'student-animal-avatar avatar-tone-' + ST[n][1], note: NOTE[n][0], noteC: NOTE[n][1] || 'var(--sumi-muted)',
+        isP: a === 'P', isA: a === 'A', pCls: a === 'P' ? 'is-present' : '', aCls: a === 'A' ? 'is-absent' : '',
+        ariaA: 'Asistencia de ' + n, ariaP: 'Pago de ' + n, ariaG: 'Calificación de ' + n,
+        setP: () => set('att', n, 'P'), setA: () => set('att', n, 'A'),
+        isPaid: p === 'paid', isPend: p === 'pend', isNo: p === 'no', paidCls: p === 'paid' ? 'is-paid' : '', pendCls: p === 'pend' ? 'is-pending' : '', noCls: p === 'no' ? 'is-unpaid' : '',
+        setPaid: () => set('pay', n, 'paid'), setPend: () => set('pay', n, 'pend'), setNo: () => set('pay', n, 'no'),
+        g: st.gr[n] || '', setG: (e) => { const g = Object.assign({}, this.state.gr); g[n] = e.target.value; this.setState({ gr: g }); },
+        gradeOn: st.task && a === 'P', gradeOff: !(st.task && a === 'P'), gOff: !st.task ? 'Sin tarea' : a === 'A' ? '— ausente' : '—',
+        showPay: false, showMes: false, payDash: false, dashTxt: '— ausente', canMark: false };
+      if (monthly) {
+        const fee = MES[n][0], before = MES[n][1], today = st.mpaid[n];
+        r.showMes = true;
+        if (before) { r.mCls = 'st st-ok'; r.mTxt = 'Octubre pagado'; r.mSub = money(fee) + ' · ' + before; }
+        else if (today) { r.mCls = 'st st-ok'; r.mTxt = 'Octubre pagado'; r.mSub = money(fee) + ' · hoy'; r.canMark = true; r.markL = 'Deshacer'; cobrado += fee; }
+        else { r.mCls = 'st st-pend'; r.mTxt = 'Octubre · ' + money(fee); r.mSub = 'Vence hoy, en esta clase'; r.canMark = true; r.markL = 'Marcar pagada'; pend += fee; }
+        r.mark = () => { const o = Object.assign({}, this.state.mpaid); o[n] = !o[n]; this.setState({ mpaid: o }); };
+        if (n !== 'Valeria Gómez') { r.note = before || today ? 'Al día' : 'Mensualidad de octubre pendiente'; r.noteC = before || today ? 'var(--sumi-muted)' : 'var(--ocre-ink)'; }
+      } else if (a === 'P') {
+        r.showPay = true;
+        if (p === 'paid') cobrado += PER; else if (p) pend += PER;
+      } else if (a === 'A') { r.payDash = true; r.dashTxt = '— ausente · no se cobra'; }
+      else { r.payDash = true; r.dashTxt = '—'; }
+      return r;
+    });
+    const nP = M.filter((n) => st.att[n] === 'P').length, nA = M.filter((n) => st.att[n] === 'A').length, nU = M.length - nP - nA;
+    const gs = M.filter((n) => st.att[n] === 'P' && parseFloat(st.gr[n])).map((n) => parseFloat(st.gr[n]));
+    const sum = [{ v: String(nP), l: nP === 1 ? 'presente' : 'presentes' }, { v: String(nA), l: nA === 1 ? 'ausente' : 'ausentes' }, { v: String(nU), l: 'sin marcar' }, { v: money(cobrado), l: 'cobrado hoy' }, { v: money(pend), l: 'pendiente' }];
+    if (gs.length) sum.push({ v: (gs.reduce((x, y) => x + y, 0) / gs.length).toFixed(1), l: 'promedio' });
+    return {
+      isMes, rows, sum, payHead: isMes ? 'Pago · mensualidad o clase' : 'Pago de esta clase',
+      t: { on: st.task, off: !st.task, yes: st.task ? 'active' : '', no: st.task ? '' : 'active', setYes: () => this.setState({ task: true }), setNo: () => this.setState({ task: false }) }
+    };
+  }
+}
+</script>
+</body>
+</html>

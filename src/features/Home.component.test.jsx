@@ -54,7 +54,8 @@ describe("AttendancePanel", () => {
     expect(document.querySelector(".home-metric-value")).toHaveTextContent("90%");
     expect(screen.getByRole("status")).toHaveTextContent("Group A · 10 students");
 
-    await user.selectOptions(screen.getByLabelText("Attendance group"), "group:b");
+    await user.click(screen.getByRole("combobox", { name: "Attendance group" }));
+    await user.click(screen.getByRole("option", { name: /Group B/ }));
     expect(document.querySelector(".home-metric-value")).toHaveTextContent("80%");
     expect(screen.getByText("Attendance in 1 class")).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("Group B · 8 students");

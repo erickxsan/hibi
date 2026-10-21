@@ -1,3 +1,4 @@
+import { Select } from "../components/ui";
 import { uiText } from "../i18n/index.jsx";
 import { ArchivedGroupsScope } from "../components/ArchivedGroupsScope";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -191,7 +192,7 @@ export function AttendancePanel({ title, sessions, previousSessions, onOpen }) {
         </span>
         <label className="home-attendance-scope">
           <span className="sr-only">{uiT("Attendance group")}</span>
-          <select
+          <Select
             aria-label={uiT("Attendance group")}
             value={activeScope}
             onChange={(event) => {
@@ -204,8 +205,7 @@ export function AttendancePanel({ title, sessions, previousSessions, onOpen }) {
                 {option.label}
               </option>
             ))}
-          </select>
-          <ChevronDown aria-hidden="true" size={14} />
+          </Select>
         </label>
       </header>
 

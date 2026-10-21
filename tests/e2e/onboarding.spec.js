@@ -68,9 +68,11 @@ test("sets up, resumes, saves the schedule and students, and completes the guide
   await page.getByRole("button", { name: "Empezar", exact: true }).click();
   await page.getByLabel("Nombre del grupo").fill("Inglés B1");
   await page.getByLabel("Materia", { exact: true }).fill("Inglés");
-  await page.getByRole("combobox", { name: "Duración" }).selectOption("1");
+  await page.getByRole("combobox", { name: "Duración" }).click();
+  await page.getByRole("option", { name: "1 hora", exact: true }).click();
   await page.getByRole("button", { name: "Añadir otro día" }).click();
-  await page.getByRole("combobox", { name: "Día", exact: true }).nth(1).selectOption("3");
+  await page.getByRole("combobox", { name: "Día", exact: true }).nth(1).click();
+  await page.getByRole("option", { name: "Miércoles", exact: true }).click();
   await page.getByRole("heading", { name: "Crea tu primer grupo" }).click();
   await page.screenshot({ path: testInfo.outputPath("group.png"), animations: "disabled" });
   await page.getByRole("button", { name: "Guardar y continuar" }).click();

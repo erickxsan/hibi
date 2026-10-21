@@ -1,3 +1,5 @@
+import { DatePicker, TimePicker } from "../components/DateTimePickers";
+import { RepeatPicker } from "../components/RepeatPicker";
 import { useI18n } from "../i18n/index.jsx";
 import { calculateCharge } from "../domain/calculations.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -32,6 +34,7 @@ import { useHistoryBackedState } from "../hooks/useHistoryNavigation";
 import { confirmDiscard, draftChanged, draftSignature, useUnsavedChanges } from "../hooks/useUnsavedChanges";
 import { getUiLocale } from "../i18n";
 import { playHibiSound } from "../utils/hibiSounds";
+import { nextRecurrenceDates, timeToMinutes } from "../domain/pickerModels";
 import {
   buildClassWorkspaceSessions,
   buildClassWorkspaceSessionsForRange,
@@ -51,16 +54,6 @@ import {
   minutesFromTime,
 } from "./classesCalendarModel";
 
-/** @type {Array<[number, string]>} */
-const DAY_OPTIONS = [
-  [1, "Mon"],
-  [2, "Tue"],
-  [3, "Wed"],
-  [4, "Thu"],
-  [5, "Fri"],
-  [6, "Sat"],
-  [7, "Sun"],
-];
 const PAGE_SIZE = 8;
 
 /** @param {string} value @param {Intl.DateTimeFormatOptions} [options] */
@@ -440,6 +433,33 @@ function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
   const { t: uiT } = useI18n();
   const [draft, setDraft] = useState(() => initialScheduleDraft(asOfDate, state));
   const [saving, setSaving] = useState(false);
+  const pickerSchedule = useMemo(() => {
+    if (!open || !draft.startDate) return { repeatDates: [], classDates: [], busy: [] };
+    const repeatDates =
+      draft.recurrence === "weekly"
+        ? nextRecurrenceDates({ ...draft, kind: "weekly", interval: draft.intervalWeeks })
+        : [];
+    const activeDates = new Set(repeatDates.length ? repeatDates : [draft.startDate]);
+    const endDate = [addMonths(draft.startDate, 2), ...activeDates].sort().at(-1);
+    const sessions = buildClassWorkspaceSessionsForRange(
+      state,
+      startOfMonth(draft.startDate),
+      endDate,
+      asOfDate,
+    ).filter((session) => session.statusLabel !== "Cancelled");
+    const busy = sessions
+      .filter((session) => activeDates.has(session.classDate) && timeToMinutes(session.startTime) !== null)
+      .map((session) => ({
+        start: timeToMinutes(session.startTime),
+        end: timeToMinutes(session.startTime) + Number(session.durationHours) * 60,
+        label: `${session.title} (${new Intl.DateTimeFormat(getUiLocale(), { weekday: "short", timeZone: "UTC" }).format(parseDateOnly(session.classDate))})`,
+      }));
+    return {
+      repeatDates,
+      classDates: [...new Set(sessions.map((session) => session.classDate))],
+      busy: [...new Map(busy.map((block) => [JSON.stringify(block), block])).values()],
+    };
+  }, [asOfDate, draft, open, state]);
   useEffect(() => {
     if (open) setDraft(initialScheduleDraft(asOfDate, state));
   }, [asOfDate, open, state]);
@@ -447,6 +467,7 @@ function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
   const valid =
     ownerReady &&
     draft.startDate &&
+    draft.startDate >= asOfDate &&
     draft.startTime &&
     Number(draft.durationHours) > 0 &&
     (draft.recurrence === "once" || draft.daysOfWeek.length > 0);
@@ -546,8 +567,10 @@ function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
         )}
         <div className="classes-new-grid">
           <Field label={uiT("Start date")} required>
-            <Input
-              type="date"
+            <DatePicker
+              today={asOfDate}
+              classDates={pickerSchedule.classDates}
+              repeatDates={pickerSchedule.repeatDates}
               value={draft.startDate}
               onChange={(event) => {
                 const startDate = event.target.value;
@@ -562,8 +585,11 @@ function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
             />
           </Field>
           <Field label={uiT("Time")} required>
-            <Input
-              type="time"
+            <TimePicker
+              minMinutes={0}
+              maxMinutes={1440}
+              durationMinutes={Number(draft.durationHours) * 60}
+              busy={pickerSchedule.busy}
               value={draft.startTime}
               onChange={(event) => update({ startTime: event.target.value })}
             />
@@ -583,41 +609,15 @@ function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
         </div>
         {draft.recurrence === "weekly" ? (
           <>
-            <Field label={uiT("Repeat every")}>
-              <Select
-                value={draft.intervalWeeks}
-                onChange={(event) => update({ intervalWeeks: Number(event.target.value) })}
-              >
-                <option value="1">{uiT("1 week")}</option>
-                <option value="2">{uiT("2 weeks")}</option>
-                <option value="3">{uiT("3 weeks")}</option>
-                <option value="4">{uiT("4 weeks")}</option>
-              </Select>
-            </Field>
-            <Field label={uiT("Days of the week")} required>
-              <div className="weekday-picker">
-                {DAY_OPTIONS.map(([value, label]) => {
-                  const active = draft.daysOfWeek.includes(value);
-                  return (
-                    <button
-                      type="button"
-                      key={value}
-                      className={active ? "active" : ""}
-                      aria-pressed={active}
-                      onClick={() =>
-                        update({
-                          daysOfWeek: active
-                            ? draft.daysOfWeek.filter((day) => day !== value)
-                            : [...draft.daysOfWeek, value].sort(),
-                        })
-                      }
-                    >
-                      {uiT(label)}
-                      {active ? <Check size={12} aria-hidden="true" /> : null}
-                    </button>
-                  );
-                })}
-              </div>
+            <Field label={uiT("Repeat")} required>
+              <RepeatPicker
+                kinds={["weekly"]}
+                startDate={draft.startDate}
+                value={{ kind: "weekly", interval: draft.intervalWeeks, daysOfWeek: draft.daysOfWeek }}
+                onChange={(rule) =>
+                  update({ intervalWeeks: rule.interval, daysOfWeek: rule.days.map((day) => (day === 0 ? 7 : day)) })
+                }
+              />
             </Field>
             <p className="classes-repeat-note">
               <CircleAlert size={15} aria-hidden="true" />

@@ -11,7 +11,7 @@ import {
   Trash2,
   UsersRound,
 } from "lucide-react";
-import { Button, Field, Input } from "../components/ui";
+import { Button, Field, Input, Select } from "../components/ui";
 import { getUiLocale, useI18n } from "../i18n";
 import ContextualTour from "./ContextualTour";
 import {
@@ -172,8 +172,7 @@ function ScheduleRows({ rows, setRows }) {
         {rows.map((slot, index) => (
           <div className="onboarding-schedule-row" key={slot.id}>
             <Field label={uiT("Day")}>
-              <select
-                className="control"
+              <Select
                 value={String(slot.dayOfWeek)}
                 onChange={(event) =>
                   setRows(
@@ -186,7 +185,7 @@ function ScheduleRows({ rows, setRows }) {
                     {uiT(day.label)}
                   </option>
                 ))}
-              </select>
+              </Select>
             </Field>
             <Field label={uiT("Time")}>
               <Input
@@ -199,8 +198,7 @@ function ScheduleRows({ rows, setRows }) {
               />
             </Field>
             <Field label={uiT("Duration")}>
-              <select
-                className="control"
+              <Select
                 value={String(slot.durationHours)}
                 onChange={(event) =>
                   setRows(
@@ -215,7 +213,7 @@ function ScheduleRows({ rows, setRows }) {
                     {uiT(option.label)}
                   </option>
                 ))}
-              </select>
+              </Select>
             </Field>
             <button
               className="onboarding-remove-schedule"

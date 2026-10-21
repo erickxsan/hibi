@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 const designSystem = readFileSync(new URL("./design-system.css", import.meta.url), "utf8");
-const ui = readFileSync(new URL("./components/ui.jsx", import.meta.url), "utf8");
+const ui = readFileSync(new URL("./components/Drawer.jsx", import.meta.url), "utf8");
 
 describe("mobile responsive layout contracts", () => {
   it("keeps primary tab bars on one axis without visible mobile scrollbars", () => {

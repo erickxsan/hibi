@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { createStarterState } from "../domain";
@@ -168,8 +168,11 @@ describe("OnboardingTutorial", () => {
     await user.type(screen.getByRole("textbox", { name: /Group name/ }), "Advanced English");
     await user.type(screen.getByRole("textbox", { name: /Subject/ }), "English");
     await user.click(screen.getByRole("button", { name: "Add another day" }));
-    await user.selectOptions(screen.getAllByRole("combobox", { name: "Day" })[1], "1");
-    fireEvent.change(screen.getAllByLabelText("Time")[1], { target: { value: "10:30" } });
+    await user.click(screen.getAllByRole("combobox", { name: "Day" })[1]);
+    await user.click(screen.getByRole("option", { name: "Monday" }));
+    await user.click(screen.getAllByRole("combobox", { name: "Time" })[1]);
+    await user.click(screen.getByRole("button", { name: /^10:00/ }));
+    await user.click(screen.getByRole("button", { name: "30 minutes" }));
     expect(screen.getByText("Classes on the same day can’t overlap.")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Save and continue" }));

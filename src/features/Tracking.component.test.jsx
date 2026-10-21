@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import Tracking from "./Tracking";
@@ -181,9 +181,9 @@ describe("Tracking attendance overview", () => {
 
     await user.click(screen.getByRole("button", { name: "Report date" }));
     await user.click(screen.getByRole("button", { name: "Choose another date" }));
-    const dateInput = screen.getByLabelText("Show data through");
-    await user.clear(dateInput);
-    await user.type(dateInput, "2026-07-20");
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Show data through" })).toBeEnabled());
+    await user.click(screen.getByRole("combobox", { name: "Show data through" }));
+    await user.click(screen.getByRole("button", { name: "Monday, July 20, 2026" }));
     await user.click(screen.getByRole("button", { name: "Apply date" }));
     expect(screen.getByText("Historical view")).toBeInTheDocument();
 

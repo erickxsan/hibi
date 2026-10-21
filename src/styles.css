@@ -1,6 +1,6 @@
 :root {
   color-scheme: light;
-  font-family: "Nunito Sans", Nunito, Aptos, "Segoe UI", sans-serif;
+  font-family: var(--font-sans);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   --canvas: #f3eedf;
@@ -93,7 +93,7 @@ body,
 }
 .hibi-brand strong,
 .mobile-brand span {
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-sans);
   font-size: 34px;
   line-height: 1;
 }
@@ -196,7 +196,7 @@ body,
 .detail-identity h1 {
   margin: 0;
   color: var(--hibi-forest-dark);
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-sans);
   letter-spacing: -0.02em;
 }
 .welcome-row h1 {
@@ -496,7 +496,7 @@ body,
 }
 .group-emblem {
   background: #dce8bd;
-  font-family: Georgia, serif;
+  font-family: var(--font-sans);
   font-size: 28px;
 }
 .profile-avatar.small,
@@ -1321,7 +1321,7 @@ body,
 .payment-list-panel h2,
 .forecast-panel h2 {
   margin: 0;
-  font-family: Georgia, serif;
+  font-family: var(--font-sans);
   color: var(--hibi-forest);
   font-size: 21px;
 }
@@ -1548,7 +1548,7 @@ body,
 .settings-content h2 {
   margin: 0;
   color: var(--hibi-forest);
-  font-family: Georgia, serif;
+  font-family: var(--font-sans);
   font-size: 20px;
 }
 .settings-content > p {
@@ -6696,7 +6696,7 @@ a {
 .progress-heading h1 {
   margin: 0;
   color: var(--hibi-forest-dark);
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-sans);
   font-size: 34px;
   letter-spacing: -0.025em;
 }
@@ -8161,7 +8161,7 @@ tbody .attendance-student-column {
 .tracking-heading h1 {
   margin: 0;
   color: var(--hibi-forest-dark);
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-sans);
   font-size: 42px;
   line-height: 1;
   letter-spacing: -0.035em;
@@ -9619,10 +9619,7 @@ tbody .attendance-student-column {
 .classes-workspace-heading h1 {
   margin: 0;
   color: var(--hibi-forest-dark);
-  font:
-    700 38px/1 Georgia,
-    "Times New Roman",
-    serif;
+  font: 700 38px/1 var(--font-sans);
   letter-spacing: -0.035em;
 }
 .classes-workspace-heading p {
@@ -9755,10 +9752,7 @@ tbody .attendance-student-column {
 .class-session-title-row h2 {
   margin: 0;
   color: #202b31;
-  font:
-    700 18px/1.25 Georgia,
-    "Times New Roman",
-    serif;
+  font: 700 18px/1.25 var(--font-sans);
 }
 .class-session-title-row .status-badge {
   padding: 7px 12px;
@@ -10074,10 +10068,7 @@ tbody .attendance-student-column {
 }
 .class-live-summary-title h2 {
   margin: 0;
-  font:
-    700 18px/1.25 Georgia,
-    "Times New Roman",
-    serif;
+  font: 700 18px/1.25 var(--font-sans);
 }
 .class-live-summary-title p {
   margin: 4px 0 0;
@@ -10538,10 +10529,7 @@ tbody .attendance-student-column {
 }
 .class-edit-modal .drawer-header h2 {
   color: var(--hibi-forest-dark);
-  font:
-    700 27px/1.1 Georgia,
-    "Times New Roman",
-    serif;
+  font: 700 27px/1.1 var(--font-sans);
 }
 .class-edit-modal .drawer-header p {
   margin-top: 5px;
@@ -11267,7 +11255,7 @@ tbody .attendance-student-column {
 .community-page-heading h1 {
   margin: 0;
   color: #176044;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-sans);
   font-size: clamp(34px, 3vw, 44px);
   line-height: 1;
   letter-spacing: -0.035em;
@@ -12135,10 +12123,7 @@ tbody .attendance-student-column {
 .calendar-period-controls > strong {
   min-width: 165px;
   color: #24312e;
-  font:
-    700 18px/1.15 Georgia,
-    "Times New Roman",
-    serif;
+  font: 700 18px/1.15 var(--font-sans);
   text-align: center;
   white-space: nowrap;
 }
@@ -12367,10 +12352,7 @@ tbody .attendance-student-column {
 .calendar-day-agenda > header h2 {
   margin: 2px 0 0;
   color: #23312e;
-  font:
-    700 20px/1.15 Georgia,
-    "Times New Roman",
-    serif;
+  font: 700 20px/1.15 var(--font-sans);
 }
 .calendar-day-agenda > header > strong {
   min-width: 70px;

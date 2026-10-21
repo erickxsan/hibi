@@ -1,3 +1,47 @@
+@font-face {
+  font-family: "Albert Sans";
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url(/fonts/albert-sans-latin-ext.woff2) format("woff2");
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F,
+    U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Albert Sans";
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url(/fonts/albert-sans-latin.woff2) format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC,
+    U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Dela Gothic One";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/fonts/dela-gothic-one-latin-ext.woff2) format("woff2");
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F,
+    U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Dela Gothic One";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/fonts/dela-gothic-one-latin.woff2) format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC,
+    U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 /*
  * Hibi shared visual system.
  *
@@ -5,17 +49,95 @@
  * content, state, navigation, and interaction behavior remain unchanged.
  */
 :root {
-  --hibi-canvas: #f7f3ea;
-  --hibi-surface: #fffdf8;
-  --hibi-forest: #175c43;
-  --hibi-forest-dark: #114b37;
-  --hibi-text: #23312d;
-  --hibi-muted: #6f756f;
-  --hibi-border: #e3d9c7;
-  --hibi-sage: #eaf2e4;
-  --hibi-shadow: 0 2px 10px rgba(57, 48, 35, 0.04);
-  --hibi-card-radius: 16px;
-  --hibi-control-radius: 12px;
+  --bermellon: #d9472c;
+  --bermellon-strong: #c23b22;
+  --bermellon-ink: #a8321c;
+  --bermellon-soft: #f9e3de;
+  --sumi: #1e1c20;
+  --sumi-muted: #5a524a;
+  --sumi-subtle: #9a8f80;
+  --washi: #f6f1e8;
+  --papel: #ffffff;
+  --kraft: #efe8db;
+  --line: #e8dfcf;
+  --line-soft: #f1ebe0;
+  --line-control: #8f8475;
+  --indigo: #34437f;
+  --indigo-soft: #e5e8f2;
+  --jade: #2e8c7e;
+  --jade-strong: #23705f;
+  --jade-soft: #e3f1ee;
+  --ocre: #d9a23a;
+  --ocre-ink: #7e5a12;
+  --ocre-soft: #f8edd5;
+  --focus: var(--indigo);
+  --overlay: rgba(30, 28, 32, 0.45);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-pill: 999px;
+  --shadow-card: 0 1px 2px rgba(30, 28, 32, 0.05);
+  --shadow-overlay: 0 16px 40px rgba(30, 28, 32, 0.16);
+  --control-height: 44px;
+  --segment-height: 36px;
+  --sidebar-width: 232px;
+  --topbar-height: 60px;
+  --drawer-width: 480px;
+  --font-display: "Dela Gothic One", "Arial Black", system-ui, sans-serif;
+  --font-sans: "Albert Sans", "Segoe UI", system-ui, sans-serif;
+  --canvas: var(--washi);
+  --surface: var(--papel);
+  --surface-strong: var(--papel);
+  --ink: var(--sumi);
+  --muted: var(--sumi-muted);
+  --border: var(--line);
+  --border-soft: var(--line-soft);
+  --teal: var(--jade);
+  --teal-strong: var(--jade-strong);
+  --teal-soft: var(--jade-soft);
+  --lilac: var(--indigo);
+  --lilac-soft: var(--indigo-soft);
+  --pink: var(--bermellon);
+  --pink-soft: var(--bermellon-soft);
+  --mustard: var(--ocre);
+  --mustard-soft: var(--ocre-soft);
+  --coral: var(--bermellon);
+  --coral-strong: var(--bermellon-strong);
+  --coral-soft: var(--bermellon-soft);
+  --olive: var(--jade-strong);
+  --olive-soft: var(--jade-soft);
+  --blue: var(--indigo);
+  --blue-soft: var(--indigo-soft);
+  --danger: var(--bermellon-ink);
+  --danger-soft: var(--bermellon-soft);
+  --shadow: var(--shadow-overlay);
+  --shadow-small: var(--shadow-card);
+  --radius: var(--radius-md);
+  --hibi-canvas: var(--washi);
+  --hibi-surface: var(--papel);
+  --hibi-forest: var(--bermellon-strong);
+  --hibi-forest-dark: var(--sumi);
+  --hibi-text: var(--sumi);
+  --hibi-muted: var(--sumi-muted);
+  --hibi-border: var(--line);
+  --hibi-sage: var(--bermellon-soft);
+  --hibi-peach: var(--ocre-soft);
+  --hibi-blue: var(--indigo-soft);
+  --hibi-yellow: var(--ocre-soft);
+  --hibi-lilac: var(--indigo-soft);
+  --hibi-shadow: var(--shadow-card);
+  --hibi-card-radius: var(--radius-lg);
+  --hibi-control-radius: var(--radius-md);
 }
 
 html,
@@ -26,14 +148,14 @@ body,
 }
 
 .hibi-shell {
-  grid-template-columns: 224px minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   color: var(--hibi-text);
   font-size: 14px;
   line-height: 20px;
 }
 
 .hibi-sidebar {
-  width: 224px;
+  width: var(--sidebar-width);
   background: rgba(255, 253, 248, 0.98);
 }
 
@@ -43,8 +165,8 @@ body,
 
 .hibi-topbar,
 .page-community .hibi-topbar {
-  height: 64px;
-  min-height: 64px;
+  height: var(--topbar-height);
+  min-height: var(--topbar-height);
   padding: 0 48px;
   border-bottom: 1px solid var(--hibi-border);
   background: rgba(255, 253, 248, 0.92);
@@ -66,7 +188,7 @@ body,
 .hibi-main input,
 .hibi-main select,
 .hibi-main textarea {
-  font-family: "Nunito Sans", Nunito, Aptos, "Segoe UI", sans-serif;
+  font-family: var(--font-sans);
 }
 
 .hibi-main small {
@@ -96,10 +218,7 @@ body,
 .page-heading h1 {
   margin: 0;
   color: var(--hibi-forest-dark);
-  font:
-    700 40px/44px Georgia,
-    "Times New Roman",
-    serif;
+  font: 400 36px/44px var(--font-display);
   letter-spacing: -0.035em;
 }
 
@@ -112,12 +231,7 @@ body,
   max-width: 640px;
   margin: 6px 0 0;
   color: var(--hibi-muted);
-  font:
-    400 14px/20px "Nunito Sans",
-    Nunito,
-    Aptos,
-    "Segoe UI",
-    sans-serif;
+  font: 400 14px/20px var(--font-sans);
 }
 
 .home-dashboard-header {
@@ -222,14 +336,14 @@ body,
 .tracking-tabs button.active,
 .community-tabs button.active {
   background: transparent;
-  color: var(--hibi-forest);
+  color: var(--sumi);
 }
 
 .progress-tabs button.active::after,
 .classes-workspace-tabs button.active::after,
 .tracking-tabs button.active::after,
 .community-tabs button.active::after {
-  background: var(--hibi-forest);
+  background: var(--bermellon);
 }
 
 /* Compact segmented choices use the same 40px frame. */
@@ -261,8 +375,8 @@ body,
 .segmented button.active,
 .classes-choice button.active,
 .tracking-mode button.active {
-  background: var(--hibi-sage);
-  color: var(--hibi-forest-dark);
+  background: var(--sumi);
+  color: var(--papel);
   box-shadow: none;
 }
 
@@ -379,12 +493,7 @@ body,
 .settings-content h2,
 .class-live-summary-title h2 {
   color: var(--hibi-text);
-  font:
-    700 18px/24px "Nunito Sans",
-    Nunito,
-    Aptos,
-    "Segoe UI",
-    sans-serif;
+  font: 700 18px/24px var(--font-sans);
 }
 
 .settings-content > p {
@@ -458,7 +567,7 @@ body,
 
   .hibi-topbar,
   .page-community .hibi-topbar {
-    height: 64px;
+    height: var(--topbar-height);
     padding: 10px 18px;
   }
 
@@ -512,7 +621,7 @@ body,
   .tracking-heading h1,
   .progress-heading h1,
   .page-heading h1 {
-    font-size: 30px;
+    font-size: 28px;
     line-height: 34px;
   }
 
@@ -565,4 +674,15 @@ body,
   .community-tabs button {
     font-size: 12px;
   }
+}
+
+body,
+button,
+input,
+textarea {
+  font-family: var(--font-sans);
+}
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }

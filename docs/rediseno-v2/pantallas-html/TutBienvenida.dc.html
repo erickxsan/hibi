@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Tutorial · Bienvenida</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/hibi/components/bundle.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&amp;family=Albert+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+:root{--bermellon:#D9472C;--bermellon-strong:#C23B22;--bermellon-ink:#A8321C;--bermellon-soft:#F9E3DE;--sumi:#1E1C20;--sumi-muted:#5A524A;--sumi-subtle:#9A8F80;--washi:#F6F1E8;--papel:#FFFFFF;--kraft:#EFE8DB;--line:#E8DFCF;--line-soft:#F1EBE0;--line-control:#8F8475;--indigo:#34437F;--indigo-soft:#E5E8F2;--jade:#2E8C7E;--jade-strong:#23705F;--jade-soft:#E3F1EE;--ocre:#D9A23A;--ocre-ink:#7E5A12;--ocre-soft:#F8EDD5;--focus:#34437F;--overlay:rgba(30,28,32,.45);--space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:20px;--space-6:24px;--space-8:32px;--space-10:40px;--space-12:48px;--radius-sm:8px;--radius-md:10px;--radius-lg:12px;--radius-xl:16px;--radius-pill:999px;--shadow-card:0 1px 2px rgba(30,28,32,.05);--shadow-overlay:0 16px 40px rgba(30,28,32,.16);--control-height:44px;--segment-height:36px;--sidebar-width:232px;--topbar-height:60px;--drawer-width:480px;--font-display:"Dela Gothic One","Arial Black",system-ui,sans-serif;--font-sans:"Albert Sans","Segoe UI",system-ui,sans-serif}
+body{margin:0}
+a{color:#C23B22}a:hover{color:#A8321C}
+.chip{display:inline-flex;align-items:center;padding:3px 9px;border-radius:999px;background:var(--kraft);font:700 12px/16px var(--font-sans);white-space:nowrap}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.tm{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(720px,calc(100% - 32px));max-height:calc(100% - 48px);overflow:auto;background:var(--papel);border-radius:16px;box-shadow:var(--shadow-overlay);display:flex;flex-direction:column}
+.tm-body{padding:28px 40px;display:flex;flex-direction:column;gap:20px}
+.tm-foot{display:flex;justify-content:space-between;gap:12px;padding:20px 40px;border-top:1px solid var(--line);flex-wrap:wrap}
+.steps{display:flex;align-items:center;gap:12px;justify-content:center;list-style:none;margin:0;padding:0}
+.steps li{display:flex;align-items:center;gap:8px;font:700 14px/20px var(--font-sans);color:var(--sumi-muted)}
+.steps li+li::before{content:"";width:48px;height:1px;background:var(--line);margin-right:4px}
+.steps .n{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;border:1.5px solid var(--line-control);font:800 13px/1 var(--font-sans);color:var(--sumi-muted)}
+.steps .cur{color:var(--sumi)} .steps .cur .n{background:var(--sumi);border-color:var(--sumi);color:var(--papel)}
+.steps .done{color:var(--sumi)} .steps .done .n{background:var(--jade-strong);border-color:var(--jade-strong);color:#fff}
+.steps .n svg{width:15px;height:15px;stroke-width:3}
+.hero{display:flex;gap:20px;align-items:center}
+.hero img{width:76px;height:76px;object-fit:contain;flex:none}
+.hero h2{margin:0;font:400 28px/1.15 var(--font-display);letter-spacing:-.01em}
+.hero p{margin:6px 0 0;font-size:15px;line-height:22px;color:var(--sumi-muted)}
+.note{display:flex;gap:12px;align-items:center;padding:14px 16px;border-radius:12px;background:var(--washi);border:1px solid var(--line)}
+.dayrow{display:grid;grid-template-columns:1.2fr 1fr 1fr 44px;gap:12px;align-items:end}
+.pill{display:inline-flex;gap:6px;align-items:center;padding:5px 10px;border-radius:999px;border:1px solid var(--line);background:var(--papel);font:700 13px/18px var(--font-sans);white-space:nowrap}
+.pill.first{background:var(--sumi);border-color:var(--sumi);color:var(--papel)}
+</style>
+</helmet>
+<div class="hibi-ds" style="position:relative;min-height:100vh;height:900px;display:flex;background:var(--washi);overflow:hidden">
+  <aside class="hibi-sidebar" style="flex:none" aria-hidden="true">
+    <span class="hibi-brand"><img src="/_blob/19d7de209d497968ffcc94f1e708a867" alt="" style="height:40px"></span>
+    <div class="sidebar-nav"><span class="sidebar-link active"><svg class="ico" viewBox="0 0 24 24"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Inicio</span><span class="sidebar-link"><svg class="ico" viewBox="0 0 24 24"><path d="M18 21a8 8 0 0 0-16 0"/><circle cx="10" cy="8" r="5"/><path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3"/></svg>Comunidad</span><span class="sidebar-link"><svg class="ico" viewBox="0 0 24 24"><path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/></svg>Clases</span><span class="sidebar-link"><svg class="ico" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>Seguimiento</span><span class="sidebar-link"><svg class="ico" viewBox="0 0 24 24"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg>Configuración</span></div>
+  </aside>
+  <div aria-hidden="true" style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <div style="height:var(--topbar-height);flex:none;border-bottom:1px solid var(--line);background:var(--papel)"></div>
+    <div style="padding:40px 48px;display:flex;flex-direction:column;gap:24px">
+      <div class="page-heading"><div><h1>¡Buenos días, profe!</h1><p>Aquí verás tus clases, alumnos y cobros de la semana.</p></div></div>
+      <div class="card" style="height:200px"></div>
+      <div style="display:flex;gap:24px"><div class="card" style="flex:1;height:240px"></div><div class="card" style="flex:1;height:240px"></div></div>
+      <div style="display:flex;gap:24px"><div class="card" style="flex:2;height:300px"></div><div class="card" style="flex:1;height:300px"></div></div>
+    </div>
+  </div>
+  <div style="position:absolute;inset:0;background:var(--overlay)"></div>
+  <section class="tm" role="dialog" aria-modal="true" aria-labelledby="w1" style="width:min(600px,calc(100% - 32px));text-align:center">
+    <div class="tm-body" style="align-items:center;padding:44px 48px 32px;gap:16px">
+      <img src="/_blob/f94d92622e26d07cb8c2035979131ea0" alt="" style="width:96px;height:96px;object-fit:contain">
+      <h2 id="w1" style="margin:0;font:400 34px/1.1 var(--font-display);letter-spacing:-.01em">¡Hola, profe! Esto es Hibi</h2>
+      <p style="margin:0;max-width:420px;font-size:16px;line-height:24px;color:var(--sumi-muted)">En tres pasos creas un grupo, añades a tus alumnos y Hibi prepara tu agenda.</p>
+      <ol style="list-style:none;margin:8px 0 0;padding:0;display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+        <li class="pill"><b>1</b> Grupo</li><li class="pill"><b>2</b> Alumnos</li><li class="pill"><b>3</b> Agenda</li>
+      </ol>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:12px">
+        <button class="button button-secondary" type="button">Explorar por mi cuenta</button>
+        <button class="button button-primary" type="button">Empezar<svg class="ico" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
+      </div>
+      <p style="margin:4px 0 0;font-size:13px;line-height:18px;color:var(--sumi-subtle)">Puedes retomarlo cuando quieras desde Configuración.</p>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

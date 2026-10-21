@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Clases · Nueva clase</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/hibi/components/bundle.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&amp;family=Albert+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+:root{--bermellon:#D9472C;--bermellon-strong:#C23B22;--bermellon-ink:#A8321C;--bermellon-soft:#F9E3DE;--sumi:#1E1C20;--sumi-muted:#5A524A;--sumi-subtle:#9A8F80;--washi:#F6F1E8;--papel:#FFFFFF;--kraft:#EFE8DB;--line:#E8DFCF;--line-soft:#F1EBE0;--line-control:#8F8475;--indigo:#34437F;--indigo-soft:#E5E8F2;--jade:#2E8C7E;--jade-strong:#23705F;--jade-soft:#E3F1EE;--ocre:#D9A23A;--ocre-ink:#7E5A12;--ocre-soft:#F8EDD5;--focus:#34437F;--overlay:rgba(30,28,32,.45);--space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:20px;--space-6:24px;--space-8:32px;--space-10:40px;--space-12:48px;--radius-sm:8px;--radius-md:10px;--radius-lg:12px;--radius-xl:16px;--radius-pill:999px;--shadow-card:0 1px 2px rgba(30,28,32,.05);--shadow-overlay:0 16px 40px rgba(30,28,32,.16);--control-height:44px;--segment-height:36px;--sidebar-width:232px;--topbar-height:60px;--drawer-width:480px;--font-display:"Dela Gothic One","Arial Black",system-ui,sans-serif;--font-sans:"Albert Sans","Segoe UI",system-ui,sans-serif}
+body{margin:0}
+a{color:#C23B22}a:hover{color:#A8321C}
+.seg2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;padding:4px;background:var(--papel);border:1px solid var(--line-control);border-radius:12px}
+.seg2 button{min-height:40px;border:0;border-radius:9px;background:transparent;font:700 15px/20px var(--font-sans);color:var(--sumi-muted);cursor:pointer}
+.seg2 button.active{background:var(--sumi);color:var(--papel)}
+.days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.days button{min-height:44px;border-radius:10px;border:1.5px solid var(--line-control);background:var(--papel);font:700 14px/20px var(--font-sans);color:var(--sumi);cursor:pointer}
+.days button[aria-pressed="true"]{background:var(--sumi);border-color:var(--sumi);color:var(--papel)}
+@media (max-width:780px){.hibi-sidebar{display:none!important}}
+</style>
+</helmet>
+<div class="hibi-ds" style="position:relative;min-height:100vh;display:flex;background:var(--washi);overflow:hidden">
+
+  <aside class="hibi-sidebar" style="flex:none" aria-hidden="true">
+    <span class="hibi-brand"><img src="/_blob/19d7de209d497968ffcc94f1e708a867" alt="" style="height:40px"></span>
+    <div class="sidebar-nav">
+      <span class="sidebar-link">Inicio</span><span class="sidebar-link">Comunidad</span><span class="sidebar-link active">Clases</span><span class="sidebar-link">Seguimiento</span><span class="sidebar-link">Configuración</span>
+    </div>
+  </aside>
+  <div aria-hidden="true" style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <div style="height:var(--topbar-height);border-bottom:1px solid var(--line);background:var(--papel)"></div>
+    <div style="padding:40px 48px;display:flex;flex-direction:column;gap:24px">
+      <div class="page-heading"><div><h1>Clases</h1><p>Registra la información de la clase actual de forma rápida y sencilla.</p></div></div>
+      <div class="tabs"><span class="tab">Próxima clase</span><span class="tab is-active">Calendario</span><span class="tab">Historial</span></div>
+      <div style="display:flex;gap:24px"><div class="card" style="flex:3;height:520px"></div><div class="card" style="flex:1;height:420px"></div></div>
+    </div>
+  </div>
+
+  <div style="position:absolute;inset:0;background:var(--overlay)"></div>
+
+  <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="nc-title" style="position:absolute;top:0;right:0;bottom:0;border-radius:16px 0 0 16px">
+    <header class="drawer-header">
+      <div><h2 id="nc-title">Nueva clase</h2><p>Asóciala a un grupo o a un alumno.</p></div>
+      <button class="icon-button" type="button" aria-label="Cerrar"><svg class="ico" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    </header>
+    <div class="drawer-body" style="overflow:auto">
+      <div class="field">
+        <span class="field-label">Frecuencia</span>
+        <div class="seg2" role="group" aria-label="Frecuencia"><button type="button">Única</button><button type="button" class="active" aria-pressed="true">Recurrente</button></div>
+      </div>
+      <div class="field">
+        <span class="field-label">Formato</span>
+        <div class="seg2" role="group" aria-label="Formato"><button type="button" class="active" aria-pressed="true">Grupo</button><button type="button">Individual</button></div>
+      </div>
+      <label class="field"><span class="field-label">Grupo <span class="req">*</span></span><button class="select-trigger" type="button" aria-haspopup="listbox" style="width:100%">Secundaria 8–10<svg class="ico" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button></label>
+      <div style="display:grid;grid-template-columns:1.3fr 1fr 0.8fr;gap:12px">
+        <label class="field"><span class="field-label">Fecha de inicio <span class="req">*</span></span><input class="control tnum" value="lun 12 oct 2026"></label>
+        <label class="field"><span class="field-label">Hora <span class="req">*</span></span><input class="control tnum" value="10:00 a.m."></label>
+        <label class="field"><span class="field-label">Duración <span class="req">*</span></span><button class="select-trigger" type="button" style="min-width:0;width:100%">2 h<svg class="ico" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button></label>
+      </div>
+      <label class="field"><span class="field-label">Repetir cada</span><button class="select-trigger" type="button" style="width:100%">1 semana<svg class="ico" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button></label>
+      <fieldset class="field" style="border:0;margin:0;padding:0">
+        <legend class="field-label" style="padding:0;margin-bottom:6px">Días de la semana <span class="req">*</span></legend>
+        <div class="days"><button type="button" aria-pressed="true">Lun</button><button type="button" aria-pressed="false">Mar</button><button type="button" aria-pressed="true">Mié</button><button type="button" aria-pressed="false">Jue</button><button type="button" aria-pressed="false">Vie</button><button type="button" aria-pressed="false">Sáb</button><button type="button" aria-pressed="false">Dom</button></div>
+      </fieldset>
+      <div style="display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:10px;background:var(--indigo-soft);color:var(--indigo);font:600 14px/20px var(--font-sans)">
+        <svg class="ico" viewBox="0 0 24 24" style="margin-top:0"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        <span>Se repetirá los lunes y miércoles a las 10:00 a.m., desde el 12 de octubre. La verás en Calendario y en Próxima clase.</span>
+      </div>
+    </div>
+    <footer class="drawer-footer">
+      <button class="button button-secondary" type="button">Cancelar</button>
+      <button class="button button-primary" type="button"><svg class="ico" viewBox="0 0 24 24"><path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/></svg>Crear clase</button>
+    </footer>
+  </aside>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

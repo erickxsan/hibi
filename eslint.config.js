@@ -4,7 +4,14 @@ import globals from "globals";
 
 export default [
   {
-    ignores: ["coverage/**", "dist/**", "node_modules/**", "playwright-report/**", "test-results/**"],
+    ignores: [
+      "docs/rediseno-v2/**",
+      "coverage/**",
+      "dist/**",
+      "node_modules/**",
+      "playwright-report/**",
+      "test-results/**",
+    ],
   },
   js.configs.recommended,
   {

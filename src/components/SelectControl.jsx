@@ -1,10 +1,9 @@
 import { useI18n } from "../i18n/index.jsx";
-import { Children, isValidElement, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { Children, isValidElement, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, LoaderCircle, Search, UsersRound, X } from "lucide-react";
-import { closeOverlayHistory, pushOverlayHistory, subscribeToAppHistory } from "../navigation/appHistory";
 import { normalizeSearchText } from "../utils/searchText";
 import { StudentAvatar } from "./StudentAvatar";
+import { PickerPopover } from "./PickerPopover";
 
 function optionLabel(children) {
   return Children.toArray(children)
@@ -31,6 +30,7 @@ function optionsFromChildren(children) {
         disabled: Boolean(child.props.disabled),
         avatarId: child.props["data-avatar-id"],
         meta: child.props["data-meta"],
+        detail: child.props["data-detail"],
       });
       return;
     }
@@ -46,671 +46,272 @@ function OptionArtwork({ option, variant }) {
   }
   if (variant === "group")
     return (
-      <span className="select-option-icon" aria-hidden="true">
+      <span className="select-mark" aria-hidden="true">
         <UsersRound size={17} />
       </span>
     );
   return null;
 }
 
-function focusWithoutPageScroll(element) {
-  if (!element) return;
-  try {
-    element.focus({ preventScroll: true });
-  } catch {
-    const { scrollX, scrollY } = window;
-    element.focus();
-    window.scrollTo({ left: scrollX, top: scrollY, behavior: "auto" });
-  }
-}
-
-function scrollOptionInsideList(optionId) {
-  const option = document.getElementById(optionId);
-  const list = option?.closest(".select-options");
-  if (!option || !list) return;
-  const optionRect = option.getBoundingClientRect();
-  const listRect = list.getBoundingClientRect();
-  if (optionRect.top < listRect.top) list.scrollTop -= listRect.top - optionRect.top;
-  else if (optionRect.bottom > listRect.bottom) list.scrollTop += optionRect.bottom - listRect.bottom;
-}
-
-function isCompactChoiceViewport() {
-  return typeof window !== "undefined" && window.matchMedia("(max-width: 640px)").matches;
-}
-
-function useChoicePopover({
-  open,
-  setOpen,
-  triggerRef,
-  menuRef,
-  activeIndex,
-  setActiveIndex,
-  optionCount,
-  onChoose,
-  searchable,
-}) {
-  const overlayId = useId();
-  const ownsHistory = useRef(false);
-  const close = useCallback(
-    (returnFocus = true) => {
-      if (ownsHistory.current && closeOverlayHistory(overlayId)) return;
-      setOpen(false);
-      if (returnFocus) requestAnimationFrame(() => focusWithoutPageScroll(triggerRef.current));
-    },
-    [overlayId, setOpen, triggerRef],
-  );
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const timer = window.setTimeout(() => {
-      ownsHistory.current = Boolean(pushOverlayHistory(overlayId));
-    }, 0);
-    const unsubscribe = subscribeToAppHistory({
-      beforePop: ({ previous, next }) => {
-        if (!previous?.overlays?.includes(overlayId) || next?.overlays?.includes(overlayId)) return true;
-        ownsHistory.current = false;
-        setOpen(false);
-        requestAnimationFrame(() => focusWithoutPageScroll(triggerRef.current));
-        return true;
-      },
-    });
-    const onPointerDown = (event) => {
-      if (triggerRef.current?.contains(event.target) || menuRef.current?.contains(event.target)) return;
-      close();
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => {
-      window.clearTimeout(timer);
-      unsubscribe();
-      document.removeEventListener("pointerdown", onPointerDown);
-      if (ownsHistory.current) closeOverlayHistory(overlayId);
-      ownsHistory.current = false;
-    };
-  }, [close, menuRef, open, overlayId, setOpen, triggerRef]);
-
-  const onKeyDown = (event) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      close();
-      return;
-    }
-    if (event.key === "Tab") {
-      close(false);
-      return;
-    }
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      event.preventDefault();
-      const direction = event.key === "ArrowDown" ? 1 : -1;
-      setActiveIndex((current) => {
-        if (!optionCount) return -1;
-        const next =
-          current < 0 ? (direction > 0 ? 0 : optionCount - 1) : (current + direction + optionCount) % optionCount;
-        requestAnimationFrame(() => scrollOptionInsideList(`${overlayId}-option-${next}`));
-        return next;
-      });
-      return;
-    }
-    if (event.key === "Home" || event.key === "End") {
-      event.preventDefault();
-      const next = event.key === "Home" ? 0 : Math.max(0, optionCount - 1);
-      setActiveIndex(next);
-      requestAnimationFrame(() => scrollOptionInsideList(`${overlayId}-option-${next}`));
-      return;
-    }
-    if (event.key === "Enter" && activeIndex >= 0) {
-      event.preventDefault();
-      onChoose(activeIndex);
-      return;
-    }
-    if (!searchable && event.key.length === 1 && !event.altKey && !event.ctrlKey && !event.metaKey) {
-      // The trigger handles printable type-ahead before the menu opens. Keeping
-      // focus in the list avoids swallowing screen-reader navigation keys here.
-    }
-  };
-
-  return { close, onKeyDown, optionId: (index) => `${overlayId}-option-${index}` };
-}
-
-function usePopoverPosition(open, triggerRef) {
-  const [position, setPosition] = useState({});
-  const [mobile, setMobile] = useState(isCompactChoiceViewport);
-  useEffect(() => {
-    if (!open) return undefined;
-    const update = () => {
-      const compact = isCompactChoiceViewport();
-      setMobile(compact);
-      if (compact || !triggerRef.current) return;
-      const rect = triggerRef.current.getBoundingClientRect();
-      const margin = 10;
-      const width = Math.min(Math.max(rect.width, 260), window.innerWidth - margin * 2);
-      const maxHeight = Math.min(340, window.innerHeight - margin * 2);
-      const spaceBelow = window.innerHeight - rect.bottom - margin;
-      const above = spaceBelow < 230 && rect.top > spaceBelow;
-      setPosition({
-        position: "fixed",
-        left: Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin)),
-        top: above ? undefined : rect.bottom + 7,
-        bottom: above ? window.innerHeight - rect.top + 7 : undefined,
-        width,
-        maxHeight,
-      });
-    };
-    update();
-    window.addEventListener("resize", update);
-    window.addEventListener("scroll", update, true);
-    return () => {
-      window.removeEventListener("resize", update);
-      window.removeEventListener("scroll", update, true);
-    };
-  }, [open, triggerRef]);
-  return { mobile, position };
-}
-
-function ChoiceMenu({
-  activeIndex,
-  emptyMessage,
-  filteredOptions,
-  listId,
-  loading,
-  menuRef,
-  mobile,
-  multiple,
-  onChoose,
-  onClose,
-  onKeyDown,
-  optionId,
-  position,
-  query,
-  searchable,
-  selectedValues,
-  setActiveIndex,
-  setQuery,
-  variant,
-}) {
-  const { t: uiT } = useI18n();
-  const searchRef = useRef(null);
-  useEffect(() => {
-    if (!mobile) return undefined;
-    const body = document.body;
-    const shell = document.querySelector(".hibi-shell");
-    const scrollX = window.scrollX;
-    const scrollY = window.scrollY;
-    const previous = {
-      position: body.style.position,
-      top: body.style.top,
-      left: body.style.left,
-      right: body.style.right,
-      width: body.style.width,
-      overflow: body.style.overflow,
-    };
-    const shellWasInert = shell?.hasAttribute("inert");
-    body.classList.add("select-sheet-open");
-    body.style.position = "fixed";
-    body.style.top = `${-scrollY}px`;
-    body.style.left = `${-scrollX}px`;
-    body.style.right = "0";
-    body.style.width = "100%";
-    body.style.overflow = "hidden";
-    shell?.setAttribute("inert", "");
-    return () => {
-      body.classList.remove("select-sheet-open");
-      Object.assign(body.style, previous);
-      if (!shellWasInert && !body.classList.contains("drawer-open")) shell?.removeAttribute("inert");
-      window.scrollTo({ left: scrollX, top: scrollY, behavior: "auto" });
-    };
-  }, [mobile]);
-  useEffect(() => {
-    const focusMenu = () => focusWithoutPageScroll(!mobile && searchable ? searchRef.current : menuRef.current);
-    focusMenu();
-    const timer = window.setTimeout(focusMenu, 0);
-    return () => window.clearTimeout(timer);
-  }, [menuRef, mobile, searchable]);
-  const list = (
-    <div
-      className={`select-popover ${mobile ? "select-sheet" : ""}`.trim()}
-      ref={menuRef}
-      style={mobile ? undefined : position}
-      role={mobile ? "dialog" : !searchable ? "listbox" : undefined}
-      aria-modal={mobile ? "true" : undefined}
-      aria-label={mobile ? uiT("Choose an option") : undefined}
-      aria-multiselectable={!searchable && multiple ? "true" : undefined}
-      aria-activedescendant={!searchable && activeIndex >= 0 ? optionId(activeIndex) : undefined}
-      tabIndex={searchable ? -1 : 0}
-      onKeyDown={onKeyDown}
-    >
-      {mobile ? (
-        <div className="select-sheet-head">
-          <span aria-hidden="true" />
-          <strong>{uiT("Choose an option")}</strong>
-          <button type="button" aria-label={uiT("Close selector")} onClick={onClose}>
-            <X size={18} />
-          </button>
-        </div>
-      ) : null}
-      {searchable ? (
-        <label className="select-search">
-          <Search aria-hidden="true" size={17} />
-          <span className="sr-only">{uiT("Search options")}</span>
-          <input
-            ref={searchRef}
-            role="combobox"
-            aria-label={uiT("Search options")}
-            aria-expanded="true"
-            aria-controls={listId}
-            aria-activedescendant={activeIndex >= 0 ? optionId(activeIndex) : undefined}
-            value={query}
-            onChange={(event) => {
-              setQuery(event.target.value);
-              setActiveIndex(0);
-            }}
-            placeholder={uiT("Search…")}
-            autoComplete="off"
-          />
-          {query ? (
-            <button
-              type="button"
-              aria-label={uiT("Clear search")}
-              onClick={() => {
-                setQuery("");
-                setActiveIndex(0);
-              }}
-            >
-              <X size={15} />
-            </button>
-          ) : null}
-        </label>
-      ) : null}
-      <div
-        id={listId}
-        className="select-options"
-        role={searchable || mobile ? "listbox" : "presentation"}
-        aria-multiselectable={(searchable || mobile) && multiple ? "true" : undefined}
-        aria-label={searchable || mobile ? uiT("Options") : undefined}
-      >
-        {loading ? (
-          <div className="select-message" role="status">
-            <LoaderCircle className="select-spinner" />
-            <span>{uiT("Loading options…")}</span>
-          </div>
-        ) : null}
-        {!loading &&
-          filteredOptions.map((option, index) => {
-            const selected = selectedValues.includes(option.value);
-            return (
-              <button
-                type="button"
-                id={optionId(index)}
-                key={`${option.value}-${index}`}
-                role="option"
-                aria-selected={selected}
-                disabled={option.disabled}
-                className={`select-option ${selected ? "is-selected" : ""} ${activeIndex === index ? "is-active" : ""}`.trim()}
-                onPointerMove={() => setActiveIndex(index)}
-                onClick={() => onChoose(index)}
-                title={option.label}
-              >
-                <OptionArtwork option={option} variant={variant} />
-                <span className="select-option-copy">
-                  <strong>{option.label}</strong>
-                  {option.meta ? <small>{option.meta}</small> : null}
-                </span>
-                {selected ? <Check className="select-option-check" aria-hidden="true" size={18} /> : null}
-              </button>
-            );
-          })}
-        {!loading && !filteredOptions.length ? (
-          <div className="select-message">
-            <Search aria-hidden="true" />
-            <strong>{uiT(emptyMessage)}</strong>
-            <span>{uiT("Try a different search.")}</span>
-          </div>
-        ) : null}
-      </div>
-      {mobile && multiple ? (
-        <button type="button" className="select-sheet-done" onClick={onClose}>
-          {uiT("Done")}
-        </button>
-      ) : null}
-    </div>
-  );
-  return mobile ? (
-    <div
-      className="select-mobile-overlay"
-      role="presentation"
-      onPointerDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      {list}
-    </div>
-  ) : (
-    list
-  );
-}
-
-export function Select({
-  className = "",
-  children,
+function ChoiceControl({
+  options,
+  value = "",
+  onChange = undefined,
+  multiple = false,
   disabled = false,
-  emptyMessage = "No options found",
   loading = false,
-  onChange,
   searchable = false,
-  searchThreshold = 9,
+  searchThreshold = 8,
   variant = "standard",
-  value,
+  className = "",
+  emptyMessage = "No options found",
+  placeholder = "Choose an option",
+  small = false,
   ...props
 }) {
-  const { t: uiT } = useI18n();
-  const options = useMemo(() => optionsFromChildren(children), [children]);
-  const selectedValue = String(value ?? "");
-  const selected = options.find((option) => option.value === selectedValue) || options[0];
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [activeIndex, setActiveIndex] = useState(0);
+  const triggerRef = useRef(null);
+  const searchRef = useRef(null);
+  const listId = useId();
+  const selectedValues = (multiple && Array.isArray(value) ? value : [value ?? ""]).map(String);
+  const selected = options.filter((option) => selectedValues.includes(String(option.value)));
   const shouldSearch = searchable || options.length >= searchThreshold;
-  const triggerRef = useRef(null);
-  const menuRef = useRef(null);
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [activeIndex, setActiveIndex] = useState(-1);
-  const listId = useId();
-  const valueId = useId();
-  const filteredOptions = useMemo(() => {
-    const needle = normalizeSearchText(query);
-    return needle
-      ? options.filter((option) => normalizeSearchText(`${option.label} ${option.meta || ""}`).includes(needle))
-      : options;
-  }, [options, query]);
-  useEffect(() => {
-    if (!open) setQuery("");
-  }, [open]);
-  const { mobile, position } = usePopoverPosition(open, triggerRef);
-  const choose = (index) => {
-    const option = filteredOptions[index];
-    if (!option || option.disabled) return;
-    onChange?.({
-      target: { value: option.value, name: props.name },
-      currentTarget: { value: option.value, name: props.name },
-    });
-    setOpen(false);
-    setQuery("");
-    requestAnimationFrame(() => focusWithoutPageScroll(triggerRef.current));
-  };
-  const popover = useChoicePopover({
-    open,
-    setOpen,
-    triggerRef,
-    menuRef,
-    activeIndex,
-    setActiveIndex,
-    optionCount: filteredOptions.length,
-    onChoose: choose,
-    searchable: shouldSearch,
-  });
-
-  const openMenu = (preferredIndex) => {
-    if (disabled || loading) return;
-    const selectedIndex = options.findIndex((option) => option.value === selectedValue);
-    setActiveIndex(Number.isInteger(preferredIndex) ? preferredIndex : Math.max(0, selectedIndex));
-    setOpen(true);
-  };
-  const onTriggerKeyDown = (event) => {
-    if (["Enter", " ", "ArrowDown", "ArrowUp"].includes(event.key)) {
-      event.preventDefault();
-      openMenu(event.key === "ArrowUp" ? Math.max(0, options.length - 1) : undefined);
-      return;
-    }
-    if (event.key.length === 1 && !event.altKey && !event.ctrlKey && !event.metaKey) {
-      const match = options.findIndex((option) =>
-        normalizeSearchText(option.label).startsWith(normalizeSearchText(event.key)),
-      );
-      if (match >= 0) openMenu(match);
-    }
-  };
-
-  return (
-    <span
-      className={`select-wrap select-${variant} ${open ? "is-open" : ""} ${props["aria-invalid"] ? "is-invalid" : ""} ${className}`.trim()}
-    >
-      <select
-        className="select-native-input"
-        value={selectedValue}
-        onChange={() => {}}
-        disabled={disabled}
-        name={props.name}
-        required={props.required}
-        tabIndex={-1}
-        aria-hidden="true"
-      >
-        {children}
-      </select>
-      <button
-        ref={triggerRef}
-        type="button"
-        role="combobox"
-        className="control select-trigger"
-        disabled={disabled || loading}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-controls={open ? listId : undefined}
-        aria-label={props["aria-label"]}
-        aria-labelledby={
-          !props["aria-label"] && props["aria-labelledby"] ? `${props["aria-labelledby"]} ${valueId}` : undefined
-        }
-        aria-invalid={props["aria-invalid"]}
-        title={selected?.label}
-        onClick={() => (open ? popover.close() : openMenu())}
-        onKeyDown={onTriggerKeyDown}
-      >
-        {loading ? (
-          <LoaderCircle className="select-spinner" aria-hidden="true" size={17} />
-        ) : (
-          <OptionArtwork option={selected || {}} variant={variant} />
-        )}
-        <span className="select-trigger-copy" id={valueId}>
-          <strong>{selected?.label || props.placeholder || uiT("Choose an option")}</strong>
-          {selected?.meta ? <small>{selected.meta}</small> : null}
-        </span>
-        <ChevronDown className="select-chevron" aria-hidden="true" size={17} strokeWidth={1.8} />
-      </button>
-      {open && typeof document !== "undefined"
-        ? createPortal(
-            <ChoiceMenu
-              activeIndex={activeIndex}
-              emptyMessage={emptyMessage}
-              filteredOptions={filteredOptions}
-              listId={listId}
-              loading={loading}
-              menuRef={menuRef}
-              mobile={mobile}
-              multiple={false}
-              onChoose={choose}
-              onClose={popover.close}
-              onKeyDown={popover.onKeyDown}
-              optionId={popover.optionId}
-              position={position}
-              query={query}
-              searchable={shouldSearch}
-              selectedValues={[selectedValue]}
-              setActiveIndex={setActiveIndex}
-              setQuery={setQuery}
-              variant={variant}
-            />,
-            document.body,
-          )
-        : null}
-    </span>
-  );
-}
-
-export function MultiSelect({
-  ariaLabel,
-  className = "",
-  disabled = false,
-  emptyMessage = "No options found",
-  onChange,
-  options,
-  placeholder = "Choose options",
-  searchable = true,
-  value = [],
-  variant = "standard",
-}) {
-  const { t: uiT } = useI18n();
-  const triggerRef = useRef(null);
-  const menuRef = useRef(null);
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [activeIndex, setActiveIndex] = useState(-1);
-  const listId = useId();
-  const selectedValues = value.map(String);
-  const selectedOptions = options.filter((option) => selectedValues.includes(String(option.value)));
-  const filteredOptions = useMemo(() => {
+  const filtered = useMemo(() => {
     const needle = normalizeSearchText(query);
     return options
       .map((option) => ({ ...option, value: String(option.value) }))
       .filter((option) => !needle || normalizeSearchText(`${option.label} ${option.meta || ""}`).includes(needle));
   }, [options, query]);
   useEffect(() => {
-    if (!open || disabled) setQuery("");
     if (disabled) setOpen(false);
-  }, [open, disabled]);
-  const { mobile, position } = usePopoverPosition(open, triggerRef);
+    if (!open || disabled) setQuery("");
+  }, [disabled, open]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const timer = setTimeout(() => (shouldSearch ? searchRef.current : document.getElementById(listId))?.focus(), 0);
+    return () => clearTimeout(timer);
+  }, [listId, open, shouldSearch]);
   const choose = (index) => {
-    const option = filteredOptions[index];
-    if (disabled || !option || option.disabled) return;
-    const next = selectedValues.includes(option.value)
-      ? selectedValues.filter((item) => item !== option.value)
-      : [...selectedValues, option.value];
-    onChange(next);
+    const option = filtered[index];
+    if (disabled || loading || !option || option.disabled) return;
+    if (multiple)
+      onChange(
+        selectedValues.includes(option.value)
+          ? selectedValues.filter((item) => item !== option.value)
+          : [...selectedValues, option.value],
+      );
+    else {
+      const target = { value: option.value, ...(props.name ? { name: props.name } : {}) };
+      onChange?.({ target, currentTarget: target });
+      setOpen(false);
+    }
   };
-  const popover = useChoicePopover({
-    open,
-    setOpen,
-    triggerRef,
-    menuRef,
-    activeIndex,
-    setActiveIndex,
-    optionCount: filteredOptions.length,
-    onChoose: choose,
-    searchable,
-  });
-  const visible = selectedOptions.slice(0, 2);
-
+  const move = (direction, from = activeIndex) => {
+    for (let i = 1; i <= filtered.length; i++) {
+      const index = (from + i * direction + filtered.length * 2) % filtered.length;
+      if (!filtered[index].disabled) {
+        setActiveIndex(index);
+        return;
+      }
+    }
+  };
+  const keyDown = (event) => {
+    if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+      event.preventDefault();
+      const direction = event.key === "ArrowUp" || event.key === "End" ? -1 : 1;
+      move(direction, event.key === "Home" ? -1 : event.key === "End" ? 0 : activeIndex);
+    } else if (event.key === "Enter" || (event.key === " " && event.target !== searchRef.current)) {
+      event.preventDefault();
+      choose(activeIndex);
+    }
+  };
+  const openMenu = () => {
+    setActiveIndex(
+      Math.max(
+        0,
+        options.findIndex((option) => selectedValues.includes(String(option.value)) && !option.disabled),
+      ),
+    );
+    setOpen(true);
+  };
+  const title = props["aria-label"] || props.ariaLabel || t("Choose an option");
   return (
-    <div className={`multi-select ${open ? "is-open" : ""} ${disabled ? "is-disabled" : ""} ${className}`.trim()}>
-      <div
-        className="control multi-select-trigger"
-        onClick={(event) => {
-          if (disabled || (event.target instanceof Element && event.target.closest(".multi-select-chip"))) return;
-          if (open) popover.close();
-          else setOpen(true);
-        }}
-      >
-        <span className="multi-select-values">
-          {!visible.length ? <span className="multi-select-placeholder">{uiT(placeholder)}</span> : null}
-          {visible.map((option) => (
-            <button
-              type="button"
-              className="multi-select-chip"
-              disabled={disabled}
-              key={option.value}
-              aria-label={uiT("Remove {p0}", { p0: option.label })}
-              onClick={(event) => {
-                event.stopPropagation();
-                if (disabled) return;
-                onChange(selectedValues.filter((item) => item !== String(option.value)));
-              }}
-            >
-              {variant === "student" ? (
-                <StudentAvatar avatarId={option.avatarId} name={option.label} size="micro" decorative />
-              ) : null}
-              <span>{option.label}</span>
-              <X aria-hidden="true" size={13} />
-            </button>
-          ))}
-          {selectedOptions.length > visible.length ? (
-            <span className="multi-select-more">
-              +{selectedOptions.length - visible.length} {uiT(" more")}
-            </span>
-          ) : null}
-        </span>
-        <button
-          ref={triggerRef}
-          className="multi-select-toggle"
-          type="button"
-          disabled={disabled}
-          aria-label={ariaLabel}
-          aria-haspopup="listbox"
-          aria-expanded={open}
-          aria-controls={open ? listId : undefined}
-          onClick={(event) => {
-            event.stopPropagation();
-            if (disabled) return;
-            if (open) popover.close();
-            else setOpen(true);
-          }}
-          onPointerDown={(event) => event.stopPropagation()}
-          onKeyDown={(event) => {
-            if (disabled) return;
-            if (["Enter", " ", "ArrowDown", "ArrowUp"].includes(event.key)) {
-              event.preventDefault();
-              setActiveIndex(event.key === "ArrowUp" ? Math.max(0, filteredOptions.length - 1) : 0);
+    <span
+      className={`select-menu-wrap select-wrap ${multiple ? "multi-select" : ""} select-${variant} ${open ? "is-open" : ""} ${className}`.trim()}
+    >
+      {props.name ? (
+        <input type="hidden" name={props.name} value={selectedValues.join(",")} disabled={disabled} />
+      ) : null}
+      <button
+        ref={triggerRef}
+        type="button"
+        role="combobox"
+        disabled={disabled || loading}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={open ? listId : undefined}
+        aria-label={props["aria-label"] || props.ariaLabel}
+        aria-labelledby={props["aria-labelledby"]}
+        aria-describedby={props["aria-describedby"]}
+        aria-invalid={props["aria-invalid"]}
+        aria-required={props.required || props["aria-required"]}
+        className={`select-trigger-hibi select-trigger ${open ? "is-open" : ""} ${!multiple && selected[0]?.meta ? "is-two-line" : ""} ${small ? "is-small" : ""}`}
+        onClick={() => (open ? setOpen(false) : openMenu())}
+        onKeyDown={(event) => {
+          if (["ArrowDown", "ArrowUp", "Enter", " "].includes(event.key)) {
+            event.preventDefault();
+            openMenu();
+          } else if (event.key.length === 1 && !event.altKey && !event.ctrlKey && !event.metaKey) {
+            const index = options.findIndex(
+              (option) =>
+                !option.disabled && normalizeSearchText(option.label).startsWith(normalizeSearchText(event.key)),
+            );
+            if (index >= 0) {
+              setActiveIndex(index);
               setOpen(true);
             }
-          }}
-        >
-          <ChevronDown className="select-chevron" aria-hidden="true" size={17} />
-        </button>
-      </div>
-      <div className="multi-select-summary">
-        <span>
-          {selectedOptions.length ? uiT("{p0} selected", { p0: selectedOptions.length }) : uiT("None selected")}
+          }
+        }}
+      >
+        {loading ? (
+          <LoaderCircle className="select-spinner" size={18} aria-hidden="true" />
+        ) : !multiple && selected[0] ? (
+          <OptionArtwork option={selected[0]} variant={variant} />
+        ) : null}
+        <span className="select-value">
+          <strong>
+            {multiple
+              ? selected.length
+                ? selected.map((option) => option.label).join(", ")
+                : t(placeholder)
+              : selected[0]?.label || t(placeholder)}
+          </strong>
+          {!multiple && selected[0]?.meta ? <small>{selected[0].meta}</small> : null}
         </span>
-        {selectedOptions.length ? (
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={() => {
-              if (!disabled) onChange([]);
-            }}
-          >
-            {uiT("Clear")}
+        <ChevronDown className="select-chevron" aria-hidden="true" size={18} />
+      </button>
+      {multiple ? (
+        <span className="multi-select-summary">
+          <span>{selected.length ? t("{p0} selected", { p0: selected.length }) : t("None selected")}</span>
+          {selected.length ? (
+            <button type="button" disabled={disabled} onClick={() => onChange([])}>
+              {t("Clear")}
+            </button>
+          ) : null}
+        </span>
+      ) : null}
+      {multiple && selected.length ? (
+        <span className="multi-select-values">
+          {selected.map((option) => (
+            <button
+              type="button"
+              key={option.value}
+              className="multi-select-chip"
+              disabled={disabled}
+              aria-label={t("Remove {p0}", { p0: option.label })}
+              onClick={() => onChange(selectedValues.filter((item) => item !== String(option.value)))}
+            >
+              {option.label}
+              <X size={13} aria-hidden="true" />
+            </button>
+          ))}
+        </span>
+      ) : null}
+      <PickerPopover
+        open={open && !disabled}
+        onClose={() => setOpen(false)}
+        triggerRef={triggerRef}
+        title={title}
+        className="select-popover"
+        onKeyDown={keyDown}
+      >
+        {shouldSearch ? (
+          <label className="select-search">
+            <Search size={17} aria-hidden="true" />
+            <input
+              ref={searchRef}
+              role="combobox"
+              aria-label={t("Search options")}
+              aria-expanded="true"
+              aria-controls={listId}
+              aria-activedescendant={filtered[activeIndex] ? `${listId}-${activeIndex}` : undefined}
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setActiveIndex(0);
+              }}
+              placeholder={t("Search…")}
+              autoComplete="off"
+            />
+          </label>
+        ) : null}
+        <div
+          id={listId}
+          className="select-options"
+          role="listbox"
+          aria-label={t("Options")}
+          aria-multiselectable={multiple || undefined}
+          tabIndex={0}
+          aria-activedescendant={filtered[activeIndex] ? `${listId}-${activeIndex}` : undefined}
+        >
+          {filtered.map((option, index) => (
+            <button
+              type="button"
+              role="option"
+              id={`${listId}-${index}`}
+              key={option.value}
+              tabIndex={-1}
+              disabled={option.disabled}
+              aria-selected={selectedValues.includes(option.value)}
+              className={`select-option ${selectedValues.includes(option.value) ? "is-selected" : ""} ${index === activeIndex ? "is-active" : ""}`}
+              onPointerMove={() => setActiveIndex(index)}
+              onClick={() => choose(index)}
+            >
+              <OptionArtwork option={option} variant={variant} />
+              <span className="select-option-text">
+                <strong>{option.label}</strong>
+                {option.meta ? <small>{option.meta}</small> : null}
+              </span>
+              {option.detail ? <span className="select-option-meta">{option.detail}</span> : null}
+              <Check className="select-check" aria-hidden="true" size={18} />
+            </button>
+          ))}
+          {!filtered.length ? (
+            <div className="select-message" role="status">
+              {t(emptyMessage)}
+            </div>
+          ) : null}
+        </div>
+        {multiple ? (
+          <button type="button" className="select-sheet-done" onClick={() => setOpen(false)}>
+            {t("Done")}
           </button>
         ) : null}
-      </div>
-      {open && !disabled && typeof document !== "undefined"
-        ? createPortal(
-            <ChoiceMenu
-              activeIndex={activeIndex}
-              emptyMessage={emptyMessage}
-              filteredOptions={filteredOptions}
-              listId={listId}
-              loading={false}
-              menuRef={menuRef}
-              mobile={mobile}
-              multiple
-              onChoose={choose}
-              onClose={popover.close}
-              onKeyDown={popover.onKeyDown}
-              optionId={popover.optionId}
-              position={position}
-              query={query}
-              searchable={searchable}
-              selectedValues={selectedValues}
-              setActiveIndex={setActiveIndex}
-              setQuery={setQuery}
-              variant={variant}
-            />,
-            document.body,
-          )
-        : null}
-    </div>
+      </PickerPopover>
+    </span>
   );
 }
 
-export function GroupSelect({ groups, include = [], value, onChange, ...props }) {
+// Existing Select callers retain their option children and change-event contract.
+export function Select({ children, ...props }) {
+  const options = useMemo(() => optionsFromChildren(children), [children]);
+  return <ChoiceControl options={options} {...props} />;
+}
+
+export const SelectMenu = Select;
+
+export function MultiSelect(props) {
+  return <ChoiceControl {...props} multiple />;
+}
+
+export function GroupSelect({ groups, include = [], ...props }) {
   return (
-    <Select variant="group" searchable={groups.length > 7} value={value} onChange={onChange} {...props}>
+    <Select {...props} variant="group">
       {[...include, ...groups].map((group) => (
-        <option key={group.id} value={group.id} data-meta={group.meta}>
+        <option key={group.id} value={group.id} data-meta={group.meta} data-detail={group.detail}>
           {group.name}
         </option>
       ))}
@@ -718,15 +319,16 @@ export function GroupSelect({ groups, include = [], value, onChange, ...props })
   );
 }
 
-export function StudentSelect({ students, value, onChange, ...props }) {
+export function StudentSelect({ students, ...props }) {
   return (
-    <Select variant="student" searchable={students.length > 6} value={value} onChange={onChange} {...props}>
+    <Select {...props} variant="student">
       {students.map((student) => (
         <option
           key={student.id}
           value={student.id}
           data-avatar-id={student.avatarId}
           data-meta={student.code || student.meta}
+          data-detail={student.detail}
         >
           {student.fullName || student.name}
         </option>

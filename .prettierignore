@@ -8,3 +8,6 @@ public/
 supabase/migrations/
 supabase/tests/
 supabase/.temp/
+
+# Original design handoff (kept byte-for-byte).
+docs/rediseno-v2/

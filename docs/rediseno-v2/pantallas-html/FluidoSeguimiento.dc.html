@@ -1,0 +1,730 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Seguimiento · interactivo</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/hibi/components/bundle.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&amp;family=Albert+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+:root{--bermellon:#D9472C;--bermellon-strong:#C23B22;--bermellon-ink:#A8321C;--bermellon-soft:#F9E3DE;--sumi:#1E1C20;--sumi-muted:#5A524A;--sumi-subtle:#9A8F80;--washi:#F6F1E8;--papel:#FFFFFF;--kraft:#EFE8DB;--line:#E8DFCF;--line-soft:#F1EBE0;--line-control:#8F8475;--indigo:#34437F;--indigo-soft:#E5E8F2;--jade:#2E8C7E;--jade-strong:#23705F;--jade-soft:#E3F1EE;--ocre:#D9A23A;--ocre-ink:#7E5A12;--ocre-soft:#F8EDD5;--focus:#34437F;--overlay:rgba(30,28,32,.45);--space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:20px;--space-6:24px;--space-8:32px;--space-10:40px;--space-12:48px;--radius-sm:8px;--radius-md:10px;--radius-lg:12px;--radius-xl:16px;--radius-pill:999px;--shadow-card:0 1px 2px rgba(30,28,32,.05);--shadow-overlay:0 16px 40px rgba(30,28,32,.16);--control-height:44px;--segment-height:36px;--sidebar-width:232px;--topbar-height:60px;--drawer-width:480px;--font-display:"Dela Gothic One","Arial Black",system-ui,sans-serif;--font-sans:"Albert Sans","Segoe UI",system-ui,sans-serif}
+body{margin:0}
+sc-if,sc-for{display:contents}
+a{color:#C23B22}a:hover{color:#A8321C}
+.side{flex:1 1 220px;max-width:220px;padding:28px 14px 24px;display:flex;flex-direction:column;gap:28px}
+.side .sidebar-link:hover{background:var(--papel)}
+.sheet{flex:999 1 560px;min-width:0;margin:12px 12px 12px 0;background:var(--papel);border:1px solid var(--line);border-radius:16px;padding:40px clamp(20px,4vw,56px) 56px;display:flex;flex-direction:column;gap:24px}
+.ov{margin:0;font:800 12px/16px var(--font-sans);letter-spacing:.12em;text-transform:uppercase;color:var(--sumi-muted)}
+.lk{font:700 13px/18px var(--font-sans);text-decoration:none;white-space:nowrap}
+.st{display:inline-flex;align-items:center;gap:7px;font:700 13px/18px var(--font-sans);white-space:nowrap}
+.st::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;flex:none}
+.st-ok{color:var(--jade-strong)}.st-ok::before{background:var(--jade)}
+.st-pend{color:var(--ocre-ink)}.st-pend::before{background:var(--ocre)}
+.st-venc{color:var(--bermellon-ink)}.st-venc::before{background:var(--bermellon)}
+.st-muted{color:var(--sumi-muted)}.st-muted::before{background:var(--sumi-subtle)}
+.k-asis{--c:#2E8C7E;--cs:#E3F1EE}.k-calif{--c:#34437F;--cs:#E5E8F2}.k-pagos{--c:#2E8C7E;--cs:#E3F1EE}
+@keyframes d-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+@keyframes ch-draw{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+@keyframes ch-up{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+@keyframes ch-pop{from{opacity:0;transform:translate(-50%,50%) scale(.3)}to{opacity:1;transform:translate(-50%,50%) scale(1)}}
+@keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+
+.frow{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.chips{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.chip{min-height:36px;padding:0 14px;border-radius:999px;border:1.5px solid var(--line-control);background:var(--papel);font:700 13px/18px var(--font-sans);color:var(--sumi);cursor:pointer}
+.chip.on{background:var(--sumi);border-color:var(--sumi);color:var(--papel)}
+.gsel{appearance:none;-webkit-appearance:none;min-height:44px;padding:0 38px 0 14px;border:1.5px solid var(--line-control);border-radius:10px;background:var(--papel) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%231E1C20' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 12px center;font:700 14px/20px var(--font-sans);color:var(--sumi);cursor:pointer}
+
+/* Cifras */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(190px,100%),1fr));border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.kpi{display:flex;flex-direction:column;gap:2px;padding:16px 20px;border:0;border-left:1px solid var(--line-soft);background:transparent;text-align:left;font-family:var(--font-sans);color:var(--sumi)}
+.kpi:first-child{border-left:0;padding-left:0}
+button.kpi{cursor:pointer}
+button.kpi:hover b{text-decoration:underline}
+.kpi.on{background:var(--washi)}
+.kpi span{font:700 13px/18px var(--font-sans);color:var(--sumi-muted)}
+.kpi b{font:800 28px/34px var(--font-sans)}
+.kpi small{font:600 12px/16px var(--font-sans)}
+
+/* Gráfica + lista */
+.cols{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(300px,1fr);gap:32px;align-items:start}
+.chead{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.plot{position:relative;height:250px;margin:22px 12px 38px 48px}
+.grid{position:absolute;left:0;right:0;border-top:1px solid var(--line-soft)}
+.grid b{position:absolute;left:-48px;top:-8px;width:40px;text-align:right;font:600 11px/14px var(--font-sans);color:var(--sumi-muted);font-variant-numeric:tabular-nums}
+.thr{position:absolute;left:0;right:0;border-top:1.5px dashed var(--bermellon);z-index:1;pointer-events:none;opacity:.8}
+.thr b{position:absolute;right:0;top:-20px;font:700 11px/14px var(--font-sans);color:var(--bermellon-ink);background:var(--papel);padding:0 4px}
+svg.ln{position:absolute;inset:0;width:100%;height:100%;overflow:visible;animation:ch-draw 1s .1s cubic-bezier(.2,.7,.2,1) both}
+svg.ln polyline{fill:none;stroke:var(--c);stroke-width:2;vector-effect:non-scaling-stroke;stroke-linejoin:round;stroke-linecap:round}
+svg.ln polyline.pj{stroke:var(--line-control);stroke-dasharray:5 5}
+svg.ln polyline.su{stroke:var(--sumi);stroke-width:2;stroke-dasharray:2 4}
+svg.ln polygon{fill:var(--cs);opacity:.75}
+.dim svg.ln polygon,.dim svg.ln polyline:not(.su){opacity:.35}
+.dt{position:absolute;width:16px;height:16px;margin:0;padding:0;border-radius:50%;transform:translate(-50%,50%);background:var(--papel);border:2.5px solid var(--c);cursor:pointer;z-index:2;animation:ch-pop .4s cubic-bezier(.2,.7,.2,1.3) both}
+.dt::before{content:"";position:absolute;inset:-12px;border-radius:50%}
+.dt:hover{box-shadow:0 0 0 5px var(--cs)}
+.dt.low{border-color:var(--bermellon)}
+.dt.on{background:var(--c);box-shadow:0 0 0 4px var(--papel),0 0 0 6px var(--c)}
+.dt.low.on{background:var(--bermellon);box-shadow:0 0 0 4px var(--papel),0 0 0 6px var(--bermellon)}
+.dt.unreg{border:2px dashed var(--ocre);background:var(--ocre-soft)}
+.dt.faded{opacity:.3}
+.sdot{position:absolute;width:12px;height:12px;border-radius:3px;transform:translate(-50%,50%) rotate(45deg);background:var(--sumi);z-index:3;pointer-events:none;box-shadow:0 0 0 2px var(--papel)}
+.sdot.low{background:var(--bermellon)}
+.rg{position:absolute;width:6px;margin-left:-3px;border-radius:3px;background:var(--cs);z-index:1}
+.tip{display:none;position:absolute;left:50%;bottom:calc(100% + 10px);transform:translateX(-50%);padding:6px 10px;border-radius:8px;background:var(--sumi);color:var(--papel);font:700 12px/16px var(--font-sans);white-space:nowrap;z-index:6;box-shadow:var(--shadow-overlay);pointer-events:none}
+.dt:hover .tip,.dt:focus-visible .tip,.bar:hover .tip,.bar:focus-visible .tip{display:block}
+.xl{position:absolute;bottom:-26px;transform:translateX(-50%);font:600 12px/16px var(--font-sans);color:var(--sumi-muted);white-space:nowrap}
+.xl.on{color:var(--sumi);font-weight:800}
+.srow{position:absolute;left:0;right:0;bottom:-58px;height:22px}
+.srow span{position:absolute;transform:translateX(-50%);width:20px;height:20px;border-radius:6px;display:grid;place-items:center;font:800 10px/1 var(--font-sans)}
+.bars{position:absolute;inset:0;display:flex;align-items:stretch;gap:12px;border-bottom:1px solid var(--line-control)}
+.bar{position:relative;flex:1;max-width:96px;height:100%;padding:0;border:0;background:transparent;cursor:pointer;border-radius:6px}
+.bar.on{background:var(--washi)}
+.bar .col{position:absolute;inset:0 12%;display:flex;flex-direction:column-reverse}
+.bar .col i{position:relative;display:block;flex:none;border-radius:5px 5px 0 0;background:var(--c);transform-origin:bottom;animation:ch-up .7s cubic-bezier(.2,.7,.2,1) both}
+.bar .col i.ph{background:transparent;border-top:2px dashed var(--line-control);height:2px!important;animation:none;border-radius:0}
+.bar .col i.mine{position:absolute;left:0;right:0;bottom:0;background:var(--jade-strong);border-radius:5px 5px 0 0;z-index:1}
+.bar.dim .col i:not(.mine){opacity:.35}
+.bar .bxl{position:absolute;left:-6px;right:-6px;bottom:-26px;text-align:center;font:600 12px/16px var(--font-sans);color:var(--sumi-muted);white-space:nowrap}
+.bar.on .bxl{color:var(--sumi);font-weight:800}
+.leg{display:flex;flex-wrap:wrap;gap:16px;font:600 12px/16px var(--font-sans);color:var(--sumi-muted)}
+.leg span{display:inline-flex;align-items:center;gap:7px}
+.leg i{width:11px;height:11px;border-radius:3px;display:block}
+.focus{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;border-radius:10px;background:var(--washi);font-size:14px;line-height:20px;animation:d-in .25s ease-out both}
+.focus b{font-weight:800}
+.xbtn{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 10px;border:0;border-radius:8px;background:transparent;font:700 13px/18px var(--font-sans);color:var(--bermellon-strong);cursor:pointer;margin-left:auto}
+.xbtn:hover{background:var(--papel)}
+
+/* Lista de alumnos */
+.list{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.lh{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:14px 16px;border-bottom:1px solid var(--line);background:var(--papel)}
+.sr{display:flex;align-items:center;gap:12px;padding:10px 16px;border:0;border-top:1px solid var(--line-soft);background:var(--papel);text-align:left;cursor:pointer;font-family:var(--font-sans);color:var(--sumi);width:100%}
+.sr:first-of-type{border-top:0}
+.sr:hover{background:var(--washi)}
+.sr.on{background:var(--washi);box-shadow:inset 3px 0 0 var(--sumi)}
+.sr.hit{background:var(--bermellon-soft)}
+.sr .student-animal-avatar{width:34px;height:34px;border-radius:10px}
+.sr .student-animal-avatar svg{width:24px;height:24px}
+.sr .nm{flex:1;min-width:0}
+.sr strong{display:block;font:700 14px/18px var(--font-sans)}
+.sr small{display:block;font:500 12px/16px var(--font-sans);color:var(--sumi-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sr .rv{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.sr .rv b{font:800 15px/18px var(--font-sans);font-variant-numeric:tabular-nums}
+.mini{display:flex;gap:3px;align-items:flex-end;height:16px}
+.mini span{width:12px;height:12px;border-radius:3px}
+.mini i{display:block;width:6px;border-radius:2px 2px 0 0}
+
+/* Panel del alumno */
+.stu{display:flex;flex-direction:column;gap:14px;padding:20px 22px;border-radius:14px;background:var(--washi);animation:d-in .3s ease-out both}
+.stuh{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.stuh .student-animal-avatar{width:52px;height:52px;border-radius:14px}
+.stuh .student-animal-avatar svg{width:38px;height:38px}
+.stats{display:flex;gap:0;flex-wrap:wrap}
+.stats div{display:flex;flex-direction:column;padding:0 20px;border-left:1px solid var(--line)}
+.stats div:first-child{padding-left:0;border-left:0}
+.stats span{font:600 12px/16px var(--font-sans);color:var(--sumi-muted)}
+.stats b{font:800 20px/26px var(--font-sans)}
+.hist{display:flex;flex-direction:column;background:var(--papel);border-radius:10px;padding:4px 14px}
+.hr{display:grid;grid-template-columns:minmax(90px,1fr) minmax(120px,1.4fr) minmax(90px,.9fr) minmax(80px,.8fr) minmax(90px,.9fr);gap:12px;align-items:center;padding:9px 0;border-top:1px solid var(--line-soft);font-size:13px;line-height:18px}
+.hr:first-child{border-top:0}
+.hr.th{font:700 11px/14px var(--font-sans);color:var(--sumi-muted);text-transform:uppercase;letter-spacing:.08em}
+
+/* Desglose */
+.tb{min-width:820px;display:flex;flex-direction:column}
+.tr{display:grid;grid-template-columns:minmax(110px,1fr) minmax(150px,1.4fr) minmax(150px,1.4fr) minmax(100px,.9fr) minmax(100px,.9fr) minmax(100px,.9fr);gap:14px;align-items:center;padding:10px 0;border-top:1px solid var(--line-soft);font-size:14px}
+.tr.th{border-top:0;padding:0 0 8px;font:700 12px/16px var(--font-sans);color:var(--sumi-muted)}
+
+@media (max-width:1100px){.cols{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:780px){.side{max-width:none;flex-basis:100%;padding:16px}.side .sidebar-companion{display:none}.sheet{margin:0;border-radius:0;border-left:0;border-right:0}.kpi{border-left:0;padding-left:0}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+span.sc-interp{display:inline!important;position:static!important;font:inherit!important;color:inherit!important;letter-spacing:inherit!important;text-transform:inherit!important;background:none!important;padding:0!important;margin:0!important;border:0!important;box-shadow:none!important;width:auto!important;height:auto!important;min-width:0!important;transform:none!important;opacity:1!important;animation:none!important}
+
+/* ---- Selectores Hibi ---- */
+.pk{position:relative;min-width:0}
+.trg{display:flex;align-items:center;gap:10px;width:100%;min-width:0;height:44px;padding:0 10px 0 12px;box-sizing:border-box;border:1.5px solid var(--line-control);border-radius:10px;background:var(--papel);font:600 15px/20px var(--font-sans);color:var(--sumi);text-align:left;cursor:pointer;font-variant-numeric:tabular-nums}
+.trg:hover{border-color:var(--sumi)}
+.trg.open{border-color:var(--sumi);box-shadow:0 0 0 3px rgba(30,28,32,.08)}
+.trg .tv{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trg .tv small{display:block;font:600 12px/16px var(--font-sans);color:var(--sumi-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trg.two{height:56px}
+.trg.two .tv{font-weight:800}
+.trg .ti{flex:none;width:18px;height:18px;color:var(--sumi-muted)}
+.trg .cv{flex:none;width:18px;height:18px;color:var(--sumi-muted);transition:transform .18s}
+.trg.open .cv{transform:rotate(180deg)}
+.catch{position:fixed;inset:0;z-index:40;border:0;padding:0;background:transparent;cursor:default}
+.pop{position:absolute;top:calc(100% + 6px);left:0;z-index:41;min-width:100%;box-sizing:border-box;background:var(--papel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-overlay);padding:6px;animation:popin .16s cubic-bezier(.2,.8,.2,1) both}
+.pop.r{left:auto;right:0}
+.pop.up{top:auto;bottom:calc(100% + 6px)}
+@keyframes popin{from{opacity:0;transform:translateY(-4px) scale(.98)}to{opacity:1;transform:none}}
+.ph2{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 6px 8px}
+.ph2 b{font:800 15px/20px var(--font-sans);color:var(--sumi)}
+.cap{display:block;padding:8px 8px 4px;font:800 11px/14px var(--font-sans);letter-spacing:.1em;text-transform:uppercase;color:var(--sumi-muted)}
+.li{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:6px 10px;box-sizing:border-box;border:0;border-radius:8px;background:transparent;text-align:left;cursor:pointer;font-family:var(--font-sans);color:var(--sumi)}
+.li:hover{background:var(--washi)}
+.li.on{background:var(--washi)}
+.li .lt{flex:1;min-width:0}
+.li .lt strong{display:block;font:700 14px/18px var(--font-sans);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.li .lt small{display:block;font:500 12px/16px var(--font-sans);color:var(--sumi-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.li .lv{flex:none;font:700 12px/16px var(--font-sans);color:var(--sumi-muted);font-variant-numeric:tabular-nums}
+.li .ck{flex:none;width:18px;height:18px;color:var(--sumi);visibility:hidden}
+.li.on .ck{visibility:visible}
+.li.on .lt strong{font-weight:800}
+.li .student-animal-avatar{width:32px;height:32px;border-radius:9px;flex:none}
+.li .student-animal-avatar svg{width:23px;height:23px}
+.gm{flex:none;width:32px;height:32px;border-radius:9px;display:grid;place-items:center;background:var(--kraft);font:800 12px/1 var(--font-sans);color:var(--sumi)}
+.sr2{display:flex;align-items:center;gap:8px;height:40px;margin:2px 2px 6px;padding:0 10px;border-radius:9px;background:var(--washi);color:var(--sumi-muted)}
+.sr2 input{flex:1;min-width:0;border:0;outline:0;background:transparent;font:600 14px/18px var(--font-sans);color:var(--sumi)}
+.sr2 svg{width:16px;height:16px}
+.lsc{max-height:264px;overflow:auto}
+/* Calendario */
+.cal{width:300px;padding:10px}
+.cnav{width:32px;height:32px;border:0;border-radius:8px;background:transparent;display:grid;place-items:center;cursor:pointer;color:var(--sumi)}
+.cnav:hover{background:var(--washi)}
+.cnav:disabled{color:var(--line-control);cursor:default;background:transparent}
+.cnav svg{width:18px;height:18px}
+.cwk{display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:2px}
+.cwk span{text-align:center;font:700 11px/24px var(--font-sans);color:var(--sumi-muted)}
+.cgr{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.cd{position:relative;height:38px;border:0;border-radius:9px;background:transparent;font:700 14px/1 var(--font-sans);color:var(--sumi);cursor:pointer;font-variant-numeric:tabular-nums}
+.cd:hover{background:var(--washi)}
+.cd.out{color:var(--sumi-subtle);font-weight:500}
+.cd.past{color:var(--line-control);font-weight:500;cursor:default;background:transparent}
+.cd.today{box-shadow:inset 0 0 0 1.5px var(--bermellon)}
+.cd.on{background:var(--sumi);color:var(--papel);box-shadow:none}
+.cd.rep{background:var(--kraft)}
+.cd i{position:absolute;left:50%;bottom:5px;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:var(--line-control)}
+.cd.on i{background:var(--papel)}
+.cft{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;padding:8px 2px 0;border-top:1px solid var(--line-soft);font:500 12px/16px var(--font-sans);color:var(--sumi-muted)}
+.cft .lg{display:flex;align-items:center;gap:12px}
+.cft .lg span{display:inline-flex;align-items:center;gap:5px}
+.cft .lg i{width:4px;height:4px;border-radius:50%;background:var(--line-control)}
+.cft .lg em{width:12px;height:12px;border-radius:4px;background:var(--kraft);font-style:normal}
+.chipb{height:30px;padding:0 10px;border:1.5px solid var(--line-control);border-radius:8px;background:var(--papel);font:700 12px/16px var(--font-sans);color:var(--sumi);cursor:pointer;white-space:nowrap}
+.chipb:hover{background:var(--washi)}
+/* Hora */
+.tpk{width:304px;padding:10px}
+.hg{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.hc{position:relative;height:38px;border:1.5px solid var(--line);border-radius:9px;background:var(--papel);font:700 14px/1 var(--font-sans);color:var(--sumi);cursor:pointer;font-variant-numeric:tabular-nums}
+.hc:hover{border-color:var(--sumi)}
+.hc.on{background:var(--sumi);border-color:var(--sumi);color:var(--papel)}
+.hc.busy{color:var(--bermellon-ink);border-color:var(--bermellon-soft);background:var(--bermellon-soft)}
+.hc.busy.on{background:var(--bermellon-ink);border-color:var(--bermellon-ink);color:var(--papel)}
+.mg{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:3px;border-radius:10px;background:var(--washi);border:1px solid var(--line)}
+.mg button{height:32px;border:0;border-radius:7px;background:transparent;font:700 13px/16px var(--font-sans);color:var(--sumi-muted);cursor:pointer;font-variant-numeric:tabular-nums}
+.mg button.on{background:var(--papel);color:var(--sumi);box-shadow:0 1px 2px rgba(30,28,32,.14)}
+.tft{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;padding:10px 2px 0;border-top:1px solid var(--line-soft);font:700 13px/18px var(--font-sans);color:var(--sumi);font-variant-numeric:tabular-nums}
+.tft .st{font-size:12px}
+.tlg{display:flex;align-items:center;gap:6px;margin:8px 2px 0;font:500 12px/16px var(--font-sans);color:var(--sumi-muted)}
+.tlg i{width:12px;height:12px;border-radius:4px;background:var(--bermellon-soft)}
+
+.scope{display:flex;align-items:center;gap:10px;margin-left:auto;padding:6px 12px 6px 6px;border-radius:999px;background:var(--washi);font:600 13px/18px var(--font-sans);color:var(--sumi)}
+.scope.on{background:var(--indigo-soft)}
+.scope small{font:600 12px/16px var(--font-sans);color:var(--ocre-ink)}
+.scope.on small{color:var(--indigo)}
+.tg{position:relative;width:40px;height:24px;flex:none;border-radius:999px;border:0;background:var(--line-control);cursor:pointer;transition:background .2s}
+.tg::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--papel);transition:transform .2s;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.tg.on{background:var(--indigo)}
+.tg.on::after{transform:translateX(16px)}
+</style>
+</helmet>
+<div class="hibi-ds" style="min-height:100vh;display:flex;flex-wrap:wrap;background:var(--washi)">
+
+  <aside class="side">
+    <a class="hibi-brand" href="#" aria-label="Inicio de Hibi"><img src="/_blob/19d7de209d497968ffcc94f1e708a867" alt="hibi" style="height:40px"></a>
+    <nav class="sidebar-nav" aria-label="Navegación principal">
+      <a class="sidebar-link" href="FluidoInicioC.dc.html"><svg class="ico" viewBox="0 0 24 24"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Inicio</a>
+      <a class="sidebar-link" href="FluidoComunidad.dc.html"><svg class="ico" viewBox="0 0 24 24"><path d="M18 21a8 8 0 0 0-16 0"/><circle cx="10" cy="8" r="5"/><path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3"/></svg>Comunidad</a>
+      <a class="sidebar-link" href="FluidoClases.dc.html"><svg class="ico" viewBox="0 0 24 24"><path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M8 13h.01"/><path d="M12 13h.01"/><path d="M16 13h.01"/><path d="M8 17h.01"/><path d="M12 17h.01"/><path d="M16 17h.01"/></svg>Clases</a>
+      <a class="sidebar-link active" href="FluidoSeguimiento.dc.html" aria-current="page"><svg class="ico" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>Seguimiento</a>
+      <a class="sidebar-link" href="FluidoConfig.dc.html"><svg class="ico" viewBox="0 0 24 24"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg>Configuración</a>
+    </nav>
+    <div class="sidebar-companion" style="gap:12px">
+      <img src="/_blob/f94d92622e26d07cb8c2035979131ea0" alt="" style="width:52px;height:52px">
+      <span class="sync-pill" style="align-self:flex-start">Sincronizado</span>
+    </div>
+  </aside>
+
+  <main class="sheet">
+    <div class="page-heading" style="flex-wrap:wrap;align-items:flex-end">
+      <div><h1>Seguimiento</h1><p>Calificaciones, asistencia y pagos de tus alumnos y grupos.</p></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+<div class="pk" style="width:230px"><button type="button" class="{{perDD.cls}}" aria-haspopup="listbox" aria-expanded="{{perDD.open}}" aria-label="Fecha de consulta" onClick="{{perDD.t}}"><svg class="ico ti" viewBox="0 0 24 24"><path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 10h18"/></svg><span class="tv">{{perDD.l}}</span><svg class="ico cv" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button><sc-if value="{{perDD.open}}"><div class="pop r" role="listbox" aria-label="Fecha de consulta" style="width:240px"><sc-for list="{{perDD.opts}}" as="o"><button type="button" role="option" aria-selected="{{o.on}}" class="{{o.cls}}" onClick="{{o.pick}}"><span class="lt"><strong>{{o.l}}</strong><small>{{o.s}}</small></span><svg class="ico ck" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></button></sc-for></div></sc-if></div>
+        <sc-if value="{{anyPop}}"><button type="button" class="catch" aria-label="Cerrar selector" onClick="{{popClose}}"></button></sc-if>
+        <button class="button button-secondary" type="button"><svg class="ico" viewBox="0 0 24 24"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg>Exportar Excel</button>
+      </div>
+    </div>
+
+    <div class="frow" style="border-bottom:1px solid var(--line)">
+      <nav class="tabs" aria-label="Vistas de seguimiento" style="border-bottom:0">
+        <sc-for list="{{tabs}}" as="t" hint-placeholder-count="3"><button type="button" class="{{t.cls}}" aria-current="{{t.cur}}" onClick="{{t.pick}}">{{t.label}}</button></sc-for>
+      </nav>
+      <div class="segmented" role="group" aria-label="Mostrar" style="margin-bottom:8px"><button type="button" class="{{modeR}}" aria-pressed="{{isRes}}" onClick="{{toRes}}">Resumen</button><button type="button" class="{{modeD}}" aria-pressed="{{isDes}}" onClick="{{toDes}}">Desglose</button></div>
+    </div>
+
+    <div class="frow">
+      <div class="chips" role="group" aria-label="Alcance"><span class="ov" style="margin-right:4px">Alcance</span><sc-for list="{{groups}}" as="g"><button type="button" class="{{g.cls}}" aria-pressed="{{g.on}}" onClick="{{g.pick}}">{{g.label}}</button></sc-for></div>
+      <div class="{{scope.cls}}" role="status"><button type="button" class="{{scope.tg}}" role="switch" aria-checked="{{scope.on}}" aria-label="Incluir grupos archivados" onClick="{{scope.t}}"></button><span>Incluir grupos archivados</span><small>{{scope.msg}}</small></div>
+    </div>
+
+    <div class="kpis">
+      <sc-for list="{{kpis}}" as="k" hint-placeholder-count="4">
+        <sc-if value="{{k.btn}}"><button type="button" class="{{k.cls}}" onClick="{{k.pick}}" aria-pressed="{{k.on}}"><span>{{k.l}}</span><b style="color:{{k.vc}}">{{k.v}}</b><small style="color:{{k.nc}}">{{k.n}}</small></button></sc-if>
+        <sc-if value="{{k.plain}}"><div class="kpi"><span>{{k.l}}</span><b style="color:{{k.vc}}">{{k.v}}</b><small style="color:{{k.nc}}">{{k.n}}</small></div></sc-if>
+      </sc-for>
+    </div>
+
+    <!-- Resumen: gráfica + lista ligada -->
+    <sc-if value="{{isRes}}" hint-placeholder-val="{{ true }}">
+      <div class="{{colsCls}}">
+        <section style="display:flex;flex-direction:column;gap:14px;min-width:0" aria-labelledby="ch-t">
+          <div class="chead">
+            <div><h2 id="ch-t" style="margin:0;font:800 18px/24px var(--font-sans)">{{chart.title}}</h2><p style="margin:2px 0 0;font:600 13px/18px var(--font-sans);color:var(--sumi-muted)">{{chart.caption}}</p></div>
+            <sc-if value="{{isPagos}}"><div class="segmented" role="group" aria-label="Vista de cobros"><button type="button" class="{{viewR}}" aria-pressed="{{isRitmo}}" onClick="{{toRitmo}}">Ritmo</button><button type="button" class="{{viewA}}" aria-pressed="{{isAcum}}" onClick="{{toAcum}}">Acumulado</button></div></sc-if>
+          </div>
+          <div class="{{plotCls}}">
+            <sc-for list="{{chart.ticks}}" as="t"><span class="grid" style="bottom:{{t.b}}%"><b>{{t.l}}</b></span></sc-for>
+            <sc-if value="{{chart.hasThr}}"><span class="thr" style="bottom:{{chart.thr}}%"><b>{{chart.thrLabel}}</b></span></sc-if>
+            <sc-if value="{{chart.isDot}}">
+              <svg class="ln" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polygon points="{{chart.area}}"></polygon><polyline class="pj" points="{{chart.proj}}"></polyline><polyline points="{{chart.line}}"></polyline><polyline class="su" points="{{chart.suLine}}"></polyline></svg>
+              <sc-for list="{{chart.rngs}}" as="r"><span class="rg" style="left:{{r.x}}%;bottom:{{r.lo}}%;height:{{r.h}}%"></span></sc-for>
+              <sc-for list="{{chart.dots}}" as="d" hint-placeholder-count="8"><button type="button" class="{{d.cls}}" style="left:{{d.x}}%;bottom:{{d.y}}%;animation-delay:{{d.delay}}" onClick="{{d.pick}}" aria-label="{{d.tip}}" aria-pressed="{{d.on}}"><span class="tip">{{d.tip}}</span></button></sc-for>
+              <sc-for list="{{chart.sdots}}" as="s"><span class="{{s.cls}}" style="left:{{s.x}}%;bottom:{{s.y}}%"></span></sc-for>
+              <sc-for list="{{chart.dots}}" as="d"><span class="{{d.xcls}}" style="left:{{d.x}}%">{{d.xl}}</span></sc-for>
+              <sc-if value="{{chart.hasRow}}"><div class="srow" aria-label="{{chart.rowAria}}"><sc-for list="{{chart.row}}" as="r"><span style="left:{{r.x}}%;{{r.st}}">{{r.t}}</span></sc-for></div></sc-if>
+            </sc-if>
+            <sc-if value="{{chart.isBar}}">
+              <div class="bars">
+                <sc-for list="{{chart.bars}}" as="b" hint-placeholder-count="5">
+                  <button type="button" class="{{b.cls}}" onClick="{{b.pick}}" aria-label="{{b.tip}}" aria-pressed="{{b.on}}">
+                    <span class="col"><sc-if value="{{b.fut}}"><i class="ph"></i></sc-if><sc-if value="{{b.real}}"><i style="height:{{b.h}}%;animation-delay:{{b.delay}}"><sc-if value="{{b.hasMine}}"><i class="mine" style="height:{{b.mine}}%"></i></sc-if></i></sc-if></span>
+                    <span class="bxl">{{b.xl}}</span>
+                    <span class="tip">{{b.tip}}</span>
+                  </button>
+                </sc-for>
+              </div>
+            </sc-if>
+          </div>
+          <div class="leg"><sc-for list="{{chart.legend}}" as="l"><span><i style="{{l.st}};"></i>{{l.t}}</span></sc-for></div>
+
+          <sc-if value="{{hasFocus}}">
+            <div class="focus" aria-live="polite"><span class="ov">Mostrando</span><b>{{focus.title}}</b><span style="color:var(--sumi-muted)">{{focus.sub}}</span><button type="button" class="xbtn" onClick="{{clearFocus}}">Quitar filtro</button></div>
+          </sc-if>
+
+          <!-- Historial del alumno -->
+          <sc-if value="{{hasStu}}">
+            <div class="stu" aria-labelledby="stu-t">
+              <div class="stuh">
+                <sc-if value="{{stu.isCat}}"><span class="student-animal-avatar {{stu.tone}}" role="img" aria-label="Avatar de gato"><svg viewBox="0 0 48 48"><path d="M11 25C11 17 13 12.2 14.5 9.6Q15.3 8.3 16.4 9.2L20.4 12.6C22.7 12 25.3 12 27.6 12.6L31.6 9.2Q32.7 8.3 33.5 9.6C35 12.2 37 17 37 25C37 33.5 31.2 39 24 39S11 33.5 11 25Z"></path><circle cx="19" cy="25.5" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="29" cy="25.5" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="24" cy="28.6" r="1.1" fill="currentColor" stroke="none"></circle><path d="M22 30.5q1 1 2 0q1 1 2 0"></path><ellipse cx="15.8" cy="29.4" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><ellipse cx="32.2" cy="29.4" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse></svg></span></sc-if>
+                <sc-if value="{{stu.isFox}}"><span class="student-animal-avatar {{stu.tone}}" role="img" aria-label="Avatar de zorro"><svg viewBox="0 0 48 48"><path d="M9 9.6C9 8.6 10 8 10.8 8.6L18.4 14.6C22 13.6 26 13.6 29.6 14.6L37.2 8.6C38 8 39 8.6 39 9.6L38 22C37.4 30.5 31.5 37.5 24 39.5 16.5 37.5 10.6 30.5 10 22Z"></path><path d="M11.6 26.4C16.4 26.9 20.8 29.8 24 33.2 27.2 29.8 31.6 26.9 36.4 26.4"></path><circle cx="18.8" cy="23.8" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="29.2" cy="23.8" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="24" cy="36.2" r="1.5" fill="currentColor" stroke="none"></circle></svg></span></sc-if>
+                <sc-if value="{{stu.isRabbit}}"><span class="student-animal-avatar {{stu.tone}}" role="img" aria-label="Avatar de conejo"><svg viewBox="0 0 48 48"><path d="M19.2 17.4C15.8 12.4 15.2 5.6 17.8 4.3S22.8 9.2 22.1 16.5M28.8 17.4C32.2 12.4 32.8 5.6 30.2 4.3S25.2 9.2 25.9 16.5"></path><ellipse cx="24" cy="28" rx="13" ry="11.6"></ellipse><circle cx="19.2" cy="27" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="28.8" cy="27" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="24" cy="30.2" r="1.1" fill="currentColor" stroke="none"></circle><path d="M22 32.1q1 1 2 0q1 1 2 0"></path><ellipse cx="15.6" cy="31" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><ellipse cx="32.4" cy="31" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse></svg></span></sc-if>
+                <sc-if value="{{stu.isBear}}"><span class="student-animal-avatar {{stu.tone}}" role="img" aria-label="Avatar de oso"><svg viewBox="0 0 48 48"><circle cx="24" cy="27.2" r="13.4"></circle><path d="M13.6 19.2A5 5 0 1 1 19.9 14.4M34.4 19.2A5 5 0 1 0 28.1 14.4"></path><circle cx="18.8" cy="25.2" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="29.2" cy="25.2" r="1.8" fill="currentColor" stroke="none"></circle><ellipse cx="24" cy="31.4" rx="5.2" ry="3.9"></ellipse><ellipse cx="24" cy="30" rx="1.9" ry="1.3" fill="currentColor" stroke="none"></ellipse><path d="M24 31.2v1.5"></path><ellipse cx="15.2" cy="30.2" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><ellipse cx="32.8" cy="30.2" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse></svg></span></sc-if>
+                <sc-if value="{{stu.isOwl}}"><span class="student-animal-avatar {{stu.tone}}" role="img" aria-label="Avatar de búho"><svg viewBox="0 0 48 48"><path d="M11.5 18C11.5 13.5 13 10.6 15.2 9.2 16.8 11 18.2 12.2 19.8 13 22.6 12.2 25.4 12.2 28.2 13 29.8 12.2 31.2 11 32.8 9.2 35 10.6 36.5 13.5 36.5 18V28C36.5 35.2 31 40 24 40S11.5 35.2 11.5 28Z"></path><circle cx="18.7" cy="22.8" r="4.9"></circle><circle cx="29.3" cy="22.8" r="4.9"></circle><circle cx="19.3" cy="23.4" r="2.1" fill="currentColor" stroke="none"></circle><circle cx="28.7" cy="23.4" r="2.1" fill="currentColor" stroke="none"></circle><path d="M22.8 28.2Q24 31 25.2 28.2Z" fill="currentColor"></path><ellipse cx="15.6" cy="31" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><ellipse cx="32.4" cy="31" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><path d="M21 40v1.6M27 40v1.6"></path></svg></span></sc-if>
+                <sc-if value="{{stu.isPenguin}}"><span class="student-animal-avatar {{stu.tone}}" role="img" aria-label="Avatar de pingüino"><svg viewBox="0 0 48 48"><ellipse cx="24" cy="26" rx="13" ry="17"/><ellipse cx="24" cy="29" rx="8" ry="11"/><circle cx="20" cy="21" r="1.4" fill="currentColor" stroke="none"/><circle cx="28" cy="21" r="1.4" fill="currentColor" stroke="none"/></svg></span></sc-if>
+                <sc-if value="{{stu.isDog}}"><span class="student-animal-avatar {{stu.tone}}" role="img" aria-label="Avatar de perro"><svg viewBox="0 0 48 48"><path d="M13.5 22C13.5 15 18 11 24 11S34.5 15 34.5 22V27.5C34.5 34 29.8 38.8 24 38.8S13.5 34 13.5 27.5Z"></path><path d="M14.2 16.5C9.5 14.8 6.5 18.5 7.2 24.6 7.6 28.4 10.6 29.6 13.5 27.3M33.8 16.5C38.5 14.8 41.5 18.5 40.8 24.6 40.4 28.4 37.4 29.6 34.5 27.3"></path><circle cx="19.2" cy="24.2" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="28.8" cy="24.2" r="1.8" fill="currentColor" stroke="none"></circle><ellipse cx="24" cy="30.8" rx="4.6" ry="3.6"></ellipse><ellipse cx="24" cy="29.3" rx="1.9" ry="1.3" fill="currentColor" stroke="none"></ellipse><path d="M24 30.4v1.4"></path><ellipse cx="16" cy="29.2" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><ellipse cx="32" cy="29.2" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse></svg></span></sc-if>
+                <sc-if value="{{stu.isFrog}}"><span class="student-animal-avatar {{stu.tone}}" role="img" aria-label="Avatar de rana"><svg viewBox="0 0 48 48"><path d="M9.5 19.5A6.5 6.5 0 1 1 20.8 18.9C23 18.3 25 18.3 27.2 18.9A6.5 6.5 0 1 1 38.5 19.5C42 25 41.5 34 35.5 37.5 29.5 41 18.5 41 12.5 37.5 6.5 34 6 25 9.5 19.5Z"></path><circle cx="15" cy="16.2" r="2.3" fill="currentColor" stroke="none"></circle><circle cx="33" cy="16.2" r="2.3" fill="currentColor" stroke="none"></circle><path d="M19.6 29.4C22.2 31.6 25.8 31.6 28.4 29.4"></path><ellipse cx="13.4" cy="28.4" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><ellipse cx="34.6" cy="28.4" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse></svg></span></sc-if>
+                <div style="flex:1;min-width:180px"><h3 id="stu-t" style="margin:0;font:800 20px/26px var(--font-sans)">{{stu.n}}</h3><span style="font:600 13px/18px var(--font-sans);color:var(--sumi-muted)">{{stu.gl}}</span></div>
+                <a class="lk" href="FluidoComunidad.dc.html">Ver ficha</a>
+                <button class="icon-button" type="button" onClick="{{closeStu}}" aria-label="Cerrar historial"><svg class="ico" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+              </div>
+              <div class="stats">
+                <div><span>Asistencia</span><b style="color:{{stu.asisColor}}">{{stu.asisTxt}}</b></div>
+                <div><span>Promedio</span><b style="color:{{stu.promColor}}">{{stu.promTxt}}</b></div>
+                <div><span>Pagado</span><b>{{stu.pagF}}</b></div>
+                <div><span>Por cobrar</span><b style="color:{{stu.debColor}}">{{stu.debF}}</b></div>
+              </div>
+              <div class="hist" role="table" aria-label="Historial de {{stu.n}}">
+                <div class="hr th" role="row"><span role="columnheader">Fecha</span><span role="columnheader">Clase</span><span role="columnheader">Asistencia</span><span role="columnheader">Calificación</span><span role="columnheader">Pago</span></div>
+                <sc-for list="{{stu.hist}}" as="h"><div class="hr" role="row"><span role="cell" class="tnum">{{h.d}}</span><span role="cell">{{h.c}}</span><span role="cell"><span class="{{h.aCls}}">{{h.a}}</span></span><span role="cell" class="tnum" style="font-weight:800;color:{{h.gCol}}">{{h.g}}</span><span role="cell"><span class="{{h.pCls}}">{{h.p}}</span></span></div></sc-for>
+              </div>
+            </div>
+          </sc-if>
+        </section>
+
+        <aside class="list" aria-labelledby="ls-t">
+          <div class="lh"><h2 id="ls-t" class="ov">{{listTitle}}</h2><span style="font:600 12px/16px var(--font-sans);color:var(--sumi-muted)">Toca para ver su historial</span></div>
+          <sc-for list="{{rows}}" as="s" hint-placeholder-count="8">
+            <button type="button" class="{{s.cls}}" onClick="{{s.pick}}" aria-pressed="{{s.on}}">
+              <sc-if value="{{s.isCat}}"><span class="student-animal-avatar {{s.tone}}" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M11 25C11 17 13 12.2 14.5 9.6Q15.3 8.3 16.4 9.2L20.4 12.6C22.7 12 25.3 12 27.6 12.6L31.6 9.2Q32.7 8.3 33.5 9.6C35 12.2 37 17 37 25C37 33.5 31.2 39 24 39S11 33.5 11 25Z"></path><circle cx="19" cy="25.5" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="29" cy="25.5" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="24" cy="28.6" r="1.1" fill="currentColor" stroke="none"></circle><path d="M22 30.5q1 1 2 0q1 1 2 0"></path><ellipse cx="15.8" cy="29.4" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><ellipse cx="32.2" cy="29.4" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse></svg></span></sc-if>
+              <sc-if value="{{s.isFox}}"><span class="student-animal-avatar {{s.tone}}" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M9 9.6C9 8.6 10 8 10.8 8.6L18.4 14.6C22 13.6 26 13.6 29.6 14.6L37.2 8.6C38 8 39 8.6 39 9.6L38 22C37.4 30.5 31.5 37.5 24 39.5 16.5 37.5 10.6 30.5 10 22Z"></path><path d="M11.6 26.4C16.4 26.9 20.8 29.8 24 33.2 27.2 29.8 31.6 26.9 36.4 26.4"></path><circle cx="18.8" cy="23.8" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="29.2" cy="23.8" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="24" cy="36.2" r="1.5" fill="currentColor" stroke="none"></circle></svg></span></sc-if>
+              <sc-if value="{{s.isRabbit}}"><span class="student-animal-avatar {{s.tone}}" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M19.2 17.4C15.8 12.4 15.2 5.6 17.8 4.3S22.8 9.2 22.1 16.5M28.8 17.4C32.2 12.4 32.8 5.6 30.2 4.3S25.2 9.2 25.9 16.5"></path><ellipse cx="24" cy="28" rx="13" ry="11.6"></ellipse><circle cx="19.2" cy="27" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="28.8" cy="27" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="24" cy="30.2" r="1.1" fill="currentColor" stroke="none"></circle><path d="M22 32.1q1 1 2 0q1 1 2 0"></path><ellipse cx="15.6" cy="31" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><ellipse cx="32.4" cy="31" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse></svg></span></sc-if>
+              <sc-if value="{{s.isBear}}"><span class="student-animal-avatar {{s.tone}}" aria-hidden="true"><svg viewBox="0 0 48 48"><circle cx="24" cy="27.2" r="13.4"></circle><path d="M13.6 19.2A5 5 0 1 1 19.9 14.4M34.4 19.2A5 5 0 1 0 28.1 14.4"></path><circle cx="18.8" cy="25.2" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="29.2" cy="25.2" r="1.8" fill="currentColor" stroke="none"></circle><ellipse cx="24" cy="31.4" rx="5.2" ry="3.9"></ellipse><ellipse cx="24" cy="30" rx="1.9" ry="1.3" fill="currentColor" stroke="none"></ellipse><path d="M24 31.2v1.5"></path><ellipse cx="15.2" cy="30.2" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><ellipse cx="32.8" cy="30.2" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse></svg></span></sc-if>
+              <sc-if value="{{s.isOwl}}"><span class="student-animal-avatar {{s.tone}}" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M11.5 18C11.5 13.5 13 10.6 15.2 9.2 16.8 11 18.2 12.2 19.8 13 22.6 12.2 25.4 12.2 28.2 13 29.8 12.2 31.2 11 32.8 9.2 35 10.6 36.5 13.5 36.5 18V28C36.5 35.2 31 40 24 40S11.5 35.2 11.5 28Z"></path><circle cx="18.7" cy="22.8" r="4.9"></circle><circle cx="29.3" cy="22.8" r="4.9"></circle><circle cx="19.3" cy="23.4" r="2.1" fill="currentColor" stroke="none"></circle><circle cx="28.7" cy="23.4" r="2.1" fill="currentColor" stroke="none"></circle><path d="M22.8 28.2Q24 31 25.2 28.2Z" fill="currentColor"></path><ellipse cx="15.6" cy="31" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><ellipse cx="32.4" cy="31" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><path d="M21 40v1.6M27 40v1.6"></path></svg></span></sc-if>
+              <sc-if value="{{s.isPenguin}}"><span class="student-animal-avatar {{s.tone}}" aria-hidden="true"><svg viewBox="0 0 48 48"><ellipse cx="24" cy="26" rx="13" ry="17"/><ellipse cx="24" cy="29" rx="8" ry="11"/><circle cx="20" cy="21" r="1.4" fill="currentColor" stroke="none"/><circle cx="28" cy="21" r="1.4" fill="currentColor" stroke="none"/></svg></span></sc-if>
+              <sc-if value="{{s.isDog}}"><span class="student-animal-avatar {{s.tone}}" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M13.5 22C13.5 15 18 11 24 11S34.5 15 34.5 22V27.5C34.5 34 29.8 38.8 24 38.8S13.5 34 13.5 27.5Z"></path><path d="M14.2 16.5C9.5 14.8 6.5 18.5 7.2 24.6 7.6 28.4 10.6 29.6 13.5 27.3M33.8 16.5C38.5 14.8 41.5 18.5 40.8 24.6 40.4 28.4 37.4 29.6 34.5 27.3"></path><circle cx="19.2" cy="24.2" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="28.8" cy="24.2" r="1.8" fill="currentColor" stroke="none"></circle><ellipse cx="24" cy="30.8" rx="4.6" ry="3.6"></ellipse><ellipse cx="24" cy="29.3" rx="1.9" ry="1.3" fill="currentColor" stroke="none"></ellipse><path d="M24 30.4v1.4"></path><ellipse cx="16" cy="29.2" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><ellipse cx="32" cy="29.2" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse></svg></span></sc-if>
+              <sc-if value="{{s.isFrog}}"><span class="student-animal-avatar {{s.tone}}" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M9.5 19.5A6.5 6.5 0 1 1 20.8 18.9C23 18.3 25 18.3 27.2 18.9A6.5 6.5 0 1 1 38.5 19.5C42 25 41.5 34 35.5 37.5 29.5 41 18.5 41 12.5 37.5 6.5 34 6 25 9.5 19.5Z"></path><circle cx="15" cy="16.2" r="2.3" fill="currentColor" stroke="none"></circle><circle cx="33" cy="16.2" r="2.3" fill="currentColor" stroke="none"></circle><path d="M19.6 29.4C22.2 31.6 25.8 31.6 28.4 29.4"></path><ellipse cx="13.4" cy="28.4" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><ellipse cx="34.6" cy="28.4" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse></svg></span></sc-if>
+              <span class="nm"><strong>{{s.n}}</strong><small>{{s.sub}}</small></span>
+              <span class="rv"><b style="color:{{s.vc}}">{{s.v}}</b>
+                <sc-if value="{{s.hasSq}}"><span class="mini" aria-hidden="true"><sc-for list="{{s.sq}}" as="q"><span style="{{q.st}};"></span></sc-for></span></sc-if>
+                <sc-if value="{{s.hasBars}}"><span class="mini" aria-hidden="true"><sc-for list="{{s.bars}}" as="q"><i style="height:{{q.h}}%;background:{{q.c}}"></i></sc-for></span></sc-if>
+                <sc-if value="{{s.hasSt}}"><span class="{{s.stCls}}">{{s.stTxt}}</span></sc-if>
+              </span>
+            </button>
+          </sc-for>
+          <sc-if value="{{noRows}}"><p style="margin:0;padding:16px;font-size:14px;color:var(--sumi-muted)">Nadie en este filtro.</p></sc-if>
+        </aside>
+      </div>
+    </sc-if>
+
+    <!-- Desglose -->
+    <sc-if value="{{isDes}}">
+      <section aria-labelledby="ds-t" style="display:flex;flex-direction:column;gap:12px">
+        <div class="frow"><h2 id="ds-t" style="margin:0;font:800 18px/24px var(--font-sans)">Desglose por clase y alumno</h2><span style="font:600 13px/18px var(--font-sans);color:var(--sumi-muted)">{{desCount}}</span></div>
+        <div style="overflow-x:auto" tabindex="0" role="region" aria-label="Desglose">
+          <div class="tb" role="table" aria-label="Registros">
+            <div class="tr th" role="row"><span role="columnheader">Fecha</span><span role="columnheader">Clase</span><span role="columnheader">Alumno</span><span role="columnheader">Asistencia</span><span role="columnheader">Calificación</span><span role="columnheader">Pago</span></div>
+            <sc-for list="{{des}}" as="h" hint-placeholder-count="10"><div class="tr" role="row"><span role="cell" class="tnum">{{h.d}}</span><span role="cell">{{h.c}}</span><span role="cell" style="font-weight:700">{{h.n}}</span><span role="cell"><span class="{{h.aCls}}">{{h.a}}</span></span><span role="cell" class="tnum" style="font-weight:800;color:{{h.gCol}}">{{h.g}}</span><span role="cell"><span class="{{h.pCls}}">{{h.p}}</span></span></div></sc-for>
+          </div>
+        </div>
+      </section>
+    </sc-if>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1500}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { tab: 'asis', period: 'mes', grp: 'todos', sel: null, focus: false, stu: null, mode: 'res', view: 'ritmo', kf: null };
+  }
+
+  money(n) { return '$' + Math.round(n).toLocaleString('en-US'); }
+  first(names) { const f = names.map((n) => n.split(' ')[0]); return f.length > 1 ? f.slice(0, -1).join(', ') + ' y ' + f[f.length - 1] : f[0]; }
+  nice(v) { if (v <= 0) return 100; const e = Math.pow(10, Math.floor(Math.log10(v))); const m = v / e; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10) * e; }
+  kfmt(v) { return v >= 10000 ? '$' + Math.round(v / 1000) + 'k' : v >= 1000 ? '$' + (v / 1000).toFixed(1).replace('.0', '') + 'k' : '$' + Math.round(v); }
+
+  B() {
+    const inc = !!this.state.inc;
+    if (this._b && this._bk === inc) return this._b;
+    this._bk = inc;
+    const G = { s810: ['Ana Rivera', 'Mateo Cruz', 'Luna López'], p5a: ['Diego Soto', 'Emilio Ruiz', 'Luna López', 'Sofía Martín', 'Valeria Gómez'], pa: ['Camila Torres', 'Santiago Reyes', 'Regina Flores'], ind: ['Ana Rivera'] };
+    const GL = { s810: 'Secundaria 8–10', p5a: 'Primaria 5A', pa: 'Prepa · Álgebra', ind: 'Ana · individual' };
+    const S = [
+      { d: 'jue 1 oct', x: '1', day: 1, wk: 'w40', g: 'ind', t: '6:00 p. m.', abs: [] },
+      { d: 'lun 5 oct', x: '5', day: 5, wk: 'w41', g: 's810', t: '10:00 a. m.', abs: [], task: { n: 'Ecuaciones lineales', gr: { 'Ana Rivera': 9, 'Mateo Cruz': 8, 'Luna López': 9 } } },
+      { d: 'lun 5 oct', x: '5', day: 5, wk: 'w41', g: 'p5a', t: '4:00 p. m.', abs: ['Luna López', 'Valeria Gómez'], task: { n: 'Problemas de fracciones', gr: { 'Diego Soto': 8.5, 'Emilio Ruiz': 9, 'Sofía Martín': 9.5 } } },
+      { d: 'lun 5 oct', x: '5', day: 5, wk: 'w41', g: 'ind', t: '6:00 p. m.', abs: [] },
+      { d: 'mar 6 oct', x: '6', day: 6, wk: 'w41', g: 'pa', t: '5:00 p. m.', abs: ['Regina Flores'], task: { n: 'Factorización', gr: { 'Camila Torres': 8.8, 'Santiago Reyes': 8.6 } } },
+      { d: 'mié 7 oct', x: '7', day: 7, wk: 'w41', g: 's810', t: '10:00 a. m.', abs: ['Luna López'], task: { n: 'Sistemas de ecuaciones', gr: { 'Ana Rivera': 9, 'Mateo Cruz': 8.4 } } },
+      { d: 'jue 8 oct', x: '8', day: 8, wk: 'w41', g: 'p5a', t: '4:00 p. m.', abs: [], task: { n: 'Lectura cap. 2', gr: { 'Diego Soto': 9, 'Emilio Ruiz': 8.8, 'Luna López': 8.5, 'Sofía Martín': 9.6 }, miss: ['Valeria Gómez'] } },
+      { d: 'jue 8 oct', x: '8', day: 8, wk: 'w41', g: 'ind', t: '6:00 p. m.', st: 'unreg' },
+      { d: 'vie 9 oct', x: '9', day: 9, wk: 'w41', g: 'pa', t: '5:00 p. m.', abs: [], task: { n: 'Productos notables', gr: { 'Camila Torres': 9, 'Santiago Reyes': 8.5, 'Regina Flores': 6.5 } } },
+      { d: 'lun 12 oct', x: '12', day: 12, wk: 'w42', g: 's810', t: '10:00 a. m.', abs: ['Luna López'], task: { n: 'Repaso de ecuaciones', gr: { 'Ana Rivera': 9.5, 'Mateo Cruz': 9.5 } } }
+    ];
+    if (inc) {
+      G.eng = ['Mariana Paz', 'Tomás Vega']; GL.eng = 'Inglés · conversación';
+      S.push({ d: 'vie 2 oct', x: '2', day: 2, wk: 'w40', g: 'eng', t: '5:00 p. m.', abs: ['Tomás Vega'], task: { n: 'Diagnóstico', gr: { 'Mariana Paz': 9 } } }, { d: 'mié 7 oct', x: '7', day: 7, wk: 'w41', g: 'eng', t: '6:00 p. m.', abs: ['Tomás Vega'] });
+      S.sort((a, b) => a.day - b.day);
+    }
+    S.forEach((s) => {
+      s.reg = !s.st;
+      if (s.reg) { s.n = G[s.g].length; s.p = s.n - s.abs.length; s.v = Math.round((s.p / s.n) * 100); }
+      if (s.task) { const v = Object.values(s.task.gr); s.task.avg = v.reduce((a, b) => a + b, 0) / v.length; s.task.lo = Math.min.apply(null, v); s.task.hi = Math.max.apply(null, v); }
+    });
+    const P = [
+      { day: 1, n: 'Ana Rivera', g: 'ind', a: 210 }, { day: 1, n: 'Camila Torres', g: 'pa', a: 270 }, { day: 1, n: 'Santiago Reyes', g: 'pa', a: 270 },
+      { day: 5, n: 'Ana Rivera', g: 's810', a: 210 }, { day: 5, n: 'Mateo Cruz', g: 's810', a: 100 },
+      { day: 5, n: 'Diego Soto', g: 'p5a', a: 300 }, { day: 5, n: 'Emilio Ruiz', g: 'p5a', a: 300 }, { day: 5, n: 'Sofía Martín', g: 'p5a', a: 150 },
+      { day: 6, n: 'Regina Flores', g: 'pa', a: 135 }, { day: 8, n: 'Valeria Gómez', g: 'p5a', a: 150 },
+      { day: 12, n: 'Luna López', g: 'p5a', a: 300 }
+    ];
+    const OWE = { 'lun 5 oct|ind|Ana Rivera': ['Vencido', 210], 'lun 12 oct|s810|Ana Rivera': ['Vencido', 210], 'mié 7 oct|s810|Mateo Cruz': ['Vencido', 200], 'jue 8 oct|p5a|Sofía Martín': ['Pendiente', 150] };
+    const STU = [
+      { n: 'Ana Rivera', an: 'Cat', tone: 'avatar-tone-indigo' }, { n: 'Mateo Cruz', an: 'Fox', tone: 'avatar-tone-ocre' }, { n: 'Luna López', an: 'Rabbit', tone: 'avatar-tone-bermellon' },
+      { n: 'Diego Soto', an: 'Bear', tone: 'avatar-tone-kraft' }, { n: 'Emilio Ruiz', an: 'Dog', tone: 'avatar-tone-kraft' }, { n: 'Sofía Martín', an: 'Owl', tone: 'avatar-tone-ocre' },
+      { n: 'Valeria Gómez', an: 'Penguin', tone: 'avatar-tone-indigo' }, { n: 'Camila Torres', an: 'Dog', tone: 'avatar-tone-jade' }, { n: 'Santiago Reyes', an: 'Cat', tone: 'avatar-tone-kraft' }, { n: 'Regina Flores', an: 'Frog', tone: 'avatar-tone-jade' }
+    ];
+    if (inc) {
+      P.push({ day: 2, n: 'Mariana Paz', g: 'eng', a: 150 }); P.sort((a, b) => a.day - b.day);
+      OWE['mié 7 oct|eng|Mariana Paz'] = ['Pendiente', 150];
+      STU.push({ n: 'Mariana Paz', an: 'Fox', tone: 'avatar-tone-jade' }, { n: 'Tomás Vega', an: 'Dog', tone: 'avatar-tone-ocre' });
+    }
+    this._b = { G, GL, S, P, OWE, STU };
+    return this._b;
+  }
+
+  inPeriod(day) { return this.state.period === 'sem' ? day >= 12 && day <= 18 : true; }
+  sess(grp) { return this.B().S.filter((s) => (grp === 'todos' || s.g === grp) && this.inPeriod(s.day)); }
+  memberOf(s, n) { return this.B().G[s.g].indexOf(n) >= 0; }
+  groupsOf(n) { const B = this.B(); return Object.keys(B.G).filter((g) => B.G[g].indexOf(n) >= 0); }
+  pay(s, n) {
+    const B = this.B();
+    if (!s.reg) return ['—', 'st st-muted'];
+    if (s.abs.indexOf(n) >= 0) return ['—', 'st st-muted'];
+    const o = B.OWE[s.d + '|' + s.g + '|' + n];
+    if (o) return [o[0] + ' ' + this.money(o[1]), o[0] === 'Vencido' ? 'st st-venc' : 'st st-pend'];
+    return ['Pagado', 'st st-ok'];
+  }
+  record(s, n) {
+    const B = this.B();
+    if (!s.reg) return { d: s.d, c: B.GL[s.g], n, a: 'Sin registrar', aCls: 'st st-pend', g: '—', gCol: 'var(--sumi-muted)', p: '—', pCls: 'st st-muted' };
+    const ab = s.abs.indexOf(n) >= 0;
+    let g = '—', gCol = 'var(--sumi-muted)';
+    if (s.task && s.task.gr[n] != null) { g = s.task.gr[n].toFixed(1); gCol = s.task.gr[n] < 7 ? 'var(--bermellon-ink)' : 'var(--sumi)'; }
+    else if (s.task && s.task.miss && s.task.miss.indexOf(n) >= 0) { g = 'Sin calificar'; gCol = 'var(--ocre-ink)'; }
+    const p = this.pay(s, n);
+    return { d: s.d, c: B.GL[s.g] + (s.task ? ' · ' + s.task.n : ''), n, a: ab ? 'Ausente' : 'Presente', aCls: ab ? 'st st-venc' : 'st st-ok', g, gCol, p: p[0], pCls: p[1] };
+  }
+
+  student(n, grp) {
+    const B = this.B();
+    const st = B.STU.find((x) => x.n === n);
+    const mine = this.sess(grp).filter((s) => s.reg && this.memberOf(s, n));
+    const seq = mine.map((s) => (s.abs.indexOf(n) >= 0 ? 'A' : 'P'));
+    const pres = seq.filter((x) => x === 'P').length;
+    const grades = []; const sin = [];
+    mine.forEach((s) => { if (s.task && s.task.gr[n] != null) grades.push(s.task.gr[n]); if (s.task && s.task.miss && s.task.miss.indexOf(n) >= 0) sin.push(s.task.n); });
+    const pag = B.P.filter((p) => p.n === n && this.inPeriod(p.day) && (grp === 'todos' || p.g === grp)).reduce((a, p) => a + p.a, 0);
+    let deb = 0, venc = false;
+    Object.keys(B.OWE).forEach((k) => { const [d, g, nm] = k.split('|'); const s = B.S.find((x) => x.d === d && x.g === g); if (nm === n && s && this.inPeriod(s.day) && (grp === 'todos' || g === grp)) { deb += B.OWE[k][1]; if (B.OWE[k][0] === 'Vencido') venc = true; } });
+    const gl = this.groupsOf(n).map((g) => (g === 'ind' ? 'Individual' : B.GL[g])).join(' · ');
+    return Object.assign({}, st, { gl, mine, seq, asis: seq.length ? Math.round((pres / seq.length) * 100) : null, faltas: seq.length - pres, grades, sin, prom: grades.length ? grades.reduce((a, b) => a + b, 0) / grades.length : null, pag, deb, venc });
+  }
+
+  /* ---------- Gráficas ---------- */
+  dotChart(tab, grp, sel, stu) {
+    const B = this.B();
+    let L = this.sess(grp);
+    if (tab === 'calif') L = L.filter((s) => s.task);
+    const n = L.length;
+    const lastReg = L.reduce((a, s, i) => (s.reg ? i : a), 0);
+    const si = sel == null || sel >= n ? lastReg : sel;
+    const X = (i) => (n === 1 ? 50 : 4 + (i * 92) / (n - 1));
+    const val = (s) => (tab === 'asis' ? s.v : s.task.avg * 10);
+    const reg = [];
+    const dots = L.map((s, i) => {
+      const y = s.reg ? val(s) : 0;
+      if (s.reg) reg.push(X(i).toFixed(2) + ',' + (100 - y).toFixed(2));
+      const low = s.reg && (tab === 'asis' ? s.v < 80 : s.task.avg < 7);
+      const faded = stu && !this.memberOf(s, stu);
+      const fmt = !s.reg ? 'sin registrar' : tab === 'asis' ? s.v + '% · ' + s.p + ' de ' + s.n : s.task.n + ' · ' + s.task.avg.toFixed(1);
+      return {
+        x: X(i), y, on: i === si, delay: (0.1 + i * 0.05).toFixed(2) + 's',
+        xl: i > 0 && L[i - 1].x === s.x ? '' : s.x + ' oct', xcls: 'xl' + (i === si ? ' on' : ''),
+        cls: 'dt' + (s.reg ? '' : ' unreg') + (low ? ' low' : '') + (i === si && this.state.focus ? ' on' : '') + (faded ? ' faded' : ''),
+        tip: s.d + ' · ' + B.GL[s.g] + ' · ' + fmt,
+        pick: () => this.setState({ sel: i, focus: true, kf: null })
+      };
+    });
+    const area = reg.length ? reg[0].split(',')[0] + ',100 ' + reg.join(' ') + ' ' + reg[reg.length - 1].split(',')[0] + ',100' : '';
+    const out = {
+      isDot: true, isBar: false, dots, line: reg.join(' '), area, proj: '', suLine: '', sdots: [], row: [], hasRow: false,
+      rngs: tab === 'calif' ? L.map((s, i) => ({ x: X(i), lo: s.task.lo * 10, h: (s.task.hi - s.task.lo) * 10 })).filter((r) => r.h > 0) : [],
+      ticks: tab === 'asis' ? [0, 50, 100].map((t) => ({ b: t, l: t + '%' })) : [0, 5, 10].map((t) => ({ b: t * 10, l: String(t) })),
+      hasThr: true, thr: tab === 'asis' ? 80 : 70, thrLabel: tab === 'asis' ? 'Asistencia baja · 80%' : 'Calificación baja · 7.0',
+      L, si,
+      title: tab === 'asis' ? 'Asistencia por clase' : 'Promedio por tarea',
+      caption: (tab === 'asis' ? 'Cada punto es una clase registrada' : 'Cada punto es una tarea; la barra clara va de la calificación más baja a la más alta') + ' · toca uno para filtrar la lista',
+      legend: tab === 'asis'
+        ? [{ st: 'border-radius:50%;border:2.5px solid #2E8C7E;background:#fff;box-sizing:border-box', t: 'Clase registrada' }, { st: 'border-radius:50%;border:2px dashed #D9A23A;background:#F8EDD5;box-sizing:border-box', t: 'Sin registrar' }, { st: 'border-top:2px dashed #D9472C;height:0;border-radius:0;width:16px', t: 'Umbral 80%' }]
+        : [{ st: 'border-radius:50%;border:2.5px solid #34437F;background:#fff;box-sizing:border-box', t: 'Promedio de la tarea' }, { st: 'background:#E5E8F2;width:6px;border-radius:3px', t: 'De la más baja a la más alta' }, { st: 'border-top:2px dashed #D9472C;height:0;border-radius:0;width:16px', t: 'Calificación baja · 7.0' }]
+    };
+    if (stu) {
+      if (tab === 'asis') {
+        out.hasRow = true; out.rowAria = 'Asistencia de ' + stu + ' en cada clase';
+        out.row = L.map((s, i) => (s.reg && this.memberOf(s, stu) ? { x: X(i), t: s.abs.indexOf(stu) >= 0 ? 'A' : 'P', st: s.abs.indexOf(stu) >= 0 ? 'background:#F9E3DE;color:#A8321C;box-shadow:inset 0 0 0 1.5px #A8321C' : 'background:#1E1C20;color:#fff' } : null)).filter(Boolean);
+        out.legend = out.legend.concat([{ st: 'background:#1E1C20;border-radius:3px', t: 'Asistencia de ' + stu.split(' ')[0] }]);
+      } else {
+        const pts = L.map((s, i) => (s.task.gr[stu] != null ? { x: X(i), y: s.task.gr[stu] * 10, low: s.task.gr[stu] < 7 } : null)).filter(Boolean);
+        out.suLine = pts.map((p) => p.x.toFixed(2) + ',' + (100 - p.y).toFixed(2)).join(' ');
+        out.sdots = pts.map((p) => ({ x: p.x, y: p.y, cls: 'sdot' + (p.low ? ' low' : '') }));
+        out.legend = out.legend.concat([{ st: 'background:#1E1C20;transform:rotate(45deg);border-radius:2px', t: 'Calificaciones de ' + stu.split(' ')[0] }]);
+      }
+    }
+    return out;
+  }
+
+  barChart(grp, sel, stu, view) {
+    const B = this.B();
+    const sem = this.state.period === 'sem';
+    const bk = sem ? ['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'].map((l, i) => ({ l, title: l + ' ' + (12 + i) + ' oct', a: 12 + i, b: 12 + i, fut: i > 0 }))
+      : [[1, 4], [5, 11], [12, 18], [19, 25], [26, 31]].map((r) => ({ l: r[0] + ' oct', title: 'Del ' + r[0] + ' al ' + r[1] + ' oct', a: r[0], b: r[1], fut: r[0] > 12 }));
+    const ps = B.P.filter((p) => grp === 'todos' || p.g === grp);
+    const vals = bk.map((b) => ps.filter((p) => p.day >= b.a && p.day <= b.b).reduce((a, p) => a + p.a, 0));
+    const mineV = bk.map((b) => (stu ? ps.filter((p) => p.n === stu && p.day >= b.a && p.day <= b.b).reduce((a, p) => a + p.a, 0) : 0));
+    const lastNonFut = bk.reduce((a, b, i) => (!b.fut ? i : a), 0);
+    const lastPaid = bk.reduce((a, b, i) => (!b.fut && vals[i] > 0 ? i : a), -1);
+    const si = sel == null || sel >= bk.length || bk[sel].fut ? (lastPaid >= 0 ? lastPaid : lastNonFut) : sel;
+    const proj = grp === 'todos' ? (sem ? 2230 : 9826) : 0;
+    const legend = [{ st: 'background:#2E8C7E', t: 'Cobros por fecha de pago' }].concat(stu ? [{ st: 'background:#23705F', t: 'Pagos de ' + stu.split(' ')[0] }] : []);
+    if (view === 'acum') {
+      let run = 0; const cum = vals.map((v) => (run += v));
+      const K = bk.length, max = this.nice(Math.max(cum[lastNonFut], proj) * 1.08);
+      const X = (i) => 4 + (i * 92) / (K - 1);
+      const pts = cum.slice(0, lastNonFut + 1).map((c, i) => X(i).toFixed(2) + ',' + (100 - (c / max) * 100).toFixed(2));
+      const line = ['0,100'].concat(pts).join(' ');
+      const dots = bk.map((b, i) => (b.fut ? null : { x: X(i), y: (cum[i] / max) * 100, on: i === si, xl: b.l, xcls: 'xl' + (i === si ? ' on' : ''), delay: '0s', cls: 'dt' + (i === si && this.state.focus ? ' on' : ''), tip: b.title + ': ' + this.money(cum[i]) + ' acumulado', pick: () => this.setState({ sel: i, focus: true, kf: null }) })).filter(Boolean);
+      return { isDot: true, isBar: false, dots, line, area: line + ' ' + X(lastNonFut).toFixed(2) + ',100', proj: proj ? ['0,100'].concat(bk.map((b, i) => X(i).toFixed(2) + ',' + (100 - ((proj * (i + 1)) / K / max) * 100).toFixed(2))).join(' ') : '', suLine: '', sdots: [], rngs: [], row: [], hasRow: false,
+        ticks: [0, 0.5, 1].map((f) => ({ b: f * 100, l: this.kfmt(max * f) })), hasThr: false, bk, vals, si, cum, proj,
+        title: 'Cobrado acumulado', caption: 'Comparado con el ritmo para llegar a la proyección · toca un punto para ver los pagos',
+        legend: [{ st: 'background:#2E8C7E', t: 'Cobrado acumulado' }].concat(proj ? [{ st: 'border-top:2px dashed #8F8475;height:0;border-radius:0;width:16px', t: 'Ritmo para la proyección' }] : []) };
+    }
+    const max = this.nice(Math.max.apply(null, vals.concat([1])) * 1.1);
+    const bars = bk.map((b, i) => ({
+      xl: b.l, fut: b.fut, real: !b.fut, h: (vals[i] / max) * 100, on: i === si && this.state.focus, delay: (0.1 + i * 0.05).toFixed(2) + 's',
+      hasMine: mineV[i] > 0, mine: vals[i] ? (mineV[i] / vals[i]) * 100 : 0,
+      cls: 'bar' + (i === si && this.state.focus ? ' on' : '') + (stu ? ' dim' : ''),
+      tip: b.title + ': ' + (b.fut ? 'por venir' : this.money(vals[i]) + (stu && mineV[i] ? ' · ' + stu.split(' ')[0] + ' ' + this.money(mineV[i]) : '')),
+      pick: () => { if (!b.fut) this.setState({ sel: i, focus: true, kf: null }); }
+    }));
+    return { isDot: false, isBar: true, bars, ticks: [0, 0.5, 1].map((f) => ({ b: f * 100, l: this.kfmt(max * f) })), hasThr: false, bk, vals, si, title: 'Cobros por fecha de pago', caption: 'Toca una barra para ver quién pagó en ese tramo', legend };
+  }
+
+  renderVals() {
+    const st = this.state;
+    const B = this.B();
+    const { tab, grp, stu } = st;
+    const tabsDef = [['calif', 'Calificaciones'], ['asis', 'Asistencia'], ['pagos', 'Pagos']];
+    const L = this.sess(grp);
+    const reg = L.filter((s) => s.reg);
+    const students = B.STU.filter((s) => grp === 'todos' || B.G[grp].indexOf(s.n) >= 0).map((s) => this.student(s.n, grp));
+
+    // Gráfica
+    const c = tab === 'pagos' ? this.barChart(grp, st.sel, stu, st.view) : this.dotChart(tab, grp, st.sel, stu);
+
+    // Foco (selección en la gráfica o en una cifra)
+    let focusSet = null, focus = { title: '', sub: '' };
+    if (st.kf === 'low') {
+      focusSet = students.filter((s) => (tab === 'asis' ? s.asis != null && s.asis < 80 : s.grades.some((g) => g < 7))).map((s) => s.n);
+      focus = { title: tab === 'asis' ? 'Alumnos bajo el 80%' : 'Con alguna calificación baja', sub: focusSet.length + ' alumnos' };
+    } else if (st.kf === 'sin') {
+      focusSet = students.filter((s) => s.sin.length).map((s) => s.n);
+      focus = { title: 'Sin calificar', sub: focusSet.length + ' alumnos' };
+    } else if (st.kf === 'deb') {
+      focusSet = students.filter((s) => s.deb > 0).map((s) => s.n);
+      focus = { title: 'Por cobrar', sub: focusSet.length + ' alumnos' };
+    } else if (st.focus) {
+      if (tab === 'pagos') {
+        const b = c.bk[c.si];
+        const pp = B.P.filter((p) => (grp === 'todos' || p.g === grp) && p.day >= b.a && p.day <= b.b);
+        focusSet = pp.map((p) => p.n);
+        focus = { title: b.title, sub: pp.length ? pp.length + (pp.length === 1 ? ' pago · ' : ' pagos · ') + this.money(pp.reduce((a, p) => a + p.a, 0)) : 'Sin pagos en este tramo' };
+      } else {
+        const s = c.L[c.si];
+        if (s) {
+          focusSet = B.G[s.g].slice();
+          if (tab === 'asis') focus = { title: s.d + ' · ' + B.GL[s.g], sub: !s.reg ? 'Sin registrar' : s.abs.length ? s.p + ' de ' + s.n + ' · faltó ' + this.first(s.abs) : s.p + ' de ' + s.n + ' · nadie faltó' };
+          else focus = { title: s.task.n + ' · ' + s.d, sub: B.GL[s.g] + ' · promedio ' + s.task.avg.toFixed(1) + (s.task.miss ? ' · sin calificar: ' + this.first(s.task.miss) : '') };
+        }
+      }
+    }
+
+    // Lista ligada
+    let list = students.slice();
+    const sel = st.focus && tab !== 'pagos' ? c.L[c.si] : null;
+    if (tab === 'asis') list.sort((a, b) => (a.asis == null ? 101 : a.asis) - (b.asis == null ? 101 : b.asis));
+    if (tab === 'calif') list.sort((a, b) => (b.sin.length - a.sin.length) || ((a.prom == null ? 11 : a.prom) - (b.prom == null ? 11 : b.prom)));
+    if (tab === 'pagos') list.sort((a, b) => b.deb - a.deb || b.pag - a.pag);
+    if (focusSet) list = list.filter((s) => focusSet.indexOf(s.n) >= 0);
+    if (sel && tab === 'asis' && sel.reg) list.sort((a, b) => (sel.abs.indexOf(b.n) >= 0) - (sel.abs.indexOf(a.n) >= 0));
+    if (sel && tab === 'calif') list.sort((a, b) => (sel.task.gr[a.n] == null ? -1 : sel.task.gr[a.n]) - (sel.task.gr[b.n] == null ? -1 : sel.task.gr[b.n]));
+    const rows = list.map((s) => {
+      let sub = s.gl, v = '', vc = 'var(--sumi)', hasSq = false, sq = [], hasBars = false, bars = [], hasSt = false, stCls = '', stTxt = '', hit = false;
+      if (tab === 'asis') {
+        v = s.asis == null ? '—' : s.asis + '%'; vc = s.asis != null && s.asis < 80 ? 'var(--bermellon-ink)' : 'var(--sumi)';
+        hasSq = true; sq = s.seq.slice(-6).map((t) => ({ st: t === 'P' ? 'background:#1E1C20' : 'background:#F9E3DE;box-shadow:inset 0 0 0 1.5px #A8321C' }));
+        if (sel && sel.reg) { hit = sel.abs.indexOf(s.n) >= 0; sub = hit ? 'Faltó el ' + sel.d : 'Presente el ' + sel.d; }
+        else sub = s.faltas ? s.faltas + (s.faltas === 1 ? ' falta' : ' faltas') + ' · ' + s.gl : s.gl;
+      }
+      if (tab === 'calif') {
+        v = s.prom == null ? '—' : s.prom.toFixed(1); vc = s.prom != null && s.prom < 7 ? 'var(--bermellon-ink)' : 'var(--sumi)';
+        hasBars = s.grades.length > 0; bars = s.grades.map((g) => ({ h: g * 10, c: g < 7 ? '#D9472C' : '#34437F' }));
+        if (sel) { const g = sel.task.gr[s.n]; hit = (g != null && g < 7) || (sel.task.miss && sel.task.miss.indexOf(s.n) >= 0); sub = g != null ? sel.task.n + ': ' + g.toFixed(1) : sel.task.miss && sel.task.miss.indexOf(s.n) >= 0 ? 'Sin calificar en ' + sel.task.n : 'Faltó a esa clase'; }
+        else if (s.sin.length) { sub = 'Sin calificar: ' + s.sin.join(', '); hasSt = true; stCls = 'st st-pend'; stTxt = 'Falta calificar'; }
+        else if (s.grades.some((g) => g < 7)) { hasSt = true; stCls = 'st st-venc'; stTxt = 'Calificación baja'; }
+      }
+      if (tab === 'pagos') {
+        v = s.deb ? this.money(s.deb) : this.money(s.pag); vc = s.deb ? (s.venc ? 'var(--bermellon-ink)' : 'var(--ocre-ink)') : 'var(--sumi)';
+        hasSt = true; stCls = s.deb ? (s.venc ? 'st st-venc' : 'st st-pend') : 'st st-ok'; stTxt = s.deb ? (s.venc ? 'Vencido' : 'Pendiente') : 'Al día';
+        sub = 'Pagado ' + this.money(s.pag) + ' · ' + s.gl;
+        if (st.focus && !st.kf) { const b = c.bk[c.si]; const amt = B.P.filter((p) => p.n === s.n && p.day >= b.a && p.day <= b.b).reduce((a, p) => a + p.a, 0); sub = 'Pagó ' + this.money(amt) + ' en este tramo'; }
+      }
+      return Object.assign({ n: s.n, tone: s.tone, sub, v, vc, hasSq, sq, hasBars, bars, hasSt, stCls, stTxt, on: stu === s.n,
+        cls: 'sr' + (stu === s.n ? ' on' : hit ? ' hit' : ''),
+        pick: () => this.setState({ stu: this.state.stu === s.n ? null : s.n }) }, this.animal(s.an));
+    });
+
+    // Cifras
+    let kpis = [];
+    const mk = (l, v, n, o) => Object.assign({ l, v, n, vc: 'var(--sumi)', nc: 'var(--sumi-muted)', btn: false, plain: true, cls: 'kpi', on: false, pick: () => {} }, o || {});
+    const kbtn = (key) => ({ btn: true, plain: false, on: st.kf === key, cls: 'kpi' + (st.kf === key ? ' on' : ''), pick: () => this.setState({ kf: this.state.kf === key ? null : key, focus: false }) });
+    if (tab === 'asis') {
+      const n = reg.reduce((a, s) => a + s.n, 0), p = reg.reduce((a, s) => a + s.p, 0);
+      const v = n ? Math.round((p / n) * 100) : null;
+      const low = students.filter((s) => s.asis != null && s.asis < 80);
+      const un = L.filter((s) => !s.reg).length;
+      kpis = [
+        mk('Asistencia promedio', v == null ? '—' : v + '%', st.period === 'mes' && grp === 'todos' ? (st.inc ? 'Incluye 1 grupo archivado' : '↓ 5 pp vs. septiembre') : p + ' de ' + n + ' registros', { nc: st.period === 'mes' && grp === 'todos' && !st.inc ? 'var(--bermellon-ink)' : 'var(--sumi-muted)' }),
+        mk('Clases registradas', String(reg.length), un ? un + ' sin registrar' : 'Todo registrado', { nc: un ? 'var(--ocre-ink)' : 'var(--jade-strong)' }),
+        mk('Ausencias', String(n - p), 'de ' + n + ' registros'),
+        mk('Bajo el 80%', String(low.length), low.length ? this.first(low.map((s) => s.n)) : 'Nadie', Object.assign({ vc: low.length ? 'var(--bermellon-ink)' : 'var(--jade-strong)', nc: 'var(--sumi-muted)' }, kbtn('low')))
+      ];
+    }
+    if (tab === 'calif') {
+      const all = []; reg.filter((s) => s.task).forEach((s) => Object.values(s.task.gr).forEach((g) => all.push(g)));
+      const avg = all.length ? all.reduce((a, b) => a + b, 0) / all.length : null;
+      const lowS = students.filter((s) => s.grades.some((g) => g < 7));
+      const sinS = students.filter((s) => s.sin.length);
+      kpis = [
+        mk('Promedio', avg == null ? '—' : avg.toFixed(1) + ' /10', st.period === 'mes' && grp === 'todos' ? 'Igual que septiembre' : all.length + ' calificaciones', { nc: 'var(--indigo)' }),
+        mk('Tareas calificadas', String(reg.filter((s) => s.task).length), all.length + ' calificaciones'),
+        mk('Calificaciones bajas', String(lowS.length), lowS.length ? this.first(lowS.map((s) => s.n)) : 'Nadie bajo 7.0', Object.assign({ vc: lowS.length ? 'var(--bermellon-ink)' : 'var(--jade-strong)' }, kbtn('low'))),
+        mk('Sin calificar', String(sinS.length), sinS.length ? this.first(sinS.map((s) => s.n)) : 'Todo calificado', Object.assign({ vc: sinS.length ? 'var(--ocre-ink)' : 'var(--jade-strong)' }, kbtn('sin')))
+      ];
+    }
+    if (tab === 'pagos') {
+      const cob = B.P.filter((p) => (grp === 'todos' || p.g === grp) && this.inPeriod(p.day)).reduce((a, p) => a + p.a, 0);
+      const deb = students.reduce((a, s) => a + s.deb, 0), ven = students.filter((s) => s.venc).reduce((a, s) => a + s.deb, 0);
+      const oweN = Object.keys(B.OWE).filter((k) => { const [d, g] = k.split('|'); return reg.some((s) => s.d === d && s.g === g); }).length;
+      kpis = [
+        mk('Cobrado', this.money(cob), st.period === 'mes' && grp === 'todos' ? (st.inc ? 'Incluye 1 grupo archivado' : '↓ 45% vs. el mismo día de septiembre') : B.P.filter((p) => (grp === 'todos' || p.g === grp) && this.inPeriod(p.day)).length + ' pagos', { nc: st.period === 'mes' && grp === 'todos' && !st.inc ? 'var(--bermellon-ink)' : 'var(--sumi-muted)' }),
+        mk('Por cobrar', this.money(deb), ven ? this.money(ven) + ' vencido' : 'Nada vencido', Object.assign({ vc: deb ? 'var(--bermellon-ink)' : 'var(--jade-strong)', nc: ven ? 'var(--bermellon-ink)' : 'var(--sumi-muted)' }, kbtn('deb'))),
+        mk('Proyección del mes', grp === 'todos' ? '$9,826' : '—', grp === 'todos' ? 'Vas $1,409 abajo del ritmo' : 'Solo con todos los grupos'),
+        mk('Clases pagadas', String(reg.reduce((a, s) => a + s.p, 0) - oweN), oweN + ' sin pagar', { nc: oweN ? 'var(--ocre-ink)' : 'var(--jade-strong)' })
+      ];
+    }
+
+    // Historial del alumno
+    let stuV = {};
+    if (stu) {
+      const s = this.student(stu, grp);
+      const hist = this.sess(grp).filter((x) => this.memberOf(x, stu)).slice().reverse().map((x) => this.record(x, stu));
+      stuV = Object.assign({ n: s.n, gl: s.gl, tone: s.tone, asisTxt: s.asis == null ? '—' : s.asis + '%', asisColor: s.asis != null && s.asis < 80 ? 'var(--bermellon-ink)' : 'var(--sumi)', promTxt: s.prom == null ? '—' : s.prom.toFixed(1), promColor: s.prom != null && s.prom < 7 ? 'var(--bermellon-ink)' : 'var(--sumi)', pagF: this.money(s.pag), debF: s.deb ? this.money(s.deb) : '—', debColor: s.deb ? (s.venc ? 'var(--bermellon-ink)' : 'var(--ocre-ink)') : 'var(--sumi)', hist }, this.animal(s.an));
+    }
+
+
+    const perDD = (() => { const open = this.state.pop === 'per', O = [['mes', 'Este mes · octubre', '1 al 12 oct · hasta hoy'], ['sem', 'Esta semana', '12 al 18 oct']];
+      return { open, cls: 'trg' + (open ? ' open' : ''), l: O.find((o) => o[0] === st.period)[1], t: () => this.setState({ pop: open ? null : 'per' }),
+        opts: O.map((o) => ({ l: o[1], s: o[2], hasS: true, on: st.period === o[0], cls: 'li' + (st.period === o[0] ? ' on' : ''), pick: () => this.setState({ period: o[0], pop: null, sel: null, focus: false, kf: null, f: 'all' }) })) }; })();
+    // Desglose
+    let des = [];
+    this.sess(grp).slice().reverse().forEach((x) => B.G[x.g].forEach((n) => { if (!stu || n === stu) des.push(this.record(x, n)); }));
+
+    const listTitle = focusSet ? 'Alumnos · ' + list.length + ' en el filtro' : tab === 'asis' ? 'Alumnos · menor asistencia primero' : tab === 'calif' ? 'Alumnos · lo pendiente primero' : 'Alumnos · lo que se debe primero';
+    return {
+      perDD, anyPop: !!st.pop, popClose: () => this.setState({ pop: null }),
+      period: st.period, setPeriod: (e) => this.setState({ period: e.target.value, sel: null, focus: false, kf: null }),
+      tabs: tabsDef.map((t) => ({ label: t[1], cls: 'tab' + (tab === t[0] ? ' is-active' : ''), cur: tab === t[0] ? 'page' : 'false', pick: () => this.setState({ tab: t[0], sel: null, focus: false, kf: null }) })),
+      modeR: st.mode === 'res' ? 'active' : '', modeD: st.mode === 'des' ? 'active' : '', isRes: st.mode === 'res', isDes: st.mode === 'des',
+      toRes: () => this.setState({ mode: 'res' }), toDes: () => this.setState({ mode: 'des' }),
+      groups: [['todos', 'Todos'], ['p5a', 'Primaria 5A'], ['s810', 'Secundaria 8–10'], ['pa', 'Prepa · Álgebra'], ['ind', 'Individuales']].map((g) => ({ label: g[1], on: grp === g[0], cls: 'chip' + (grp === g[0] ? ' on' : ''), pick: () => this.setState({ grp: g[0], sel: null, focus: false, kf: null, stu: null }) })),
+      kpis, chart: c, colsCls: 'cols k-' + tab, plotCls: 'plot' + (stu ? ' dim' : ''),
+      isPagos: tab === 'pagos', viewR: st.view === 'ritmo' ? 'active' : '', viewA: st.view === 'acum' ? 'active' : '', isRitmo: st.view === 'ritmo', isAcum: st.view === 'acum',
+      toRitmo: () => this.setState({ view: 'ritmo', sel: null, focus: false }), toAcum: () => this.setState({ view: 'acum', sel: null, focus: false }),
+      hasFocus: !!focusSet, focus, clearFocus: () => this.setState({ focus: false, kf: null }),
+      rows, noRows: rows.length === 0, listTitle,
+      hasStu: !!stu, stu: stuV, closeStu: () => this.setState({ stu: null }),
+      scope: { on: !!st.inc, cls: 'scope' + (st.inc ? ' on' : ''), tg: 'tg' + (st.inc ? ' on' : ''), msg: st.inc ? 'Solo en esta sesión' : 'Saldo $150 fuera',
+        t: () => this.setState({ inc: !this.state.inc, sel: null, focus: false, kf: null, stu: null }) },
+      des, desCount: des.length + ' registros' + (stu ? ' de ' + stu : '')
+    };
+  }
+
+  animal(an) { return { isCat: an === 'Cat', isFox: an === 'Fox', isRabbit: an === 'Rabbit', isBear: an === 'Bear', isOwl: an === 'Owl', isPenguin: an === 'Penguin', isDog: an === 'Dog', isFrog: an === 'Frog' }; }
+}
+</script>
+</body>
+</html>

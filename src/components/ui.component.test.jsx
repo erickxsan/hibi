@@ -98,7 +98,7 @@ describe("interactive UI primitives", () => {
 
   it("locks and restores the page while a mobile choice sheet is open", async () => {
     vi.mocked(window.matchMedia).mockImplementation((query) => ({
-      matches: query === "(max-width: 640px)",
+      matches: query === "(max-width: 780px)",
       media: query,
       onchange: null,
       addEventListener: vi.fn(),
@@ -120,16 +120,16 @@ describe("interactive UI primitives", () => {
     );
 
     fireEvent.click(screen.getByRole("combobox", { name: "Status" }));
-    const overlay = document.querySelector(".select-mobile-overlay");
-    expect(screen.getByRole("dialog", { name: "Choose an option" })).toBeInTheDocument();
-    expect(document.body).toHaveClass("select-sheet-open");
+    const overlay = document.querySelector(".bottom-sheet-layer");
+    expect(screen.getByRole("dialog", { name: "Status" })).toBeInTheDocument();
+    expect(document.body).toHaveClass("drawer-open");
     expect(document.body.style.position).toBe("fixed");
     expect(document.body.style.top).toBe("-34px");
     expect(document.querySelector(".hibi-shell")).toHaveAttribute("inert");
 
     fireEvent.pointerDown(overlay);
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Choose an option" })).not.toBeInTheDocument());
-    expect(document.body).not.toHaveClass("select-sheet-open");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Status" })).not.toBeInTheDocument());
+    expect(document.body).not.toHaveClass("drawer-open");
     expect(document.body.style.position).toBe("");
     expect(document.querySelector(".hibi-shell")).not.toHaveAttribute("inert");
     expect(window.scrollTo).toHaveBeenCalledWith({ left: 12, top: 34, behavior: "auto" });

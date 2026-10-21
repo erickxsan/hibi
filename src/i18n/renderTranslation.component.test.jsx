@@ -89,13 +89,13 @@ describe("render-time localization and primitive contracts", () => {
     };
     const props = { ariaLabel: "People", options: [{ value: "a", label: "Home" }], value: ["a"], onChange };
     const view = render(<MultiSelect {...props} />);
-    fireEvent.click(screen.getByRole("button", { name: "People" }));
+    fireEvent.click(screen.getByRole("combobox", { name: "People" }));
     expect(screen.getByRole("listbox")).toBeInTheDocument();
     view.rerender(<MultiSelect {...props} disabled />);
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Remove Home" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Clear" })).toBeDisabled();
-    fireEvent.keyDown(screen.getByRole("button", { name: "People" }), { key: "ArrowDown" });
+    fireEvent.keyDown(screen.getByRole("combobox", { name: "People" }), { key: "ArrowDown" });
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
   });
 });

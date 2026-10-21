@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Configuración · fluido</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/hibi/components/bundle.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&amp;family=Albert+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+:root{--bermellon:#D9472C;--bermellon-strong:#C23B22;--bermellon-ink:#A8321C;--bermellon-soft:#F9E3DE;--sumi:#1E1C20;--sumi-muted:#5A524A;--sumi-subtle:#9A8F80;--washi:#F6F1E8;--papel:#FFFFFF;--kraft:#EFE8DB;--line:#E8DFCF;--line-soft:#F1EBE0;--line-control:#8F8475;--indigo:#34437F;--indigo-soft:#E5E8F2;--jade:#2E8C7E;--jade-strong:#23705F;--jade-soft:#E3F1EE;--ocre:#D9A23A;--ocre-ink:#7E5A12;--ocre-soft:#F8EDD5;--focus:#34437F;--overlay:rgba(30,28,32,.45);--space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:20px;--space-6:24px;--space-8:32px;--space-10:40px;--space-12:48px;--radius-sm:8px;--radius-md:10px;--radius-lg:12px;--radius-xl:16px;--radius-pill:999px;--shadow-card:0 1px 2px rgba(30,28,32,.05);--shadow-overlay:0 16px 40px rgba(30,28,32,.16);--control-height:44px;--segment-height:36px;--sidebar-width:232px;--topbar-height:60px;--drawer-width:480px;--font-display:"Dela Gothic One","Arial Black",system-ui,sans-serif;--font-sans:"Albert Sans","Segoe UI",system-ui,sans-serif}
+body{margin:0}
+a{color:#C23B22}a:hover{color:#A8321C}
+.side{flex:1 1 220px;max-width:220px;padding:28px 14px 24px;display:flex;flex-direction:column;gap:28px}
+.side .sidebar-link:hover{background:var(--papel)}
+.sheet{flex:999 1 560px;min-width:0;margin:12px 12px 12px 0;background:var(--papel);border:1px solid var(--line);border-radius:16px;padding:40px clamp(20px,4vw,56px) 48px;display:flex;flex-direction:column}
+.ov{margin:0;font:800 12px/16px var(--font-sans);letter-spacing:.12em;text-transform:uppercase;color:var(--sumi-muted)}
+.lk{font:700 13px/18px var(--font-sans);text-decoration:none;white-space:nowrap}
+.st{display:inline-flex;align-items:center;gap:7px;font:700 13px/18px var(--font-sans);white-space:nowrap}
+.st::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;flex:none}
+.st-ok{color:var(--jade-strong)}.st-ok::before{background:var(--jade)}
+.st-pend{color:var(--ocre-ink)}.st-pend::before{background:var(--ocre)}
+.st-venc{color:var(--bermellon-ink)}.st-venc::before{background:var(--bermellon)}
+.cols{display:flex;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:24px;margin-top:28px}
+.list{flex:1 1 280px;max-width:340px;min-width:0;padding-right:32px;display:flex;flex-direction:column;gap:2px}
+.sec{display:flex;gap:14px;align-items:flex-start;padding:14px 12px;margin:0 -12px;border-radius:10px;text-decoration:none;color:var(--sumi)}
+.sec:hover,.sec.sel{background:var(--washi)}
+.sec svg{color:var(--sumi-muted);margin-top:1px}
+.sec.sel svg{color:var(--bermellon-strong)}
+.sec strong{display:block;font:700 15px/20px var(--font-sans)}
+.sec small{display:block;font:500 13px/18px var(--font-sans);color:var(--sumi-muted)}
+.detail{flex:999 1 520px;min-width:0;padding-left:40px;border-left:1px solid var(--line-soft);display:flex;flex-direction:column}
+.blk{padding:24px 0;border-top:1px solid var(--line-soft)}
+.unit{position:relative;display:flex;align-items:center}
+.unit .control{width:100%;padding-right:100px}
+.unit span{position:absolute;right:14px;font:600 13px/18px var(--font-sans);color:var(--sumi-muted);pointer-events:none}
+.g3{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));gap:16px}
+.fx{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:16px;align-items:center;padding:14px 0;border-top:1px solid var(--line-soft)}
+.fx:first-child{border-top:0;padding-top:0}
+.fx b{display:block;font:700 15px/20px var(--font-sans)}
+.fx small{display:block;font:500 13px/18px var(--font-sans);color:var(--sumi-muted)}
+.fx .v{font:800 18px/24px var(--font-sans);font-variant-numeric:tabular-nums;text-align:right}
+.av{width:28px;height:28px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;color:var(--sumi);border:2px solid var(--papel);margin-left:-8px;box-sizing:content-box}
+.av:first-child{margin-left:0}
+.av svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+@media (max-width:780px){.side{max-width:none;flex-basis:100%;padding:16px}.side .sidebar-companion{display:none}.sheet{margin:0;border-radius:0;border-left:0;border-right:0}.list{max-width:none;padding-right:0}.detail{padding-left:0;border-left:0;border-top:1px solid var(--line);padding-top:24px}}
+span.sc-interp{display:inline!important;position:static!important;font:inherit!important;color:inherit!important;letter-spacing:inherit!important;text-transform:inherit!important;background:none!important;padding:0!important;margin:0!important;border:0!important;box-shadow:none!important;width:auto!important;height:auto!important;min-width:0!important;transform:none!important;opacity:1!important;animation:none!important}
+</style>
+</helmet>
+<div class="hibi-ds" style="min-height:100vh;display:flex;flex-wrap:wrap;background:var(--washi)">
+
+  <aside class="side">
+    <a class="hibi-brand" href="#" aria-label="Inicio de Hibi"><img src="/_blob/19d7de209d497968ffcc94f1e708a867" alt="hibi" style="height:40px"></a>
+    <nav class="sidebar-nav" aria-label="Navegación principal">
+      <a class="sidebar-link" href="FluidoInicioC.dc.html"><svg class="ico" viewBox="0 0 24 24"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Inicio</a>
+      <a class="sidebar-link" href="FluidoComunidad.dc.html"><svg class="ico" viewBox="0 0 24 24"><path d="M18 21a8 8 0 0 0-16 0"/><circle cx="10" cy="8" r="5"/><path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3"/></svg>Comunidad</a>
+      <a class="sidebar-link" href="FluidoClases.dc.html"><svg class="ico" viewBox="0 0 24 24"><path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M8 13h.01"/><path d="M12 13h.01"/><path d="M16 13h.01"/><path d="M8 17h.01"/><path d="M12 17h.01"/><path d="M16 17h.01"/></svg>Clases</a>
+      <a class="sidebar-link" href="FluidoSeguimiento.dc.html"><svg class="ico" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>Seguimiento</a>
+      <a class="sidebar-link active" href="FluidoConfig.dc.html" aria-current="page"><svg class="ico" viewBox="0 0 24 24"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg>Configuración</a>
+    </nav>
+    <div class="sidebar-companion" style="gap:12px">
+      <img src="/_blob/f94d92622e26d07cb8c2035979131ea0" alt="" style="width:52px;height:52px">
+      <span class="sync-pill" style="align-self:flex-start">Sincronizado</span>
+    </div>
+  </aside>
+
+  <main class="sheet">
+    <div class="page-heading"><div><h1>Configuración</h1><p>Valores de clase, idioma, sonidos, respaldos y privacidad.</p></div></div>
+
+    <div class="cols">
+      <!-- Secciones con su valor actual -->
+      <nav class="list" aria-label="Secciones de configuración">
+        <a class="sec sel" href="#" aria-current="true"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><span><strong>Valores de clase</strong><small>2 h · $50 por hora · proyección a 4 semanas</small></span></a>
+        <a class="sec" href="#"><svg class="ico" viewBox="0 0 24 24"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/></svg><span><strong>Tutorial de bienvenida</strong><small>Recorrido completado el 28 sep</small></span></a>
+        <a class="sec" href="#"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg><span><strong>Interfaz</strong><small>Español · sonidos activados</small></span></a>
+        <a class="sec" href="#"><svg class="ico" viewBox="0 0 24 24"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg><span><strong>Registros y respaldos</strong><small>Último respaldo hace 8 días</small><span class="st st-pend" style="margin-top:4px">Conviene respaldar</span></span></a>
+        <a class="sec" href="#"><svg class="ico" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span><strong>Datos y privacidad</strong><small>Cifrado de extremo a extremo</small><span class="st st-ok" style="margin-top:4px">Activo</span></span></a>
+      </nav>
+
+      <!-- Sección elegida -->
+      <section class="detail" aria-labelledby="vc-t">
+        <div style="padding-bottom:20px">
+          <h2 id="vc-t" style="margin:0;font:800 24px/30px var(--font-sans)">Valores de clase</h2>
+          <p style="margin:4px 0 0;font-size:15px;line-height:22px;color:var(--sumi-muted)">Se usan al registrar clases nuevas y para calcular alertas y proyecciones.</p>
+        </div>
+
+        <div class="g3">
+          <label class="field"><span class="field-label">Duración predeterminada</span><span class="unit"><input class="control tnum" value="2"><span>horas</span></span></label>
+          <label class="field"><span class="field-label">Tarifa por hora</span><span class="unit"><input class="control tnum" value="50"><span>MXN / hora</span></span></label>
+          <label class="field"><span class="field-label">Periodo de proyección</span><span class="unit"><input class="control tnum" value="4"><span>semanas</span></span></label>
+          <label class="field"><span class="field-label">Calificación baja, menor a</span><span class="unit"><input class="control tnum" value="70"><span>%</span></span></label>
+          <label class="field"><span class="field-label">Asistencia baja, menor a</span><span class="unit"><input class="control tnum" value="80"><span>%</span></span></label>
+        </div>
+
+        <div class="blk" style="margin-top:28px">
+          <h3 class="ov" style="margin-bottom:14px">Con estos valores</h3>
+          <div class="fx">
+            <span><b>Una clase nueva de 2 h cuesta $100 por alumno</b><small>Secundaria 8–10 y las clases individuales tienen tarifa propia.</small></span>
+            <span class="v">$100</span>
+          </div>
+          <div class="fx">
+            <span><b>Proyección de octubre</b><small>Promedio de tus últimas 4 semanas de cobros.</small></span>
+            <span class="v">$9,826</span>
+          </div>
+          <div class="fx">
+            <span><b>3 alumnos con asistencia baja</b><small>Luna López 40% · Valeria Gómez 50% · Regina Flores 50%</small></span>
+            <span style="display:flex;justify-content:flex-end" aria-hidden="true">
+              <span class="av avatar-tone-bermellon"><svg viewBox="0 0 48 48"><path d="M19.2 17.4C15.8 12.4 15.2 5.6 17.8 4.3S22.8 9.2 22.1 16.5M28.8 17.4C32.2 12.4 32.8 5.6 30.2 4.3S25.2 9.2 25.9 16.5"></path><ellipse cx="24" cy="28" rx="13" ry="11.6"></ellipse><circle cx="19.2" cy="27" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="28.8" cy="27" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="24" cy="30.2" r="1.1" fill="currentColor" stroke="none"></circle><path d="M22 32.1q1 1 2 0q1 1 2 0"></path><ellipse cx="15.6" cy="31" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><ellipse cx="32.4" cy="31" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse></svg></span>
+              <span class="av avatar-tone-indigo"><svg viewBox="0 0 48 48"><ellipse cx="24" cy="26" rx="13" ry="17"/><ellipse cx="24" cy="29" rx="8" ry="11"/></svg></span>
+              <span class="av avatar-tone-jade"><svg viewBox="0 0 48 48"><path d="M9.5 19.5A6.5 6.5 0 1 1 20.8 18.9C23 18.3 25 18.3 27.2 18.9A6.5 6.5 0 1 1 38.5 19.5C42 25 41.5 34 35.5 37.5 29.5 41 18.5 41 12.5 37.5 6.5 34 6 25 9.5 19.5Z"></path><circle cx="15" cy="16.2" r="2.3" fill="currentColor" stroke="none"></circle><circle cx="33" cy="16.2" r="2.3" fill="currentColor" stroke="none"></circle><path d="M19.6 29.4C22.2 31.6 25.8 31.6 28.4 29.4"></path><ellipse cx="13.4" cy="28.4" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse><ellipse cx="34.6" cy="28.4" rx="2.3" ry="1.4" fill="currentColor" fill-opacity=".16" stroke="none"></ellipse></svg></span>
+            </span>
+          </div>
+          <div class="fx">
+            <span><b>1 alumno con calificación baja</b><small>Regina Flores sacó 6.5 en Productos notables (vie 9 oct).</small></span>
+            <span class="st st-venc">Revisar</span>
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;align-items:center;gap:12px;flex-wrap:wrap;padding-top:16px;border-top:1px solid var(--line-soft)">
+          <span style="font-size:13px;color:var(--sumi-muted)">Sin cambios por guardar</span>
+          <button class="button button-primary" type="button" disabled>Guardar valores</button>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
