@@ -1,11 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  BarChart3,
-  CalendarDays,
-  Home as HomeIcon,
-  Settings as SettingsIcon,
-  UsersRound,
-} from "lucide-react";
+import { BarChart3, CalendarDays, Home as HomeIcon, Settings as SettingsIcon, UsersRound } from "lucide-react";
 import { AccountMenu } from "./auth/AccountMenu";
 import { AppShell } from "./components/AppShell";
 import { ToastRegion } from "./components/ui";
@@ -104,6 +98,24 @@ export default function ClassManagerApplication({
         : deriveAll(statisticsState, statisticsState.settings.asOfDate),
     [statisticsState, manager.state, manager.derived],
   );
+  // Today's line and «Para atender» always leave archived groups out, whatever the statistics scope says.
+  const agendaState = useMemo(
+    () => (includeArchivedGroups ? statisticsStateForGroups(manager.state, false) : statisticsState),
+    [includeArchivedGroups, manager.state, statisticsState],
+  );
+  const agendaDerived = useMemo(
+    () =>
+      agendaState === statisticsState
+        ? statisticsDerived
+        : agendaState === manager.state
+          ? manager.derived
+          : deriveAll(agendaState, agendaState.settings.asOfDate),
+    [agendaState, manager.state, manager.derived, statisticsState, statisticsDerived],
+  );
+  const archivedGroupNames = useMemo(
+    () => manager.state.groups.filter(isGroupArchived).map((group) => group.name),
+    [manager.state.groups],
+  );
   const [intent, setIntent] = useState(null);
   const [signingOut, setSigningOut] = useState(false);
   const [onboarding, setOnboarding] = useState(() => ({
@@ -183,6 +195,7 @@ export default function ClassManagerApplication({
       onOpenOnboarding: openOnboarding,
       archiveScope: {
         count: archivedGroupIds.size,
+        names: archivedGroupNames,
         pendingBalance: archivedPendingBalance,
         currency: manager.state.settings.currency,
         included: includeArchivedGroups,
@@ -202,13 +215,23 @@ export default function ClassManagerApplication({
     if (page === "grades" || page === "payments")
       return <Tracking {...common} state={statisticsState} derived={statisticsDerived} />;
     if (page === "settings") return <Settings {...common} />;
-    return <Home {...common} state={statisticsState} derived={statisticsDerived} />;
+    return (
+      <Home
+        {...common}
+        state={statisticsState}
+        derived={statisticsDerived}
+        agenda={{ state: agendaState, derived: agendaDerived }}
+      />
+    );
   }, [
     clearIntent,
     intent,
     manager,
     archivedGroupIds,
+    archivedGroupNames,
     archivedPendingBalance,
+    agendaState,
+    agendaDerived,
     includeArchivedGroups,
     statisticsState,
     statisticsDerived,

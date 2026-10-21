@@ -2014,3 +2014,59 @@
 .list-row:hover:not(:disabled) .list-row-chev {
   color: var(--sumi);
 }
+
+/* ---------- Aviso de alcance (archivados) ---------- */
+.scope {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: -4px 0 16px;
+  padding: 10px 14px;
+  border-radius: var(--radius-lg);
+  background: var(--washi);
+  font: 500 13px/18px var(--font-sans);
+  color: var(--sumi-muted);
+}
+
+.scope.on {
+  background: var(--indigo-soft);
+}
+
+.scope b {
+  color: var(--sumi);
+  font-weight: 700;
+}
+
+.scope .scope-text {
+  min-width: 0;
+}
+
+.scope .scope-balance {
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ocre-ink);
+  font: 700 13px/18px var(--font-sans);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.scope .scope-balance:hover {
+  text-decoration: underline;
+}
+
+.scope.is-compact {
+  margin: 0 0 6px;
+  padding: 10px 12px;
+}
+
+.scope.is-compact .scope-text {
+  flex: 1;
+  font: 500 12px/16px var(--font-sans);
+}
+
+.scope.is-compact .scope-text b {
+  display: block;
+  font: 700 14px/20px var(--font-sans);
+}

@@ -183,10 +183,9 @@ describe("Classes remote draft safety", () => {
     expect(await screen.findByRole("alert")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Rebase my draft" }));
 
-    expect(within(screen.getByRole("group", { name: "Attendance for Ana" })).getByRole("button", { name: "Present" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    expect(
+      within(screen.getByRole("group", { name: "Attendance for Ana" })).getByRole("button", { name: "Present" }),
+    ).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("textbox", { name: "Assignment name" })).toHaveValue("Remote quiz");
     expect(screen.getByRole("textbox", { name: /Grade for Ana/ })).toHaveValue("12");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
@@ -232,10 +231,9 @@ describe("Classes remote draft safety", () => {
 
     await user.click(screen.getByRole("tab", { name: "Calendar" }));
     expect(screen.getByRole("tab", { name: "Next class" })).toHaveAttribute("aria-selected", "true");
-    expect(within(screen.getByRole("group", { name: "Attendance for Ana" })).getByRole("button", { name: "Present" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    expect(
+      within(screen.getByRole("group", { name: "Attendance for Ana" })).getByRole("button", { name: "Present" }),
+    ).toHaveAttribute("aria-pressed", "true");
 
     await user.click(screen.getByRole("tab", { name: "Calendar" }));
     expect(screen.getByRole("tab", { name: "Calendar" })).toHaveAttribute("aria-selected", "true");

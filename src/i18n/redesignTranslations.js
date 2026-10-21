@@ -1,7 +1,6 @@
 // Spanish copy for the «Sello sereno» redesign (docs/rediseno-v2).
 export const REDESIGN_TRANSLATIONS = Object.freeze({
   Adjustments: "Ajustes",
-  individual: "individual",
   Shorter: "Menos tiempo",
   Longer: "Más tiempo",
   Synced: "Sincronizado",
@@ -15,7 +14,8 @@ export const REDESIGN_TRANSLATIONS = Object.freeze({
   "Billing must be per class or monthly.": "La forma de cobro debe ser por clase o mensual.",
   "Monthly fee must be zero or more.": "La cuota mensual debe ser cero o más.",
   "Billing start must use YYYY-MM.": "El inicio del cobro debe usar AAAA-MM.",
-  "Monthly payment needs a period, a paid date and an amount.": "La mensualidad necesita un mes, una fecha de pago y un monto.",
+  "Monthly payment needs a period, a paid date and an amount.":
+    "La mensualidad necesita un mes, una fecha de pago y un monto.",
   "Monthly payments must be an array.": "Las mensualidades deben ser una lista.",
   "Student billing adjustments must be an object.": "Los ajustes de cobro del alumno deben ser un objeto.",
   "Repeat rule must be daily or monthly.": "La repetición debe ser diaria o mensual.",
@@ -64,7 +64,8 @@ export const REDESIGN_TRANSLATIONS = Object.freeze({
   "class {nth}": "{nth}.ª clase",
   "Everything that already happened, class by class. Tap one to see each student.":
     "Todo lo que ya pasó, clase por clase. Toca una para ver a cada alumno.",
-  "Choose a class from your schedule and record it right here.": "Elige una clase de tu agenda y regístrala aquí mismo.",
+  "Choose a class from your schedule and record it right here.":
+    "Elige una clase de tu agenda y regístrala aquí mismo.",
   "Your month at a glance. Tap a day to see its classes.": "Tu mes de un vistazo. Toca un día para ver sus clases.",
   "Payment · monthly fee or class": "Pago · mensualidad o clase",
   "Payment for this class": "Pago de esta clase",

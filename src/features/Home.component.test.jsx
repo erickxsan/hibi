@@ -1,115 +1,198 @@
 // @vitest-environment jsdom
 
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { deriveAll } from "../domain";
 import { I18nProvider } from "../i18n";
-import { AttendancePanel, RevenuePanel } from "./Home";
+import Home from "./Home";
 
-const sessions = [
-  {
-    key: "one",
-    scopeId: "group:a",
-    groupId: "a",
-    title: "Group A",
-    attended: 9,
-    expected: 10,
-    attendance: 0.9,
-  },
-  {
-    key: "two",
-    scopeId: "group:b",
-    groupId: "b",
-    title: "Group B",
-    attended: 8,
-    expected: 10,
-    attendance: 0.8,
-  },
-  {
-    key: "three",
-    scopeId: "group:a",
-    groupId: "a",
-    title: "Group A",
-    attended: 10,
-    expected: 10,
-    attendance: 1,
-  },
-];
+const AS_OF = "2026-10-21";
 
-describe("AttendancePanel", () => {
-  it("filters real sessions by group, selects session details, and opens attendance tracking", async () => {
-    const user = userEvent.setup();
-    const onOpen = vi.fn();
-    render(
-      <I18nProvider>
-        <AttendancePanel
-          title="Average attendance this week"
-          sessions={sessions}
-          previousSessions={[{ ...sessions[0], key: "previous", attendance: 0.8, attended: 8 }]}
-          onOpen={onOpen}
-        />
-      </I18nProvider>,
-    );
+function row(id, classDate, studentId, attendance, amountPaid) {
+  return {
+    id,
+    classDate,
+    studentId,
+    groupId: "g1",
+    startTime: "16:00",
+    scheduleSlotId: "slot-mon",
+    scheduleOccurrenceDate: classDate,
+    classStatus: "Completed",
+    attendance,
+    hours: 2,
+    appliedHourlyRate: 100,
+    appliedCharge: attendance === "A" ? 0 : 200,
+    amountPaid,
+    paymentState: attendance === "A" ? "" : amountPaid ? "Paid" : "Pending",
+    paymentDate: amountPaid ? classDate : null,
+    paymentMethod: amountPaid ? "Cash" : "",
+  };
+}
 
-    expect(document.querySelector(".home-metric-value")).toHaveTextContent("90%");
-    expect(screen.getByRole("status")).toHaveTextContent("Group A · 10 students");
+function homeState() {
+  return {
+    version: 1,
+    settings: {
+      asOfDate: AS_OF,
+      hourlyRate: 100,
+      defaultClassHours: 2,
+      lowAttendanceThreshold: 0.8,
+      lowGradeThreshold: 0.7,
+    },
+    groups: [
+      {
+        id: "g1",
+        name: "Reading",
+        hourlyRate: 100,
+        weeklySchedule: [
+          { id: "slot-mon", dayOfWeek: 1, startTime: "16:00", durationHours: 2 },
+          { id: "slot-wed", dayOfWeek: 3, startTime: "16:00", durationHours: 2 },
+        ],
+      },
+    ],
+    students: [
+      { id: "s1", code: "S1", fullName: "Maya Torres", groupIds: ["g1"], status: "Active", avatarId: "cat" },
+      { id: "s2", code: "S2", fullName: "Lucas Bennett", groupIds: ["g1"], status: "Active", avatarId: "fox" },
+    ],
+    grades: [
+      {
+        id: "grade-low",
+        date: "2026-10-19",
+        studentId: "s1",
+        assessment: "Quiz",
+        score: 5,
+        maxScore: 10,
+        classSessionKey: "2026-10-19|g:g1|16:00",
+      },
+    ],
+    classLog: [
+      row("r1", "2026-10-12", "s1", "P", 0),
+      row("r2", "2026-10-12", "s2", "P", 200),
+      row("r3", "2026-10-19", "s1", "P", 200),
+      row("r4", "2026-10-19", "s2", "A", 0),
+      row("r5", "2026-10-14", "s1", "P", 200),
+      row("r6", "2026-10-14", "s2", "P", 200),
+    ].map((item) => (item.classDate === "2026-10-14" ? { ...item, scheduleSlotId: "slot-wed" } : item)),
+    classSchedules: [],
+    scheduleExceptions: [],
+    scheduleChanges: [],
+  };
+}
 
-    await user.click(screen.getByRole("combobox", { name: "Attendance group" }));
-    await user.click(screen.getByRole("option", { name: /Group B/ }));
-    expect(document.querySelector(".home-metric-value")).toHaveTextContent("80%");
-    expect(screen.getByText("Attendance in 1 class")).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("Group B · 8 students");
+function renderHome(overrides = {}) {
+  const state = homeState();
+  const derived = deriveAll(state, AS_OF);
+  const props = {
+    state,
+    derived,
+    openPage: vi.fn(),
+    clearIntent: vi.fn(),
+    archiveScope: {
+      count: 1,
+      names: ["Old group"],
+      pendingBalance: 150,
+      included: false,
+      onChange: vi.fn(),
+      onOpen: vi.fn(),
+    },
+    ...overrides,
+  };
+  render(
+    <I18nProvider>
+      <Home {...props} />
+    </I18nProvider>,
+  );
+  return props;
+}
 
-    await user.click(screen.getByRole("button", { name: "View sessions" }));
-    expect(onOpen).toHaveBeenCalledTimes(1);
-  });
+function setCompact(matches) {
+  window.matchMedia.mockImplementation((query) => ({
+    matches,
+    media: query,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  }));
+}
+
+beforeEach(() => {
+  localStorage.setItem("hibi:language:v1", "en");
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(2026, 9, 21, 12, 30));
 });
 
-describe("RevenuePanel", () => {
-  it("switches between rhythm, projection, and group views without changing the selected period", async () => {
+afterEach(() => {
+  vi.useRealTimers();
+  setCompact(false);
+});
+
+describe("Home", () => {
+  it("shows today's line, the next class and records it", async () => {
     const user = userEvent.setup();
-    const onOpen = vi.fn();
-    const dashboard = {
-      collected: 400,
-      collectedDelta: 0.25,
-      collectionRecordCount: 2,
-      completedClassCount: 2,
-      projectedClassCount: 1,
-      collectionProjection: 600,
-      collectionSeries: [
-        { label: "2026-07-13", collected: 150, value: 150 },
-        { label: "2026-07-14", collected: 250, value: 400 },
-      ],
-      collectionGroups: [{ id: "group:g1", name: "Reading", value: 400, paymentCount: 2 }],
-    };
+    const props = renderHome();
+    expect(screen.getByRole("heading", { name: "Good afternoon, Teacher!" })).toBeInTheDocument();
+    expect(screen.getByText("You have 1 class today. Next is Reading, in 3 h 30 min.")).toBeInTheDocument();
+    const block = screen.getByRole("button", { name: /^Reading, 4:00 – 6:00 p\.m\./ });
+    expect(block).toHaveAttribute("aria-pressed", "true");
+    const card = screen.getByRole("article", { name: "Reading" });
+    expect(within(card).getByText("owes $200 from the class on 12 Oct.")).toBeInTheDocument();
+    await user.click(within(card).getByRole("button", { name: "Record class" }));
+    expect(props.openPage).toHaveBeenCalledWith("classes", { type: "open-class", sessionKey: "2026-10-21|g:g1|16:00" });
+  });
 
-    render(
-      <I18nProvider>
-        <RevenuePanel dashboard={dashboard} period="weekly" locale="en-MX" noun="this week" onOpen={onOpen} />
-      </I18nProvider>,
-    );
+  it("turns «Para atender» into actions and explores a metric in place", async () => {
+    const user = userEvent.setup();
+    const props = renderHome();
+    const attention = screen.getByRole("heading", { name: /^To attend to · / }).closest("section");
+    await user.click(within(attention).getByRole("button", { name: /got 5\.0/ }));
+    const tabs = screen.getByRole("tablist", { name: "Charts" });
+    expect(within(tabs).getByRole("tab", { name: /Grade/ })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("table", { name: "Students · what needs attention first" })).toBeInTheDocument();
+    await user.click(within(tabs).getByRole("tab", { name: /Collections/ }));
+    await user.click(screen.getByRole("button", { name: /To collect/ }));
+    expect(screen.getByText("Who owes")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Month projection/ }));
+    expect(screen.getByText("Accumulated collections · tap a point")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Reading" }));
+    await user.click(screen.getByRole("button", { name: "Close detail and return to the three charts" }));
+    expect(screen.queryByRole("tablist", { name: "Charts" })).not.toBeInTheDocument();
+    await user.click(within(attention).getByRole("button", { name: /still not recorded/ }));
+    expect(props.openPage).toHaveBeenCalledWith("classes", expect.objectContaining({ type: "open-class" }));
+  });
 
-    expect(screen.getByText("Amount collected this week")).toBeInTheDocument();
-    expect(screen.getByText("2 payments recorded")).toBeInTheDocument();
-    const rhythmTrigger = screen.getByRole("button", { name: /View: Rhythm/i });
-    await user.click(rhythmTrigger);
-    await waitFor(() => expect(screen.getByRole("menuitemradio", { name: "Weekly rhythm" })).toHaveFocus());
-    await user.keyboard("{ArrowDown}{Enter}");
-    expect(screen.getByText("Period projection")).toBeInTheDocument();
-    expect(screen.getByText("1 class to teach")).toBeInTheDocument();
+  it("changes the period, picks points and switches the archived scope", async () => {
+    const user = userEvent.setup();
+    const props = renderHome();
+    expect(screen.getByRole("heading", { name: "Your week · 19 to 25 Oct" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Monthly" }));
+    expect(screen.getByRole("heading", { name: "Your month · October" })).toBeInTheDocument();
+    const attendance = screen.getByRole("article", { name: /^Attendance:/ });
+    await user.click(within(attendance).getByRole("button", { name: /Mon 12 Oct · Reading: 100%/ }));
+    expect(within(attendance).getByText("Nobody missed. Perfect attendance!")).toBeInTheDocument();
+    await user.click(screen.getByRole("switch", { name: "Include archived groups" }));
+    expect(props.archiveScope.onChange).toHaveBeenCalledWith(true);
+    expect(screen.getByText("1 archived group is left out of these figures")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Balance in archived groups: $150" }));
+    expect(props.archiveScope.onOpen).toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Yearly" }));
+    expect(screen.getByRole("heading", { name: "Your year · 2026" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Today" }));
+    expect(screen.getByRole("heading", { name: /^Today · / })).toBeInTheDocument();
+  });
 
-    const projectionTrigger = screen.getByRole("button", { name: /View: Projection/i });
-    await user.click(projectionTrigger);
-    await waitFor(() => expect(screen.getByRole("menuitemradio", { name: "Projection" })).toHaveFocus());
-    await user.keyboard("{Escape}");
-    expect(projectionTrigger).toHaveFocus();
-    await user.click(projectionTrigger);
-    await user.click(screen.getByRole("menuitemradio", { name: "By groups" }));
-    expect(screen.getByText("Reading")).toBeInTheDocument();
-    expect(screen.getByText("2 payments")).toBeInTheDocument();
-    expect(screen.getByLabelText("Collection period: Weekly")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "View breakdown" }));
-    expect(onOpen).toHaveBeenCalledTimes(1);
+  it("uses an agenda, a list and metric sheets on a phone", async () => {
+    setCompact(true);
+    const user = userEvent.setup();
+    const props = renderHome();
+    expect(screen.getByRole("heading", { name: "Hi, Teacher" })).toBeInTheDocument();
+    expect(screen.getByText("12:30 now")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "View students of Reading" }));
+    expect(await screen.findByRole("dialog", { name: "Reading" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    await user.click(screen.getByRole("button", { name: /^Attendance:/ }));
+    const sheet = await screen.findByRole("dialog", { name: "Attendance" });
+    expect(within(sheet).getByText("Below 80%")).toBeInTheDocument();
+    await user.click(within(sheet).getByRole("button", { name: "Open in Tracking" }));
+    expect(props.openPage).toHaveBeenCalledWith("grades", { type: "open-tracking", tab: "attendance" });
   });
 });
