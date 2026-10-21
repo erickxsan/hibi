@@ -12,7 +12,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("loads the local workspace and preserves a student interaction", async ({ page }) => {
-  await expect(page.getByRole("heading", { name: /Good morning, Teacher/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Good (morning|afternoon|evening), Teacher/ })).toBeVisible();
   await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "Community" }).click();
   await expect(page.getByRole("heading", { name: "Community" })).toBeVisible();
 
