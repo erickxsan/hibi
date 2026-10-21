@@ -38,11 +38,13 @@ export interface EmptyStateProps {
   title: ReactNode;
   description?: ReactNode;
   action?: ReactNode;
+  stamp?: boolean;
 }
 export interface SectionHeadingProps {
   title: ReactNode;
   description?: ReactNode;
   actions?: ReactNode;
+  kicker?: ReactNode;
 }
 export interface StatusBadgeProps {
   children?: ReactNode;

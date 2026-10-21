@@ -31,6 +31,7 @@ function optionsFromChildren(children) {
         avatarId: child.props["data-avatar-id"],
         meta: child.props["data-meta"],
         detail: child.props["data-detail"],
+        mark: child.props["data-mark"],
       });
       return;
     }
@@ -47,7 +48,7 @@ function OptionArtwork({ option, variant }) {
   if (variant === "group")
     return (
       <span className="select-mark" aria-hidden="true">
-        <UsersRound size={17} />
+        {option.mark || <UsersRound size={17} />}
       </span>
     );
   return null;
@@ -311,7 +312,13 @@ export function GroupSelect({ groups, include = [], ...props }) {
   return (
     <Select {...props} variant="group">
       {[...include, ...groups].map((group) => (
-        <option key={group.id} value={group.id} data-meta={group.meta} data-detail={group.detail}>
+        <option
+          key={group.id}
+          value={group.id}
+          data-meta={group.meta}
+          data-detail={group.detail}
+          data-mark={group.mark}
+        >
           {group.name}
         </option>
       ))}

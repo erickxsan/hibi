@@ -57,7 +57,7 @@ export function DatePicker({
   onChange,
   name,
   today = todayDateOnly(),
-  allowPast = false,
+  allowPast = true,
   min,
   max,
   classDates = [],

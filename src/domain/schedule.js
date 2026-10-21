@@ -1,5 +1,6 @@
 import { addDays, isDateInRange, isDateOnly, parseDateOnly } from "./dates.js";
 import { isGroupArchived } from "./groupArchiving.js";
+import { normalizeRepeatRule, repeatRuleOccursOn } from "./classRecurrence.js";
 
 export const DAY_OPTIONS = Object.freeze([
   { value: 1, label: "Monday", short: "Mon" },
@@ -61,6 +62,7 @@ function classScheduleOccursOn(schedule, date) {
   if (date < schedule.startDate) return false;
   if (schedule.endDate && date > schedule.endDate) return false;
   if (schedule.recurrence === "once") return date === schedule.startDate;
+  if (normalizeRepeatRule(schedule.repeatRule)) return repeatRuleOccursOn(schedule, date);
   if (!(schedule.daysOfWeek || []).includes(dayOfWeekForDate(date))) return false;
   return (
     Math.floor(daysBetween(schedule.recurrenceAnchorDate || schedule.startDate, date) / 7) %

@@ -1,1669 +1,321 @@
-import { DatePicker, TimePicker } from "../components/DateTimePickers";
-import { RepeatPicker } from "../components/RepeatPicker";
-import { useI18n } from "../i18n/index.jsx";
-import { calculateCharge } from "../domain/calculations.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CalendarDays, ChevronLeft, ChevronRight, Pencil, Plus, Save } from "lucide-react";
+import { useI18n } from "../i18n/index.jsx";
 import {
-  BookOpenCheck,
-  CalendarDays,
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  CircleAlert,
-  CircleDollarSign,
-  Clock3,
-  Filter,
-  Hourglass,
-  Minus,
-  MoreHorizontal,
-  Pencil,
-  Plus,
-  Save,
-  Search,
-  Star,
-  Trash2,
-  UserRound,
-  UsersRound,
-  X,
-} from "lucide-react";
-import { Button, Drawer, EmptyState, Field, Input, Select, StatusBadge } from "../components/ui";
+  AttendanceChoice,
+  BottomSheet,
+  Button,
+  EmptyState,
+  Field,
+  Input,
+  PaymentChoice,
+  SectionHeading,
+  Segmented,
+  Switch,
+  Tabs,
+} from "../components/ui";
 import { StudentAvatar } from "../components/StudentAvatar";
-import { dayOfWeekForDate, scheduledClassSupportsFutureScope } from "../domain";
-import { addDays, addMonths, parseDateOnly, startOfMonth, todayDateOnly } from "../domain/dates";
+import { useCompactViewport } from "../components/OverlayContext";
+import { addDays, startOfWeek, todayDateOnly } from "../domain/dates";
+import { scheduledClassSupportsFutureScope } from "../domain";
+import { deriveMonthlyCharges, isMonthlyGroup, monthlyDueDate, normalizeGroupBilling, periodOf } from "../domain/monthlyBilling";
 import { useHistoryBackedState } from "../hooks/useHistoryNavigation";
 import { confirmDiscard, draftChanged, draftSignature, useUnsavedChanges } from "../hooks/useUnsavedChanges";
-import { getUiLocale } from "../i18n";
 import { playHibiSound } from "../utils/hibiSounds";
-import { nextRecurrenceDates, timeToMinutes } from "../domain/pickerModels";
+import {
+  dayNumber,
+  formatDayMonth,
+  formatHours,
+  formatLongDate,
+  formatMoney,
+  formatScore,
+  formatShortDate,
+  formatSpan,
+  formatTime,
+  formatTimeRange,
+  minutesOf,
+  monthLong,
+  nowTimeFor,
+  relativeDay,
+  weekdayShort,
+} from "../utils/displayFormat";
 import {
   buildClassWorkspaceSessions,
-  buildClassWorkspaceSessionsForRange,
-  filterClassHistory,
   rosterForClassSession,
   selectPrimaryClassSession,
+  STATUS_LOOK,
 } from "./classesWorkspaceModel";
-import { buildClassDraft, rebaseClassDraft } from "./classesDraftModel";
 import {
-  calendarMonthDays,
-  calendarMonthRange,
-  calendarSessionTone,
-  calendarWeekDays,
-  calendarWeekRange,
-  filterCalendarSessions,
-  groupCalendarSessionsByDate,
-  minutesFromTime,
-} from "./classesCalendarModel";
+  buildClassDraft,
+  buildClassRecords,
+  classDraftSummary,
+  rebaseClassDraft,
+  studentClassNote,
+} from "./classesDraftModel";
+import { ClassCalendar } from "./ClassCalendar";
+import { ClassHistory } from "./ClassHistory";
+import { NewClassDrawer } from "./NewClassDrawer";
+import { EditClassDrawer } from "./EditClassDrawer";
+import "./classes.css";
 
-const PAGE_SIZE = 8;
+const TABS = [
+  { value: "next", label: "Next class" },
+  { value: "calendar", label: "Calendar" },
+  { value: "history", label: "History" },
+];
 
-/** @param {string} value @param {Intl.DateTimeFormatOptions} [options] */
-function formatDate(value, options = { day: "2-digit", month: "2-digit", year: "numeric" }) {
-  if (!value) return "—";
-  return new Intl.DateTimeFormat(getUiLocale(), options).format(new Date(`${value}T12:00:00`));
+export function sessionStudentCount(state, session) {
+  return rosterForClassSession(state, session).length;
 }
 
-function formatTime(value) {
-  if (!value) return "—";
-  const [hour, minute] = value.split(":").map(Number);
-  return new Intl.DateTimeFormat(getUiLocale(), { hour: "numeric", minute: "2-digit" }).format(
-    new Date(2026, 0, 1, hour, minute),
-  );
+/** «2 de 3 presentes · faltó Luna» for a recorded class, or «2 h · 5 alumnos». */
+export function sessionSubline(state, session, t, locale) {
+  const rows = (session.rows || []).filter((row) => row.classStatus === "Completed");
+  if (rows.length) {
+    const present = rows.filter((row) => row.attendance === "P" || row.attendance === "L").length;
+    const absentNames = rows
+      .filter((row) => row.attendance === "A")
+      .map((row) => (state.students || []).find((student) => student.id === row.studentId)?.fullName?.split(" ")[0])
+      .filter(Boolean);
+    const base = t("{present} of {total} present", { present, total: rows.length });
+    return absentNames.length
+      ? `${base} · ${t("{names} missed", { names: new Intl.ListFormat(locale, { type: "conjunction" }).format(absentNames) })}`
+      : base;
+  }
+  const hours = formatHours(session.durationHours, locale);
+  if (session.format === "individual") return `${hours} · ${t("Individual")}`;
+  const count = sessionStudentCount(state, session);
+  return `${hours} · ${t(count === 1 ? "{count} student" : "{count} students", { count })}`;
 }
 
-function currentTimeForDate(date) {
-  if (date !== todayDateOnly()) return "23:59";
-  return new Date().toLocaleTimeString("en-CA", { hour12: false, hour: "2-digit", minute: "2-digit" });
+function noteText(note, t, locale) {
+  switch (note.kind) {
+    case "absences":
+      return t("Missed {missed} of their last {total} classes", { missed: note.missed, total: note.total });
+    case "owes":
+      return t("Owes {amount} from the class on {date}", {
+        amount: formatMoney(note.amount, locale),
+        date: formatShortDate(note.date, locale, { weekday: false }),
+      });
+    case "ungraded":
+      return t("Missing grade for {assessment}", { assessment: note.assessment });
+    case "monthlyPending":
+      return t("{month} monthly fee pending", { month: monthLong(`${note.period}-01`, locale) });
+    case "customFee":
+      return t("Own fee {amount}", { amount: formatMoney(note.fee, locale) });
+    default:
+      return t("Up to date");
+  }
 }
 
-function statusTone(status) {
-  if (status === "Registered") return "success";
-  if (status === "Cancelled") return "danger";
-  if (status === "Rescheduled" || status === "Pending") return "warning";
-  return "info";
+function capitalize(text) {
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
 }
 
-function initialScheduleDraft(asOfDate, state) {
-  const firstGroup = state.groups?.find((group) => group.status !== "Inactive");
-  const firstStudent = state.students?.find((student) => student.status !== "Inactive");
-  return {
-    recurrence: "weekly",
-    format: firstGroup ? "group" : "individual",
-    groupId: firstGroup?.id || "",
-    studentId: firstStudent?.id || "",
-    startDate: asOfDate,
-    startTime: "10:00",
-    durationHours: state.settings?.defaultClassHours || 2,
-    intervalWeeks: 1,
-    daysOfWeek: [dayOfWeekForDate(asOfDate)],
+function WeekRail({ state, sessions, currentDate, weekStart, setWeekStart, selectedDay, setSelectedDay, activeKey, onSelect }) {
+  const { t, locale } = useI18n();
+  const days = Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
+  const weekEnd = days[6];
+  const inWeek = sessions.filter((session) => session.classDate >= weekStart && session.classDate <= weekEnd);
+  const visible = inWeek.filter((session) => session.classDate >= selectedDay);
+  const pending = sessions
+    .filter((session) => session.statusLabel === "Pending" && session.classDate >= addDays(currentDate, -30))
+    .filter((session) => !visible.some((item) => item.key === session.key))
+    .slice(-6);
+  const byDate = new Map();
+  visible.forEach((session) => byDate.set(session.classDate, [...(byDate.get(session.classDate) || []), session]));
+  const sameMonth = weekStart.slice(0, 7) === weekEnd.slice(0, 7);
+  const range = sameMonth
+    ? `${dayNumber(weekStart)} – ${formatDayMonth(weekEnd, locale)}`
+    : `${formatShortDate(weekStart, locale, { weekday: false })} – ${formatShortDate(weekEnd, locale, { weekday: false })}`;
+  const dayLabel = (date) => {
+    const relative = relativeDay(date, currentDate);
+    if (!relative) return formatShortDate(date, locale, { weekday: true }).replace(/ \S+$/, "");
+    return relative.key === "Tomorrow" ? `${t("Tomorrow")} · ${formatShortDate(date, locale, { weekday: true }).replace(/ \S+$/, "")}` : t(relative.key);
   };
-}
-
-function groupIdsForStudent(student) {
-  return Array.isArray(student?.groupIds) ? student.groupIds : student?.groupId ? [student.groupId] : [];
-}
-
-function initialEditDraft(session) {
-  return {
-    classDate: session?.classDate || "",
-    startTime: session?.startTime || "",
-    durationHours: Number(session?.durationHours || 2),
-    format: session?.format === "individual" ? "individual" : "group",
-    groupId: session?.groupId || "",
-    studentId: session?.studentId || "",
-    participantMode: session?.participantMode === "custom" ? "custom" : "default",
-    participantIds: [...(session?.participantIds || [])],
-  };
-}
-
-function EditClassModal({ open, session, state, actions, asOfDate, onClose }) {
-  const { t: uiT } = useI18n();
-  const [draft, setDraft] = useState(() => initialEditDraft(session));
-  const [scope, setScope] = useState("occurrence");
-  const [participantsOpen, setParticipantsOpen] = useState(false);
-  const [participantSearch, setParticipantSearch] = useState("");
-  const [saving, setSaving] = useState(false);
-  const baselineRef = useRef(null);
-  const spanish = getUiLocale().toLowerCase().startsWith("es");
-  const futureSupported = scheduledClassSupportsFutureScope(state, session);
-
-  useEffect(() => {
-    if (!open || !session) return;
-    const next = initialEditDraft(session);
-    setDraft(next);
-    setScope("occurrence");
-    setParticipantsOpen(false);
-    setParticipantSearch("");
-    baselineRef.current = { draft: next, scope: "occurrence" };
-  }, [open, session]);
-
-  const activeStudents = useMemo(
-    () =>
-      (state.students || [])
-        .filter((student) => student.status !== "Inactive")
-        .sort((left, right) => String(left.fullName).localeCompare(String(right.fullName))),
-    [state.students],
-  );
-  const defaultParticipantIds = useMemo(() => {
-    if (draft.format === "individual") return draft.studentId ? [draft.studentId] : [];
-    return activeStudents
-      .filter((student) => groupIdsForStudent(student).includes(draft.groupId))
-      .map((student) => student.id);
-  }, [activeStudents, draft.format, draft.groupId, draft.studentId]);
-  const effectiveParticipantIds = draft.participantMode === "custom" ? draft.participantIds : defaultParticipantIds;
-  const visibleStudents = useMemo(() => {
-    const needle = participantSearch.trim().toLocaleLowerCase();
-    return needle
-      ? activeStudents.filter((student) => student.fullName.toLocaleLowerCase().includes(needle))
-      : activeStudents;
-  }, [activeStudents, participantSearch]);
-  const currentSnapshot = useMemo(() => ({ draft, scope }), [draft, scope]);
-  const dirty = Boolean(baselineRef.current) && draftChanged(currentSnapshot, baselineRef.current);
-  const update = (patch) => setDraft((current) => ({ ...current, ...patch }));
-  const requestClose = () => {
-    if (
-      dirty &&
-      !confirmDiscard(
-        true,
-        spanish ? "¿Descartar los cambios del horario de la clase?" : "Discard the class schedule changes?",
-      )
-    )
-      return false;
-    onClose();
-    return true;
-  };
-  const save = async () => {
-    if (!session || !actions.editScheduledClass) return;
-    setSaving(true);
-    try {
-      const saved = await actions.editScheduledClass({ session, draft, scope, asOfDate });
-      if (saved) onClose();
-    } finally {
-      setSaving(false);
-    }
-  };
-  const remove = async () => {
-    if (!session || !actions.removeScheduledClass) return;
-    const future = scope === "future" && futureSupported;
-    const message = spanish
-      ? `¿Eliminar ${future ? "esta clase y todas las clases futuras de la serie" : "solo esta clase"}? Las clases pasadas y los registros guardados no cambiarán.`
-      : `Remove ${future ? "this class and every future class in the series" : "only this class"}? Past classes and saved records will not change.`;
-    if (!globalThis.confirm?.(message)) return;
-    setSaving(true);
-    try {
-      const removed = await actions.removeScheduledClass({ session, scope, asOfDate });
-      if (removed) onClose();
-    } finally {
-      setSaving(false);
-    }
-  };
-  const toggleParticipant = (studentId) => {
-    const selected = new Set(effectiveParticipantIds);
-    if (selected.has(studentId)) selected.delete(studentId);
-    else selected.add(studentId);
-    update({ participantMode: "custom", participantIds: [...selected] });
-  };
-  const minimumDate = scope === "future" ? session?.occurrenceDate || session?.classDate : asOfDate;
-
-  return (
-    <Drawer
-      open={open}
-      onClose={requestClose}
-      title={uiT("Edit class")}
-      description={uiT("Update the information for this class.")}
-      size="modal"
-      className="class-edit-modal"
-      footer={
-        <>
-          <Button className="class-edit-delete" icon={Trash2} onClick={remove} disabled={saving}>
-            {uiT("Delete class")}
-          </Button>
-          <span className="class-edit-footer-spacer" />
-          <Button onClick={requestClose} disabled={saving}>
-            {uiT("Cancel")}
-          </Button>
-          <Button variant="primary" onClick={save} disabled={saving}>
-            {saving ? uiT("Saving…") : uiT("Save changes")}
-          </Button>
-        </>
-      }
-    >
-      {session ? (
-        <div className="class-edit-form">
-          <div className="class-edit-identity">
-            <span>
-              <CalendarDays size={18} aria-hidden="true" />
-            </span>
-            <strong>{session.title}</strong>
-            <i>·</i>
-            <span>{formatDate(session.classDate, { day: "numeric", month: "short", year: "numeric" })}</span>
-            <i>·</i>
-            <span>{formatTime(session.startTime)}</span>
-            {futureSupported ? <StatusBadge tone="success">{uiT("Recurring")}</StatusBadge> : null}
-          </div>
-          <Field label={uiT("Apply changes to")}>
-            <div className="class-edit-scope" role="group" aria-label={uiT("Apply changes to")}>
-              <button
-                type="button"
-                className={scope === "occurrence" ? "active" : ""}
-                aria-pressed={scope === "occurrence"}
-                onClick={() => setScope("occurrence")}
-              >
-                {uiT("Only this class")}
-              </button>
-              <button
-                type="button"
-                disabled={!futureSupported}
-                className={scope === "future" ? "active" : ""}
-                aria-pressed={scope === "future"}
-                onClick={() => futureSupported && setScope("future")}
-              >
-                {uiT("This and future classes")}
-              </button>
-            </div>
-          </Field>
-          <p className="class-edit-scope-note">
-            <CircleAlert size={15} aria-hidden="true" />
-            {scope === "future"
-              ? uiT("Past classes and saved records will remain unchanged.")
-              : uiT("The other classes in this series will keep their information.")}
-          </p>
-          <div className="class-edit-grid">
-            <Field label={uiT("Date")} required>
-              <Input
-                type="date"
-                min={minimumDate}
-                value={draft.classDate}
-                onChange={(event) => update({ classDate: event.target.value })}
-              />
-            </Field>
-            <Field label={uiT("Time")} required>
-              <Input
-                type="time"
-                value={draft.startTime}
-                onChange={(event) => update({ startTime: event.target.value })}
-              />
-            </Field>
-            <Field label={uiT("Duration")} required>
-              <Select
-                value={draft.durationHours}
-                onChange={(event) => update({ durationHours: Number(event.target.value) })}
-              >
-                {[0.5, 1, 1.5, 2, 2.5, 3, 4].map((hours) => (
-                  <option value={hours} key={hours}>
-                    {hours} {uiT(" h")}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label={uiT("Format")}>
-              <div className="classes-choice" role="group" aria-label={uiT("Class format")}>
-                <button
-                  type="button"
-                  className={draft.format === "group" ? "active" : ""}
-                  aria-pressed={draft.format === "group"}
-                  onClick={() =>
-                    update({
-                      format: "group",
-                      groupId: draft.groupId || state.groups?.find((group) => group.status !== "Inactive")?.id || "",
-                      studentId: "",
-                      participantMode: "default",
-                      participantIds: [],
-                    })
-                  }
-                >
-                  {uiT("Group")}
-                </button>
-                <button
-                  type="button"
-                  className={draft.format === "individual" ? "active" : ""}
-                  aria-pressed={draft.format === "individual"}
-                  onClick={() =>
-                    update({
-                      format: "individual",
-                      studentId: draft.studentId || activeStudents[0]?.id || "",
-                      groupId: "",
-                      participantMode: "default",
-                      participantIds: [],
-                    })
-                  }
-                >
-                  {uiT("Individual")}
-                </button>
-              </div>
-            </Field>
-          </div>
-          {draft.format === "group" ? (
-            <Field label={uiT("Group or student")} required>
-              <Select
-                value={draft.groupId}
-                onChange={(event) =>
-                  update({ groupId: event.target.value, participantMode: "default", participantIds: [] })
-                }
-              >
-                <option value="">{uiT("Choose a group")}</option>
-                {(state.groups || [])
-                  .filter((group) => group.status !== "Inactive")
-                  .map((group) => (
-                    <option key={group.id} value={group.id}>
-                      {group.name}
-                    </option>
-                  ))}
-              </Select>
-            </Field>
-          ) : (
-            <Field label={uiT("Group or student")} required>
-              <Select value={draft.studentId} onChange={(event) => update({ studentId: event.target.value })}>
-                <option value="">{uiT("Choose a student")}</option>
-                {activeStudents.map((student) => (
-                  <option key={student.id} value={student.id}>
-                    {student.fullName}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          )}
-          <section className="class-edit-participants">
-            <div>
-              <strong>{uiT("Participants")}</strong>
-              <span>
-                {effectiveParticipantIds.length}{" "}
-                {effectiveParticipantIds.length === 1 ? uiT("student") : uiT("students")}
-                {draft.participantMode === "custom" ? uiT(" · custom list") : ""}
-              </span>
-            </div>
-            {draft.format === "group" ? (
-              <Button onClick={() => setParticipantsOpen((value) => !value)}>
-                {participantsOpen ? uiT("Hide") : uiT("Manage")}
-              </Button>
-            ) : null}
-          </section>
-          {participantsOpen && draft.format === "group" ? (
-            <div className="class-edit-participant-picker">
-              <label>
-                <Search size={17} aria-hidden="true" />
-                <span className="sr-only">{uiT("Search students")}</span>
-                <input
-                  value={participantSearch}
-                  onChange={(event) => setParticipantSearch(event.target.value)}
-                  placeholder={uiT("Search students")}
-                />
-              </label>
-              <div>
-                {visibleStudents.map((student) => (
-                  <label key={student.id}>
-                    <input
-                      type="checkbox"
-                      checked={effectiveParticipantIds.includes(student.id)}
-                      onChange={() => toggleParticipant(student.id)}
-                    />
-                    <StudentAvatar avatarId={student.avatarId} name={student.fullName} size="tiny" decorative />
-                    <span>
-                      <strong>{student.fullName}</strong>
-                      <small>
-                        {groupIdsForStudent(student).includes(draft.groupId)
-                          ? uiT("Group member")
-                          : uiT("Not in this group")}
-                      </small>
-                    </span>
-                  </label>
-                ))}
-              </div>
-              {draft.participantMode === "custom" ? (
-                <Button variant="ghost" onClick={() => update({ participantMode: "default", participantIds: [] })}>
-                  {uiT("Use the group roster")}
-                </Button>
-              ) : null}
-            </div>
-          ) : null}
-          <details className="class-edit-more">
-            <summary>{uiT("More options")}</summary>
-            <p>
-              {futureSupported
-                ? uiT("This is a recurring class. Choose the scope above before saving.")
-                : uiT("This is a one-time class.")}
-            </p>
-          </details>
-        </div>
-      ) : null}
-    </Drawer>
-  );
-}
-
-function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
-  const { t: uiT } = useI18n();
-  const [draft, setDraft] = useState(() => initialScheduleDraft(asOfDate, state));
-  const [saving, setSaving] = useState(false);
-  const pickerSchedule = useMemo(() => {
-    if (!open || !draft.startDate) return { repeatDates: [], classDates: [], busy: [] };
-    const repeatDates =
-      draft.recurrence === "weekly"
-        ? nextRecurrenceDates({ ...draft, kind: "weekly", interval: draft.intervalWeeks })
-        : [];
-    const activeDates = new Set(repeatDates.length ? repeatDates : [draft.startDate]);
-    const endDate = [addMonths(draft.startDate, 2), ...activeDates].sort().at(-1);
-    const sessions = buildClassWorkspaceSessionsForRange(
-      state,
-      startOfMonth(draft.startDate),
-      endDate,
-      asOfDate,
-    ).filter((session) => session.statusLabel !== "Cancelled");
-    const busy = sessions
-      .filter((session) => activeDates.has(session.classDate) && timeToMinutes(session.startTime) !== null)
-      .map((session) => ({
-        start: timeToMinutes(session.startTime),
-        end: timeToMinutes(session.startTime) + Number(session.durationHours) * 60,
-        label: `${session.title} (${new Intl.DateTimeFormat(getUiLocale(), { weekday: "short", timeZone: "UTC" }).format(parseDateOnly(session.classDate))})`,
-      }));
-    return {
-      repeatDates,
-      classDates: [...new Set(sessions.map((session) => session.classDate))],
-      busy: [...new Map(busy.map((block) => [JSON.stringify(block), block])).values()],
-    };
-  }, [asOfDate, draft, open, state]);
-  useEffect(() => {
-    if (open) setDraft(initialScheduleDraft(asOfDate, state));
-  }, [asOfDate, open, state]);
-  const ownerReady = draft.format === "group" ? Boolean(draft.groupId) : Boolean(draft.studentId);
-  const valid =
-    ownerReady &&
-    draft.startDate &&
-    draft.startDate >= asOfDate &&
-    draft.startTime &&
-    Number(draft.durationHours) > 0 &&
-    (draft.recurrence === "once" || draft.daysOfWeek.length > 0);
-  const update = (patch) => setDraft((current) => ({ ...current, ...patch }));
-  const save = async () => {
-    if (!valid || !actions.upsertClassSchedule) return;
-    setSaving(true);
-    try {
-      const saved = await actions.upsertClassSchedule(draft);
-      if (saved) onClose();
-    } finally {
-      setSaving(false);
-    }
+  const item = (session) => {
+    const look = STATUS_LOOK[session.statusLabel];
+    const showStatus = session.statusLabel !== "Scheduled" || session.key === activeKey;
+    return (
+      <button
+        type="button"
+        key={session.key}
+        className={`agenda-item ${session.key === activeKey ? "is-selected" : ""}`}
+        aria-current={session.key === activeKey ? "true" : undefined}
+        onClick={() => onSelect(session)}
+      >
+        <time>{formatTime(session.startTime, locale)}</time>
+        <span>
+          <strong>{session.title}</strong>
+          <small>{sessionSubline(state, session, t, locale)}</small>
+          {showStatus ? <span className={`st ${look.className}`}>{t(look.label)}</span> : null}
+        </span>
+      </button>
+    );
   };
   return (
-    <Drawer
-      open={open}
-      onClose={onClose}
-      title={uiT("New class")}
-      description={uiT("Assign the class to a group or one student.")}
-      footer={
-        <>
-          <Button onClick={onClose}>{uiT("Cancel")}</Button>
-          <Button variant="primary" icon={CalendarDays} disabled={!valid || saving} onClick={save}>
-            {saving ? uiT("Creating…") : uiT("Create class")}
-          </Button>
-        </>
-      }
-    >
-      <div className="classes-new-form">
-        <Field label={uiT("Frequency")} hint={uiT("A recurring class appears automatically on its selected days.")}>
-          <div className="classes-choice" role="group" aria-label={uiT("Class frequency")}>
-            <button
-              type="button"
-              className={draft.recurrence === "once" ? "active" : ""}
-              aria-pressed={draft.recurrence === "once"}
-              onClick={() => update({ recurrence: "once" })}
-            >
-              {uiT("One-time")}
+    <>
+      <div className="agenda-week-head">
+        <span>
+          {range}
+          <span className="agenda-week-nav">
+            <button type="button" aria-label={t("Previous week")} onClick={() => setWeekStart(addDays(weekStart, -7))}>
+              <ChevronLeft aria-hidden="true" />
             </button>
-            <button
-              type="button"
-              className={draft.recurrence === "weekly" ? "active" : ""}
-              aria-pressed={draft.recurrence === "weekly"}
-              onClick={() => update({ recurrence: "weekly" })}
-            >
-              {uiT("Recurring")}
+            <button type="button" aria-label={t("Next week")} onClick={() => setWeekStart(addDays(weekStart, 7))}>
+              <ChevronRight aria-hidden="true" />
             </button>
-          </div>
-        </Field>
-        <Field label={uiT("Format")}>
-          <div className="classes-choice" role="group" aria-label={uiT("Class format")}>
-            <button
-              type="button"
-              className={draft.format === "group" ? "active" : ""}
-              aria-pressed={draft.format === "group"}
-              onClick={() => update({ format: "group" })}
-            >
-              {uiT("Group")}
-            </button>
-            <button
-              type="button"
-              className={draft.format === "individual" ? "active" : ""}
-              aria-pressed={draft.format === "individual"}
-              onClick={() => update({ format: "individual" })}
-            >
-              {uiT("Individual")}
-            </button>
-          </div>
-        </Field>
-        {draft.format === "group" ? (
-          <Field label={uiT("Group")} required>
-            <Select value={draft.groupId} onChange={(event) => update({ groupId: event.target.value })}>
-              <option value="">{uiT("Choose a group")}</option>
-              {state.groups
-                .filter((group) => group.status !== "Inactive")
-                .map((group) => (
-                  <option key={group.id} value={group.id}>
-                    {group.name}
-                  </option>
-                ))}
-            </Select>
-          </Field>
-        ) : (
-          <Field label={uiT("Student")} required>
-            <Select value={draft.studentId} onChange={(event) => update({ studentId: event.target.value })}>
-              <option value="">{uiT("Choose a student")}</option>
-              {state.students
-                .filter((student) => student.status !== "Inactive")
-                .map((student) => (
-                  <option key={student.id} value={student.id}>
-                    {student.fullName}
-                  </option>
-                ))}
-            </Select>
-          </Field>
-        )}
-        <div className="classes-new-grid">
-          <Field label={uiT("Start date")} required>
-            <DatePicker
-              today={asOfDate}
-              classDates={pickerSchedule.classDates}
-              repeatDates={pickerSchedule.repeatDates}
-              value={draft.startDate}
-              onChange={(event) => {
-                const startDate = event.target.value;
-                update({
-                  startDate,
-                  daysOfWeek:
-                    draft.recurrence === "weekly" && draft.daysOfWeek.length === 1
-                      ? [dayOfWeekForDate(startDate)]
-                      : draft.daysOfWeek,
-                });
-              }}
-            />
-          </Field>
-          <Field label={uiT("Time")} required>
-            <TimePicker
-              minMinutes={0}
-              maxMinutes={1440}
-              durationMinutes={Number(draft.durationHours) * 60}
-              busy={pickerSchedule.busy}
-              value={draft.startTime}
-              onChange={(event) => update({ startTime: event.target.value })}
-            />
-          </Field>
-          <Field label={uiT("Duration")} required>
-            <Select
-              value={draft.durationHours}
-              onChange={(event) => update({ durationHours: Number(event.target.value) })}
-            >
-              {[1, 1.5, 2, 2.5, 3].map((hours) => (
-                <option value={hours} key={hours}>
-                  {hours} {uiT(" h")}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        </div>
-        {draft.recurrence === "weekly" ? (
+          </span>
+        </span>
+        <small>{t(inWeek.length === 1 ? "{count} class" : "{count} classes", { count: inWeek.length })}</small>
+      </div>
+      <div className="week-strip" role="group" aria-label={t("Days of the week")}>
+        {days.map((date) => (
+          <button
+            type="button"
+            key={date}
+            className={`${date === selectedDay ? "is-selected" : ""} ${date === currentDate ? "is-today" : ""}`.trim()}
+            aria-pressed={date === selectedDay}
+            aria-current={date === currentDate ? "date" : undefined}
+            aria-label={formatLongDate(date, locale)}
+            onClick={() => setSelectedDay(date)}
+          >
+            {weekdayShort(date, locale).charAt(0).toUpperCase()}
+            <b>{dayNumber(date)}</b>
+            <i className={inWeek.some((session) => session.classDate === date) ? "" : "is-empty"} />
+          </button>
+        ))}
+      </div>
+      <div className="agenda">
+        {pending.length ? (
           <>
-            <Field label={uiT("Repeat")} required>
-              <RepeatPicker
-                kinds={["weekly"]}
-                startDate={draft.startDate}
-                value={{ kind: "weekly", interval: draft.intervalWeeks, daysOfWeek: draft.daysOfWeek }}
-                onChange={(rule) =>
-                  update({ intervalWeeks: rule.interval, daysOfWeek: rule.days.map((day) => (day === 0 ? 7 : day)) })
-                }
-              />
-            </Field>
-            <p className="classes-repeat-note">
-              <CircleAlert size={15} aria-hidden="true" />
-              {uiT("This class will repeat on the selected days.")}
-            </p>
+            <h3>{t("Not recorded")}</h3>
+            {pending.map(item)}
           </>
         ) : null}
-      </div>
-    </Drawer>
-  );
-}
-
-function AttendanceControl({ value, name, onChange }) {
-  const { t: uiT } = useI18n();
-  return (
-    <div className="class-attendance-control" role="group" aria-label={uiT("Attendance for {p0}", { p0: name })}>
-      <button
-        type="button"
-        className={value === "P" ? "present active" : "present"}
-        aria-pressed={value === "P"}
-        title={uiT("Present")}
-        onClick={() => onChange("P")}
-      >
-        {uiT("P")}
-      </button>
-      <button
-        type="button"
-        className={value === "A" ? "absent active" : "absent"}
-        aria-pressed={value === "A"}
-        title={uiT("Absent")}
-        onClick={() => onChange("A")}
-      >
-        {uiT("A")}
-      </button>
-    </div>
-  );
-}
-
-function PaymentControl({ value, name, onChange }) {
-  const { t: uiT } = useI18n();
-  const choices = [
-    { value: "Paid", label: "Paid", icon: Check },
-    { value: "Pending", label: "Pending", icon: Minus },
-    { value: "Unpaid", label: "Unpaid", icon: X },
-  ];
-  return (
-    <div className="class-payment-control" role="group" aria-label={uiT("Payment for {p0}", { p0: name })}>
-      {choices.map((choice) => {
-        const Icon = choice.icon;
-        return (
-          <button
-            type="button"
-            key={choice.value}
-            className={`${choice.value.toLowerCase()} ${value === choice.value ? "active" : ""}`}
-            aria-label={uiT(choice.label)}
-            title={uiT(choice.label)}
-            aria-pressed={value === choice.value}
-            onClick={() => onChange(choice.value)}
-          >
-            <Icon size={15} aria-hidden="true" />
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function ClassFacts({ session, rosterCount }) {
-  const { t: uiT } = useI18n();
-  const facts = [
-    [CalendarDays, "Date", formatDate(session.classDate)],
-    [Clock3, "Time", formatTime(session.startTime)],
-    [Hourglass, "Duration", `${session.durationHours || 0} h`],
-    [UsersRound, "Students", rosterCount],
-    [session.format === "group" ? UsersRound : UserRound, "Type", session.format === "group" ? "Group" : "Individual"],
-  ];
-  return (
-    <div className="class-session-facts">
-      {facts.map(([Icon, label, value]) => (
-        <div key={label}>
-          <Icon size={19} aria-hidden="true" />
-          <span>
-            <small>{uiT(label)}</small>
-            <strong>{value}</strong>
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function ClassSummary({ entries, roster, maximum }) {
-  const { t: uiT } = useI18n();
-  const values = roster.map((student) => entries[student.id] || {});
-  const present = values.filter((entry) => entry.attendance !== "A").length;
-  const absent = values.filter((entry) => entry.attendance === "A").length;
-  const paid = values.filter((entry) => entry.paymentState === "Paid").length;
-  const pending = values.filter((entry) => entry.paymentState === "Pending").length;
-  const unpaid = values.filter((entry) => entry.paymentState === "Unpaid").length;
-  const scores = values
-    .map((entry) => Number(entry.score))
-    .filter((score, index) => values[index].score !== "" && Number.isFinite(score));
-  const average = scores.length ? scores.reduce((sum, score) => sum + score, 0) / scores.length : null;
-  return (
-    <aside className="class-live-summary" aria-label={uiT("Class summary")}>
-      <div className="class-live-summary-title">
-        <div>
-          <h2>{uiT("Class summary")}</h2>
-          <p>{uiT("Review before saving")}</p>
-        </div>
-        <BookOpenCheck size={34} aria-hidden="true" />
-      </div>
-      <dl>
-        <div className="green">
-          <dt>
-            <UsersRound size={17} />
-            {uiT("Present")}
-          </dt>
-          <dd>{present}</dd>
-        </div>
-        <div className="red">
-          <dt>
-            <UserRound size={17} />
-            {uiT("Absent")}
-          </dt>
-          <dd>{absent}</dd>
-        </div>
-        <div className="orange">
-          <dt>
-            <CircleDollarSign size={17} />
-            {uiT("Payments pending")}
-          </dt>
-          <dd>{pending}</dd>
-        </div>
-        <div className="blue">
-          <dt>
-            <CircleDollarSign size={17} />
-            {uiT("Payments recorded")}
-          </dt>
-          <dd>{paid}</dd>
-        </div>
-        {unpaid ? (
-          <div className="red">
-            <dt>
-              <CircleAlert size={17} />
-              {uiT("Unpaid")}
-            </dt>
-            <dd>{unpaid}</dd>
+        {[...byDate.entries()].map(([date, items]) => (
+          <div key={date} className="agenda-day">
+            <h3>{dayLabel(date)}</h3>
+            {items.map(item)}
           </div>
-        ) : null}
-      </dl>
-      <div className="class-average">
-        <Star size={21} aria-hidden="true" />
-        <span>
-          <small>{uiT("Average grade")}</small>
-          <strong>
-            {average == null ? "—" : average.toFixed(1)} <em>/ {maximum || 20}</em>
-          </strong>
-          <b>{scores.length ? uiT("Based on {p0} grades", { p0: scores.length }) : uiT("No grades recorded")}</b>
-        </span>
+        ))}
+        {!visible.length && !pending.length ? <p className="agenda-empty">{t("No classes left this week.")}</p> : null}
       </div>
-    </aside>
+    </>
   );
 }
 
-function RemoteDraftNotice({ onKeep, onReload, onRebase }) {
-  const { t: uiT } = useI18n();
-  return (
-    <section className="class-remote-update" role="alert" aria-live="assertive">
-      <CircleAlert size={22} aria-hidden="true" />
-      <div>
-        <strong>{uiT("Newer class data is available")}</strong>
-        <p>{uiT("Your unsaved attendance, payments, and grades are safe. Choose how to continue.")}</p>
-      </div>
-      <div className="class-remote-update-actions">
-        <Button onClick={onKeep}>{uiT("Keep my draft")}</Button>
-        <Button onClick={onReload}>{uiT("Reload remote version")}</Button>
-        <Button variant="primary" onClick={onRebase}>
-          {uiT("Rebase my draft")}
-        </Button>
-      </div>
-    </section>
-  );
-}
-
-function SessionEditor({
-  session,
-  state: _state,
-  entries,
-  setEntry,
-  roster,
-  assessmentOn,
-  setAssessmentOn,
-  assessment,
-  setAssessment,
-  maximum,
-  setMaximum,
-  saving,
-  saveBlocked,
-  dirty,
-  onSave,
-  onDiscard,
-  onCancel,
-  onEdit = undefined,
-  variant = "upcoming",
-}) {
-  const { t: uiT } = useI18n();
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  if (!session)
+function MonthlyPaymentCell({ charge, today, onToggle, busy }) {
+  const { t, locale } = useI18n();
+  const month = capitalize(monthLong(`${charge.period}-01`, locale));
+  if (charge.status === "paid") {
+    const paidToday = charge.paidAt === today;
     return (
-      <EmptyState
-        icon={CalendarDays}
-        title={uiT("No class selected")}
-        description={uiT("Choose a class from History or create a new class.")}
-      />
-    );
-  const heading =
-    variant === "history"
-      ? "Edit class record"
-      : session.statusLabel === "Pending"
-        ? "Class pending registration"
-        : "Next class";
-  return (
-    <>
-      <section className={`class-session-card class-session-${variant}`} data-onboarding-tour="classes">
-        <header className="class-session-header">
-          <div className="class-session-title-row">
-            <h2>{heading}</h2>
-            <div className="class-session-heading-actions">
-              {onEdit ? (
-                <Button className="class-edit-trigger" icon={Pencil} onClick={onEdit}>
-                  {uiT("Edit class")}
-                </Button>
-              ) : null}
-              <StatusBadge tone={statusTone(session.statusLabel)}>
-                {uiT(session.statusLabel === "Pending" ? "Pending registration" : session.statusLabel)}
-              </StatusBadge>
-            </div>
-          </div>
-          <div className="class-session-overview">
-            <div className="class-session-identity">
-              <span>
-                <UsersRound size={24} aria-hidden="true" />
-              </span>
-              <div>
-                <small>{session.format === "group" ? uiT("Group") : uiT("Student")}</small>
-                <strong>{session.title}</strong>
-              </div>
-            </div>
-            <button
-              className="class-overview-toggle"
-              type="button"
-              aria-expanded={detailsOpen}
-              onClick={() => setDetailsOpen((open) => !open)}
-            >
-              {detailsOpen ? uiT("Hide details") : uiT("View details")}
-            </button>
-            <div className={detailsOpen ? "class-overview-details is-open" : "class-overview-details"}>
-              <ClassFacts session={session} rosterCount={roster.length} />
-            </div>
-          </div>
-          {variant === "history" ? <ClassSummary entries={entries} roster={roster} maximum={maximum} /> : null}
-        </header>
-        <div className="class-session-body">
-          <div className="class-task-toggle">
-            <strong>{uiT("Record assignment?")}</strong>
-            <div role="group" aria-label={uiT("Record assignment")}>
-              <button
-                type="button"
-                className={assessmentOn ? "active" : ""}
-                aria-pressed={assessmentOn}
-                onClick={() => setAssessmentOn(true)}
-              >
-                {uiT("Yes")}
-              </button>
-              <button
-                type="button"
-                className={!assessmentOn ? "active" : ""}
-                aria-pressed={!assessmentOn}
-                onClick={() => setAssessmentOn(false)}
-              >
-                {uiT("No")}
-              </button>
-            </div>
-          </div>
-          {assessmentOn ? (
-            <div className="class-assessment">
-              <span>
-                <BookOpenCheck size={20} aria-hidden="true" />
-                <strong>{uiT("Graded activity")}</strong>
-              </span>
-              <Field label={uiT("Assignment name")}>
-                <Input
-                  value={assessment}
-                  onChange={(event) => setAssessment(event.target.value)}
-                  placeholder={uiT("e.g. Equivalent fractions")}
-                />
-              </Field>
-              <Field label={uiT("Maximum score")}>
-                <Input
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  value={maximum}
-                  onChange={(event) => setMaximum(event.target.value)}
-                />
-              </Field>
-            </div>
-          ) : null}
-          {!roster.length ? (
-            <EmptyState
-              icon={UsersRound}
-              title={uiT("No active students")}
-              description={uiT("Add active students to this group in Community before registering the class.")}
-            />
-          ) : (
-            <div className="class-roster" role="table" aria-label={uiT("Class student roster")}>
-              <div className="class-roster-head" role="row">
-                <span role="columnheader">{uiT("Student")}</span>
-                <span role="columnheader">{uiT("Attendance")}</span>
-                <span role="columnheader">{uiT("Payment")}</span>
-                {assessmentOn ? <span role="columnheader">{uiT("Grade")}</span> : null}
-              </div>
-              {roster.map((student) => {
-                const entry = entries[student.id] || { attendance: "A", paymentState: "Pending", score: "" };
-                return (
-                  <div className="class-roster-row" role="row" key={student.id}>
-                    <div className="class-roster-student" role="rowheader">
-                      <StudentAvatar avatarId={student.avatarId} name={student.fullName} size="tiny" decorative />
-                      <span>
-                        <strong>{student.fullName}</strong>
-                        <small>{student.code || uiT("Student")}</small>
-                      </span>
-                    </div>
-                    <AttendanceControl
-                      value={entry.attendance}
-                      name={student.fullName}
-                      onChange={(attendance) => setEntry(student.id, { attendance })}
-                    />
-                    <PaymentControl
-                      value={entry.paymentState}
-                      name={student.fullName}
-                      onChange={(paymentState) => {
-                        setEntry(student.id, { paymentState, paymentTouched: true });
-                        playHibiSound("payment");
-                      }}
-                    />
-                    {assessmentOn ? (
-                      <label className="class-grade-input">
-                        <span className="sr-only">
-                          {uiT("Grade for ")}
-                          {student.fullName}
-                        </span>
-                        <Input
-                          type="number"
-                          min="0"
-                          max={maximum || undefined}
-                          step="0.01"
-                          value={entry.score}
-                          onChange={(event) => setEntry(student.id, { score: event.target.value })}
-                        />
-                        <small>/{maximum || "—"}</small>
-                      </label>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </section>
-      <footer className={`class-session-actions ${variant}`}>
-        {variant === "history" ? (
-          <Button onClick={onDiscard} disabled={!dirty || saving}>
-            {uiT("Discard changes")}
-          </Button>
-        ) : (
-          <Button onClick={onCancel} disabled={saving || session.statusLabel === "Cancelled"}>
-            {uiT("Mark cancelled")}
-          </Button>
-        )}
-        <Button variant="primary" icon={Save} onClick={onSave} disabled={!roster.length || saving || saveBlocked}>
-          {saving ? uiT("Saving…") : variant === "history" ? uiT("Save changes") : uiT("Save class")}
-        </Button>
-      </footer>
-    </>
-  );
-}
-
-function UpcomingClasses({ sessions, onSelect }) {
-  const { t: uiT } = useI18n();
-  if (!sessions.length) return null;
-  return (
-    <section className="classes-next-list" aria-labelledby="classes-next-title">
-      <h2 id="classes-next-title">{uiT("Upcoming classes")}</h2>
-      <div>
-        {sessions.slice(0, 3).map((session) => (
-          <button type="button" key={session.key} onClick={() => onSelect(session)}>
-            <span>
-              <CalendarDays size={20} aria-hidden="true" />
-            </span>
-            <span>
-              <small>
-                {session.classDate === todayDateOnly()
-                  ? uiT("Today, {p0}", { p0: formatTime(session.startTime) })
-                  : `${formatDate(session.classDate, { weekday: "short", month: "short", day: "numeric" })}, ${formatTime(session.startTime)}`}
-              </small>
-              <strong>{session.title}</strong>
-              <em>
-                {session.durationHours} {uiT(" h · ")}
-                {session.format === "group" ? uiT("Group") : uiT("Individual")} ·{" "}
-                {session.format === "group"
-                  ? uiT("{p0} students", { p0: session.studentCount || 0 })
-                  : uiT("1 student")}
-              </em>
-            </span>
+      <span className="monthly-pay">
+        <span className="st st-ok">{t("{month} paid", { month })}</span>
+        <small>
+          {formatMoney(charge.amount, locale)} ·{" "}
+          {paidToday ? t("today") : t("paid on {date}", { date: formatShortDate(charge.paidAt, locale, { weekday: false }) })}
+        </small>
+        {paidToday ? (
+          <button type="button" className="link-button" disabled={busy} onClick={() => onToggle(charge, false)}>
+            {t("Undo")}
           </button>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function CalendarSessionCard({ session, onOpen, compact = false, selected = false, onSelect }) {
-  const { t: uiT } = useI18n();
-  const tone = calendarSessionTone(session);
-  const studentCount = session.studentCount || (session.format === "individual" ? 1 : 0);
-  return (
-    <article
-      className={`calendar-session-card tone-${tone} ${compact ? "compact" : ""} ${selected ? "selected" : ""}`.trim()}
-      onClick={() => onSelect?.(session)}
-    >
-      <span className="calendar-session-icon">
-        <CalendarDays size={compact ? 16 : 19} aria-hidden="true" />
+        ) : null}
       </span>
-      <div className="calendar-session-copy">
-        <small>{formatTime(session.startTime)}</small>
-        <strong>{session.title}</strong>
-        <span>
-          {session.format === "group" ? uiT("Group") : uiT("Individual")} · {session.durationHours || 0} {uiT(" h · ")}
-          {studentCount} {studentCount === 1 ? uiT("student") : uiT("students")}
-        </span>
-      </div>
-      {!compact ? (
-        <div className="calendar-session-actions">
-          <StatusBadge tone={statusTone(session.statusLabel)}>{uiT(session.statusLabel)}</StatusBadge>
-          <Button
-            variant={selected ? "primary" : undefined}
-            onClick={(event) => {
-              event.stopPropagation();
-              onOpen(session);
-            }}
-          >
-            {uiT("Open class")}
-          </Button>
-          <button
-            type="button"
-            className="calendar-more-button"
-            aria-label={uiT("More options for {p0}", { p0: session.title })}
-            title={uiT("Open class")}
-            onClick={(event) => {
-              event.stopPropagation();
-              onOpen(session);
-            }}
-          >
-            <MoreHorizontal size={18} aria-hidden="true" />
-          </button>
-        </div>
-      ) : null}
-    </article>
+    );
+  }
+  if (charge.status === "waived") {
+    return (
+      <span className="monthly-pay">
+        <span className="st st-prog">{t("{month} at no cost", { month })}</span>
+        <small>{t("Monthly fee starts next month")}</small>
+      </span>
+    );
+  }
+  const due =
+    charge.dueDate === today
+      ? t("Due today, in this class")
+      : charge.status === "overdue"
+        ? t("Overdue since {date}", { date: formatShortDate(charge.dueDate, locale, { weekday: false }) })
+        : t("Due {date}", { date: formatShortDate(charge.dueDate, locale) });
+  return (
+    <span className="monthly-pay">
+      <span className={`st ${charge.status === "overdue" ? "st-venc" : "st-pend"}`}>
+        {month} · {formatMoney(charge.amount, locale)}
+      </span>
+      <small>{due}</small>
+      <button type="button" className="link-button" disabled={busy} onClick={() => onToggle(charge, true)}>
+        {t("Mark paid")}
+      </button>
+    </span>
   );
 }
 
-function CalendarNavigator({
-  view,
-  setView,
-  anchorDate,
-  setAnchorDate,
-  setSelectedDate,
-  currentDate,
-  search,
-  setSearch,
-  ownerId,
-  setOwnerId,
-  ownerOptions,
-  showFilters,
-  setShowFilters,
-}) {
-  const { t: uiT } = useI18n();
-  const monthLabel = formatDate(anchorDate, { month: "long", year: "numeric" });
-  const week = calendarWeekRange(anchorDate);
-  const weekLabel = `${formatDate(week.startDate, { month: "short", day: "numeric" })} – ${formatDate(week.endDate, { month: "short", day: "numeric", year: "numeric" })}`;
-  const move = (amount) => {
-    const next = view === "month" ? addMonths(anchorDate, amount) : addDays(anchorDate, amount * 7);
-    setAnchorDate(next);
-    setSelectedDate(view === "month" ? startOfMonth(next) : next);
-  };
-  const goToday = () => {
-    setAnchorDate(currentDate);
-    setSelectedDate(currentDate);
-  };
-  return (
-    <div className="classes-calendar-toolbar">
-      <div className="calendar-period-controls">
-        <button
-          type="button"
-          aria-label={view === "month" ? uiT("Previous month") : uiT("Previous week")}
-          onClick={() => move(-1)}
-        >
-          <ChevronLeft size={18} />
-        </button>
-        <strong>{view === "month" ? monthLabel : weekLabel}</strong>
-        <button
-          type="button"
-          aria-label={view === "month" ? uiT("Next month") : uiT("Next week")}
-          onClick={() => move(1)}
-        >
-          <ChevronRight size={18} />
-        </button>
-        <button type="button" className="calendar-today-button" onClick={goToday}>
-          {uiT("Today")}
-        </button>
-      </div>
-      <div className="calendar-view-toggle" role="group" aria-label={uiT("Calendar view")}>
-        <button
-          type="button"
-          className={view === "month" ? "active" : ""}
-          aria-pressed={view === "month"}
-          onClick={() => setView("month")}
-        >
-          {uiT("Month")}
-        </button>
-        <button
-          type="button"
-          className={view === "week" ? "active" : ""}
-          aria-pressed={view === "week"}
-          onClick={() => setView("week")}
-        >
-          {uiT("Week")}
-        </button>
-      </div>
-      <label className="calendar-search">
-        <Search size={18} aria-hidden="true" />
-        <span className="sr-only">{uiT("Search student or group")}</span>
-        <input
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder={uiT("Search student or group")}
-        />
-      </label>
-      <label className="calendar-owner-filter">
-        <UsersRound size={18} aria-hidden="true" />
-        <Select
-          aria-label={uiT("Filter calendar by student or group")}
-          value={ownerId}
-          onChange={(event) => setOwnerId(event.target.value)}
-        >
-          <option value="">{uiT("All classes")}</option>
-          {ownerOptions.map((option) => (
-            <option key={option.id} value={option.id}>
-              {option.label}
-            </option>
-          ))}
-        </Select>
-      </label>
-      <div className="calendar-mobile-tools">
-        <button
-          type="button"
-          aria-label={uiT("Search calendar")}
-          aria-expanded={showFilters}
-          onClick={() => setShowFilters((open) => !open)}
-        >
-          <Search size={18} />
-        </button>
-        <button
-          type="button"
-          aria-label={uiT("Filter calendar")}
-          aria-expanded={showFilters}
-          onClick={() => setShowFilters((open) => !open)}
-        >
-          <Filter size={18} />
-        </button>
-      </div>
-      {showFilters ? (
-        <div className="calendar-mobile-filter-panel">
-          <label>
-            <Search size={17} />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder={uiT("Search student or group")}
-            />
-          </label>
-          <Select
-            aria-label={uiT("Filter calendar by student or group")}
-            value={ownerId}
-            onChange={(event) => setOwnerId(event.target.value)}
-          >
-            <option value="">{uiT("All classes")}</option>
-            {ownerOptions.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function MonthCalendar({ anchorDate, days, sessionsByDate, selectedDate, setSelectedDate, currentDate }) {
-  const { t: uiT } = useI18n();
-  const currentMonth = startOfMonth(anchorDate).slice(0, 7);
-  return (
-    <section className="calendar-month-card" aria-label={formatDate(anchorDate, { month: "long", year: "numeric" })}>
-      <div className="calendar-month-weekdays" aria-hidden="true">
-        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-          <span key={day}>{uiT(day)}</span>
-        ))}
-      </div>
-      <div className="calendar-month-grid">
-        {days.map((date) => {
-          const dateSessions = sessionsByDate.get(date) || [];
-          const outside = date.slice(0, 7) !== currentMonth;
-          return (
-            <button
-              type="button"
-              key={date}
-              className={`${outside ? "outside" : ""} ${date === selectedDate ? "selected" : ""} ${date === currentDate ? "today" : ""}`.trim()}
-              aria-label={uiT("{p0}, {p1} classes", {
-                p0: formatDate(date, { weekday: "long", month: "long", day: "numeric" }),
-                p1: dateSessions.length,
-              })}
-              aria-pressed={date === selectedDate}
-              onClick={() => setSelectedDate(date)}
-            >
-              <span className="calendar-day-number">{parseDateOnly(date).getUTCDate()}</span>
-              <span className="calendar-day-dots" aria-hidden="true">
-                {dateSessions.slice(0, 3).map((session) => (
-                  <i className={`tone-${calendarSessionTone(session)}`} key={session.key} />
-                ))}
-                {dateSessions.length ? (
-                  <em>
-                    {dateSessions.length} {dateSessions.length === 1 ? uiT("class") : uiT("classes")}
-                  </em>
-                ) : null}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-function DayAgenda({ date, sessions, selectedKey, setSelectedKey, onOpen, onAdd, layout = "side" }) {
-  const { t: uiT } = useI18n();
-  return (
-    <aside
-      className={`calendar-day-agenda ${layout}`}
-      aria-label={uiT("Classes on {p0}", { p0: formatDate(date, { month: "long", day: "numeric" }) })}
-    >
-      <header>
-        <div>
-          <span>{formatDate(date, { weekday: "long" })}</span>
-          <h2>{formatDate(date, { month: "long", day: "numeric" })}</h2>
-        </div>
-        <strong>
-          {sessions.length} {sessions.length === 1 ? uiT("class") : uiT("classes")}
-        </strong>
-      </header>
-      <div className="calendar-day-agenda-list">
-        {sessions.map((session, index) => (
-          <CalendarSessionCard
-            key={session.key}
-            session={session}
-            selected={selectedKey ? selectedKey === session.key : index === 0}
-            onSelect={(item) => setSelectedKey(item.key)}
-            onOpen={onOpen}
-          />
-        ))}
-        {!sessions.length ? (
-          <EmptyState
-            icon={CalendarDays}
-            title={uiT("No classes this day")}
-            description={uiT("Choose another day or add a new class.")}
-          />
-        ) : null}
-      </div>
-      <Button icon={Plus} onClick={onAdd}>
-        {uiT("Add class")}
-      </Button>
-    </aside>
-  );
-}
-
-function WeekCalendar({
-  days,
-  sessionsByDate,
-  selectedDate,
-  setSelectedDate,
-  selectedKey,
-  setSelectedKey,
-  onOpen,
-  onAdd,
-  showWeekends,
-  setShowWeekends,
-}) {
-  const { t: uiT } = useI18n();
-  const visibleDays = showWeekends ? days : days.slice(0, 5);
-  const selectedSessions = sessionsByDate.get(selectedDate) || [];
-  const hours = Array.from({ length: 13 }, (_, index) => index + 8);
-  return (
-    <>
-      <div className="calendar-week-options">
-        <label>
-          <input type="checkbox" checked={showWeekends} onChange={(event) => setShowWeekends(event.target.checked)} />
-          <span aria-hidden="true" />
-          {uiT("Show weekends")}
-        </label>
-      </div>
-      <section className="calendar-week-card">
-        <div className="calendar-week-head">
-          <span />
-          {visibleDays.map((date) => (
-            <button
-              type="button"
-              key={date}
-              className={date === selectedDate ? "selected" : ""}
-              onClick={() => setSelectedDate(date)}
-            >
-              <small>{formatDate(date, { weekday: "short" })}</small>
-              <strong>{parseDateOnly(date).getUTCDate()}</strong>
-            </button>
-          ))}
-        </div>
-        <div className="calendar-week-body">
-          <div className="calendar-time-axis">
-            {hours.map((hour) => (
-              <span key={hour}>{formatTime(`${String(hour).padStart(2, "0")}:00`)}</span>
-            ))}
-          </div>
-          {visibleDays.map((date) => (
-            <div className="calendar-week-column" key={date}>
-              {(sessionsByDate.get(date) || []).map((session) => {
-                const start = Math.max(0, minutesFromTime(session.startTime) - 480);
-                const duration = Math.max(45, Number(session.durationHours || 1) * 60);
-                return (
-                  <button
-                    type="button"
-                    key={session.key}
-                    className={`calendar-week-event tone-${calendarSessionTone(session)} ${selectedKey === session.key ? "selected" : ""}`.trim()}
-                    style={{
-                      "--event-top": `${(start / 720) * 100}%`,
-                      "--event-height": `${(Math.min(duration, 720 - start) / 720) * 100}%`,
-                    }}
-                    onClick={() => {
-                      setSelectedDate(date);
-                      setSelectedKey(session.key);
-                    }}
-                  >
-                    <small>{formatTime(session.startTime)}</small>
-                    <strong>{session.title}</strong>
-                    <span>
-                      {session.durationHours} {uiT(" h")}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-      </section>
-      <div className="calendar-mobile-week-agenda">
-        <DayAgenda
-          date={selectedDate}
-          sessions={selectedSessions}
-          selectedKey={selectedKey}
-          setSelectedKey={setSelectedKey}
-          onOpen={onOpen}
-          onAdd={onAdd}
-          layout="timeline"
-        />
-      </div>
-      {selectedKey ? (
-        <div className="calendar-week-selection">
-          <span>{uiT("Selected class")}</span>
-          <strong>{[...sessionsByDate.values()].flat().find((session) => session.key === selectedKey)?.title}</strong>
-          <Button
-            variant="primary"
-            onClick={() => onOpen([...sessionsByDate.values()].flat().find((session) => session.key === selectedKey))}
-          >
-            {uiT("Open class")}
-          </Button>
-        </div>
-      ) : null}
-    </>
-  );
-}
-
-function CalendarWorkspace({ state, currentDate, onOpen, onAdd }) {
-  const [view, setView] = useState("month");
-  const [anchorDate, setAnchorDate] = useState(currentDate);
-  const [selectedDate, setSelectedDate] = useState(currentDate);
-  const [selectedKey, setSelectedKey] = useState("");
-  const [search, setSearch] = useState("");
-  const [ownerId, setOwnerId] = useState("");
-  const [showWeekends, setShowWeekends] = useState(true);
-  const [showFilters, setShowFilters] = useState(false);
-  const range = useMemo(
-    () => (view === "month" ? calendarMonthRange(anchorDate) : calendarWeekRange(anchorDate)),
-    [anchorDate, view],
-  );
-  const sessions = useMemo(
-    () =>
-      buildClassWorkspaceSessionsForRange(state, range.startDate, range.endDate, currentDate).map((session) => ({
-        ...session,
-        studentCount: rosterForClassSession(state, session).length,
-      })),
-    [currentDate, range.endDate, range.startDate, state],
-  );
-  const filtered = useMemo(() => filterCalendarSessions(sessions, { search, ownerId }), [ownerId, search, sessions]);
-  const sessionsByDate = useMemo(() => groupCalendarSessionsByDate(filtered), [filtered]);
-  const monthDays = useMemo(() => calendarMonthDays(anchorDate), [anchorDate]);
-  const weekDays = useMemo(() => calendarWeekDays(anchorDate), [anchorDate]);
-  const selectedSessions = sessionsByDate.get(selectedDate) || [];
-  const ownerOptions = useMemo(
-    () => [
-      ...(state.groups || []).map((group) => ({ id: group.id, label: group.name })),
-      ...(state.students || [])
-        .filter((student) => student.status !== "Inactive")
-        .map((student) => ({ id: student.id, label: student.fullName })),
-    ],
-    [state.groups, state.students],
-  );
-  return (
-    <div className={`classes-calendar-view view-${view}`} role="tabpanel" data-onboarding-tour="classes">
-      <CalendarNavigator
-        view={view}
-        setView={setView}
-        anchorDate={anchorDate}
-        setAnchorDate={setAnchorDate}
-        setSelectedDate={setSelectedDate}
-        currentDate={currentDate}
-        search={search}
-        setSearch={setSearch}
-        ownerId={ownerId}
-        setOwnerId={setOwnerId}
-        ownerOptions={ownerOptions}
-        showFilters={showFilters}
-        setShowFilters={setShowFilters}
-      />
-      {view === "month" ? (
-        <div className="calendar-month-layout">
-          <MonthCalendar
-            anchorDate={anchorDate}
-            days={monthDays}
-            sessionsByDate={sessionsByDate}
-            selectedDate={selectedDate}
-            setSelectedDate={(date) => {
-              setSelectedDate(date);
-              setSelectedKey("");
-            }}
-            currentDate={currentDate}
-          />
-          <DayAgenda
-            date={selectedDate}
-            sessions={selectedSessions}
-            selectedKey={selectedKey}
-            setSelectedKey={setSelectedKey}
-            onOpen={onOpen}
-            onAdd={onAdd}
-          />
-        </div>
-      ) : (
-        <WeekCalendar
-          days={weekDays}
-          sessionsByDate={sessionsByDate}
-          selectedDate={selectedDate}
-          setSelectedDate={(date) => {
-            setSelectedDate(date);
-            setSelectedKey("");
+function RosterRow({ student, entry, note, setEntry, assessmentOn, maximum, monthlyCharge, today, onMonthly, busy }) {
+  const { t, locale } = useI18n();
+  const attendance = entry.attendance || "";
+  let payment;
+  if (monthlyCharge) {
+    payment = <MonthlyPaymentCell charge={monthlyCharge} today={today} onToggle={onMonthly} busy={busy} />;
+  } else if (attendance === "P") {
+    payment = (
+      <>
+        <span className="cell-label">{t("Today's payment")}</span>
+        <PaymentChoice
+          value={entry.paymentState || ""}
+          name={student.fullName}
+          onChange={(paymentState) => {
+            setEntry(student.id, { paymentState, paymentTouched: true });
+            playHibiSound("payment");
           }}
-          selectedKey={selectedKey}
-          setSelectedKey={setSelectedKey}
-          onOpen={onOpen}
-          onAdd={onAdd}
-          showWeekends={showWeekends}
-          setShowWeekends={setShowWeekends}
         />
-      )}
-    </div>
-  );
-}
-
-function HistoryList({ sessions, selectedKey, onSelect, filters, setFilters }) {
-  const { t: uiT } = useI18n();
-  const [page, setPage] = useState(1);
-  useEffect(() => setPage(1), [filters]);
-  const pages = Math.max(1, Math.ceil(sessions.length / PAGE_SIZE));
-  const visible = sessions.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+      </>
+    );
+  } else if (attendance === "A") {
+    payment = <span className="roster-muted">{t("— absent · not charged")}</span>;
+  } else payment = <span className="roster-muted">—</span>;
+  let grade;
+  if (assessmentOn && attendance === "P") {
+    grade = (
+      <>
+        <span className="cell-label">{t("Grade")}</span>
+        <span className="grade-input">
+          <Input
+            inputMode="decimal"
+            aria-label={t("Grade for {name}", { name: student.fullName })}
+            value={entry.score ?? ""}
+            placeholder="—"
+            onChange={(event) => setEntry(student.id, { score: event.target.value.replace(",", ".") })}
+          />
+          <span>/{maximum || "—"}</span>
+        </span>
+      </>
+    );
+  } else grade = <span className="roster-muted">{attendance === "A" && assessmentOn ? t("— absent") : "—"}</span>;
+  const empty = (node) => (!monthlyCharge && attendance !== "P" ? "is-empty" : node ? "" : "is-empty");
   return (
-    <div className="classes-history-master">
-      <div className="classes-history-filters">
-        <label className="classes-history-search">
-          <Search size={18} aria-hidden="true" />
-          <span className="sr-only">{uiT("Search by group or student")}</span>
-          <input
-            value={filters.search}
-            placeholder={uiT("Search by group or student")}
-            onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))}
-          />
-        </label>
-        <label>
-          <CalendarDays size={18} aria-hidden="true" />
-          <span className="sr-only">{uiT("From date")}</span>
-          <input
-            type="date"
-            value={filters.dateFrom}
-            onChange={(event) => setFilters((current) => ({ ...current, dateFrom: event.target.value }))}
-          />
-          <span>—</span>
-          <span className="sr-only">{uiT("To date")}</span>
-          <input
-            type="date"
-            value={filters.dateTo}
-            onChange={(event) => setFilters((current) => ({ ...current, dateTo: event.target.value }))}
-          />
-        </label>
-        <label>
-          <UsersRound size={18} aria-hidden="true" />
-          <Select
-            aria-label={uiT("Filter by group or student")}
-            value={filters.ownerId}
-            onChange={(event) => setFilters((current) => ({ ...current, ownerId: event.target.value }))}
-          >
-            <option value="">{uiT("Group or student")}</option>
-            {[
-              ...new Map(sessions.map((session) => [session.groupId || session.studentId, session.title])).entries(),
-            ].map(([id, name]) => (
-              <option key={id} value={id}>
-                {name}
-              </option>
-            ))}
-          </Select>
-        </label>
-        <label>
-          <Filter size={18} aria-hidden="true" />
-          <Select
-            aria-label={uiT("Filter by status")}
-            value={filters.status}
-            onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}
-          >
-            <option value="">{uiT("Status")}</option>
-            {["Pending", "Registered", "Cancelled", "Rescheduled"].map((status) => (
-              <option key={status} value={status}>
-                {uiT(status)}
-              </option>
-            ))}
-          </Select>
-        </label>
-      </div>
-      <section className="classes-history-list" aria-label={uiT("Class history")}>
-        <div className="classes-history-head">
-          <span>{uiT("Date")}</span>
-          <span>{uiT("Group / Student")}</span>
-          <span>{uiT("Type")}</span>
-          <span>{uiT("Status")}</span>
-          <span>{uiT("Summary")}</span>
-        </div>
-        {visible.map((session) => (
-          <button
-            type="button"
-            className={selectedKey === session.key ? "selected" : ""}
-            key={session.key}
-            onClick={() => onSelect(session)}
-          >
-            <span>
-              <CalendarDays size={17} aria-hidden="true" />
-              <b>{formatDate(session.classDate)}</b>
-              <small>{formatTime(session.startTime)}</small>
-            </span>
-            <span>
-              <strong>{session.title}</strong>
-              <small>{session.format === "group" ? uiT("Group") : session.studentName || uiT("Individual")}</small>
-            </span>
-            <span>{session.format === "group" ? <UsersRound size={18} /> : <UserRound size={18} />}</span>
-            <StatusBadge tone={statusTone(session.statusLabel)}>{uiT(session.statusLabel)}</StatusBadge>
-            <span>
-              <b>
-                {session.studentCount || 1} {session.studentCount === 1 ? uiT("student") : uiT("students")}
-              </b>
-              <small>
-                {session.durationHours} {uiT(" h")}
-              </small>
-            </span>
-            <ChevronRight size={17} aria-hidden="true" />
-          </button>
-        ))}
-        {!visible.length ? (
-          <EmptyState
-            icon={CalendarDays}
-            title={uiT("No matching classes")}
-            description={uiT("Try changing one or more filters.")}
-          />
-        ) : null}
-        <footer>
-          <span>
-            {uiT("Showing ")}
-            {sessions.length ? (page - 1) * PAGE_SIZE + 1 : 0} {uiT(" to ")}
-            {Math.min(page * PAGE_SIZE, sessions.length)} {uiT("of ")}
-            {sessions.length} {uiT(" classes")}
-          </span>
-          <nav aria-label={uiT("History pages")}>
-            <button
-              type="button"
-              aria-label={uiT("Previous page")}
-              disabled={page === 1}
-              onClick={() => setPage((value) => value - 1)}
-            >
-              <ChevronLeft size={16} />
-            </button>
-            {Array.from({ length: pages }, (_, index) => index + 1)
-              .slice(0, 4)
-              .map((value) => (
-                <button
-                  type="button"
-                  key={value}
-                  className={page === value ? "active" : ""}
-                  onClick={() => setPage(value)}
-                >
-                  {value}
-                </button>
-              ))}
-            <button
-              type="button"
-              aria-label={uiT("Next page")}
-              disabled={page === pages}
-              onClick={() => setPage((value) => value + 1)}
-            >
-              <ChevronRight size={16} />
-            </button>
-          </nav>
-        </footer>
-      </section>
+    <div className="roster-row" role="row">
+      <span role="rowheader" className="person" data-cell="who">
+        <StudentAvatar avatarId={student.avatarId} name={student.fullName} size="small" decorative />
+        <span>
+          <strong>{student.fullName}</strong>
+          <small className={note.tone ? `text-${note.tone}` : "muted"}>{noteText(note, t, locale)}</small>
+        </span>
+      </span>
+      <span role="cell" data-cell="attendance">
+        <AttendanceChoice
+          value={attendance}
+          name={student.fullName}
+          onChange={(value) => setEntry(student.id, { attendance: value })}
+        />
+      </span>
+      <span role="cell" data-cell="payment" className={empty(payment)}>
+        {payment}
+      </span>
+      <span role="cell" data-cell="grade" className={assessmentOn && attendance === "P" ? "" : "is-empty"}>
+        {grade}
+      </span>
     </div>
   );
 }
@@ -1671,21 +323,24 @@ function HistoryList({ sessions, selectedKey, onSelect, filters, setFilters }) {
 export default function Classes({
   state = undefined,
   actions = undefined,
+  derived = undefined,
   asOfDate,
   intent,
   clearIntent,
   registerNavigationBlocker,
+  openPage = undefined,
 }) {
-  const { t: uiT } = useI18n();
+  const { t, locale } = useI18n();
+  const compact = useCompactViewport();
   const currentDate = asOfDate || state.settings?.asOfDate || todayDateOnly();
   const sessions = useMemo(() => buildClassWorkspaceSessions(state, currentDate), [currentDate, state]);
-  const [currentTime, setCurrentTime] = useState(() => currentTimeForDate(currentDate));
+  const [currentTime, setCurrentTime] = useState(() => nowTimeFor(currentDate, todayDateOnly()));
   useEffect(() => {
-    const updateCurrentTime = () => setCurrentTime(currentTimeForDate(currentDate));
-    updateCurrentTime();
+    const update = () => setCurrentTime(nowTimeFor(currentDate, todayDateOnly()));
+    update();
     if (currentDate !== todayDateOnly()) return undefined;
-    const intervalId = window.setInterval(updateCurrentTime, 60_000);
-    return () => window.clearInterval(intervalId);
+    const id = window.setInterval(update, 60_000);
+    return () => window.clearInterval(id);
   }, [currentDate]);
   const primary = useMemo(
     () => selectPrimaryClassSession(sessions, currentDate, currentTime),
@@ -1693,15 +348,17 @@ export default function Classes({
   );
   const [tab, setTab] = useState("next");
   const [selectedKey, setSelectedKey] = useState("");
-  const [selectedUpcomingKey, setSelectedUpcomingKey] = useState("");
+  const [weekStart, setWeekStart] = useState(() => startOfWeek(currentDate));
+  const [selectedDay, setSelectedDay] = useState(currentDate);
+  const [agendaOpen, setAgendaOpen] = useState(false);
   const [newClassOpen, setNewClassOpen] = useState(false);
   const [editingSession, setEditingSession] = useState(null);
-  const [filters, setFilters] = useState({ search: "", dateFrom: "", dateTo: "", ownerId: "", status: "" });
   const [entries, setEntries] = useState({});
   const [assessmentOn, setAssessmentOn] = useState(false);
   const [assessment, setAssessment] = useState("");
-  const [maximum, setMaximum] = useState(20);
+  const [maximum, setMaximum] = useState(10);
   const [saving, setSaving] = useState(false);
+  const [monthlyBusy, setMonthlyBusy] = useState(false);
   const [remoteUpdate, setRemoteUpdate] = useState(null);
   const baselineRef = useRef(null);
   const hydratedSessionKeyRef = useRef("");
@@ -1713,34 +370,33 @@ export default function Classes({
   );
   const dirty = Boolean(baselineRef.current) && draftChanged(snapshot, baselineRef.current);
 
-  const history = useMemo(
-    () =>
-      filterClassHistory(sessions, filters).map((session) => ({
-        ...session,
-        studentCount: rosterForClassSession(state, session).length,
-      })),
-    [filters, sessions, state],
-  );
-  useEffect(() => {
-    if (!selectedKey && history[0]) setSelectedKey(history[0].key);
-    else if (selectedKey && !history.some((session) => session.key === selectedKey))
-      setSelectedKey(history[0]?.key || "");
-  }, [history, selectedKey]);
-  const selectedHistory = history.find((session) => session.key === selectedKey) || history[0] || null;
-  const selectedUpcoming = sessions.find((session) => session.key === selectedUpcomingKey) || null;
+  const selectedSession = sessions.find((session) => session.key === selectedKey) || null;
   const retainedSession =
     dirty && hydratedSessionRef.current
       ? sessions.find((session) => session.key === hydratedSessionKeyRef.current) || hydratedSessionRef.current
       : null;
-  const activeSession =
-    tab === "history" ? retainedSession || selectedHistory : selectedUpcoming || retainedSession || primary;
+  const activeSession = selectedSession || retainedSession || primary;
   const canEditActiveSession =
-    tab === "next" &&
     activeSession &&
     !(activeSession.rows || []).length &&
     (activeSession.occurrenceDate || activeSession.classDate) >= currentDate &&
     Boolean(activeSession.classScheduleId || activeSession.scheduleSlotId || activeSession.exceptionId);
   const roster = useMemo(() => rosterForClassSession(state, activeSession), [activeSession, state]);
+  const activeGroup = (state.groups || []).find((group) => group.id === activeSession?.groupId) || null;
+  const monthlyCharges = useMemo(
+    () =>
+      activeSession && activeGroup && isMonthlyGroup(activeGroup)
+        ? deriveMonthlyCharges(state, currentDate, { through: periodOf(activeSession.classDate) > periodOf(currentDate) ? periodOf(activeSession.classDate) : periodOf(currentDate) })
+        : [],
+    [activeGroup, activeSession, currentDate, state],
+  );
+  const chargeFor = (studentId) =>
+    monthlyCharges.find(
+      (item) =>
+        item.studentId === studentId &&
+        item.groupId === activeSession?.groupId &&
+        item.period === periodOf(activeSession?.classDate),
+    ) || null;
 
   const remoteDraft = useMemo(() => buildClassDraft(state, activeSession), [activeSession, state]);
   const remoteSignature = useMemo(() => draftSignature(remoteDraft), [remoteDraft]);
@@ -1785,17 +441,26 @@ export default function Classes({
     },
   });
 
+  const focusSession = useCallback((session) => {
+    setSelectedKey(session.key);
+    setWeekStart(startOfWeek(session.classDate));
+    setSelectedDay(session.classDate);
+  }, []);
+
   useEffect(() => {
     if (intent === "class-history" || intent === "add-grades") changeTab("history", { replace: true });
     if (intent?.type === "open-history-class" && typeof intent.sessionKey === "string") {
-      if (changeTab("history", { replace: true })) setSelectedKey(intent.sessionKey);
+      changeTab("history", { replace: true });
     }
     if (intent?.type === "open-class" && typeof intent.sessionKey === "string") {
-      if (changeTab("next", { replace: true })) setSelectedUpcomingKey(intent.sessionKey);
+      const session = sessions.find((item) => item.key === intent.sessionKey);
+      if (changeTab("next", { replace: true }) && session) focusSession(session);
+      else if (changeTab("next", { replace: true })) setSelectedKey(intent.sessionKey);
     }
+    if (intent?.type === "open-calendar") changeTab("calendar", { replace: true });
     if (intent === "new-class") setNewClassOpen(true);
     if (intent) clearIntent?.();
-  }, [changeTab, clearIntent, intent]);
+  }, [changeTab, clearIntent, focusSession, intent, sessions]);
 
   useEffect(() => {
     const remote = latestRemoteRef.current;
@@ -1834,6 +499,7 @@ export default function Classes({
 
   const setEntry = (studentId, patch) =>
     setEntries((current) => ({ ...current, [studentId]: { ...current[studentId], ...patch } }));
+
   const saveSession = async (classStatus = "Completed") => {
     if (!activeSession || !roster.length || !actions.saveProgress) return;
     if (remoteUpdate) return actions.notify?.("Choose how to handle the newer class data before saving.", "error");
@@ -1846,50 +512,24 @@ export default function Classes({
     const invalid = roster.find(
       (student) =>
         entries[student.id]?.score !== "" &&
-        (Number(entries[student.id]?.score) < 0 || Number(entries[student.id]?.score) > max),
+        entries[student.id]?.score != null &&
+        (!Number.isFinite(Number(entries[student.id]?.score)) ||
+          Number(entries[student.id]?.score) < 0 ||
+          Number(entries[student.id]?.score) > max),
     );
     if (invalid) return actions.notify?.(`Check the grade for ${invalid.fullName}.`, "error");
-    const classRecords = roster.map((student) => {
-      const entry = entries[student.id] || {};
-      const existing =
-        (activeSession.rows || []).find((row) => row.id === entry.classId) ||
-        (activeSession.rows || []).find((row) => row.studentId === student.id);
-      const hours = existing?.hours ?? activeSession.durationHours ?? state.settings?.defaultClassHours ?? 2;
-      const charge =
-        calculateCharge(state, {
-          ...existing,
-          classDate: activeSession.classDate,
-          studentId: student.id,
-          groupId: activeSession.groupId || "",
-          classStatus,
-          hours,
-        }) ?? 0;
-      const payment = entry.paymentTouched ? entry.paymentState : null;
-      return {
-        ...existing,
-        id: existing?.id,
-        classDate: activeSession.classDate,
-        studentId: student.id,
-        groupId: activeSession.groupId || "",
-        startTime: activeSession.startTime || "",
-        classTitle: activeSession.title,
-        scheduleSlotId: activeSession.scheduleSlotId || "",
-        scheduleOccurrenceDate: activeSession.occurrenceDate || activeSession.classDate,
-        classStatus,
-        attendance: classStatus === "Completed" ? entry.attendance || "A" : "",
-        hours,
-        amountPaid: payment === "Paid" ? charge : payment ? 0 : (existing?.amountPaid ?? 0),
-        paymentDate:
-          payment === "Paid" ? existing?.paymentDate || currentDate : payment ? null : existing?.paymentDate || null,
-        paymentMethod:
-          payment === "Paid" ? existing?.paymentMethod || "Cash" : payment ? "" : existing?.paymentMethod || "",
-        paymentState: payment || existing?.paymentState || entry.paymentState || "Pending",
-      };
-    });
+    const unmarked = roster.filter((student) => !entries[student.id]?.attendance).length;
+    if (
+      classStatus === "Completed" &&
+      unmarked &&
+      globalThis.confirm?.(t("{count} students are still unmarked. Save anyway?", { count: unmarked })) === false
+    )
+      return;
+    const classRecords = buildClassRecords(state, activeSession, roster, entries, { classStatus, today: currentDate });
     const gradeRecords = assessmentOn
       ? roster.flatMap((student) => {
           const entry = entries[student.id] || {};
-          if (entry.score === "" && !entry.gradeId) return [];
+          if ((entry.score === "" || entry.score == null) && !entry.gradeId) return [];
           const existing =
             (state.grades || []).find((grade) => grade.id === entry.gradeId) ||
             (state.grades || []).find(
@@ -1906,7 +546,7 @@ export default function Classes({
               studentId: student.id,
               assessment: trimmedAssessment,
               category: existing?.category || "Homework",
-              score: entry.score === "" ? null : Number(entry.score),
+              score: entry.score === "" || entry.score == null ? null : Number(entry.score),
               maxScore: max,
               workStatus: existing?.workStatus || "On time",
               feedback: existing?.feedback || "",
@@ -1918,8 +558,7 @@ export default function Classes({
     setSaving(true);
     try {
       if (await actions.saveProgress({ classRecords, gradeRecords })) {
-        const next = { entries, assessmentOn, assessment, maximum };
-        baselineRef.current = next;
+        baselineRef.current = { entries, assessmentOn, assessment, maximum };
         playHibiSound(classStatus === "Completed" ? "success" : "selection");
       }
     } finally {
@@ -1927,34 +566,40 @@ export default function Classes({
     }
   };
   const cancelSession = () => {
-    if (!globalThis.confirm?.("Mark this class as cancelled? Existing payments will be preserved.")) return;
+    if (!globalThis.confirm?.(t("Mark this class as cancelled? Existing payments will be preserved."))) return;
     saveSession("Cancelled");
   };
-  const selectUpcomingSession = useCallback(
+  const toggleMonthly = async (charge, paid) => {
+    if (!actions.setMonthlyPaid) return;
+    setMonthlyBusy(true);
+    try {
+      await actions.setMonthlyPaid({
+        studentId: charge.studentId,
+        groupId: charge.groupId,
+        period: charge.period,
+        amount: charge.amount,
+        paid,
+      });
+    } finally {
+      setMonthlyBusy(false);
+    }
+  };
+
+  const selectSession = useCallback(
     (session) => {
-      if (!session || session.key === activeSession?.key) return;
+      if (!session) return;
+      setAgendaOpen(false);
+      if (session.key === activeSession?.key) return;
       if (dirty && !confirmDiscard(true, "Discard your unsaved class changes?")) return;
       if (dirty) {
         hydratedSessionKeyRef.current = "";
         hydratedSessionRef.current = null;
       }
-      setSelectedUpcomingKey(session.key);
+      focusSession(session);
     },
-    [activeSession?.key, dirty],
+    [activeSession?.key, dirty, focusSession],
   );
-  const selectHistorySession = useCallback(
-    (session) => {
-      if (!session || session.key === activeSession?.key) return;
-      if (dirty && !confirmDiscard(true, "Discard your unsaved class changes?")) return;
-      if (dirty) {
-        hydratedSessionKeyRef.current = "";
-        hydratedSessionRef.current = null;
-      }
-      setSelectedKey(session.key);
-    },
-    [activeSession?.key, dirty],
-  );
-  const openCalendarSession = useCallback(
+  const openFromOtherTab = useCallback(
     (session) => {
       if (!session) return;
       if (dirty && !confirmDiscard(true, "Discard your unsaved class changes?")) return;
@@ -1962,158 +607,360 @@ export default function Classes({
         hydratedSessionKeyRef.current = "";
         hydratedSessionRef.current = null;
       }
-      setSelectedUpcomingKey(session.key);
+      focusSession(session);
       changeTab("next");
     },
-    [changeTab, dirty],
+    [changeTab, dirty, focusSession],
   );
 
-  const upcomingAfter = useMemo(() => {
-    const reference = tab === "next" ? activeSession : primary;
-    if (!reference) return sessions.filter((session) => session.statusLabel === "Scheduled").slice(0, 3);
-    return sessions
-      .filter(
-        (session) =>
-          session.statusLabel === "Scheduled" &&
-          session.key !== reference.key &&
-          (session.classDate > reference.classDate ||
-            (session.classDate === reference.classDate && session.startTime > reference.startTime)),
+  const summary = activeSession
+    ? classDraftSummary(
+        state,
+        activeSession,
+        roster,
+        entries,
+        monthlyCharges
+          .filter(
+            (item) =>
+              item.groupId === activeSession.groupId &&
+              item.status === "paid" &&
+              item.paidAt === currentDate &&
+              roster.some((student) => student.id === item.studentId),
+          )
+          .reduce((sum, item) => sum + item.amount, 0),
       )
-      .map((session) => ({ ...session, studentCount: rosterForClassSession(state, session).length }))
-      .slice(0, 3);
-  }, [activeSession, primary, sessions, state, tab]);
+    : null;
+  const derivedRows = derived?.classLog || [];
+  const billing = normalizeGroupBilling(activeGroup?.billing);
+  const monthlyActive = Boolean(activeGroup && activeSession && isMonthlyGroup(activeGroup, periodOf(activeSession.classDate)));
+  const monthlyDue = monthlyActive ? monthlyDueDate(state, activeGroup, periodOf(activeSession.classDate)) : "";
+  const ordinal = billing?.due?.type === "nthClass" ? t(billing.due.nth === "last" ? "last class" : "class {nth}", { nth: billing.due.nth }) : "";
+  const monthlyBadge = monthlyActive
+    ? `${t("Monthly")} · ${formatMoney(billing.monthlyFee, locale)} · ${
+        monthlyDue === activeSession.classDate
+          ? t("due today")
+          : t("due {date}", { date: formatShortDate(monthlyDue, locale, { weekday: false }) })
+      }${ordinal ? ` (${ordinal})` : ""}`
+    : "";
+  const relative = activeSession ? relativeDay(activeSession.classDate, currentDate) : null;
+  const metaDate = activeSession
+    ? `${relative ? `${t(relative.key)}, ` : ""}${formatShortDate(activeSession.classDate, locale)}`
+    : "";
+  const startsIn =
+    activeSession && activeSession.classDate === currentDate && minutesOf(activeSession.startTime) > minutesOf(currentTime)
+      ? t("in {span}", { span: formatSpan(minutesOf(activeSession.startTime) - minutesOf(currentTime)) })
+      : "";
+  const look = activeSession ? STATUS_LOOK[activeSession.statusLabel] : null;
+  const recorded = Boolean((activeSession?.rows || []).length);
+  const marked = summary ? summary.present + summary.absent : 0;
+
+  const rail = (
+    <WeekRail
+      state={state}
+      sessions={sessions}
+      currentDate={currentDate}
+      weekStart={weekStart}
+      setWeekStart={(date) => {
+        setWeekStart(date);
+        setSelectedDay(date <= currentDate && addDays(date, 6) >= currentDate ? currentDate : date);
+      }}
+      selectedDay={selectedDay}
+      setSelectedDay={setSelectedDay}
+      activeKey={activeSession?.key}
+      onSelect={selectSession}
+    />
+  );
+
+  const taskFields = (
+    <>
+      <Field label={t("Assignment name")} className="task-name">
+        <Input value={assessment} onChange={(event) => setAssessment(event.target.value)} placeholder={t("e.g. Reading ch. 3")} />
+      </Field>
+      <Field label={t("Maximum score")} className="task-max">
+        <Input inputMode="decimal" value={maximum} onChange={(event) => setMaximum(event.target.value.replace(",", "."))} />
+      </Field>
+    </>
+  );
 
   return (
-    <div className="page classes-workspace-page">
-      <header className="classes-workspace-heading">
-        <div>
-          <h1>{uiT("Classes")}</h1>
-          <p>{uiT("Record the current class quickly and simply.")}</p>
-        </div>
-        <Button icon={Plus} onClick={() => setNewClassOpen(true)}>
-          {uiT("New class")}
-        </Button>
-      </header>
-      <div className="classes-workspace-tabs" role="tablist" aria-label={uiT("Class views")}>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === "next"}
-          className={tab === "next" ? "active" : ""}
-          onClick={() => changeTab("next")}
-        >
-          {uiT("Next class")}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === "calendar"}
-          className={tab === "calendar" ? "active" : ""}
-          onClick={() => changeTab("calendar")}
-        >
-          {uiT("Calendar")}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === "history"}
-          className={tab === "history" ? "active" : ""}
-          onClick={() => changeTab("history")}
-        >
-          {uiT("History")}
-        </button>
-      </div>
+    <div className={`page classes-page ${tab === "next" && activeSession ? "has-dock" : ""}`}>
+      <SectionHeading
+        kicker={compact ? formatLongDate(currentDate, locale) : undefined}
+        title={t("Classes")}
+        description={t(
+          tab === "calendar"
+            ? "Your month at a glance. Tap a day to see its classes."
+            : tab === "history"
+              ? "Everything that already happened, class by class. Tap one to see each student."
+              : "Choose a class from your schedule and record it right here.",
+        )}
+        actions={
+          <Button icon={Plus} onClick={() => setNewClassOpen(true)}>
+            {t(compact ? "New" : "New class")}
+          </Button>
+        }
+      />
+      <Tabs value={tab} onChange={(value) => changeTab(value)} items={TABS} ariaLabel={t("Class views")} />
+      <Segmented
+        className="view-tabs-mobile"
+        tone="soft"
+        value={tab}
+        onChange={(value) => changeTab(value)}
+        label={t("Class views")}
+        items={[
+          { value: "next", label: "Next" },
+          { value: "calendar", label: "Calendar" },
+          { value: "history", label: "History" },
+        ]}
+      />
       {remoteUpdate ? (
-        <RemoteDraftNotice onKeep={keepDraft} onReload={reloadRemoteDraft} onRebase={rebaseDraft} />
+        <div className="notice is-warn class-remote-update" role="alert">
+          <div>
+            <strong>{t("Newer class data is available")}</strong>
+            <p>{t("Your unsaved attendance, payments, and grades are safe. Choose how to continue.")}</p>
+            <div className="notice-actions">
+              <Button onClick={keepDraft}>{t("Keep my draft")}</Button>
+              <Button onClick={reloadRemoteDraft}>{t("Reload remote version")}</Button>
+              <Button variant="primary" onClick={rebaseDraft}>
+                {t("Rebase my draft")}
+              </Button>
+            </div>
+          </div>
+        </div>
       ) : null}
+
       {tab === "next" ? (
-        <div
-          className="classes-upcoming-view"
-          role="tabpanel"
-          data-onboarding-tour={activeSession ? undefined : "classes"}
-        >
+        <div className="split" role="tabpanel" data-onboarding-tour="classes">
+          <aside className="split-rail agenda-rail" aria-label={t("Week schedule")}>
+            {rail}
+          </aside>
           {activeSession ? (
-            <>
-              <div className="classes-upcoming-layout">
-                <div className="classes-upcoming-primary">
-                  <SessionEditor
-                    session={activeSession}
-                    state={state}
-                    entries={entries}
-                    setEntry={setEntry}
-                    roster={roster}
-                    assessmentOn={assessmentOn}
-                    setAssessmentOn={setAssessmentOn}
-                    assessment={assessment}
-                    setAssessment={setAssessment}
-                    maximum={maximum}
-                    setMaximum={setMaximum}
-                    saving={saving}
-                    saveBlocked={Boolean(remoteUpdate)}
-                    dirty={dirty}
-                    onSave={() => saveSession("Completed")}
-                    onDiscard={reloadRemoteDraft}
-                    onCancel={cancelSession}
-                    onEdit={canEditActiveSession ? () => setEditingSession(activeSession) : null}
-                  />
+            <section className="split-main register" aria-labelledby="register-title">
+              <button type="button" className="current-card" onClick={() => setAgendaOpen(true)}>
+                <span className="current-kicker">
+                  <span>
+                    {relative ? t(relative.key) : formatShortDate(activeSession.classDate, locale)}
+                    {activeSession.statusLabel === "Scheduled" && activeSession.key === primary?.key ? ` · ${t("next")}` : ""}
+                  </span>
+                  <span>{startsIn || (look ? t(look.label) : "")}</span>
+                </span>
+                <strong>{activeSession.title}</strong>
+                <small>
+                  {formatTimeRange(activeSession.startTime, activeSession.durationHours, locale)} ·{" "}
+                  {t(roster.length === 1 ? "{count} student" : "{count} students", { count: roster.length })}
+                </small>
+                {monthlyBadge ? <span className="monthly-badge">{monthlyBadge}</span> : null}
+              </button>
+              <div className="register-head">
+                <div>
+                  <span className="register-meta">
+                    {metaDate} · {formatTimeRange(activeSession.startTime, activeSession.durationHours, locale)} ·{" "}
+                    {t(activeSession.format === "group" ? "Group" : "Individual")}
+                    {activeSession.statusLabel !== "Scheduled" ? (
+                      <span className={`st ${look.className}`}>{t(look.label)}</span>
+                    ) : null}
+                    {monthlyBadge ? <span className="monthly-badge">{monthlyBadge}</span> : null}
+                  </span>
+                  <h2 id="register-title">{activeSession.title}</h2>
                 </div>
-                <ClassSummary entries={entries} roster={roster} maximum={maximum} />
+                {canEditActiveSession ? (
+                  <Button variant="ghost" icon={Pencil} onClick={() => setEditingSession(activeSession)}>
+                    {t("Edit class")}
+                  </Button>
+                ) : null}
               </div>
-              <UpcomingClasses sessions={upcomingAfter} onSelect={selectUpcomingSession} />
-            </>
+              <div className="task-row">
+                <Field label={t("Record assignment?")}>
+                  <Segmented
+                    value={assessmentOn}
+                    onChange={setAssessmentOn}
+                    label={t("Record assignment")}
+                    items={[
+                      { value: true, label: "Yes" },
+                      { value: false, label: "No" },
+                    ]}
+                  />
+                </Field>
+                {assessmentOn ? taskFields : null}
+              </div>
+              <div className="task-switch-row-wrap">
+                <div className="task-switch-row">
+                  <span>
+                    <b>{t("Assignment")}</b>
+                    <small>
+                      {assessmentOn
+                        ? assessment
+                          ? t("{name} · out of {max}", { name: assessment, max: maximum })
+                          : t("Name it below")
+                        : t("This class has no assignment")}
+                    </small>
+                  </span>
+                  <Switch label={t("Record assignment")} checked={assessmentOn} onChange={setAssessmentOn} />
+                </div>
+                {assessmentOn && compact ? <div className="task-fields-mobile">{taskFields}</div> : null}
+              </div>
+              {compact ? (
+                <div className="roster-section-head">
+                  <h2>{t("Students")}</h2>
+                  <span>{t("They start unmarked")}</span>
+                </div>
+              ) : null}
+              {!roster.length ? (
+                <EmptyState
+                  icon={CalendarDays}
+                  title={t("No active students")}
+                  description={t("Add active students to this group in Community before registering the class.")}
+                />
+              ) : (
+                <div className="table-scroll roster-scroll" role="region" aria-label={t("Class student roster")} tabIndex={0}>
+                  <div className="roster-grid" role="table" aria-label={t("Class student roster")}>
+                    <div className="roster-head" role="row">
+                      <span role="columnheader">{t("Student")}</span>
+                      <span role="columnheader">{t("Attendance")}</span>
+                      <span role="columnheader">{t(monthlyActive ? "Payment · monthly fee or class" : "Payment for this class")}</span>
+                      <span role="columnheader">{t("Grade")}</span>
+                    </div>
+                    {roster.map((student) => (
+                      <RosterRow
+                        key={student.id}
+                        student={student}
+                        entry={entries[student.id] || {}}
+                        note={studentClassNote(state, student, activeSession, derivedRows, monthlyCharges)}
+                        setEntry={setEntry}
+                        assessmentOn={assessmentOn}
+                        maximum={maximum}
+                        monthlyCharge={chargeFor(student.id)}
+                        today={currentDate}
+                        onMonthly={toggleMonthly}
+                        busy={monthlyBusy}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="sheet-bar register-bar">
+                <div className="register-summary" aria-live="polite">
+                  <span>
+                    <b>{summary.present}</b> {t(summary.present === 1 ? "present" : "present (plural)")}
+                  </span>
+                  <span>
+                    <b>{summary.absent}</b> {t(summary.absent === 1 ? "absent" : "absent (plural)")}
+                  </span>
+                  <span>
+                    <b>{summary.unmarked}</b> {t("unmarked")}
+                  </span>
+                  <span>
+                    <b>{formatMoney(summary.collected, locale)}</b> {t("collected today")}
+                  </span>
+                  <span>
+                    <b>{formatMoney(summary.pending, locale)}</b> {t("pending")}
+                  </span>
+                  {summary.average !== null ? (
+                    <span>
+                      <b>{formatScore(summary.average, locale)}</b> {t("average")}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="sheet-bar-actions">
+                  {dirty && recorded ? (
+                    <Button variant="ghost" onClick={reloadRemoteDraft} disabled={saving}>
+                      {t("Discard changes")}
+                    </Button>
+                  ) : null}
+                  {activeSession.statusLabel !== "Cancelled" ? (
+                    <Button variant="ghost" className="muted-ghost" onClick={cancelSession} disabled={saving}>
+                      {t("Mark cancelled")}
+                    </Button>
+                  ) : null}
+                  <Button
+                    variant="primary"
+                    icon={Save}
+                    onClick={() => saveSession("Completed")}
+                    disabled={!roster.length || saving || Boolean(remoteUpdate)}
+                  >
+                    {saving ? t("Saving…") : recorded ? t("Save changes") : t("Save class")}
+                  </Button>
+                </div>
+              </div>
+              {compact ? (
+                <div className="register-dock" aria-live="polite">
+                  <div className="register-dock-top">
+                    {marked
+                      ? t("{present} present · {absent} absent", { present: summary.present, absent: summary.absent })
+                      : t("Nobody marked yet")}
+                    <span>
+                      {summary.unmarked
+                        ? t("{count} left", { count: summary.unmarked })
+                        : `${formatMoney(summary.collected, locale)} ${t("collected")}${summary.pending ? ` · ${formatMoney(summary.pending, locale)} ${t("pending")}` : ""}`}
+                    </span>
+                  </div>
+                  <div className="meter" aria-hidden="true">
+                    <i style={{ width: `${roster.length ? Math.round((marked / roster.length) * 100) : 0}%` }} />
+                  </div>
+                  <div className="register-dock-actions">
+                    {activeSession.statusLabel !== "Cancelled" ? (
+                      <Button onClick={cancelSession} disabled={saving}>
+                        {t("Cancelled")}
+                      </Button>
+                    ) : (
+                      <span />
+                    )}
+                    <Button
+                      variant="primary"
+                      onClick={() => saveSession("Completed")}
+                      disabled={!roster.length || saving || Boolean(remoteUpdate)}
+                    >
+                      {saving ? t("Saving…") : recorded ? t("Save changes") : t("Save class")}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </section>
           ) : (
-            <EmptyState
-              icon={CalendarDays}
-              title={uiT("No upcoming classes")}
-              description={uiT("Create a one-time or recurring class to start the daily workflow.")}
-              action={
-                <Button icon={Plus} variant="primary" onClick={() => setNewClassOpen(true)}>
-                  {uiT("New class")}
-                </Button>
-              }
-            />
+            <section className="split-main">
+              <EmptyState
+                stamp
+                title={t("No upcoming classes")}
+                description={t("Create a one-time or recurring class to start the daily workflow.")}
+                action={
+                  <Button icon={Plus} variant="primary" onClick={() => setNewClassOpen(true)}>
+                    {t("New class")}
+                  </Button>
+                }
+              />
+            </section>
           )}
         </div>
       ) : tab === "calendar" ? (
-        <CalendarWorkspace
+        <ClassCalendar
           state={state}
+          derived={derived}
           currentDate={currentDate}
-          onOpen={openCalendarSession}
-          onAdd={() => setNewClassOpen(true)}
+          primaryKey={primary?.key}
+          onOpen={openFromOtherTab}
+          onEdit={(session) => setEditingSession(session)}
         />
       ) : (
-        <div className="classes-history-view" role="tabpanel" data-onboarding-tour="classes">
-          <HistoryList
-            sessions={history}
-            selectedKey={selectedKey}
-            onSelect={selectHistorySession}
-            filters={filters}
-            setFilters={setFilters}
-          />
-          <div className="classes-history-detail">
-            <SessionEditor
-              variant="history"
-              session={selectedHistory}
-              state={state}
-              entries={entries}
-              setEntry={setEntry}
-              roster={roster}
-              assessmentOn={assessmentOn}
-              setAssessmentOn={setAssessmentOn}
-              assessment={assessment}
-              setAssessment={setAssessment}
-              maximum={maximum}
-              setMaximum={setMaximum}
-              saving={saving}
-              saveBlocked={Boolean(remoteUpdate)}
-              dirty={dirty}
-              onSave={() => saveSession("Completed")}
-              onDiscard={reloadRemoteDraft}
-              onCancel={cancelSession}
-            />
-          </div>
-        </div>
+        <ClassHistory
+          state={state}
+          derived={derived}
+          sessions={sessions}
+          currentDate={currentDate}
+          initialKey={intent?.type === "open-history-class" ? intent.sessionKey : ""}
+          onEdit={openFromOtherTab}
+          onOpenTracking={(intentValue) => openPage?.("grades", intentValue)}
+        />
       )}
+      {compact ? (
+        <BottomSheet
+          open={agendaOpen}
+          onClose={() => setAgendaOpen(false)}
+          title={t("Choose a class")}
+          kicker={t("Your week")}
+        >
+          <div className="agenda-sheet">{rail}</div>
+        </BottomSheet>
+      ) : null}
       <NewClassDrawer
         open={newClassOpen}
         onClose={() => setNewClassOpen(false)}
@@ -2121,16 +968,14 @@ export default function Classes({
         asOfDate={currentDate}
         actions={actions}
       />
-      <EditClassModal
+      <EditClassDrawer
         open={Boolean(editingSession)}
         session={editingSession}
         state={state}
         actions={actions}
         asOfDate={currentDate}
-        onClose={() => {
-          setEditingSession(null);
-          setSelectedUpcomingKey("");
-        }}
+        futureSupported={Boolean(editingSession) && scheduledClassSupportsFutureScope(state, editingSession)}
+        onClose={() => setEditingSession(null)}
       />
     </div>
   );

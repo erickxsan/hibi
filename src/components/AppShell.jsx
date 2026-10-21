@@ -1,6 +1,7 @@
 import { useI18n } from "../i18n/index.jsx";
-import { useEffect, useRef } from "react";
-import { BrandMark } from "./BrandMark";
+import { cloneElement, isValidElement, useEffect, useRef } from "react";
+import { HibiLogo, HibiStamp } from "./BrandMark";
+import { useCompactViewport } from "./OverlayContext";
 
 export function AppShell({
   navItems,
@@ -11,8 +12,9 @@ export function AppShell({
   children,
   guidedNavigation = false,
 }) {
-  const { t: uiT } = useI18n();
+  const { t: uiT, language } = useI18n();
   const mainRef = useRef(null);
+  const compact = useCompactViewport();
   const go = (event, page) => {
     if (
       event?.defaultPrevented ||
@@ -30,6 +32,12 @@ export function AppShell({
       window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }, [activePage, navigationReason, guidedNavigation]);
 
+  // The sync pill lives once: at the foot of the sidebar or in the mobile top bar.
+  const placedToolbar = (placement) =>
+    isValidElement(toolbar) && typeof toolbar.type !== "string"
+      ? cloneElement(/** @type {import("react").ReactElement<any>} */ (toolbar), { placement })
+      : toolbar;
+
   return (
     <div className={`hibi-shell page-${activePage}`}>
       <a className="skip-link" href="#main-content">
@@ -37,9 +45,7 @@ export function AppShell({
       </a>
       <aside className="hibi-sidebar">
         <a className="hibi-brand" href="/" onClick={(event) => go(event, "home")} aria-label={uiT("Hibi home")}>
-          <BrandMark />
-          <strong>{uiT("Hibi")}</strong>
-          <span aria-hidden="true">★</span>
+          <HibiLogo />
         </a>
         <nav aria-label={uiT("Primary navigation")} className="sidebar-nav">
           {navItems.map((item) => {
@@ -52,24 +58,23 @@ export function AppShell({
                 className={activePage === item.id ? "sidebar-link active" : "sidebar-link"}
                 aria-current={activePage === item.id ? "page" : undefined}
               >
-                <Icon size={19} strokeWidth={1.8} />
+                <Icon size={20} strokeWidth={1.8} />
                 <span>{uiT(item.label)}</span>
               </a>
             );
           })}
         </nav>
         <div className="sidebar-companion">
-          <img src="/hibi-companion.png" alt={uiT("Hibi cat reading")} />
-          <p>{uiT("Little by little, your students are doing amazing! 🌿")}</p>
+          <HibiStamp size={52} />
+          {!compact ? <div className="sidebar-toolbar">{placedToolbar("up")}</div> : null}
         </div>
       </aside>
       <section className="hibi-workspace">
         <header className="hibi-topbar">
-          <a className="mobile-brand" href="/" onClick={(event) => go(event, "home")}>
-            <span>{uiT("Hibi")}</span>
-            <b>★</b>
+          <a className="mobile-brand" href="/" onClick={(event) => go(event, "home")} aria-label={uiT("Hibi home")}>
+            <HibiLogo height={34} />
           </a>
-          <div className="topbar-tools">{toolbar}</div>
+          {compact ? <div className="topbar-tools">{placedToolbar("down")}</div> : null}
         </header>
         <main id="main-content" ref={mainRef} tabIndex={-1} className="hibi-main">
           <div className="route-stage" key={activePage}>
@@ -91,9 +96,10 @@ export function AppShell({
               onClick={(event) => go(event, item.id)}
               className={activePage === item.id ? "mobile-link active" : "mobile-link"}
               aria-current={activePage === item.id ? "page" : undefined}
+              aria-label={uiT(item.label)}
             >
-              <Icon size={20} />
-              <span>{uiT(item.label)}</span>
+              <Icon size={22} strokeWidth={1.8} />
+              <span aria-hidden="true">{uiT(item.mobileLabel && language === "es" ? item.mobileLabel : item.label)}</span>
             </a>
           );
         })}

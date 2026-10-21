@@ -8,6 +8,15 @@ function studentGroupIds(student) {
   return Array.isArray(student?.groupIds) ? student.groupIds : student?.groupId ? [student.groupId] : [];
 }
 
+/** Status word and dot for each workspace status. */
+export const STATUS_LOOK = {
+  Registered: { label: "Completed", className: "st-done" },
+  Pending: { label: "Not recorded", className: "st-pend" },
+  Cancelled: { label: "Cancelled", className: "st-prog" },
+  Rescheduled: { label: "Rescheduled", className: "st-prog" },
+  Scheduled: { label: "Scheduled", className: "st-prog" },
+};
+
 export function classWorkspaceSessionKey(item = {}) {
   return classSessionIdentity(item);
 }

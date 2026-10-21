@@ -38,6 +38,13 @@ import {
 } from "../onboarding/onboardingModel";
 import { canonicalStringify } from "../crypto/canonical.js";
 import { setGroupArchived } from "../domain/groupArchiving.js";
+import { normalizeRepeatRule } from "../domain/classRecurrence.js";
+import {
+  normalizeBillingByGroup,
+  normalizeGroupBilling,
+  normalizeMonthlyPayments,
+  setMonthlyPayment,
+} from "../domain/monthlyBilling.js";
 
 const UI_STORAGE_KEY = "minimal-class-manager:ui:v1";
 
@@ -98,6 +105,7 @@ export function canonicalGroup(draft) {
     status: draft.status ?? "Active",
     archivedAt: draft.archivedAt ?? "",
     scheduleResumeDate: draft.scheduleResumeDate ?? "",
+    ...(normalizeGroupBilling(draft.billing) ? { billing: normalizeGroupBilling(draft.billing) } : {}),
   };
 }
 
@@ -121,6 +129,12 @@ export function canonicalStudent(draft) {
     guardianContact: draft.guardianContact ?? "",
     notes: draft.notes ?? draft.importantNotes ?? "",
     status: draft.status ?? "Active",
+    ...(normalizeBillingByGroup(draft.billingByGroup)
+      ? { billingByGroup: normalizeBillingByGroup(draft.billingByGroup) }
+      : {}),
+    ...(normalizeMonthlyPayments(draft.monthlyPayments).length
+      ? { monthlyPayments: normalizeMonthlyPayments(draft.monthlyPayments) }
+      : {}),
   };
 }
 
@@ -190,6 +204,9 @@ function canonicalClassSchedule(draft) {
     daysOfWeek: Array.isArray(draft.daysOfWeek) ? [...new Set(draft.daysOfWeek.map(Number))] : [],
     participantMode: draft.participantMode === "custom" ? "custom" : "default",
     participantIds: Array.isArray(draft.participantIds) ? [...new Set(draft.participantIds.filter(Boolean))] : [],
+    ...(draft.recurrence === "weekly" && normalizeRepeatRule(draft.repeatRule)
+      ? { repeatRule: normalizeRepeatRule(draft.repeatRule) }
+      : {}),
   };
 }
 
@@ -970,6 +987,49 @@ export function useClassManager({ persistence } = {}) {
     [commit, notify],
   );
 
+  const setMonthlyPaid = useCallback(
+    ({ studentId, groupId, period, amount, paid = true }) =>
+      commit(
+        (current) =>
+          setMonthlyPayment(current, { studentId, groupId, period, amount, paid, paidAt: operationalDate }),
+        paid ? "Monthly fee marked as paid" : "Monthly fee marked as pending",
+      ),
+    [commit, operationalDate],
+  );
+
+  // Saves a group and its per-student billing adjustments in one change.
+  const saveGroupBilling = useCallback(
+    (draft, overrides = {}) => {
+      const item = applyGeneratedId(createGroup, canonicalGroup(draft));
+      const validation = validateGroup(item, stateRef.current);
+      if (!validation.valid) {
+        notify(validation.errors[0].message, "error");
+        return false;
+      }
+      const applyOverrides = (students) =>
+        students.map((student) => {
+          if (!Object.hasOwn(overrides, student.id)) return student;
+          const next = { ...(student.billingByGroup || {}) };
+          if (overrides[student.id]) next[item.id] = { ...next[item.id], ...overrides[student.id] };
+          else delete next[item.id];
+          const billingByGroup = normalizeBillingByGroup(next);
+          const { billingByGroup: _previous, ...rest } = student;
+          return billingByGroup ? { ...rest, billingByGroup } : rest;
+        });
+      return commit(
+        (current) => ({
+          ...current,
+          groups: current.groups.some((group) => group.id === item.id)
+            ? current.groups.map((group) => (group.id === item.id ? item : group))
+            : [...current.groups, item],
+          students: applyOverrides(current.students),
+        }),
+        draft.id ? "Group updated" : "Group added",
+      );
+    },
+    [commit, notify],
+  );
+
   const upsertClassSchedule = useCallback(
     (draft) => {
       const item = applyGeneratedId(createClassSchedule, canonicalClassSchedule(draft));
@@ -1305,6 +1365,8 @@ export function useClassManager({ persistence } = {}) {
       deleteClassLog,
       saveProgress,
       upsertClassSchedule,
+      setMonthlyPaid,
+      saveGroupBilling,
       editScheduledClass,
       removeScheduledClass,
       upsertScheduleException,
@@ -1359,6 +1421,8 @@ export function useClassManager({ persistence } = {}) {
       updateSettings,
       upsertClassLog,
       upsertClassSchedule,
+      setMonthlyPaid,
+      saveGroupBilling,
       upsertGrade,
       upsertGroup,
       upsertScheduleChange,

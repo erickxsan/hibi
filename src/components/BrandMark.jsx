@@ -1,10 +1,27 @@
 import { useI18n } from "../i18n/index.jsx";
-export function BrandMark() {
+
+/** Horizontal logo: the seal with ears beside the «hibi» wordmark. */
+export function HibiLogo({ className = "", height = 40 }) {
+  return (
+    <img className={`hibi-logo ${className}`.trim()} src="/brand/hibi-logo-horizontal.svg" alt="hibi" height={height} />
+  );
+}
+
+/** The cat stamp mascot. Decorative unless a label is given. */
+export function HibiStamp({ className = "", size = 52, label = "" }) {
   const { t: uiT } = useI18n();
   return (
-    <svg className="brand-mark" viewBox="0 0 64 64" role="img" aria-label={uiT("hibi smiling cat mark")}>
-      <path d="M15 23 12 10l13 8a29 29 0 0 1 14 0l13-8-3 14c5 5 8 11 8 18 0 12-10 18-25 18S7 54 7 42c0-8 3-14 8-19Z" />
-      <path d="M20 37h.1M44 37h.1M27 45c3 3 7 3 10 0M32 40v4M16 43 5 40M16 48 5 50M48 43l11-3M48 48l11 2" />
-    </svg>
+    <img
+      className={`hibi-stamp ${className}`.trim()}
+      src="/brand/hibi-gato-sello.svg"
+      alt={label ? uiT(label) : ""}
+      width={size}
+      height={size}
+    />
   );
+}
+
+// Kept for legacy callers: the stamp replaces the former line-drawn cat mark.
+export function BrandMark() {
+  return <HibiStamp size={40} />;
 }

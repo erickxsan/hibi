@@ -1,5 +1,6 @@
 import { SPANISH_COVERAGE } from "./spanishCoverage.js";
 import { PICKER_TRANSLATIONS } from "./pickerTranslations.js";
+import { REDESIGN_TRANSLATIONS } from "./redesignTranslations.js";
 
 export const LANGUAGE_STORAGE_KEY = "hibi:language:v1";
 
@@ -11,6 +12,7 @@ export const SUPPORTED_LANGUAGES = Object.freeze({
 export const SPANISH_TRANSLATIONS = Object.freeze({
   ...SPANISH_COVERAGE,
   ...PICKER_TRANSLATIONS,
+  ...REDESIGN_TRANSLATIONS,
   "Archived groups": "Grupos archivados",
   "Archived group": "Archivado",
   "Archive group": "Archivar grupo",

@@ -2,7 +2,6 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import {
   BarChart3,
   CalendarDays,
-  CloudOff,
   Home as HomeIcon,
   Settings as SettingsIcon,
   UsersRound,
@@ -35,7 +34,7 @@ const NAV_ITEMS = [
     icon: CalendarDays,
   },
   { id: "grades", label: "Tracking", href: "/progress", icon: BarChart3 },
-  { id: "settings", label: "Settings", href: "/settings", icon: SettingsIcon },
+  { id: "settings", label: "Settings", mobileLabel: "Adjustments", href: "/settings", icon: SettingsIcon },
 ];
 
 const Home = lazy(() => import("./features/Home"));
@@ -244,26 +243,23 @@ export default function ClassManagerApplication({
           if (navigate(nextPage)) setIntent(null);
         }}
         toolbar={
-          <div className="manager-toolbar">
-            {user ? (
-              <AccountMenu
-                email={user.email}
-                syncStatus={syncStatusFor(manager, cloudError)}
-                syncMessage={
-                  manager.syncMessage ||
-                  cloudError?.message ||
-                  (manager.syncStatus === "saving" ? "Wait for saving to finish before signing out." : undefined)
-                }
-                signingOut={signingOut}
-                onSignOut={manager.syncStatus === "saving" ? undefined : handleSignOut}
-              />
-            ) : (
-              <span className="cloud-mode-pill" title={uiT("Cloud sync is not configured")}>
-                <CloudOff aria-hidden="true" size={16} />
-                <span>{uiT("Local only")}</span>
-              </span>
-            )}
-          </div>
+          user ? (
+            <AccountMenu
+              email={user.email}
+              syncStatus={syncStatusFor(manager, cloudError)}
+              syncMessage={
+                manager.syncMessage ||
+                cloudError?.message ||
+                (manager.syncStatus === "saving" ? "Wait for saving to finish before signing out." : undefined)
+              }
+              signingOut={signingOut}
+              onSignOut={manager.syncStatus === "saving" ? undefined : handleSignOut}
+            />
+          ) : (
+            <span className="sync-pill is-local" title={uiT("Cloud sync is not configured")}>
+              {uiT("Local only")}
+            </span>
+          )
         }
       >
         <PendingOperations persistence={persistence} />

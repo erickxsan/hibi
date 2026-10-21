@@ -90,4 +90,9 @@ export {
   ConfirmDialog,
   ToastRegion,
   SectionHeading,
+  Segmented,
+  AttendanceChoice,
+  PaymentChoice,
+  MoneyInput,
+  DurationStepper,
 } from "./uiPrimitives";

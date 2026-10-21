@@ -177,7 +177,7 @@ export function Drawer({
         className={
           presentation === "sheet"
             ? "bottom-sheet-layer"
-            : `overlay ${presentation === "popover" ? "picker-popover-layer" : ""}`
+            : `overlay ${presentation === "popover" ? "picker-popover-layer" : ""} ${size === "compact" && presentation === "drawer" ? "is-dialog" : ""}`
         }
         role="presentation"
         style={{ zIndex: 1100 + depth * 10 }}
@@ -224,7 +224,9 @@ export function Drawer({
           {showHeader ? (
             <header className={presentation === "sheet" ? "bottom-sheet-header" : "drawer-header"}>
               <div>
-                {kicker ? <span className="bottom-sheet-kicker">{kicker}</span> : null}
+                {kicker ? (
+                  <span className={presentation === "sheet" ? "bottom-sheet-kicker" : "dialog-kicker"}>{kicker}</span>
+                ) : null}
                 {backLabel ? (
                   <button type="button" className="sheet-back" onClick={onBack || requestClose}>
                     <ChevronLeft size={16} aria-hidden="true" />

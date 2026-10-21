@@ -3,9 +3,7 @@ import ReactDOM from "react-dom/client";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import App from "./App";
 import { I18nProvider } from "./i18n";
-import "./styles.css";
 import "./design-system.css";
-import "./group-archive.css";
 import "./components/base-components.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(

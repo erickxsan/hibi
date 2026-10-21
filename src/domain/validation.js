@@ -12,6 +12,13 @@ import {
   WORK_STATUSES,
 } from "./constants.js";
 import { isDateOnly, startOfMonth } from "./dates.js";
+import { normalizeRepeatRule } from "./classRecurrence.js";
+import {
+  billingIssues,
+  normalizeBillingByGroup,
+  normalizeGroupBilling,
+  normalizeMonthlyPayments,
+} from "./monthlyBilling.js";
 
 function isRecord(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -124,6 +131,7 @@ export function validateGroup(group, state = null) {
       min: 0,
     });
   });
+  billingIssues(group, "group").forEach(([path, message]) => errors.push(issue(path, "invalid_billing", message)));
   if (state && duplicateIn(state.groups, "name", group.name, group.id)) {
     errors.push(issue("name", "duplicate", "Group name must be unique.", group.name));
   }
@@ -148,6 +156,7 @@ export function validateStudent(student, state = null) {
   if (student.isIndividual !== undefined && typeof student.isIndividual !== "boolean")
     errors.push(issue("isIndividual", "invalid_type", "Individual enrollment must be true or false."));
   finiteNumber(errors, student.customHourlyRate, "customHourlyRate", "Custom hourly rate", { min: 0, optional: true });
+  billingIssues(student, "student").forEach(([path, message]) => errors.push(issue(path, "invalid_billing", message)));
   const seenGroups = new Set();
   const legacyGroups = student.groupId ? [student.groupId] : [];
   for (const groupId of Array.isArray(student.groupIds) ? student.groupIds : legacyGroups) {
@@ -223,6 +232,8 @@ export function validateClassSchedule(item, state = null) {
   (item.daysOfWeek || []).forEach((day, index) =>
     finiteNumber(errors, day, `daysOfWeek[${index}]`, "Class day", { min: 1, max: 7, integer: true }),
   );
+  if (item.repeatRule !== undefined && item.repeatRule !== null && !normalizeRepeatRule(item.repeatRule))
+    errors.push(issue("repeatRule", "invalid_enum", "Repeat rule must be daily or monthly."));
   if (item.recurrence === "weekly" && !(item.daysOfWeek || []).length)
     errors.push(issue("daysOfWeek", "required", "Choose at least one class day."));
   if (item.format === "group") requiredText(errors, item.groupId, "groupId", "Class group");
@@ -337,6 +348,16 @@ function normalizeGroupIds(student) {
   return [...new Set(source.map(normalizeText).filter(Boolean))];
 }
 
+// Billing fields are optional: they are written only when present so legacy records stay byte-identical.
+function optionalStudentBilling(student) {
+  const billingByGroup = normalizeBillingByGroup(student?.billingByGroup);
+  const monthlyPayments = normalizeMonthlyPayments(student?.monthlyPayments);
+  return {
+    ...(billingByGroup ? { billingByGroup } : {}),
+    ...(monthlyPayments.length ? { monthlyPayments } : {}),
+  };
+}
+
 export function normalizeState(input) {
   const source = isRecord(input) ? input : {};
   const sourceSettings = isRecord(source.settings) ? source.settings : {};
@@ -357,6 +378,7 @@ export function normalizeState(input) {
     guardianContact: normalizeText(student?.guardianContact),
     notes: normalizeText(student?.notes),
     status: normalizeText(student?.status),
+    ...optionalStudentBilling(student),
   }));
   const inferableGroupByStudent = new Map(
     normalizedStudents
@@ -407,6 +429,7 @@ export function normalizeState(input) {
       status: group?.status ?? "Active",
       archivedAt: normalizeText(group?.archivedAt),
       scheduleResumeDate: normalizeText(group?.scheduleResumeDate),
+      ...(normalizeGroupBilling(group?.billing) ? { billing: normalizeGroupBilling(group.billing) } : {}),
     })),
     students: normalizedStudents,
     grades: (Array.isArray(source.grades) ? source.grades : []).map((grade) => ({
@@ -464,6 +487,9 @@ export function normalizeState(input) {
       participantIds: [
         ...new Set((Array.isArray(item?.participantIds) ? item.participantIds : []).map(normalizeText).filter(Boolean)),
       ],
+      ...(item?.recurrence === "weekly" && normalizeRepeatRule(item?.repeatRule)
+        ? { repeatRule: normalizeRepeatRule(item.repeatRule) }
+        : {}),
     })),
     scheduleExceptions: (Array.isArray(source.scheduleExceptions) ? source.scheduleExceptions : []).map(
       (item, index) => ({
