@@ -167,4 +167,6 @@ export const COMMUNITY_TRANSLATIONS = Object.freeze({
   "{count} monthly fees": "{count} mensualidades",
   "{count} per class": "{count} por clase",
   "{count} students × {amount}": "{count} alumnos × {amount}",
+  "{count} student × {amount}": "{count} alumno × {amount}",
+  "per student, no students yet": "por alumno, aún sin alumnos",
 });

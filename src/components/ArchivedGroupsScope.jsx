@@ -19,7 +19,12 @@ export function ArchivedGroupsScope({ scope, compact = false, variant = "" }) {
   const toggle = <Switch label={t("Include archived groups")} checked={included} onChange={scope.onChange} />;
   const longMessage = included
     ? names
-      ? t("includes {names} (archived) only during this session", { names })
+      ? t(
+          (scope.names || []).length === 1
+            ? "includes {names} (archived) only during this session"
+            : "includes the archived groups {names} only during this session",
+          { names },
+        )
       : t("Includes {count} archived groups · This session only", { count: scope.count })
     : t(
         scope.count === 1

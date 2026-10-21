@@ -255,9 +255,12 @@ export default function Community({
   const focusGroup = compact ? sheetGroup : selectedGroup;
   const focusMembers = useMemo(() => (focusGroup ? membersOf(focusGroup) : []), [focusGroup, membersOf]);
 
-  // Pick something to show first on desktop.
+  // Pick something to show first on desktop. Keeping the same object when nothing changes
+  // stops the effect from re-rendering itself when there is nothing to select.
   useEffect(() => {
     if (compact) return;
+    const choose = (type, id) =>
+      setSelected((current) => (current.type === type && current.id === id ? current : { type, id }));
     const stillVisible =
       (selectedStudent &&
         (selectedStudent.status === "Inactive" ? visibleInactive : visibleActive).some(
@@ -265,14 +268,13 @@ export default function Community({
         )) ||
       (selectedGroup && [...visibleGroups, ...visibleArchivedGroups].some((item) => item.id === selectedGroup.id));
     if (stillVisible) {
-      if (view === "groups" && selectedStudent && visibleGroups[0])
-        setSelected({ type: "group", id: visibleGroups[0].id });
+      if (view === "groups" && selectedStudent && visibleGroups[0]) choose("group", visibleGroups[0].id);
       return;
     }
-    if (view === "groups") setSelected({ type: visibleGroups[0] ? "group" : "", id: visibleGroups[0]?.id || "" });
-    else if (sortedStudents[0]) setSelected({ type: "student", id: sortedStudents[0].student.id });
-    else if (visibleGroups[0]) setSelected({ type: "group", id: visibleGroups[0].id });
-    else setSelected({ type: "", id: "" });
+    if (view === "groups") choose(visibleGroups[0] ? "group" : "", visibleGroups[0]?.id || "");
+    else if (sortedStudents[0]) choose("student", sortedStudents[0].student.id);
+    else if (visibleGroups[0]) choose("group", visibleGroups[0].id);
+    else choose("", "");
   }, [
     compact,
     selectedGroup,
@@ -1209,21 +1211,22 @@ export default function Community({
         title={t("Community")}
         description={description}
         actions={
+          // Keys keep each button bound to its own action while the order swaps with the view.
           view === "groups" ? (
             <>
-              <Button icon={Plus} onClick={() => openStudentEditor()}>
+              <Button key="add-student" icon={Plus} onClick={() => openStudentEditor()}>
                 {t("Add student")}
               </Button>
-              <Button variant="primary" icon={Plus} onClick={() => openGroupEditor()}>
+              <Button key="create-group" variant="primary" icon={Plus} onClick={() => openGroupEditor()}>
                 {t("Create group")}
               </Button>
             </>
           ) : (
             <>
-              <Button icon={Plus} onClick={() => openGroupEditor()}>
+              <Button key="create-group" icon={Plus} onClick={() => openGroupEditor()}>
                 {t("Create group")}
               </Button>
-              <Button variant="primary" icon={Plus} onClick={() => openStudentEditor()}>
+              <Button key="add-student" variant="primary" icon={Plus} onClick={() => openStudentEditor()}>
                 {t("Add student")}
               </Button>
             </>

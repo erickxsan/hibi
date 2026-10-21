@@ -990,8 +990,7 @@ export function useClassManager({ persistence } = {}) {
   const setMonthlyPaid = useCallback(
     ({ studentId, groupId, period, amount, paid = true }) =>
       commit(
-        (current) =>
-          setMonthlyPayment(current, { studentId, groupId, period, amount, paid, paidAt: operationalDate }),
+        (current) => setMonthlyPayment(current, { studentId, groupId, period, amount, paid, paidAt: operationalDate }),
         paid ? "Monthly fee marked as paid" : "Monthly fee marked as pending",
       ),
     [commit, operationalDate],

@@ -157,7 +157,9 @@ export function perClassCharge(state, group, studentId = "") {
   const hours = slots.length
     ? slots.reduce((sum, slot) => sum + (Number(slot.durationHours) || 0), 0) / slots.length
     : Number(state?.settings?.defaultClassHours) || 0;
-  const rate = studentId ? resolveHourlyRate(state, studentId, group?.id) : (group?.hourlyRate ?? state?.settings?.hourlyRate);
+  const rate = studentId
+    ? resolveHourlyRate(state, studentId, group?.id)
+    : (group?.hourlyRate ?? state?.settings?.hourlyRate);
   return roundMoney(hours * (Number(rate) || 0));
 }
 

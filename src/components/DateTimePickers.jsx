@@ -207,8 +207,9 @@ export function TimePicker({
   name,
   durationMinutes = 60,
   busy = [],
-  minMinutes = 480,
-  maxMinutes = 1260,
+  // The whole day by default: the clock never limits teaching hours (rediseño v2 decision).
+  minMinutes = 0,
+  maxMinutes = 1440,
   disabled = false,
   className = "",
   ...props

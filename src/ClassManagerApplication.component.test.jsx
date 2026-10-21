@@ -31,8 +31,10 @@ describe("application with the real local manager", () => {
     await user.click(within(group).getByRole("combobox", { name: "Time" }));
     await user.click(screen.getByRole("button", { name: /^6:00/ }));
     await user.click(screen.getByRole("button", { name: "30 minutes" }));
-    await user.click(within(group).getByRole("button", { name: "Save group" }));
+    await user.click(within(group).getByRole("button", { name: "Create group" }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Create group" })).not.toBeInTheDocument());
+    // Saving a group switches Community to its Groups view.
+    await waitFor(() => expect(screen.getByRole("tab", { name: "Groups" })).toHaveAttribute("aria-selected", "true"));
     await user.click(screen.getByRole("button", { name: "Add student", exact: true }));
     const student = await screen.findByRole("dialog", { name: "Add student" });
     fireEvent.change(within(student).getByLabelText(/Student ID/), { target: { value: "APP-1" } });

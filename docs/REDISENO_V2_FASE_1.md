@@ -19,9 +19,11 @@ No hay cambios en Supabase, el workspace JSONB revisionado, E2EE, importaciones,
 
 Los modelos puros de `src/domain/pickerModels.js` normalizan los valores de los selectores y generan vistas previas. El adaptador semanal conserva el anclaje de las series existentes; las nuevas opciones mensuales omiten meses sin el día solicitado y consideran la quinta ocurrencia como el último día de la semana.
 
-Decisión confirmada: se mantienen las fechas pasadas para registros históricos, correcciones y filtros. El calendario de Nueva clase impide seleccionar fechas anteriores a la fecha de referencia de la aplicación.
+Decisiones confirmadas:
 
-Decisión pendiente: si se limita la programación a 8:00–21:00 contando la duración, o si se conserva la jornada sin límite. El reloj admite ambos casos. Sus valores por defecto siguen la especificación; los adaptadores de formularios conservan los horarios existentes hasta resolver esta consulta. No se alteran ni redondean automáticamente las horas guardadas.
+- Las fechas pasadas se pueden elegir en todos los calendarios, incluido el de Nueva clase, para registros históricos, correcciones y filtros. Se retiró el bloqueo anterior; `DatePicker` solo restringe fechas cuando una pantalla pasa `allowPast={false}` o `min`.
+- El reloj no limita la jornada a 8:00–21:00: `TimePicker` ofrece las 24 horas por defecto. El límite de horario sigue disponible por `minMinutes`/`maxMinutes` para quien lo pida. No se alteran ni redondean las horas guardadas.
+- «Editar clase» de una clase programada se mantiene como en producción: solo reprograma hacia adelante.
 
 ## Verificación y revisión
 

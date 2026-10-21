@@ -48,7 +48,8 @@ describe("routed group archive flow", () => {
     expect(saved.classLog).toHaveLength(7);
     expect(saved.grades).toHaveLength(7);
     expect(saved.students[0].groupIds).toEqual(["preview-algebra", "preview-geometria"]);
-    await user.click(screen.getByRole("button", { name: "Grupos archivados · 3" }));
+    // Archiving opens the archive list so the group is easy to find again.
+    expect(screen.getByRole("button", { name: "Grupos archivados · 3" })).toHaveAttribute("aria-expanded", "true");
     const archive = document.getElementById("community-archived-groups");
     await user.click(within(archive).getByRole("button", { name: /Álgebra · Grupo A Archivado el/ }));
     expect(await screen.findByRole("region", { name: "Detalle del grupo archivado" })).toBeInTheDocument();
@@ -67,9 +68,9 @@ describe("routed group archive flow", () => {
     await go(user, "Inicio");
     const toggle = await screen.findByRole("switch", { name: "Incluir grupos archivados" });
     expect(toggle).toHaveAttribute("aria-checked", "false");
-    expect(screen.getByText("2 grupos archivados excluidos de las estadísticas")).toBeInTheDocument();
+    expect(screen.getByText("2 grupos archivados quedan fuera de estas cifras")).toBeInTheDocument();
     await user.click(toggle);
-    expect(screen.getByText("Incluye 2 grupos archivados · Solo esta sesión")).toBeInTheDocument();
+    expect(screen.getByText(/^incluye los grupos archivados .+ solo durante esta sesión$/)).toBeInTheDocument();
     await go(user, "Seguimiento");
     expect(await screen.findByRole("switch", { name: "Incluir grupos archivados" })).toHaveAttribute(
       "aria-checked",

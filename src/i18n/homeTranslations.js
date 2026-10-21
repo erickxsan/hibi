@@ -206,4 +206,6 @@ export const HOME_TRANSLATIONS = Object.freeze({
   "includes {names} (archived) only during this session": "incluye {names} (archivado) solo durante esta sesión",
   "Balance in archived groups: {amount}": "Saldo en archivados: {amount}",
   "balance {amount}": "saldo {amount}",
+  "includes the archived groups {names} only during this session":
+    "incluye los grupos archivados {names} solo durante esta sesión",
 });

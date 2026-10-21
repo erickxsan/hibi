@@ -23,7 +23,11 @@ describe("class repeat rules", () => {
       interval: 2,
       monthlyMode: "nthWeekday",
     });
-    expect(normalizeRepeatRule({ kind: "monthly" })).toEqual({ kind: "monthly", interval: 1, monthlyMode: "dayOfMonth" });
+    expect(normalizeRepeatRule({ kind: "monthly" })).toEqual({
+      kind: "monthly",
+      interval: 1,
+      monthlyMode: "dayOfMonth",
+    });
     expect(normalizeRepeatRule({ kind: "weekly" })).toBeNull();
     expect(normalizeRepeatRule(null)).toBeNull();
   });
@@ -31,9 +35,11 @@ describe("class repeat rules", () => {
   it("counts daily repetition in calendar days and can skip weekends", () => {
     const schedule = { startDate: "2026-10-16", repeatRule: { kind: "daily", interval: 2, dailyMode: "weekdays" } };
     // Fri 16 → Sun 18 (weekend, skipped) → Tue 20 → Thu 22.
-    expect(["2026-10-16", "2026-10-18", "2026-10-20", "2026-10-21", "2026-10-22"].map((date) =>
-      repeatRuleOccursOn(schedule, date),
-    )).toEqual([true, false, true, false, true]);
+    expect(
+      ["2026-10-16", "2026-10-18", "2026-10-20", "2026-10-21", "2026-10-22"].map((date) =>
+        repeatRuleOccursOn(schedule, date),
+      ),
+    ).toEqual([true, false, true, false, true]);
     expect(repeatRuleOccursOn(schedule, "2026-10-14")).toBe(false);
   });
 
@@ -52,7 +58,10 @@ describe("class repeat rules", () => {
     // Fri 30 Oct 2026 is the fifth Friday → «the last Friday».
     const last = { startDate: "2026-10-30", repeatRule: { kind: "monthly", monthlyMode: "nthWeekday" } };
     expect(repeatRuleOccursOn(last, "2026-11-27")).toBe(true);
-    const everyOther = { startDate: "2026-10-17", repeatRule: { kind: "monthly", interval: 2, monthlyMode: "nthWeekday" } };
+    const everyOther = {
+      startDate: "2026-10-17",
+      repeatRule: { kind: "monthly", interval: 2, monthlyMode: "nthWeekday" },
+    };
     expect(repeatRuleOccursOn(everyOther, "2026-11-21")).toBe(false);
     expect(repeatRuleOccursOn(everyOther, "2026-12-19")).toBe(true);
   });

@@ -9,8 +9,8 @@ import {
 } from "./index.js";
 import { statisticsStateForGroups, setGroupArchived } from "./groupArchiving.js";
 import { createGroupArchiveFixture } from "../test/groupArchiveFixture.js";
-import { buildHomeDashboard } from "../features/homeDashboardModel.js";
-import { buildAttendanceTracking, buildPaymentTracking } from "../features/trackingModel.js";
+import { buildMetric } from "../features/homeDashboardModel.js";
+import { trackingKpis, trackingRange, trackingSessions, trackingStudents } from "../features/trackingModel.js";
 import { buildClassWorkspaceSessionsForRange } from "../features/classesWorkspaceModel.js";
 import { mergeWorkspaceStates } from "../cloud/workspaceMerge.js";
 import {
@@ -125,22 +125,32 @@ describe("group archive preserves data and scopes all reports", () => {
     const included = statisticsStateForGroups(original, true);
     const excludedDerived = deriveAll(excluded, DATE);
     const includedDerived = deriveAll(included, DATE);
-    const range = { start: "2026-10-01", end: DATE, period: "month" };
-    const home = buildHomeDashboard(excluded, excludedDerived, "monthly");
-    const homeIncluded = buildHomeDashboard(included, includedDerived, "monthly");
-    expect(home.collected).toBe(350);
-    expect(homeIncluded.collected).toBe(600);
-    expect(homeIncluded.sessions.map((session) => session.workspaceKey)).toEqual(
-      home.sessions.map((session) => session.workspaceKey),
+    const collections = buildMetric(excluded, excludedDerived, DATE, "collections", "monthly");
+    const collectionsIncluded = buildMetric(included, includedDerived, DATE, "collections", "monthly");
+    expect(collections.value).toBe(350);
+    expect(collectionsIncluded.value).toBe(600);
+    const grade = buildMetric(excluded, excludedDerived, DATE, "grade", "monthly");
+    const gradeIncluded = buildMetric(included, includedDerived, DATE, "grade", "monthly");
+    expect(grade.value).toBeCloseTo(7.5);
+    expect(gradeIncluded.value).toBeCloseTo(540 / 70);
+    const range = trackingRange(DATE, "month");
+    const kpis = trackingKpis(
+      excluded,
+      excludedDerived,
+      range,
+      "all",
+      trackingStudents(excluded, excludedDerived, range),
     );
-    expect(home.grade).toBe(0.75);
-    expect(homeIncluded.grade).toBeCloseTo(54 / 70);
-    const payments = buildPaymentTracking(excluded, excludedDerived.classLog, { mode: "overview", range });
-    const paymentsIncluded = buildPaymentTracking(included, includedDerived.classLog, { mode: "overview", range });
-    expect(payments.collected).toBe(350);
-    expect(paymentsIncluded.collected).toBe(600);
-    const attendance = buildAttendanceTracking(excluded, excludedDerived.classLog, { mode: "overview", range });
-    expect(JSON.stringify(attendance)).not.toContain("preview-geometria");
+    const kpisIncluded = trackingKpis(
+      included,
+      includedDerived,
+      range,
+      "all",
+      trackingStudents(included, includedDerived, range),
+    );
+    expect(kpis.payments.collected).toBe(350);
+    expect(kpisIncluded.payments.collected).toBe(600);
+    expect(trackingSessions(excluded, range).map((item) => item.groupId)).not.toContain("preview-geometria");
     expect(includedDerived.groups.find((group) => group.id === "preview-geometria").idealRevenue).toBe(0);
   });
 

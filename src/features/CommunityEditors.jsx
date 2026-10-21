@@ -570,10 +570,12 @@ export function BillingFields({
           <>
             <span className="billing-total">{formatMoney(perClass * Math.max(members.length, 1), locale)}</span>
             <span className="field-row-hint">
-              {t("{count} students × {amount}", {
-                count: Math.max(members.length, 1),
-                amount: formatMoney(perClass, locale),
-              })}
+              {members.length
+                ? t(members.length === 1 ? "{count} student × {amount}" : "{count} students × {amount}", {
+                    count: members.length,
+                    amount: formatMoney(perClass, locale),
+                  })
+                : t("per student, no students yet")}
             </span>
           </>
         )}

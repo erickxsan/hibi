@@ -134,6 +134,8 @@ describe("Hibi base controls", () => {
         aria-label="Class time"
         value="17:00"
         durationMinutes={90}
+        minMinutes={480}
+        maxMinutes={1260}
         busy={[{ start: 1020, end: 1110, label: "Existing class" }]}
         onChange={change}
       />,

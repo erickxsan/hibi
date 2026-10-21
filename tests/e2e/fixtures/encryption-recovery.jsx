@@ -5,7 +5,8 @@ import { useWorkspaceEncryption } from "../../../src/cloud/useWorkspaceEncryptio
 import { WorkspaceEncryptionGate } from "../../../src/cloud/WorkspaceEncryptionGate.jsx";
 import { encryptedWorkspaceRepository } from "../../../src/cloud/encryptedWorkspaceRepository.js";
 import { deviceKeyStore, generateAccountMasterKey, wipeBytes } from "../../../src/crypto/index.js";
-import "../../../src/styles.css";
+import "../../../src/design-system.css";
+import "../../../src/components/base-components.css";
 
 // Isolated synthetic account. No Supabase requests or real user keys are used.
 const user = { id: "encryption-recovery-test" };

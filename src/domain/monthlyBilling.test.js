@@ -66,13 +66,15 @@ describe("monthly billing", () => {
   it("normalizes optional fields and leaves legacy groups untouched", () => {
     expect(normalizeGroupBilling(undefined)).toBeNull();
     expect(normalizeGroupBilling({ mode: "perClass" })).toEqual({ mode: "perClass" });
-    expect(normalizeGroupBilling({ mode: "monthly", monthlyFee: "900", due: { type: "dayOfMonth", day: 31 } })).toEqual({
-      mode: "monthly",
-      monthlyFee: 900,
-      due: { type: "dayOfMonth", day: 28 },
-      effectiveFrom: "",
-      creditFirstMonth: false,
-    });
+    expect(normalizeGroupBilling({ mode: "monthly", monthlyFee: "900", due: { type: "dayOfMonth", day: 31 } })).toEqual(
+      {
+        mode: "monthly",
+        monthlyFee: 900,
+        due: { type: "dayOfMonth", day: 28 },
+        effectiveFrom: "",
+        creditFirstMonth: false,
+      },
+    );
     expect(normalizeGroupBilling({ mode: "monthly", due: { type: "nthClass", nth: "last" } }).due).toEqual({
       type: "nthClass",
       nth: "last",
@@ -99,8 +101,20 @@ describe("monthly billing", () => {
     expect(groupClassDates(state, group, "2026-10")).toHaveLength(9);
     expect(monthlyDueDate(state, group, "2026-10")).toBe("2026-10-08");
     expect(monthlyDueDate(state, group, "2026-11")).toBe("2026-11-09");
-    expect(monthlyDueDate({ ...state, groups: [{ ...group, billing: { ...group.billing, due: { type: "nthClass", nth: "last" } } }] }, { ...group, billing: { ...group.billing, due: { type: "nthClass", nth: "last" } } }, "2026-10")).toBe("2026-10-29");
-    expect(monthlyDueDate(state, { ...group, billing: { ...group.billing, due: { type: "dayOfMonth", day: 5 } } }, "2026-10")).toBe("2026-10-05");
+    expect(
+      monthlyDueDate(
+        { ...state, groups: [{ ...group, billing: { ...group.billing, due: { type: "nthClass", nth: "last" } } }] },
+        { ...group, billing: { ...group.billing, due: { type: "nthClass", nth: "last" } } },
+        "2026-10",
+      ),
+    ).toBe("2026-10-29");
+    expect(
+      monthlyDueDate(
+        state,
+        { ...group, billing: { ...group.billing, due: { type: "dayOfMonth", day: 5 } } },
+        "2026-10",
+      ),
+    ).toBe("2026-10-05");
     expect(suggestedMonthlyFee(state, group, "2026-10")).toEqual({ classes: 9, perClass: 150, fee: 1350 });
   });
 
@@ -115,7 +129,13 @@ describe("monthly billing", () => {
     expect(coveredByMonthlyFee(state, "diego", "p5a", "2026-10-12")).toBe(true);
     expect(coveredByMonthlyFee(state, "diego", "p5a", "2026-09-28")).toBe(false);
 
-    state = setMonthlyPayment(state, { studentId: "diego", groupId: "p5a", period: "2026-10", amount: 1200, paidAt: "2026-10-05" });
+    state = setMonthlyPayment(state, {
+      studentId: "diego",
+      groupId: "p5a",
+      period: "2026-10",
+      amount: 1200,
+      paidAt: "2026-10-05",
+    });
     const paid = deriveMonthlyCharges(state, "2026-10-12").find((item) => item.studentId === "diego");
     expect(paid).toMatchObject({ status: "paid", paidAt: "2026-10-05", amount: 1200 });
     expect(monthlyPaymentsBetween(state, "2026-10-01", "2026-10-31")).toHaveLength(1);
@@ -174,10 +194,14 @@ describe("monthly billing", () => {
   it("stops charging archived groups after the archive month and validates the import shape", () => {
     const state = fixture();
     const archived = { ...state, groups: [{ ...state.groups[0], status: "Inactive", archivedAt: "2026-10-20" }] };
-    expect(new Set(deriveMonthlyCharges(archived, "2026-12-15").map((item) => item.period))).toEqual(new Set(["2026-10"]));
+    expect(new Set(deriveMonthlyCharges(archived, "2026-12-15").map((item) => item.period))).toEqual(
+      new Set(["2026-10"]),
+    );
     expect(deriveMonthlyCharges(archived, "2026-12-15", { includeArchived: false })).toEqual([]);
     expect(billingIssues({ billing: { mode: "yearly" } }, "group")).toHaveLength(1);
-    expect(billingIssues({ billing: { mode: "monthly", monthlyFee: -1, effectiveFrom: "oct" } }, "group")).toHaveLength(2);
+    expect(billingIssues({ billing: { mode: "monthly", monthlyFee: -1, effectiveFrom: "oct" } }, "group")).toHaveLength(
+      2,
+    );
     expect(billingIssues({ monthlyPayments: [{ period: "x" }], billingByGroup: [] }, "student")).toHaveLength(2);
     expect(billingIssues({ monthlyPayments: {} }, "student")).toHaveLength(1);
     expect(validateState(state).valid).toBe(true);

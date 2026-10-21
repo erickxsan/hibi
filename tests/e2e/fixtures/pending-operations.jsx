@@ -2,7 +2,8 @@ import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { PendingOperations } from "../../../src/cloud/PendingOperations.jsx";
 import { describeOperation } from "../../../src/cloud/workspaceMerge.js";
-import "../../../src/styles.css";
+import "../../../src/design-system.css";
+import "../../../src/components/base-components.css";
 
 const base = (id) => ({ students: [{ id, fullName: `Student ${id}`, notes: "Before", phone: "" }] });
 const local = (id) => ({ students: [{ id, fullName: `Student ${id}`, notes: "Local change", phone: "5550001111" }] });

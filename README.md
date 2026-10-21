@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="public/hibi-logo.png" width="120" alt="Logotipo de Hibi" />
+  <img src="public/brand/hibi-logo-horizontal.svg" width="180" alt="Logotipo de Hibi" />
 </p>
 
 <h1 align="center">Hibi</h1>
