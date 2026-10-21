@@ -2070,3 +2070,17 @@
   display: block;
   font: 700 14px/20px var(--font-sans);
 }
+
+/* Small menus sit inline with their hint inside a field row. */
+.field-row-control > .select-menu-wrap,
+.billing-adjustment > .select-menu-wrap {
+  flex: 0 0 auto;
+  width: auto;
+}
+
+.billing-adjustment .icon-button {
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  border: 0;
+}

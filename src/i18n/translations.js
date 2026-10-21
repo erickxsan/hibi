@@ -2,6 +2,7 @@ import { SPANISH_COVERAGE } from "./spanishCoverage.js";
 import { PICKER_TRANSLATIONS } from "./pickerTranslations.js";
 import { REDESIGN_TRANSLATIONS } from "./redesignTranslations.js";
 import { HOME_TRANSLATIONS } from "./homeTranslations.js";
+import { COMMUNITY_TRANSLATIONS } from "./communityTranslations.js";
 
 export const LANGUAGE_STORAGE_KEY = "hibi:language:v1";
 
@@ -15,6 +16,7 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   ...PICKER_TRANSLATIONS,
   ...REDESIGN_TRANSLATIONS,
   ...HOME_TRANSLATIONS,
+  ...COMMUNITY_TRANSLATIONS,
   "Archived groups": "Grupos archivados",
   "Archived group": "Archivado",
   "Archive group": "Archivar grupo",
@@ -1233,8 +1235,8 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
     "Agrega alumnos activos a este grupo en Comunidad antes de registrar la clase.",
   "Class summary": "Resumen de la clase",
   "Review before saving": "Revisa antes de guardar",
-  Present: "Presentes",
-  Absent: "Ausentes",
+  Present: "Presente",
+  Absent: "Ausente",
   "Payments pending": "Pagos pendientes",
   "Payments recorded": "Pagos registrados",
   "Average grade": "Promedio de calificación",

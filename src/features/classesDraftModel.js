@@ -14,7 +14,9 @@ const EMPTY_CLASS_DRAFT = {
 export function lastMaximumScore(state = {}, session = null) {
   const owner = session?.groupId ? `g:${session.groupId}` : session?.studentId ? `s:${session.studentId}` : "";
   const latest = (state.grades || [])
-    .filter((grade) => Number(grade.maxScore) > 0 && (!owner || String(grade.classSessionKey || "").includes(`|${owner}|`)))
+    .filter(
+      (grade) => Number(grade.maxScore) > 0 && (!owner || String(grade.classSessionKey || "").includes(`|${owner}|`)),
+    )
     .sort((left, right) => String(right.date).localeCompare(String(left.date)))[0];
   return latest ? Number(latest.maxScore) : 10;
 }
@@ -30,7 +32,9 @@ function paymentFromRow(row) {
   if (!row) return "";
   if (["Paid", "Pending", "Unpaid"].includes(row.paymentState)) return row.paymentState;
   if (Number(row.appliedCharge) === 0) return "";
-  return Number(row.amountPaid || 0) > 0 && Number(row.amountPaid) >= Number(row.appliedCharge || 0) ? "Paid" : "Pending";
+  return Number(row.amountPaid || 0) > 0 && Number(row.amountPaid) >= Number(row.appliedCharge || 0)
+    ? "Paid"
+    : "Pending";
 }
 
 export function buildClassDraft(state = {}, session = null) {
@@ -131,7 +135,13 @@ export function buildClassRecords(state, session, roster, entries, { classStatus
     const charge = free ? 0 : classChargeFor(state, session, student.id, existing);
     const payment = free ? "" : entry.paymentTouched ? entry.paymentState : existing?.paymentState || "";
     const amountPaid =
-      payment === "Paid" ? charge : payment === "Pending" || payment === "Unpaid" ? 0 : free ? 0 : (existing?.amountPaid ?? 0);
+      payment === "Paid"
+        ? charge
+        : payment === "Pending" || payment === "Unpaid"
+          ? 0
+          : free
+            ? 0
+            : (existing?.amountPaid ?? 0);
     return {
       ...existing,
       id: existing?.id,
@@ -147,8 +157,22 @@ export function buildClassRecords(state, session, roster, entries, { classStatus
       hours,
       appliedCharge: charge,
       amountPaid,
-      paymentDate: payment === "Paid" ? existing?.paymentDate || today : payment ? null : free ? null : existing?.paymentDate || null,
-      paymentMethod: payment === "Paid" ? existing?.paymentMethod || "Cash" : payment ? "" : free ? "" : existing?.paymentMethod || "",
+      paymentDate:
+        payment === "Paid"
+          ? existing?.paymentDate || today
+          : payment
+            ? null
+            : free
+              ? null
+              : existing?.paymentDate || null,
+      paymentMethod:
+        payment === "Paid"
+          ? existing?.paymentMethod || "Cash"
+          : payment
+            ? ""
+            : free
+              ? ""
+              : existing?.paymentMethod || "",
       paymentState: payment || (free ? "" : "Pending"),
     };
   });
@@ -164,7 +188,12 @@ export function classDraftSummary(state, session, roster, entries, monthlyPaidTo
   for (const { student, entry } of values) {
     if (entry.attendance !== "P" || coveredByMonthlyFee(state, student.id, session?.groupId || "", session?.classDate))
       continue;
-    const charge = classChargeFor(state, session, student.id, (session?.rows || []).find((row) => row.studentId === student.id));
+    const charge = classChargeFor(
+      state,
+      session,
+      student.id,
+      (session?.rows || []).find((row) => row.studentId === student.id),
+    );
     if (entry.paymentState === "Paid") collected += charge;
     else if (entry.paymentState) pending += charge;
   }
@@ -191,14 +220,21 @@ export function studentClassNote(state, student, session, derivedRows = [], mont
   const period = periodOf(session?.classDate);
   if (groupId && coveredByMonthlyFee(state, student.id, groupId, session.classDate)) {
     const charges = monthlyCharges || deriveMonthlyCharges(state, session.classDate);
-    const charge = charges.find((item) => item.studentId === student.id && item.groupId === groupId && item.period === period);
+    const charge = charges.find(
+      (item) => item.studentId === student.id && item.groupId === groupId && item.period === period,
+    );
     if (charge && charge.status !== "paid" && charge.status !== "waived")
       return { kind: "monthlyPending", tone: "pend", period };
     if (charge?.adjusted) return { kind: "customFee", tone: "", fee: charge.fee };
     return { kind: "upToDate", tone: "" };
   }
   const rows = derivedRows
-    .filter((row) => row.studentId === student.id && row.classStatus === "Completed" && row.classDate < (session?.classDate || "9999"))
+    .filter(
+      (row) =>
+        row.studentId === student.id &&
+        row.classStatus === "Completed" &&
+        row.classDate < (session?.classDate || "9999"),
+    )
     .sort((left, right) => right.classDate.localeCompare(left.classDate));
   const recent = rows.filter((row) => ["P", "L", "A"].includes(row.attendance)).slice(0, 5);
   const missed = recent.filter((row) => row.attendance === "A").length;

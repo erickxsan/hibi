@@ -18,7 +18,13 @@ import { StudentAvatar } from "../components/StudentAvatar";
 import { useCompactViewport } from "../components/OverlayContext";
 import { addDays, startOfWeek, todayDateOnly } from "../domain/dates";
 import { scheduledClassSupportsFutureScope } from "../domain";
-import { deriveMonthlyCharges, isMonthlyGroup, monthlyDueDate, normalizeGroupBilling, periodOf } from "../domain/monthlyBilling";
+import {
+  deriveMonthlyCharges,
+  isMonthlyGroup,
+  monthlyDueDate,
+  normalizeGroupBilling,
+  periodOf,
+} from "../domain/monthlyBilling";
 import { useHistoryBackedState } from "../hooks/useHistoryNavigation";
 import { confirmDiscard, draftChanged, draftSignature, useUnsavedChanges } from "../hooks/useUnsavedChanges";
 import { playHibiSound } from "../utils/hibiSounds";
@@ -112,7 +118,17 @@ function capitalize(text) {
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
 }
 
-function WeekRail({ state, sessions, currentDate, weekStart, setWeekStart, selectedDay, setSelectedDay, activeKey, onSelect }) {
+function WeekRail({
+  state,
+  sessions,
+  currentDate,
+  weekStart,
+  setWeekStart,
+  selectedDay,
+  setSelectedDay,
+  activeKey,
+  onSelect,
+}) {
   const { t, locale } = useI18n();
   const days = Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
   const weekEnd = days[6];
@@ -131,7 +147,9 @@ function WeekRail({ state, sessions, currentDate, weekStart, setWeekStart, selec
   const dayLabel = (date) => {
     const relative = relativeDay(date, currentDate);
     if (!relative) return formatShortDate(date, locale, { weekday: true }).replace(/ \S+$/, "");
-    return relative.key === "Tomorrow" ? `${t("Tomorrow")} · ${formatShortDate(date, locale, { weekday: true }).replace(/ \S+$/, "")}` : t(relative.key);
+    return relative.key === "Tomorrow"
+      ? `${t("Tomorrow")} · ${formatShortDate(date, locale, { weekday: true }).replace(/ \S+$/, "")}`
+      : t(relative.key);
   };
   const item = (session) => {
     const look = STATUS_LOOK[session.statusLabel];
@@ -215,7 +233,9 @@ function MonthlyPaymentCell({ charge, today, onToggle, busy }) {
         <span className="st st-ok">{t("{month} paid", { month })}</span>
         <small>
           {formatMoney(charge.amount, locale)} ·{" "}
-          {paidToday ? t("today") : t("paid on {date}", { date: formatShortDate(charge.paidAt, locale, { weekday: false }) })}
+          {paidToday
+            ? t("today")
+            : t("paid on {date}", { date: formatShortDate(charge.paidAt, locale, { weekday: false }) })}
         </small>
         {paidToday ? (
           <button type="button" className="link-button" disabled={busy} onClick={() => onToggle(charge, false)}>
@@ -386,7 +406,12 @@ export default function Classes({
   const monthlyCharges = useMemo(
     () =>
       activeSession && activeGroup && isMonthlyGroup(activeGroup)
-        ? deriveMonthlyCharges(state, currentDate, { through: periodOf(activeSession.classDate) > periodOf(currentDate) ? periodOf(activeSession.classDate) : periodOf(currentDate) })
+        ? deriveMonthlyCharges(state, currentDate, {
+            through:
+              periodOf(activeSession.classDate) > periodOf(currentDate)
+                ? periodOf(activeSession.classDate)
+                : periodOf(currentDate),
+          })
         : [],
     [activeGroup, activeSession, currentDate, state],
   );
@@ -632,9 +657,14 @@ export default function Classes({
     : null;
   const derivedRows = derived?.classLog || [];
   const billing = normalizeGroupBilling(activeGroup?.billing);
-  const monthlyActive = Boolean(activeGroup && activeSession && isMonthlyGroup(activeGroup, periodOf(activeSession.classDate)));
+  const monthlyActive = Boolean(
+    activeGroup && activeSession && isMonthlyGroup(activeGroup, periodOf(activeSession.classDate)),
+  );
   const monthlyDue = monthlyActive ? monthlyDueDate(state, activeGroup, periodOf(activeSession.classDate)) : "";
-  const ordinal = billing?.due?.type === "nthClass" ? t(billing.due.nth === "last" ? "last class" : "class {nth}", { nth: billing.due.nth }) : "";
+  const ordinal =
+    billing?.due?.type === "nthClass"
+      ? t(billing.due.nth === "last" ? "last class" : "class {nth}", { nth: billing.due.nth })
+      : "";
   const monthlyBadge = monthlyActive
     ? `${t("Monthly")} · ${formatMoney(billing.monthlyFee, locale)} · ${
         monthlyDue === activeSession.classDate
@@ -647,7 +677,9 @@ export default function Classes({
     ? `${relative ? `${t(relative.key)}, ` : ""}${formatShortDate(activeSession.classDate, locale)}`
     : "";
   const startsIn =
-    activeSession && activeSession.classDate === currentDate && minutesOf(activeSession.startTime) > minutesOf(currentTime)
+    activeSession &&
+    activeSession.classDate === currentDate &&
+    minutesOf(activeSession.startTime) > minutesOf(currentTime)
       ? t("in {span}", { span: formatSpan(minutesOf(activeSession.startTime) - minutesOf(currentTime)) })
       : "";
   const look = activeSession ? STATUS_LOOK[activeSession.statusLabel] : null;
@@ -674,10 +706,18 @@ export default function Classes({
   const taskFields = (
     <>
       <Field label={t("Assignment name")} className="task-name">
-        <Input value={assessment} onChange={(event) => setAssessment(event.target.value)} placeholder={t("e.g. Reading ch. 3")} />
+        <Input
+          value={assessment}
+          onChange={(event) => setAssessment(event.target.value)}
+          placeholder={t("e.g. Reading ch. 3")}
+        />
       </Field>
       <Field label={t("Maximum score")} className="task-max">
-        <Input inputMode="decimal" value={maximum} onChange={(event) => setMaximum(event.target.value.replace(",", "."))} />
+        <Input
+          inputMode="decimal"
+          value={maximum}
+          onChange={(event) => setMaximum(event.target.value.replace(",", "."))}
+        />
       </Field>
     </>
   );
@@ -740,7 +780,9 @@ export default function Classes({
                 <span className="current-kicker">
                   <span>
                     {relative ? t(relative.key) : formatShortDate(activeSession.classDate, locale)}
-                    {activeSession.statusLabel === "Scheduled" && activeSession.key === primary?.key ? ` · ${t("next")}` : ""}
+                    {activeSession.statusLabel === "Scheduled" && activeSession.key === primary?.key
+                      ? ` · ${t("next")}`
+                      : ""}
                   </span>
                   <span>{startsIn || (look ? t(look.label) : "")}</span>
                 </span>
@@ -812,12 +854,19 @@ export default function Classes({
                   description={t("Add active students to this group in Community before registering the class.")}
                 />
               ) : (
-                <div className="table-scroll roster-scroll" role="region" aria-label={t("Class student roster")} tabIndex={0}>
+                <div
+                  className="table-scroll roster-scroll"
+                  role="region"
+                  aria-label={t("Class student roster")}
+                  tabIndex={0}
+                >
                   <div className="roster-grid" role="table" aria-label={t("Class student roster")}>
                     <div className="roster-head" role="row">
                       <span role="columnheader">{t("Student")}</span>
                       <span role="columnheader">{t("Attendance")}</span>
-                      <span role="columnheader">{t(monthlyActive ? "Payment · monthly fee or class" : "Payment for this class")}</span>
+                      <span role="columnheader">
+                        {t(monthlyActive ? "Payment · monthly fee or class" : "Payment for this class")}
+                      </span>
                       <span role="columnheader">{t("Grade")}</span>
                     </div>
                     {roster.map((student) => (

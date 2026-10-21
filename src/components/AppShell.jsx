@@ -99,7 +99,9 @@ export function AppShell({
               aria-label={uiT(item.label)}
             >
               <Icon size={22} strokeWidth={1.8} />
-              <span aria-hidden="true">{uiT(item.mobileLabel && language === "es" ? item.mobileLabel : item.label)}</span>
+              <span aria-hidden="true">
+                {uiT(item.mobileLabel && language === "es" ? item.mobileLabel : item.label)}
+              </span>
             </a>
           );
         })}

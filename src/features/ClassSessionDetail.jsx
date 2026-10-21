@@ -17,7 +17,9 @@ export function sessionGrades(state, session) {
   const exact = (state.grades || []).filter((grade) => grade.classSessionKey === session.key);
   if (exact.length) return exact;
   const ids = new Set((session.rows || []).map((row) => row.studentId));
-  return (state.grades || []).filter((grade) => !grade.classSessionKey && grade.date === session.classDate && ids.has(grade.studentId));
+  return (state.grades || []).filter(
+    (grade) => !grade.classSessionKey && grade.date === session.classDate && ids.has(grade.studentId),
+  );
 }
 
 /** Assignment name and average for a recorded class. */
@@ -42,18 +44,39 @@ export function sessionInsight(state, session, derivedRows, t, locale) {
   if (!(session.rows || []).length) return { tone: "", text: "" };
   const name = (id) => firstName((state.students || []).find((student) => student.id === id)?.fullName);
   const absent = session.rows.filter((row) => row.attendance === "A").map((row) => name(row.studentId));
-  if (absent.length) return { tone: "bad", text: t("{names} missed", { names: joinNames(absent, locale) }).replace(/^./, (c) => c.toUpperCase()) };
+  if (absent.length)
+    return {
+      tone: "bad",
+      text: t("{names} missed", { names: joinNames(absent, locale) }).replace(/^./, (c) => c.toUpperCase()),
+    };
   const { grades } = sessionAssessment(state, session);
   const threshold = Number(state.settings?.lowGradeThreshold ?? 0.7);
-  const low = grades.filter((grade) => grade.score != null && grade.maxScore && grade.score / grade.maxScore < threshold);
-  if (low.length) return { tone: "bad", text: t(low.length === 1 ? "One low grade" : "{count} low grades", { count: low.length }) };
+  const low = grades.filter(
+    (grade) => grade.score != null && grade.maxScore && grade.score / grade.maxScore < threshold,
+  );
+  if (low.length)
+    return { tone: "bad", text: t(low.length === 1 ? "One low grade" : "{count} low grades", { count: low.length }) };
   const present = session.rows.filter((row) => row.attendance === "P" || row.attendance === "L");
-  const ungraded = grades.length ? present.filter((row) => !grades.some((grade) => grade.studentId === row.studentId && grade.score != null)) : [];
+  const ungraded = grades.length
+    ? present.filter((row) => !grades.some((grade) => grade.studentId === row.studentId && grade.score != null))
+    : [];
   if (ungraded.length)
-    return { tone: "pend", text: t("Grade missing for {names}", { names: joinNames(ungraded.map((row) => name(row.studentId)), locale) }) };
+    return {
+      tone: "pend",
+      text: t("Grade missing for {names}", {
+        names: joinNames(
+          ungraded.map((row) => name(row.studentId)),
+          locale,
+        ),
+      }),
+    };
   const rows = derivedRows.filter((row) => session.rows.some((item) => item.id === row.id));
   const owed = rows.filter((row) => Number(row.outstanding) > 0);
-  if (owed.length) return { tone: "bad", text: t(owed.length === 1 ? "1 payment pending" : "{count} payments pending", { count: owed.length }) };
+  if (owed.length)
+    return {
+      tone: "bad",
+      text: t(owed.length === 1 ? "1 payment pending" : "{count} payments pending", { count: owed.length }),
+    };
   return { tone: "ok", text: t("All in order") };
 }
 
@@ -70,7 +93,9 @@ export function sessionStudentLines(state, session, derivedRows) {
 
 export function attendanceWord(row) {
   if (!row?.attendance) return { key: "Unmarked", tone: "" };
-  return row.attendance === "A" || row.attendance === "E" ? { key: "Absent", tone: "bad" } : { key: "Present", tone: "ok" };
+  return row.attendance === "A" || row.attendance === "E"
+    ? { key: "Absent", tone: "bad" }
+    : { key: "Present", tone: "ok" };
 }
 
 export function paymentWord(row, derivedRow, locale, t) {
@@ -79,7 +104,10 @@ export function paymentWord(row, derivedRow, locale, t) {
   if (outstanding > 0) {
     // ✓ – ×: «–» is pending, «×» (not paid) reads as overdue.
     const overdue = row.paymentState === "Unpaid";
-    return { text: `${t(overdue ? "Overdue" : "Pending")} ${formatMoney(outstanding, locale)}`, tone: overdue ? "bad" : "pend" };
+    return {
+      text: `${t(overdue ? "Overdue" : "Pending")} ${formatMoney(outstanding, locale)}`,
+      tone: overdue ? "bad" : "pend",
+    };
   }
   return { text: t("Paid"), tone: "ok" };
 }
@@ -112,7 +140,10 @@ export function SessionDetailSheet({ open, onClose, state, session, derivedRows 
               name={student.fullName}
               context={
                 recorded
-                  ? `${t(attendance.key)}${row?.attendance === "P" ? ` · ${owes ? t("payment pending") : pay.text === "—" ? "" : t("paid")}` : ""}`.replace(/ · $/, "")
+                  ? `${t(attendance.key)}${row?.attendance === "P" ? ` · ${owes ? t("payment pending") : pay.text === "—" ? "" : t("paid")}` : ""}`.replace(
+                      / · $/,
+                      "",
+                    )
                   : t("Unmarked")
               }
               contextTone={attendance.tone === "bad" ? "bad" : owes ? "pend" : ""}

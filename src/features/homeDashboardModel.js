@@ -12,6 +12,12 @@ import { studentClassNote } from "./classesDraftModel";
 export const HOME_PERIODS = Object.freeze(["today", "weekly", "monthly", "yearly"]);
 export const HOME_METRICS = Object.freeze(["attendance", "grade", "collections"]);
 const DAY_START = 8 * 60;
+/** A class balance is «Pendiente» for a week after the class and «Vencido» after that. */
+export const OVERDUE_AFTER_DAYS = 7;
+
+export function isOverdueClassDebt(classDate, asOf) {
+  return Boolean(classDate) && classDate < addDays(asOf, -OVERDUE_AFTER_DAYS);
+}
 const DAY_END = 20 * 60;
 
 function finite(value) {
@@ -321,7 +327,7 @@ export function debtsThrough(state, derivedRows, asOf, groupFilter = "all") {
         matchesGroup(groupFilter, row.groupId || ""),
     )
     .forEach((row) =>
-      add(row.studentId, row.outstanding, row.classDate < asOf, {
+      add(row.studentId, row.outstanding, isOverdueClassDebt(row.classDate, asOf), {
         kind: "class",
         date: row.classDate,
         amount: row.outstanding,
@@ -610,7 +616,7 @@ export function buildAttentionItems(state, derived, asOf) {
       action: { type: "metric", metric: "grade" },
     });
   const overdueClasses = derivedRows.filter(
-    (row) => row.classDate < asOf && finite(row.outstanding) && row.outstanding > 0,
+    (row) => isOverdueClassDebt(row.classDate, asOf) && finite(row.outstanding) && row.outstanding > 0,
   );
   if (overdueClasses.length) {
     const ids = [...new Set(overdueClasses.map((row) => row.studentId))];

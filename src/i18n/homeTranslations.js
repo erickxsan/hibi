@@ -132,6 +132,7 @@ export const HOME_TRANSLATIONS = Object.freeze({
   "below {value}%": "debajo del {value}%",
   "above {value}%": "arriba del {value}%",
   Missed: "Faltaron",
+  "Present (count)": "Presentes",
   "Nobody missed. Perfect attendance!": "Nadie faltó. ¡Asistencia perfecta!",
   "View session": "Ver sesión",
   "No grade yet": "Presente, sin calificación",

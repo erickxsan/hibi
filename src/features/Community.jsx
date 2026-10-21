@@ -1,51 +1,62 @@
-import { uiText } from "../i18n/index.jsx";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Archive, ChevronRight, Plus, Search, UsersRound } from "lucide-react";
+import { useI18n } from "../i18n/index.jsx";
 import {
-  Archive,
-  Check,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  Copy,
-  EllipsisVertical,
-  Filter,
-  Mail,
-  Pencil,
-  Plus,
-  Save,
-  Search,
-  ShieldCheck,
-  Trash2,
-  UserRound,
-  UsersRound,
-  X,
-} from "lucide-react";
-import { Button, ConfirmDialog, Drawer, Field, Input, Select, TextArea } from "../components/ui";
+  AttendanceRing,
+  BottomSheet,
+  Button,
+  ConfirmDialog,
+  Drawer,
+  EmptyState,
+  Field,
+  Input,
+  ListRow,
+  SectionHeading,
+  Segmented,
+  Tabs,
+} from "../components/ui";
 import { StudentAvatar } from "../components/StudentAvatar";
+import { useCompactViewport } from "../components/OverlayContext";
 import { confirmDiscard, draftChanged, useUnsavedChanges } from "../hooks/useUnsavedChanges";
 import { useHistoryBackedState } from "../hooks/useHistoryNavigation";
-import { studentMatchesFilters } from "../domain/studentFilters";
-import { formatWeeklySchedule } from "../domain";
-import { useI18n } from "../i18n";
-import { normalizeSearchText } from "../utils/searchText";
-import { EnrollmentTags, StudentEditor } from "./Students";
-import { GroupEditor } from "./Groups";
-import { ArchivedGroupDetail } from "./ArchivedGroupDetail";
 import { isGroupArchived } from "../domain/groupArchiving";
 import { gradeGroupId } from "../domain/semanticIdentity";
+import { normalizeGroupBilling } from "../domain/monthlyBilling";
+import { todayDateOnly } from "../domain/dates";
+import { formatPercent, formatShortDate } from "../utils/displayFormat";
+import { normalizeSearchText } from "../utils/searchText";
+import { buildClassWorkspaceSessionsForRange } from "./classesWorkspaceModel";
+import { addDays } from "../domain/dates";
+import { groupScheduleShort, studentGroupIdsOf } from "./groupLabels";
 import {
-  CONTACT_VIEWS,
-  groupContactRows,
-  primaryContactForStudent,
-  uniqueAvailableContacts,
-} from "./communityContacts";
+  archivedGroupHistory,
+  billingChanges,
+  billingDraftFor,
+  groupAttendanceGrid,
+  groupMonth,
+  joinGroup,
+  sortStudentsByAttention,
+  studentMonths,
+  studentRecentClasses,
+} from "./communityModel";
+import { BillingFields, GroupEditor, StudentEditor } from "./CommunityEditors";
+import { groupNamesOf, StudentDetail, StudentSheet, studentContext } from "./CommunityStudent";
+import {
+  ArchiveGroupDialog,
+  ArchivedGroupView,
+  GroupDetail,
+  GroupSheet,
+  groupPaymentLine,
+  JoinGroupSheet,
+} from "./CommunityGroup";
+import "./community.css";
 
 const COMMUNITY_VIEWS = Object.freeze(["all", "students", "groups"]);
-const MEMBER_FILTERS = Object.freeze([
-  ["all", "All"],
-  ["assigned", "In group"],
-  ["unassigned", "Not in group"],
-]);
+const VIEW_TABS = [
+  { value: "all", label: "All" },
+  { value: "students", label: "Students" },
+  { value: "groups", label: "Groups" },
+];
 const EMPTY_STUDENT = Object.freeze({
   id: "",
   code: "",
@@ -73,27 +84,32 @@ const EMPTY_GROUP = Object.freeze({
   assistantContact: "",
   notes: "",
 });
+const NEW_GROUP_BILLING = Object.freeze({
+  mode: "perClass",
+  monthlyFee: null,
+  due: { type: "dayOfMonth", day: 5 },
+  effectiveFrom: "",
+  creditFirstMonth: false,
+  hourlyRate: null,
+  adjustments: {},
+});
 
-/** @param {Partial<ReturnType<typeof import("../domain/ids.js").createStudent>> & {studentCode?: string, studentName?: string, name?: string, email?: string, parentPhone?: string, studentPhone?: string, importantNotes?: string, groupId?: string}} [student] */
+/** @param {any} [student] */
 function cloneStudent(student = EMPTY_STUDENT) {
   return {
     ...EMPTY_STUDENT,
     ...student,
-    code: student.code ?? student.studentCode ?? "",
+    code: student.code ?? "",
     studentEmail: student.studentEmail ?? student.email ?? "",
     guardianPhone: student.guardianPhone ?? student.parentPhone ?? "",
-    phone: student.phone ?? student.studentPhone ?? "",
-    notes: student.notes ?? student.importantNotes ?? "",
-    groupIds: [...(student.groupIds || (student.groupId ? [student.groupId] : []))],
+    phone: student.phone ?? "",
+    notes: student.notes ?? "",
+    groupIds: [...studentGroupIdsOf(student)],
   };
 }
 
 function cloneGroup(group = EMPTY_GROUP) {
-  return {
-    ...EMPTY_GROUP,
-    ...group,
-    weeklySchedule: (group.weeklySchedule || []).map((slot) => ({ ...slot })),
-  };
+  return { ...EMPTY_GROUP, ...group, weeklySchedule: (group.weeklySchedule || []).map((slot) => ({ ...slot })) };
 }
 
 function initialCommunityView(explicitView) {
@@ -103,972 +119,30 @@ function initialCommunityView(explicitView) {
   return "all";
 }
 
-function CommunityTabs({ value, onChange }) {
-  const { t: uiT } = useI18n();
-  return (
-    <div className="community-tabs" role="tablist" aria-label={uiT("Community views")}>
-      {[
-        ["all", "All"],
-        ["students", "Students"],
-        ["groups", "Groups"],
-      ].map(([id, label]) => (
-        <button
-          type="button"
-          role="tab"
-          aria-selected={value === id}
-          className={value === id ? "active" : ""}
-          key={id}
-          onClick={() => onChange(id)}
-        >
-          {uiT(label)}
-        </button>
-      ))}
-    </div>
-  );
-}
+const DISCARD = "Discard your unsaved community changes?";
 
-function StudentFilters({ state, status, setStatus, filters, setFilters }) {
-  const { t: uiT } = useI18n();
-  const activeCount = filters.groupIds.length + filters.enrollment.length + (status === "all" ? 0 : 1);
-  return (
-    <details className="student-filter-menu community-filter-menu">
-      <summary aria-label={uiT("Filter students")}>
-        <Filter size={15} />
-        {uiT("Filters")}
-        {activeCount ? <span className="filter-count">{activeCount}</span> : null}
-      </summary>
-      <div className="student-filter-panel">
-        <div className="filter-panel-heading">
-          <strong>{uiT("Filter students")}</strong>
-          {activeCount ? (
-            <button
-              type="button"
-              onClick={() => {
-                setStatus("all");
-                setFilters({ groupIds: [], groupMatch: "any", enrollment: [] });
-              }}
-            >
-              {uiT("Clear all")}
-            </button>
-          ) : null}
-        </div>
-        <fieldset>
-          <legend>{uiT("Status")}</legend>
-          <div className="filter-status-options" role="group" aria-label={uiT("Filter students by status")}>
-            {[
-              ["all", "All statuses"],
-              ["Active", "Active"],
-              ["Inactive", "Inactive"],
-            ].map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                className={status === id ? "active" : ""}
-                aria-pressed={status === id}
-                onClick={() => setStatus(id)}
-              >
-                {uiT(label)}
-              </button>
-            ))}
-          </div>
-        </fieldset>
-        <fieldset>
-          <legend>{uiT("Enrollment")}</legend>
-          {[
-            ["individual", "Individual only"],
-            ["group", "Group classes"],
-            ["both", "Individual + group"],
-          ].map(([id, label]) => (
-            <label key={id}>
-              <input
-                type="checkbox"
-                checked={filters.enrollment.includes(id)}
-                onChange={() =>
-                  setFilters((current) => ({
-                    ...current,
-                    enrollment: current.enrollment.includes(id)
-                      ? current.enrollment.filter((item) => item !== id)
-                      : [...current.enrollment, id],
-                  }))
-                }
-              />
-              {uiT(label)}
-            </label>
-          ))}
-        </fieldset>
-        <fieldset>
-          <legend>{uiT("Groups")}</legend>
-          <div className="filter-group-list">
-            {state.groups.map((group) => (
-              <label key={group.id}>
-                <input
-                  type="checkbox"
-                  checked={filters.groupIds.includes(group.id)}
-                  onChange={() =>
-                    setFilters((current) => ({
-                      ...current,
-                      groupIds: current.groupIds.includes(group.id)
-                        ? current.groupIds.filter((id) => id !== group.id)
-                        : [...current.groupIds, group.id],
-                    }))
-                  }
-                />
-                {group.name}
-              </label>
-            ))}
-          </div>
-          {filters.groupIds.length > 1 ? (
-            <div className="filter-match">
-              <span>{uiT("Match")}</span>
-              <button
-                type="button"
-                className={filters.groupMatch === "any" ? "active" : ""}
-                onClick={() => setFilters((current) => ({ ...current, groupMatch: "any" }))}
-              >
-                {uiT("Any")}
-              </button>
-              <button
-                type="button"
-                className={filters.groupMatch === "all" ? "active" : ""}
-                onClick={() => setFilters((current) => ({ ...current, groupMatch: "all" }))}
-              >
-                {uiT("All")}
-              </button>
-            </div>
-          ) : null}
-        </fieldset>
-      </div>
-    </details>
-  );
-}
-
-function GroupMemberPicker({ students, group, onToggle }) {
-  const { t: uiT } = useI18n();
-  const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState("all");
-  const needle = normalizeSearchText(query);
-  const selectedCount = students.reduce(
-    (count, student) => count + ((student.groupIds || []).includes(group.id) ? 1 : 0),
-    0,
-  );
-  const visibleStudents = useMemo(
-    () =>
-      students.filter((student) => {
-        const assigned = (student.groupIds || []).includes(group.id);
-        if (filter === "assigned" && !assigned) return false;
-        if (filter === "unassigned" && assigned) return false;
-        return normalizeSearchText(`${student.fullName} ${student.code}`).includes(needle);
-      }),
-    [filter, group.id, needle, students],
-  );
-
-  return (
-    <section className="member-picker-workspace" aria-label={uiT("Manage group students")}>
-      <div className="member-picker-tools">
-        <label className="member-search">
-          <Search size={18} aria-hidden="true" />
-          <span className="sr-only">{uiT("Search students by name or ID")}</span>
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={uiT("Search students by name or ID")}
-            autoComplete="off"
-          />
-          {query ? (
-            <button type="button" aria-label={uiT("Clear search")} onClick={() => setQuery("")}>
-              <X size={17} aria-hidden="true" />
-            </button>
-          ) : null}
-        </label>
-        <div className="member-filter-tabs" role="group" aria-label={uiT("Filter students by group membership")}>
-          {MEMBER_FILTERS.map(([id, label]) => (
-            <button
-              type="button"
-              key={id}
-              className={filter === id ? "active" : ""}
-              aria-pressed={filter === id}
-              onClick={() => setFilter(id)}
-            >
-              {uiT(label)}
-            </button>
-          ))}
-        </div>
-        <div className="member-picker-summary" aria-live="polite">
-          <span>
-            {uiT("{p0} {p1} · {p2} selected", {
-              p0: visibleStudents.length,
-              p1: uiText(visibleStudents.length === 1 ? "result" : "results"),
-              p2: selectedCount,
-            })}
-          </span>
-          <small>{uiT("Selections stay saved while you search.")}</small>
-        </div>
-      </div>
-      <div className="member-picker">
-        {visibleStudents.map((student) => {
-          const assigned = (student.groupIds || []).includes(group.id);
-          return (
-            <label key={student.id} className={assigned ? "selected" : ""}>
-              <input type="checkbox" checked={assigned} onChange={() => onToggle(student)} />
-              <StudentAvatar avatarId={student.avatarId} name={student.fullName} size="tiny" decorative />
-              <span>
-                <strong>{student.fullName}</strong>
-                <small>{student.code}</small>
-                <small>{student.isIndividual ? uiT("Also takes individual classes") : uiT("Group enrollment")}</small>
-              </span>
-            </label>
-          );
-        })}
-        {!visibleStudents.length ? (
-          <div className="member-picker-empty">
-            <Search size={22} aria-hidden="true" />
-            <strong>{uiT("No students found")}</strong>
-            <span>{uiT("Try another name or filter.")}</span>
-          </div>
-        ) : null}
-      </div>
-    </section>
-  );
-}
-
-function RowMenu({ label, onEdit, onDelete, onArchive = undefined, archiveLabel = "Deactivate" }) {
-  const { t: uiT } = useI18n();
-  return (
-    <details className="community-row-menu">
-      <summary aria-label={uiT("More actions for {p0}", { p0: label })}>
-        <EllipsisVertical size={18} />
-      </summary>
-      <div>
-        <button type="button" onClick={onEdit}>
-          <Pencil size={14} />
-          {uiT("Edit all details")}
-        </button>
-        {onArchive ? (
-          <button type="button" onClick={onArchive}>
-            <Archive size={14} aria-hidden="true" />
-            {uiT(archiveLabel)}
-          </button>
-        ) : null}
-        <button type="button" className="danger" onClick={onDelete}>
-          <Trash2 size={14} />
-          {uiT("Delete")}
-        </button>
-      </div>
-    </details>
-  );
-}
-
-function StudentRows({ students, selectedId, onSelect, onEdit, onArchive, onDelete, groupsById }) {
-  const { t: uiT } = useI18n();
-  return (
-    <div className="community-table community-student-table" role="table" aria-label={uiT("Students")}>
-      <div className="community-table-head" role="row">
-        <span role="columnheader">{uiT("Student")}</span>
-        <span role="columnheader">{uiT("Primary contact")}</span>
-        <span role="columnheader">{uiT("Group(s)")}</span>
-        <span role="columnheader">{uiT("Status")}</span>
-        <span role="columnheader">{uiT("Actions")}</span>
-      </div>
-      {students.map((student) => {
-        const contact = primaryContactForStudent(student);
-        return (
-          <div
-            className={selectedId === student.id ? "community-table-row selected" : "community-table-row"}
-            role="row"
-            key={student.id}
-          >
-            <div role="cell">
-              <button
-                type="button"
-                className="community-row-primary"
-                onClick={() => onSelect(student.id)}
-                aria-label={uiT("Open {p0}", { p0: student.fullName })}
-              >
-                <StudentAvatar avatarId={student.avatarId} name={student.fullName} size="small" decorative />
-                <span>
-                  <strong>{student.fullName}</strong>
-                  <small>{student.code}</small>
-                </span>
-              </button>
-            </div>
-            <span role="cell" className="community-primary-contact">
-              <strong>{contact.value || uiT("No contact")}</strong>
-              <small>{uiT(contact.label)}</small>
-            </span>
-            <div role="cell" className="community-enrollment-cell">
-              <EnrollmentTags student={student} groupsById={groupsById} />
-            </div>
-            <span role="cell" className={student.status === "Active" ? "record-status active" : "record-status"}>
-              {uiT(student.status)}
-            </span>
-            <span role="cell" className="community-row-actions">
-              <Button icon={Pencil} onClick={() => onEdit(student)}>
-                {uiT("Edit")}
-              </Button>
-              <RowMenu
-                label={student.fullName}
-                onEdit={() => onEdit(student)}
-                onArchive={student.status === "Active" ? () => onArchive(student) : null}
-                onDelete={() => onDelete(student)}
-              />
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function GroupRows({ groups, summaries, selectedId, onSelect, onEdit, onDelete, onArchive }) {
-  const { t: uiT } = useI18n();
-  return (
-    <div className="community-table community-group-table" role="table" aria-label={uiT("Groups")}>
-      <div className="community-table-head" role="row">
-        <span role="columnheader">{uiT("Group")}</span>
-        <span role="columnheader">{uiT("Members")}</span>
-        <span role="columnheader">{uiT("Actions")}</span>
-      </div>
-      {groups.map((group) => {
-        const summary = summaries.find((item) => item.id === group.id) || {};
-        return (
-          <div
-            className={selectedId === group.id ? "community-table-row selected" : "community-table-row"}
-            role="row"
-            key={group.id}
-            data-onboarding-group={group.id}
-          >
-            <div role="cell">
-              <button
-                type="button"
-                className="community-row-primary"
-                onClick={() => onSelect(group.id)}
-                aria-label={uiT("Open {p0}", { p0: group.name })}
-              >
-                <span className="community-group-emblem">
-                  <UsersRound size={20} />
-                </span>
-                <span>
-                  <strong>{group.name}</strong>
-                  <small>{group.subject || group.grade || uiT("Group")}</small>
-                </span>
-              </button>
-            </div>
-            <strong role="cell">{summary.activeStudents || 0}</strong>
-            <span role="cell" className="community-row-actions">
-              <Button icon={Pencil} onClick={() => onEdit(group)}>
-                {uiT("Edit")}
-              </Button>
-              <RowMenu
-                label={group.name}
-                onEdit={() => onEdit(group)}
-                onDelete={() => onDelete(group)}
-                onArchive={() => onArchive(group)}
-                archiveLabel="Archive group"
-              />
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function ListPanel({
-  view,
-  students,
-  archivedStudents,
-  archivesOpen,
-  onToggleArchives,
-  onReactivateStudent,
-  saving,
-  groups,
-  derived,
-  selected,
-  onSelectStudent,
-  onSelectGroup,
-  onEditStudent,
-  onEditGroup,
-  onArchiveStudent,
-  onDeleteStudent,
-  onDeleteGroup,
-  onArchiveGroup,
-  archivedGroups,
-  groupArchivesOpen,
-  onToggleGroupArchives,
-  includedInStatistics,
-  onReactivateGroup,
-  groupsById,
-  state,
-  status,
-  setStatus,
-  filters,
-  setFilters,
-}) {
-  const { t: uiT } = useI18n();
-  const [studentPage, setStudentPage] = useState(1);
-  const [groupPage, setGroupPage] = useState(1);
-  const pageSize = 25;
-  const studentPages = Math.max(1, Math.ceil(students.length / pageSize));
-  const groupPages = Math.max(1, Math.ceil(groups.length / pageSize));
-  const currentStudentPage = Math.min(studentPage, studentPages);
-  const currentGroupPage = Math.min(groupPage, groupPages);
-  useEffect(() => {
-    setStudentPage(1);
-  }, [students]);
-  useEffect(() => {
-    setGroupPage(1);
-  }, [groups]);
-  const showStudents = view !== "groups";
-  const showGroups = view !== "students";
-  return (
-    <section className="community-list-panel" aria-label={uiT("Community directory")} data-onboarding-tour="community">
-      {showStudents ? (
-        <section className="community-list-section">
-          <header className="community-panel-heading">
-            <span className="community-heading-icon">
-              <UserRound size={23} />
-            </span>
-            <span>
-              <h2>{uiT("Students")}</h2>
-              <p>{uiT("Manage every student in one place.")}</p>
-            </span>
-            {view === "students" ? (
-              <StudentFilters
-                state={state}
-                status={status}
-                setStatus={setStatus}
-                filters={filters}
-                setFilters={setFilters}
-              />
-            ) : null}
-          </header>
-          {students.length ? (
-            <StudentRows
-              students={students.slice((currentStudentPage - 1) * pageSize, currentStudentPage * pageSize)}
-              selectedId={selected.type === "student" ? selected.id : ""}
-              onSelect={onSelectStudent}
-              onEdit={onEditStudent}
-              onArchive={onArchiveStudent}
-              onDelete={onDeleteStudent}
-              groupsById={groupsById}
-            />
-          ) : (
-            <div className="community-empty">
-              <UserRound size={24} />
-              <strong>{uiT("No students found")}</strong>
-              <span>{uiT("Add a student or adjust your search and filters.")}</span>
-            </div>
-          )}
-          <footer className="community-list-footer">
-            <span>
-              {uiT("Showing ")}
-              {students.length} {students.length === 1 ? uiT("student") : uiT("students")}
-            </span>
-            <div>
-              <button
-                type="button"
-                disabled={currentStudentPage <= 1}
-                onClick={() => setStudentPage(currentStudentPage - 1)}
-                aria-label={uiT("Previous page")}
-              >
-                <ChevronLeft size={17} />
-              </button>
-              <b>
-                {currentStudentPage} / {studentPages}
-              </b>
-              <button
-                type="button"
-                disabled={currentStudentPage >= studentPages}
-                onClick={() => setStudentPage(currentStudentPage + 1)}
-                aria-label={uiT("Next page")}
-              >
-                <ChevronRight size={17} />
-              </button>
-            </div>
-          </footer>
-          <button
-            type="button"
-            className="community-archive-toggle"
-            aria-expanded={archivesOpen}
-            aria-controls="community-archived-students"
-            onClick={onToggleArchives}
-          >
-            <Archive size={15} aria-hidden="true" />
-            <span>{uiT("Archived")}</span>
-            <span>· {archivedStudents.length}</span>
-            <ChevronRight size={16} className={archivesOpen ? "expanded" : ""} aria-hidden="true" />
-          </button>
-          <div id="community-archived-students" hidden={!archivesOpen}>
-            {archivesOpen
-              ? archivedStudents.map((student) => (
-                  <div className="community-archived-row" key={student.id}>
-                    <button type="button" className="community-row-primary" onClick={() => onSelectStudent(student.id)}>
-                      <StudentAvatar avatarId={student.avatarId} name={student.fullName} size="small" decorative />
-                      <span>
-                        <strong>{student.fullName}</strong>
-                        <small>{student.code}</small>
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className="community-reactivate"
-                      disabled={saving}
-                      onClick={() => onReactivateStudent(student)}
-                    >
-                      {uiT("Reactivate")}
-                    </button>
-                  </div>
-                ))
-              : null}
-            {archivesOpen && !archivedStudents.length ? (
-              <p className="community-archive-empty">{uiT("No archived students found.")}</p>
-            ) : null}
-          </div>
-        </section>
-      ) : null}
-      {showGroups ? (
-        <section
-          className={showStudents ? "community-list-section community-secondary-list" : "community-list-section"}
-        >
-          <header className="community-panel-heading">
-            <span className="community-heading-icon">
-              <UsersRound size={23} />
-            </span>
-            <span>
-              <h2>{uiT("Groups")}</h2>
-              <p>{uiT("Create schedules and organize students.")}</p>
-            </span>
-          </header>
-          {groups.length ? (
-            <GroupRows
-              groups={groups.slice((currentGroupPage - 1) * pageSize, currentGroupPage * pageSize)}
-              summaries={derived.groups || []}
-              selectedId={selected.type === "group" ? selected.id : ""}
-              onSelect={onSelectGroup}
-              onEdit={onEditGroup}
-              onDelete={onDeleteGroup}
-              onArchive={onArchiveGroup}
-            />
-          ) : (
-            <div className="community-empty">
-              <UsersRound size={24} />
-              <strong>{uiT("No groups found")}</strong>
-              <span>{uiT("Create a group or adjust your search.")}</span>
-            </div>
-          )}
-          <footer className="community-list-footer">
-            <span>
-              {uiT("Showing ")}
-              {groups.length} {groups.length === 1 ? uiT("group") : uiT("groups")}
-            </span>
-            <div>
-              <button
-                type="button"
-                disabled={currentGroupPage <= 1}
-                onClick={() => setGroupPage(currentGroupPage - 1)}
-                aria-label={uiT("Previous page")}
-              >
-                <ChevronLeft size={17} />
-              </button>
-              <b>
-                {currentGroupPage} / {groupPages}
-              </b>
-              <button
-                type="button"
-                disabled={currentGroupPage >= groupPages}
-                onClick={() => setGroupPage(currentGroupPage + 1)}
-                aria-label={uiT("Next page")}
-              >
-                <ChevronRight size={17} />
-              </button>
-            </div>
-          </footer>
-          <button
-            type="button"
-            className="community-archive-toggle"
-            aria-label={uiT("Archived groups") + " · " + archivedGroups.length}
-            aria-expanded={groupArchivesOpen}
-            aria-controls="community-archived-groups"
-            onClick={onToggleGroupArchives}
-          >
-            <Archive size={15} aria-hidden="true" />
-            <span>{uiT("Archived")}</span>
-            <span>· {archivedGroups.length}</span>
-            <ChevronRight size={16} className={groupArchivesOpen ? "expanded" : ""} aria-hidden="true" />
-          </button>
-          <div id="community-archived-groups" hidden={!groupArchivesOpen}>
-            <p className="community-group-archive-helper">
-              {uiT(
-                includedInStatistics ? "Included in statistics for this session" : "Excluded from general statistics",
-              )}
-            </p>
-            {groupArchivesOpen
-              ? archivedGroups.map((group) => (
-                  <div
-                    className={
-                      "community-archived-row community-archived-group-row " +
-                      (selected.type === "group" && selected.id === group.id ? "selected" : "")
-                    }
-                    key={group.id}
-                  >
-                    <button type="button" className="community-row-primary" onClick={() => onSelectGroup(group.id)}>
-                      <span className="community-group-emblem">
-                        <Archive size={19} aria-hidden="true" />
-                      </span>
-                      <span>
-                        <strong>{group.name}</strong>
-                        <small>
-                          {group.archivedAt
-                            ? uiT("Archived on {date}", { date: group.archivedAt })
-                            : uiT("Archived group")}
-                        </small>
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className="community-reactivate"
-                      disabled={saving}
-                      onClick={() => onReactivateGroup(group)}
-                    >
-                      {uiT("Reactivate")}
-                    </button>
-                  </div>
-                ))
-              : null}
-            {groupArchivesOpen && !archivedGroups.length ? (
-              <p className="community-archive-empty">{uiT("No archived groups found.")}</p>
-            ) : null}
-          </div>
-        </section>
-      ) : null}
-    </section>
-  );
-}
-
-function StudentDetail({ student, draft, setDraft, groupsById, state, onEdit, onSave, onArchive, saving }) {
-  const { t: uiT } = useI18n();
+/** A student in the desktop lists: avatar, name, context and a status dot. */
+function StudentRow({ student, context, selected, onSelect, extra = null, dot = "" }) {
   const { t } = useI18n();
-  const groupIds = draft?.groupIds || [];
   return (
-    <section className="community-detail-panel" aria-labelledby="community-student-detail-title">
-      <header className="community-detail-heading">
-        <span className="community-heading-icon">
-          <UserRound size={22} />
+    <div className={`sr ${selected ? "sel" : ""}`}>
+      <button
+        type="button"
+        className="sr-main"
+        aria-current={selected ? "true" : undefined}
+        aria-label={t("Open {name}", { name: student.fullName })}
+        onClick={() => onSelect(student.id)}
+      >
+        <StudentAvatar avatarId={student.avatarId} name={student.fullName} size="small" decorative />
+        <span className="sr-text">
+          <strong>{student.fullName}</strong>
+          <small className={context.tone ? `text-${context.tone}` : undefined}>{context.text}</small>
         </span>
-        <h2 id="community-student-detail-title">{uiT("Student details")}</h2>
-        <ChevronDown size={19} aria-hidden="true" />
-      </header>
-      <div className="community-detail-body">
-        <div className="community-profile">
-          <button
-            type="button"
-            className="community-avatar-button"
-            onClick={onEdit}
-            aria-label={uiT("Change student avatar")}
-          >
-            <StudentAvatar avatarId={student.avatarId} name={student.fullName} size="large" />
-          </button>
-          <span>
-            <strong>{student.fullName}</strong>
-            <small>{student.code}</small>
-            <em className={student.status === "Active" ? "record-status active" : "record-status"}>
-              {uiT(student.status)}
-            </em>
-          </span>
-        </div>
-        <div className="community-detail-form">
-          <Field label={uiT("Full name")}>
-            <Input value={draft.fullName} onChange={(event) => setDraft({ ...draft, fullName: event.target.value })} />
-          </Field>
-          <Field label={uiT("Student email")}>
-            <Input
-              type="email"
-              inputMode="email"
-              autoComplete="email"
-              value={draft.studentEmail}
-              onChange={(event) => setDraft({ ...draft, studentEmail: event.target.value })}
-            />
-          </Field>
-          <Field label={uiT("Guardian phone")}>
-            <Input
-              type="tel"
-              inputMode="tel"
-              autoComplete="tel"
-              value={draft.guardianPhone}
-              onChange={(event) => setDraft({ ...draft, guardianPhone: event.target.value })}
-            />
-          </Field>
-          <Field label={uiT("Student phone")}>
-            <Input
-              type="tel"
-              inputMode="tel"
-              autoComplete="tel"
-              value={draft.phone}
-              onChange={(event) => setDraft({ ...draft, phone: event.target.value })}
-            />
-          </Field>
-          <Field label={uiT("Status")}>
-            <Select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value })}>
-              <option value="Active">{uiT("Active")}</option>
-              <option value="Inactive">{uiT("Inactive")}</option>
-            </Select>
-          </Field>
-          <Field label={uiT("Brief notes")}>
-            <TextArea
-              rows="3"
-              maxLength="250"
-              value={draft.notes}
-              onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
-            />
-            <small className="community-character-count">{draft.notes.length}/250</small>
-          </Field>
-        </div>
-        <section className="community-assignment">
-          <h3>{uiT("Assigned groups")}</h3>
-          <div>
-            {groupIds
-              .map((id) => groupsById.get(id))
-              .filter(Boolean)
-              .map((group) => {
-                const memberCount = state.students.filter(
-                  (item) => item.status === "Active" && (item.groupIds || []).includes(group.id),
-                ).length;
-                return (
-                  <article key={group.id}>
-                    <span className="community-group-emblem">
-                      <UsersRound size={19} />
-                    </span>
-                    <span>
-                      <strong>{group.name}</strong>
-                      <small>{t(`${memberCount} ${memberCount === 1 ? "member" : "members"}`)}</small>
-                    </span>
-                  </article>
-                );
-              })}
-          </div>
-          {!groupIds.length ? (
-            <p>{uiT("No groups assigned. This student can still take individual classes.")}</p>
-          ) : null}
-          <button type="button" onClick={onEdit}>
-            <Plus size={16} />
-            {uiT("Add to a group")}
-          </button>
-        </section>
-      </div>
-      <footer className="community-detail-footer">
-        <Button
-          variant="danger"
-          className="community-danger-action"
-          icon={Trash2}
-          onClick={onArchive}
-          disabled={student.status !== "Active"}
-        >
-          {uiT("Deactivate student")}
-        </Button>
-        <Button variant="primary" icon={Save} onClick={onSave} disabled={saving}>
-          {saving ? uiT("Saving…") : uiT("Save changes")}
-        </Button>
-      </footer>
-    </section>
-  );
-}
-
-async function copyContactText(value) {
-  if (!value) return false;
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(value);
-    return true;
-  }
-  const field = document.createElement("textarea");
-  field.value = value;
-  field.setAttribute("readonly", "");
-  field.style.position = "fixed";
-  field.style.opacity = "0";
-  document.body.appendChild(field);
-  field.select();
-  const copied = document.execCommand("copy");
-  field.remove();
-  return copied;
-}
-
-function GroupContactDirectory({ members }) {
-  const { t: uiT } = useI18n();
-  const [contactView, setContactView] = useState(/** @type {string} */ (CONTACT_VIEWS.STUDENT_EMAIL));
-  const [missingOnly, setMissingOnly] = useState(false);
-  const [copyMessage, setCopyMessage] = useState("");
-  const allRows = useMemo(() => groupContactRows(members, contactView), [contactView, members]);
-  const rows = useMemo(
-    () => groupContactRows(members, contactView, { missingOnly }),
-    [contactView, members, missingOnly],
-  );
-  const contacts = useMemo(() => uniqueAvailableContacts(allRows), [allRows]);
-
-  useEffect(() => {
-    if (!copyMessage) return undefined;
-    const timer = window.setTimeout(() => setCopyMessage(""), 2200);
-    return () => window.clearTimeout(timer);
-  }, [copyMessage]);
-
-  const copyOne = async (value) => {
-    try {
-      if (await copyContactText(value)) setCopyMessage("Contact copied");
-    } catch {
-      setCopyMessage("Copy failed");
-    }
-  };
-  const copyAll = async () => {
-    try {
-      const separator = contactView === CONTACT_VIEWS.STUDENT_EMAIL ? ", " : "\n";
-      if (await copyContactText(contacts.join(separator))) {
-        setCopyMessage(contactView === CONTACT_VIEWS.STUDENT_EMAIL ? "Emails copied" : "Phone numbers copied");
-      }
-    } catch {
-      setCopyMessage("Copy failed");
-    }
-  };
-  const composeWithBcc = () => {
-    if (!contacts.length) return;
-    window.location.href = `mailto:?bcc=${encodeURIComponent(contacts.join(","))}`;
-  };
-
-  return (
-    <section className="group-directory" aria-labelledby="group-directory-title">
-      <div className="group-directory-title-row">
-        <h3 id="group-directory-title">{uiT("Group directory")}</h3>
-        <span>{uiT("{p0} of {p1} contacts available", { p0: contacts.length, p1: members.length })}</span>
-      </div>
-      <div className="group-directory-toolbar">
-        <div className="contact-view-tabs" role="tablist" aria-label={uiT("Contact information to show")}>
-          {[
-            [CONTACT_VIEWS.STUDENT_EMAIL, "Student email"],
-            [CONTACT_VIEWS.GUARDIAN_PHONE, "Guardian phone"],
-            [CONTACT_VIEWS.STUDENT_PHONE, "Student phone"],
-          ].map(([id, label]) => (
-            <button
-              type="button"
-              role="tab"
-              aria-selected={contactView === id}
-              className={contactView === id ? "active" : ""}
-              key={id}
-              onClick={() => setContactView(id)}
-            >
-              {uiT(label)}
-            </button>
-          ))}
-        </div>
-        <label className="directory-missing-toggle">
-          <input type="checkbox" checked={missingOnly} onChange={(event) => setMissingOnly(event.target.checked)} />
-          <span>{uiT("Show missing only")}</span>
-        </label>
-        <div className="directory-actions">
-          <Button icon={Copy} onClick={copyAll} disabled={!contacts.length}>
-            {contactView === CONTACT_VIEWS.STUDENT_EMAIL ? uiT("Copy all emails") : uiT("Copy all numbers")}
-          </Button>
-          {contactView === CONTACT_VIEWS.STUDENT_EMAIL ? (
-            <Button variant="primary" icon={Mail} onClick={composeWithBcc} disabled={!contacts.length}>
-              {uiT("Compose with BCC")}
-            </Button>
-          ) : null}
-        </div>
-      </div>
-      {contactView === CONTACT_VIEWS.STUDENT_EMAIL ? (
-        <p className="directory-privacy">
-          <ShieldCheck size={14} aria-hidden="true" />
-          {uiT("Recipients are added using BCC.")}
-        </p>
-      ) : null}
-      <div className="directory-table" role="table" aria-label={uiT("Group contacts")}>
-        <div className="directory-table-head" role="row">
-          <span role="columnheader">{uiT("Student")}</span>
-          <span role="columnheader">{uiT("Contact")}</span>
-          <span role="columnheader">{uiT("Availability")}</span>
-          <span role="columnheader">{uiT("Action")}</span>
-        </div>
-        {rows.map((row) => (
-          <div className="directory-table-row" role="row" key={row.student.id}>
-            <span role="cell" className="directory-student">
-              <StudentAvatar avatarId={row.student.avatarId} name={row.student.fullName} size="tiny" decorative />
-              <span>
-                <strong>{row.student.fullName}</strong>
-                <small>{row.student.code}</small>
-              </span>
-            </span>
-            <span
-              role="cell"
-              className="directory-contact"
-              title={row.inferred ? uiT("Read from existing parent/tutor details") : undefined}
-            >
-              {row.value || "—"}
-            </span>
-            <span role="cell">
-              <em className={row.available ? "directory-availability available" : "directory-availability missing"}>
-                {row.available ? uiT("Available") : uiT("Missing")}
-              </em>
-            </span>
-            <span role="cell">
-              {row.available ? (
-                <button type="button" className="directory-copy" onClick={() => copyOne(row.value)}>
-                  <Copy size={14} aria-hidden="true" />
-                  {uiT("Copy")}
-                </button>
-              ) : (
-                <span className="directory-no-action">—</span>
-              )}
-            </span>
-          </div>
-        ))}
-        {!rows.length ? (
-          <div className="directory-empty">
-            <Check size={21} aria-hidden="true" />
-            <strong>{missingOnly ? uiT("No missing contacts") : uiT("No students in this group")}</strong>
-            <span>
-              {missingOnly
-                ? uiT("Every student has this contact saved.")
-                : uiT("Manage students to build this directory.")}
-            </span>
-          </div>
-        ) : null}
-      </div>
-      <span className="sr-only" role="status" aria-live="polite">
-        {copyMessage}
-      </span>
-    </section>
-  );
-}
-
-function GroupDetail({ group, members, onEdit, onManage, onArchive }) {
-  const { t: uiT } = useI18n();
-  return (
-    <section className="community-detail-panel" aria-labelledby="community-group-detail-title">
-      <header className="community-group-directory-heading">
-        <span className="community-group-emblem">
-          <UsersRound size={22} />
-        </span>
-        <span>
-          <h2 id="community-group-detail-title">{group.name}</h2>
-          <small>
-            {members.length} {members.length === 1 ? uiT("student") : uiT("students")}
-            {group.grade || group.subject ? ` · ${group.grade || group.subject}` : ""}
-          </small>
-        </span>
-        <em className="record-status active">{uiT("Active")}</em>
-        <ChevronDown size={19} aria-hidden="true" />
-      </header>
-      <div className="community-detail-body community-directory-body">
-        <GroupContactDirectory members={members} />
-      </div>
-      <footer className="community-directory-footer">
-        <Button icon={Archive} onClick={onArchive}>
-          {uiT("Archive group")}
-        </Button>
-        <Button icon={UsersRound} onClick={onManage}>
-          {uiT("Manage students")}
-        </Button>
-        <Button icon={Pencil} onClick={onEdit}>
-          {uiT("Edit group")}
-        </Button>
-      </footer>
-    </section>
+        {dot ? <span className={`sr-dot dot-${dot}`} aria-hidden="true" /> : null}
+        {context.value ? <b className="sr-value text-bad">{context.value}</b> : null}
+      </button>
+      {extra}
+    </div>
   );
 }
 
@@ -1081,42 +155,180 @@ export default function Community({
   initialView,
   registerNavigationBlocker,
   archiveScope,
+  openPage = undefined,
 }) {
-  const { t: uiT } = useI18n();
+  const { t, locale } = useI18n();
+  const compact = useCompactViewport();
+  const asOf = state.settings?.asOfDate || todayDateOnly();
   const [view, setView] = useState(() => initialCommunityView(initialView));
-  const [archivesOpen, setArchivesOpen] = useState(false);
-  const [groupArchivesOpen, setGroupArchivesOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("all");
-  const [filters, setFilters] = useState({ groupIds: [], groupMatch: "any", enrollment: [] });
-  const [selected, setSelected] = useState({
-    type: "student",
-    id: state.students.find((student) => student.status === "Active")?.id || "",
-  });
+  const [studentArchivesOpen, setStudentArchivesOpen] = useState(false);
+  const [groupArchivesOpen, setGroupArchivesOpen] = useState(false);
+  const [selected, setSelected] = useState(() => ({ type: "", id: "" }));
+  const [sheet, setSheet] = useState(null);
+  const [billingSheet, setBillingSheet] = useState(false);
   const [studentDraft, setStudentDraft] = useState(null);
   const [groupDraft, setGroupDraft] = useState(null);
-  const [studentEditorDraft, setStudentEditorDraft] = useState(null);
-  const [groupEditorDraft, setGroupEditorDraft] = useState(null);
-  const [membersGroupId, setMembersGroupId] = useState("");
+  const [billingDraft, setBillingDraft] = useState(null);
+  const [applyFrom, setApplyFrom] = useState("next");
+  const [studentEditor, setStudentEditor] = useState(null);
+  const [groupEditor, setGroupEditor] = useState(null);
+  const [newGroupBilling, setNewGroupBilling] = useState(NEW_GROUP_BILLING);
   const [confirmTarget, setConfirmTarget] = useState(null);
+  const [archiveTarget, setArchiveTarget] = useState(null);
+  const [joinTarget, setJoinTarget] = useState(null);
   const [saving, setSaving] = useState(false);
-  const studentBaseline = useRef(null);
-  const groupBaseline = useRef(null);
-  const studentEditorBaseline = useRef(null);
-  const groupEditorBaseline = useRef(null);
-  const groupsById = useMemo(
-    () => derived.groupsById || new Map(state.groups.map((group) => [group.id, group])),
-    [derived.groupsById, state.groups],
-  );
-  const activeStudentCount = derived.dashboard?.activeStudents ?? 0;
+  const [pendingCode, setPendingCode] = useState("");
+  const baselines = useRef({ student: null, group: null, billing: null, studentEditor: null, groupEditor: null });
 
-  const studentDirty = Boolean(studentDraft) && draftChanged(studentDraft, studentBaseline.current);
-  const groupDirty = Boolean(groupDraft) && draftChanged(groupDraft, groupBaseline.current);
-  const studentEditorDirty =
-    Boolean(studentEditorDraft) && draftChanged(studentEditorDraft, studentEditorBaseline.current);
-  const groupEditorDirty = Boolean(groupEditorDraft) && draftChanged(groupEditorDraft, groupEditorBaseline.current);
-  const dirty = studentDirty || groupDirty || studentEditorDirty || groupEditorDirty;
-  useUnsavedChanges(registerNavigationBlocker, dirty, "Discard your unsaved community changes?");
+  const groupsById = useMemo(() => new Map(state.groups.map((group) => [group.id, group])), [state.groups]);
+  const activeStudents = useMemo(
+    () => state.students.filter((student) => student.status !== "Inactive"),
+    [state.students],
+  );
+  const months = useMemo(
+    () => studentMonths(state, derived, asOf, activeStudents),
+    [activeStudents, asOf, derived, state],
+  );
+  const activeGroups = useMemo(() => state.groups.filter((group) => !isGroupArchived(group)), [state.groups]);
+  const archivedGroups = useMemo(() => state.groups.filter(isGroupArchived), [state.groups]);
+  const membersOf = useCallback(
+    (group) =>
+      isGroupArchived(group)
+        ? state.students.filter(
+            (student) =>
+              studentGroupIdsOf(student).includes(group.id) ||
+              state.classLog.some((row) => row.groupId === group.id && row.studentId === student.id) ||
+              state.grades.some((row) => gradeGroupId(row) === group.id && row.studentId === student.id),
+          )
+        : activeStudents.filter((student) => studentGroupIdsOf(student).includes(group.id)),
+    [activeStudents, state.classLog, state.grades, state.students],
+  );
+  const groupSummaries = useMemo(
+    () => new Map(activeGroups.map((group) => [group.id, groupMonth(state, derived, group, asOf, membersOf(group))])),
+    [activeGroups, asOf, derived, membersOf, state],
+  );
+  const upcoming = useMemo(
+    () =>
+      buildClassWorkspaceSessionsForRange(state, asOf, addDays(asOf, 30), asOf).filter((session) =>
+        ["Scheduled", "Rescheduled"].includes(session.statusLabel),
+      ),
+    [asOf, state],
+  );
+
+  const needle = normalizeSearchText(query);
+  const studentMatches = useCallback(
+    (student) =>
+      !needle ||
+      normalizeSearchText(
+        [
+          student.fullName,
+          student.code,
+          student.studentEmail,
+          student.guardianPhone,
+          student.phone,
+          ...studentGroupIdsOf(student).map((id) => groupsById.get(id)?.name || ""),
+        ].join(" "),
+      ).includes(needle),
+    [groupsById, needle],
+  );
+  const groupMatches = useCallback(
+    (group) =>
+      !needle ||
+      normalizeSearchText([group.name, group.subject, group.grade, group.schedule].join(" ")).includes(needle),
+    [needle],
+  );
+  const visibleActive = activeStudents.filter(studentMatches);
+  const visibleInactive = state.students.filter((student) => student.status === "Inactive" && studentMatches(student));
+  const visibleGroups = activeGroups.filter(groupMatches);
+  const visibleArchivedGroups = archivedGroups.filter(groupMatches);
+  const sortedStudents = sortStudentsByAttention(visibleActive.map((student) => months.get(student.id)));
+  const pending = sortedStudents.filter((month) => month.flag.kind !== "ok");
+  const upToDate = sortedStudents.filter((month) => month.flag.kind === "ok");
+
+  const selectedStudent =
+    selected.type === "student" ? state.students.find((item) => item.id === selected.id) || null : null;
+  const selectedGroup = selected.type === "group" ? state.groups.find((item) => item.id === selected.id) || null : null;
+  const selectedMembers = useMemo(() => (selectedGroup ? membersOf(selectedGroup) : []), [membersOf, selectedGroup]);
+  const sheetStudent = sheet?.type === "student" ? state.students.find((item) => item.id === sheet.id) || null : null;
+  const sheetGroup = sheet?.type === "group" ? state.groups.find((item) => item.id === sheet.id) || null : null;
+  const focusGroup = compact ? sheetGroup : selectedGroup;
+  const focusMembers = useMemo(() => (focusGroup ? membersOf(focusGroup) : []), [focusGroup, membersOf]);
+
+  // Pick something to show first on desktop.
+  useEffect(() => {
+    if (compact) return;
+    const stillVisible =
+      (selectedStudent &&
+        (selectedStudent.status === "Inactive" ? visibleInactive : visibleActive).some(
+          (item) => item.id === selectedStudent.id,
+        )) ||
+      (selectedGroup && [...visibleGroups, ...visibleArchivedGroups].some((item) => item.id === selectedGroup.id));
+    if (stillVisible) {
+      if (view === "groups" && selectedStudent && visibleGroups[0])
+        setSelected({ type: "group", id: visibleGroups[0].id });
+      return;
+    }
+    if (view === "groups") setSelected({ type: visibleGroups[0] ? "group" : "", id: visibleGroups[0]?.id || "" });
+    else if (sortedStudents[0]) setSelected({ type: "student", id: sortedStudents[0].student.id });
+    else if (visibleGroups[0]) setSelected({ type: "group", id: visibleGroups[0].id });
+    else setSelected({ type: "", id: "" });
+  }, [
+    compact,
+    selectedGroup,
+    selectedStudent,
+    sortedStudents,
+    view,
+    visibleActive,
+    visibleArchivedGroups,
+    visibleGroups,
+    visibleInactive,
+  ]);
+
+  // A new student is selected once the saved record arrives.
+  useEffect(() => {
+    if (!pendingCode) return;
+    const created = state.students.find((student) => student.code === pendingCode);
+    if (!created) return;
+    setPendingCode("");
+    setSelected({ type: "student", id: created.id });
+    if (created.status === "Inactive") setStudentArchivesOpen(true);
+  }, [pendingCode, state.students]);
+
+  // Drafts follow the selected record.
+  useEffect(() => {
+    if (!selectedStudent) {
+      setStudentDraft(null);
+      return;
+    }
+    const next = cloneStudent(selectedStudent);
+    baselines.current.student = next;
+    setStudentDraft(next);
+  }, [selectedStudent]);
+  useEffect(() => {
+    if (!focusGroup || isGroupArchived(focusGroup)) {
+      setGroupDraft(null);
+      setBillingDraft(null);
+      return;
+    }
+    const nextGroup = cloneGroup(focusGroup);
+    const nextBilling = billingDraftFor(focusGroup, focusMembers);
+    baselines.current.group = nextGroup;
+    baselines.current.billing = nextBilling;
+    setGroupDraft(nextGroup);
+    setBillingDraft(nextBilling);
+    setApplyFrom("next");
+  }, [focusGroup, focusMembers]);
+
+  const studentDirty = Boolean(studentDraft) && draftChanged(studentDraft, baselines.current.student);
+  const groupDirty =
+    (Boolean(groupDraft) && draftChanged(groupDraft, baselines.current.group)) ||
+    (Boolean(billingDraft) && draftChanged(billingDraft, baselines.current.billing));
+  const editorDirty =
+    (Boolean(studentEditor) && draftChanged(studentEditor, baselines.current.studentEditor)) ||
+    (Boolean(groupEditor) && draftChanged(groupEditor, baselines.current.groupEditor));
+  const dirty = studentDirty || groupDirty || editorDirty;
+  useUnsavedChanges(registerNavigationBlocker, dirty, DISCARD);
 
   const changeView = useHistoryBackedState({
     key: "community-view",
@@ -1124,171 +336,65 @@ export default function Community({
     onChange: setView,
     defaultValue: initialCommunityView(initialView),
     allowedValues: COMMUNITY_VIEWS,
-    canChange: () =>
-      confirmDiscard(
-        [
-          [studentDraft, studentBaseline.current],
-          [groupDraft, groupBaseline.current],
-          [studentEditorDraft, studentEditorBaseline.current],
-          [groupEditorDraft, groupEditorBaseline.current],
-        ].some(([draft, baseline]) => Boolean(draft && baseline) && draftChanged(draft, baseline)),
-        "Discard your unsaved community changes?",
-      ),
+    canChange: () => confirmDiscard(studentDirty || groupDirty, DISCARD),
   });
 
-  const needle = normalizeSearchText(query);
-  const studentSearchEntries = useMemo(
-    () =>
-      state.students.map((student) => {
-        const groupNames = (student.groupIds || []).map((id) => groupsById.get(id)?.name || "");
-        const text = normalizeSearchText(
-          [
-            student.fullName,
-            student.code,
-            student.studentEmail,
-            student.guardianPhone,
-            student.phone,
-            student.guardianContact,
-            ...groupNames,
-          ].join(" "),
-        );
-        return { student, text };
-      }),
-    [groupsById, state.students],
-  );
-  const matchingStudents = useMemo(
-    () =>
-      studentSearchEntries
-        .filter(({ student, text }) => {
-          if (status !== "all" && student.status !== status) return false;
-          if (!studentMatchesFilters(student, filters)) return false;
-          return text.includes(needle);
-        })
-        .map(({ student }) => student),
-    [filters, needle, studentSearchEntries, status],
-  );
-  const activeStudents = useMemo(
-    () => matchingStudents.filter((student) => student.status === "Active"),
-    [matchingStudents],
-  );
-  const archivedStudents = useMemo(
-    () => matchingStudents.filter((student) => student.status === "Inactive"),
-    [matchingStudents],
-  );
-  const visibleStudents = useMemo(
-    () => (archivesOpen ? [...activeStudents, ...archivedStudents] : activeStudents),
-    [activeStudents, archivedStudents, archivesOpen],
-  );
-  const groupSearchEntries = useMemo(
-    () =>
-      state.groups.map((group) => ({
-        group,
-        text: normalizeSearchText(
-          [group.name, group.subject, group.grade, group.schedule, formatWeeklySchedule(group.weeklySchedule)].join(
-            " ",
-          ),
-        ),
-      })),
-    [state.groups],
-  );
-  const matchingGroups = useMemo(
-    () => groupSearchEntries.filter(({ text }) => text.includes(needle)).map(({ group }) => group),
-    [groupSearchEntries, needle],
-  );
-  const activeGroups = useMemo(() => matchingGroups.filter((group) => !isGroupArchived(group)), [matchingGroups]);
-  const archivedGroups = useMemo(() => matchingGroups.filter(isGroupArchived), [matchingGroups]);
-  const visibleGroups = useMemo(
-    () => (groupArchivesOpen ? [...activeGroups, ...archivedGroups] : activeGroups),
-    [activeGroups, archivedGroups, groupArchivesOpen],
-  );
-
-  const selectedStudent = selected.type === "student" ? state.students.find((item) => item.id === selected.id) : null;
-  const selectedGroup = selected.type === "group" ? state.groups.find((item) => item.id === selected.id) : null;
-  const groupMembers = useMemo(
-    () =>
-      selectedGroup
-        ? state.students.filter((student) =>
-            isGroupArchived(selectedGroup)
-              ? (student.groupIds || []).includes(selectedGroup.id) ||
-                state.classLog.some((row) => row.groupId === selectedGroup.id && row.studentId === student.id) ||
-                state.grades.some((row) => gradeGroupId(row) === selectedGroup.id && row.studentId === student.id)
-              : student.status === "Active" && (student.groupIds || []).includes(selectedGroup.id),
-          )
-        : [],
-    [selectedGroup, state.students, state.classLog, state.grades],
-  );
-  const membersGroup = state.groups.find((group) => group.id === membersGroupId);
-
-  useEffect(() => {
-    if (!selectedStudent) return;
-    const next = cloneStudent(selectedStudent);
-    studentBaseline.current = next;
-    setStudentDraft(next);
-    setGroupDraft(null);
-  }, [selectedStudent]);
-  useEffect(() => {
-    if (!selectedGroup) return;
-    const next = cloneGroup(selectedGroup);
-    groupBaseline.current = next;
-    setGroupDraft(next);
-    setStudentDraft(null);
-  }, [selectedGroup]);
-  useEffect(() => {
-    const wantsStudents = view === "students";
-    const wantsGroups = view === "groups";
-    if (wantsStudents && (!selectedStudent || !visibleStudents.some((item) => item.id === selectedStudent.id)))
-      setSelected({ type: "student", id: visibleStudents[0]?.id || "" });
-    if (wantsGroups && (!selectedGroup || !visibleGroups.some((item) => item.id === selectedGroup.id)))
-      setSelected({ type: "group", id: visibleGroups[0]?.id || "" });
-    if (
-      view === "all" &&
-      !selectedGroup &&
-      (!selectedStudent || !visibleStudents.some((item) => item.id === selectedStudent.id))
-    ) {
-      if (visibleStudents[0]) setSelected({ type: "student", id: visibleStudents[0].id });
-      else if (visibleGroups[0]) setSelected({ type: "group", id: visibleGroups[0].id });
-      else if (selected.id) setSelected({ type: "student", id: "" });
+  const select = (type, id) => {
+    if (compact) {
+      setSheet({ type, id });
+      return;
     }
-  }, [selected.id, selectedGroup, selectedStudent, view, visibleGroups, visibleStudents]);
-
-  const selectRecord = (type, id) => {
-    if (!confirmDiscard(studentDirty || groupDirty, "Discard your unsaved community changes?")) return;
+    if (selected.type === type && selected.id === id) return;
+    if (!confirmDiscard(studentDirty || groupDirty, DISCARD)) return;
     setSelected({ type, id });
   };
+
   const openStudentEditor = (student = EMPTY_STUDENT) => {
     const next = cloneStudent(student);
-    studentEditorBaseline.current = next;
-    setStudentEditorDraft(next);
+    baselines.current.studentEditor = next;
+    setStudentEditor(next);
   };
   const closeStudentEditor = () => {
-    if (!confirmDiscard(studentEditorDirty, "Discard your unsaved student changes?")) return false;
-    studentEditorBaseline.current = null;
-    setStudentEditorDraft(null);
+    if (
+      !confirmDiscard(
+        Boolean(studentEditor) && draftChanged(studentEditor, baselines.current.studentEditor),
+        "Discard your unsaved student changes?",
+      )
+    )
+      return false;
+    setStudentEditor(null);
     return true;
   };
   const openGroupEditor = (group = EMPTY_GROUP) => {
     const next = cloneGroup(group);
-    groupEditorBaseline.current = next;
-    setGroupEditorDraft(next);
+    baselines.current.groupEditor = next;
+    setNewGroupBilling(NEW_GROUP_BILLING);
+    setGroupEditor(next);
   };
   const closeGroupEditor = () => {
-    if (!confirmDiscard(groupEditorDirty, "Discard your unsaved group changes?")) return false;
-    groupEditorBaseline.current = null;
-    setGroupEditorDraft(null);
+    if (
+      !confirmDiscard(
+        Boolean(groupEditor) && draftChanged(groupEditor, baselines.current.groupEditor),
+        "Discard your unsaved group changes?",
+      )
+    )
+      return false;
+    setGroupEditor(null);
     return true;
   };
 
   useEffect(() => {
     if (intent?.type === "open-group-archives") {
-      setGroupArchivesOpen(true);
       changeView("groups", { replace: true });
-      setSelected({ type: "group", id: state.groups.find(isGroupArchived)?.id || "" });
+      setGroupArchivesOpen(true);
+      const first = state.groups.find(isGroupArchived);
+      if (first) select("group", first.id);
     }
     if (intent === "students" || intent === "groups" || intent === "all") changeView(intent, { replace: true });
     if (intent === "add-student") openStudentEditor();
     if (intent === "add-group") openGroupEditor();
     if (intent) clearIntent?.();
-    // Intent actions use the latest editor defaults and are consumed once.
+    // Intents are consumed once with the latest editor defaults.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [intent]);
 
@@ -1305,285 +411,841 @@ export default function Community({
     runSave(async () => {
       if (!studentDraft) return false;
       const saved = await actions.upsertStudent(studentDraft);
-      if (saved) studentBaseline.current = cloneStudent(studentDraft);
+      if (saved) baselines.current.student = cloneStudent(studentDraft);
       return saved;
     });
   const saveStudentEditor = () =>
     runSave(async () => {
-      if (!studentEditorDraft) return false;
-      const saved = await actions.upsertStudent(studentEditorDraft);
+      if (!studentEditor) return false;
+      const saved = await actions.upsertStudent(studentEditor);
       if (saved) {
-        const id = studentEditorDraft.id || state.students.at(-1)?.id;
-        studentEditorBaseline.current = null;
-        setStudentEditorDraft(null);
-        if (id) setSelected({ type: "student", id });
-        changeView("students", { replace: true });
+        setStudentEditor(null);
+        if (!compact && studentEditor.id) setSelected({ type: "student", id: studentEditor.id });
+        else if (!compact) setPendingCode(studentEditor.code);
       }
       return saved;
     });
   const saveGroupEditor = () =>
     runSave(async () => {
-      if (!groupEditorDraft) return false;
-      const saved = await actions.upsertGroup(groupEditorDraft);
+      if (!groupEditor) return false;
+      let saved;
+      if (groupEditor.id) saved = await actions.upsertGroup(groupEditor);
+      else {
+        const { billing } = billingChanges(groupEditor, [], newGroupBilling, asOf);
+        const draft = { ...groupEditor, hourlyRate: newGroupBilling.hourlyRate ?? groupEditor.hourlyRate, billing };
+        saved = actions.saveGroupBilling ? await actions.saveGroupBilling(draft, {}) : await actions.upsertGroup(draft);
+      }
       if (saved) {
-        groupEditorBaseline.current = null;
-        setGroupEditorDraft(null);
-        if (groupEditorDraft.id) setSelected({ type: "group", id: groupEditorDraft.id });
+        setGroupEditor(null);
+        if (groupEditor.id && !compact) setSelected({ type: "group", id: groupEditor.id });
         changeView("groups", { replace: true });
       }
       return saved;
     });
-  const toggleMember = async (student) => {
-    if (!membersGroup) return;
-    await actions.upsertStudent({
-      ...student,
-      groupIds: (student.groupIds || []).includes(membersGroup.id)
-        ? student.groupIds.filter((id) => id !== membersGroup.id)
-        : [...(student.groupIds || []), membersGroup.id],
+  const saveGroupDetail = (group) =>
+    runSave(async () => {
+      if (!groupDraft || !billingDraft) return false;
+      const members = membersOf(group);
+      const { billing, overrides } = billingChanges(group, members, billingDraft, asOf, applyFrom);
+      const draft = { ...group, name: groupDraft.name, hourlyRate: billingDraft.hourlyRate, billing };
+      const saved = actions.saveGroupBilling
+        ? await actions.saveGroupBilling(draft, overrides)
+        : await actions.upsertGroup(draft);
+      if (saved) {
+        baselines.current.group = { ...groupDraft };
+        baselines.current.billing = { ...billingDraft };
+        setBillingSheet(false);
+      }
+      return saved;
     });
-  };
-
   const confirmAction = async () => {
     const target = confirmTarget;
     if (!target) return;
     let completed = false;
     if (target.action === "archive-student") completed = await actions.archiveStudent(target.item.id);
-    if (target.action === "archive-group") completed = await actions.archiveGroup(target.item.id);
     if (target.action === "delete-student") completed = await actions.deleteStudent(target.item.id);
     if (target.action === "delete-group") completed = await actions.deleteGroup(target.item.id);
     if (completed) {
       setConfirmTarget(null);
-      if (selected.id === target.item.id)
-        setSelected({ type: target.action === "delete-group" ? "student" : "group", id: "" });
+      setStudentEditor(null);
+      setGroupEditor(null);
+      setSheet(null);
+      if (selected.id === target.item.id) setSelected({ type: "", id: "" });
     }
   };
+  const archiveGroup = () =>
+    runSave(async () => {
+      if (!archiveTarget) return false;
+      const done = await actions.archiveGroup(archiveTarget.id);
+      if (done) {
+        setArchiveTarget(null);
+        setSheet(null);
+        setGroupArchivesOpen(true);
+      }
+      return done;
+    });
+  const reactivateGroup = (group) => runSave(() => actions.reactivateGroup(group.id));
+  const reactivateStudent = (student) => runSave(() => actions.upsertStudent({ ...student, status: "Active" }));
+  const join = (student, choice) =>
+    runSave(async () => {
+      if (!joinTarget || !student) return false;
+      const saved = await actions.upsertStudent(joinGroup(student, joinTarget, asOf, choice));
+      if (saved) setJoinTarget(null);
+      return saved;
+    });
 
-  return (
-    <div className="page community-page">
-      <header className="community-page-heading">
-        <div>
-          <div className="community-title-line">
-            <h1>{uiT("Community")}</h1>
-            <span className="community-active-count">
-              <UserRound size={15} aria-hidden="true" />
-              <strong>{activeStudentCount}</strong>
-              <span>{uiT("Active students")}</span>
+  const nextFor = (group) => upcoming.find((session) => session.groupId === group.id) || null;
+  const openTracking = () => openPage?.("grades", { type: "open-tracking", tab: "attendance" });
+  const openNextClass = (group) => {
+    const next = nextFor(group);
+    if (next) openPage?.("classes", { type: "open-class", sessionKey: next.key });
+  };
+  const contextFor = (student) =>
+    student.status === "Inactive"
+      ? { text: `${student.code} · ${t("Inactive")}`, tone: "" }
+      : studentContext(months.get(student.id), groupNamesOf(student, groupsById, t), t, locale);
+
+  const groupCount = activeGroups.length;
+  const individualCount = activeStudents.filter((student) => student.isIndividual).length;
+  const description =
+    view === "groups"
+      ? t(
+          individualCount === 1
+            ? "{groups} groups and {count} individual class. Choose a group to see how it is going and whom to contact."
+            : "{groups} groups and {count} individual classes. Choose a group to see how it is going and whom to contact.",
+          { groups: groupCount, count: individualCount },
+        )
+      : t("{students} active students in {groups} groups. Choose someone to see their progress and details.", {
+          students: activeStudents.length,
+          groups: groupCount,
+        });
+
+  const archivedStudentsToggle = visibleInactive.length ? (
+    <>
+      <button
+        type="button"
+        className={`arch-toggle ${studentArchivesOpen ? "open" : ""}`}
+        aria-expanded={studentArchivesOpen}
+        aria-controls="community-archived-students"
+        onClick={() => setStudentArchivesOpen(!studentArchivesOpen)}
+      >
+        <Archive aria-hidden="true" />
+        {t("Inactive students · {count}", { count: visibleInactive.length })}
+        <ChevronRight className="chev" aria-hidden="true" />
+      </button>
+      {studentArchivesOpen ? (
+        <div id="community-archived-students" className="arch-list">
+          {visibleInactive.map((student) => (
+            <StudentRow
+              key={student.id}
+              student={student}
+              context={contextFor(student)}
+              selected={!compact && selected.id === student.id}
+              onSelect={(id) => select("student", id)}
+              extra={
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={() => reactivateStudent(student)}
+                  disabled={saving}
+                >
+                  {t("Reactivate")}
+                </button>
+              }
+            />
+          ))}
+        </div>
+      ) : null}
+    </>
+  ) : null;
+
+  const archivedGroupsToggle = visibleArchivedGroups.length ? (
+    <>
+      <button
+        type="button"
+        className={`arch-toggle ${groupArchivesOpen ? "open" : ""}`}
+        aria-expanded={groupArchivesOpen}
+        aria-controls="community-archived-groups"
+        onClick={() => setGroupArchivesOpen(!groupArchivesOpen)}
+      >
+        <Archive aria-hidden="true" />
+        {t("Archived groups · {count}", { count: visibleArchivedGroups.length })}
+        <ChevronRight className="chev" aria-hidden="true" />
+      </button>
+      {groupArchivesOpen ? (
+        <div id="community-archived-groups" className="arch-list">
+          <p className="arch-help">{t("They do not count in Home or Tracking. Their history is kept.")}</p>
+          {visibleArchivedGroups.map((group) => (
+            <button
+              type="button"
+              key={group.id}
+              className={`gi ar ${!compact && selected.id === group.id ? "on" : ""}`}
+              aria-label={`${group.name} ${t("Archived on {date}", { date: formatShortDate(group.archivedAt, locale, { weekday: false }) })}`}
+              onClick={() => select("group", group.id)}
+            >
+              <span className="gi-top">
+                <strong>{group.name}</strong>
+                <span className="tag">{t("Archived group")}</span>
+              </span>
+              <small>
+                {t("Archived on {date}", { date: formatShortDate(group.archivedAt, locale, { weekday: false }) })} ·{" "}
+                {t("{count} students", { count: membersOf(group).length })}
+              </small>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </>
+  ) : null;
+
+  const groupCards = (
+    <>
+      {visibleGroups.map((group) => {
+        const summary = groupSummaries.get(group.id);
+        const members = membersOf(group);
+        const line = groupPaymentLine(summary, group, t, locale);
+        return (
+          <button
+            type="button"
+            key={group.id}
+            className={`gi ${selected.type === "group" && selected.id === group.id ? "on" : ""}`}
+            aria-current={selected.id === group.id ? "true" : undefined}
+            aria-label={t("Open {name}", { name: group.name })}
+            onClick={() => select("group", group.id)}
+          >
+            <span className="gi-top">
+              <strong>{group.name}</strong>
+              <span className="gi-pct">{formatPercent(summary.attendance, locale)}</span>
             </span>
+            <small>
+              {[
+                t(members.length === 1 ? "{count} student" : "{count} students", { count: members.length }),
+                groupScheduleShort(group, locale),
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </small>
+            <span className="bar" aria-hidden="true">
+              <i style={{ width: `${Math.round((summary.attendance ?? 0) * 100)}%` }} />
+            </span>
+            <span className={`st ${line.tone}`}>{line.text}</span>
+          </button>
+        );
+      })}
+      {activeStudents
+        .filter((student) => student.isIndividual && studentMatches(student))
+        .map((student) => (
+          <button
+            type="button"
+            key={student.id}
+            className="link-button gi-individual"
+            onClick={() => select("student", student.id)}
+          >
+            {student.fullName} · {t("individual")} →
+          </button>
+        ))}
+    </>
+  );
+
+  const allList = (
+    <>
+      {visibleGroups.map((group) => {
+        const members = membersOf(group).filter(studentMatches);
+        const summary = groupSummaries.get(group.id);
+        return (
+          <div className="list-group" key={group.id}>
+            <div className="gh">
+              <span>
+                <strong>{group.name}</strong>
+                <span className="muted">
+                  {" "}
+                  · {members.length} · {formatPercent(summary.attendance, locale)}
+                </span>
+              </span>
+              <button type="button" className="link-button" onClick={() => select("group", group.id)}>
+                {t("View group")}
+              </button>
+            </div>
+            {members.map((student) => {
+              const month = months.get(student.id);
+              const others = studentGroupIdsOf(student)
+                .filter((id) => id !== group.id)
+                .map((id) => groupsById.get(id)?.name)
+                .filter(Boolean);
+              const extra = others.length
+                ? t("also in {groups}", { groups: others.join(", ") })
+                : student.isIndividual
+                  ? t("also individual")
+                  : "";
+              return (
+                <StudentRow
+                  key={`${group.id}-${student.id}`}
+                  student={student}
+                  context={{ text: [student.code, extra].filter(Boolean).join(" · "), tone: "" }}
+                  dot={month.flag.tone}
+                  selected={selected.type === "student" && selected.id === student.id}
+                  onSelect={(id) => select("student", id)}
+                />
+              );
+            })}
           </div>
-          <p>{uiT("Manage students and groups in one place, quickly and simply.")}</p>
+        );
+      })}
+      {visibleActive.some(
+        (student) =>
+          !studentGroupIdsOf(student).some((id) => groupsById.get(id) && !isGroupArchived(groupsById.get(id))),
+      ) ? (
+        <div className="list-group">
+          <div className="gh">
+            <strong>{t("Individual and without a group")}</strong>
+          </div>
+          {visibleActive
+            .filter(
+              (student) =>
+                !studentGroupIdsOf(student).some((id) => groupsById.get(id) && !isGroupArchived(groupsById.get(id))),
+            )
+            .map((student) => (
+              <StudentRow
+                key={student.id}
+                student={student}
+                context={{ text: student.code, tone: "" }}
+                dot={months.get(student.id).flag.tone}
+                selected={selected.type === "student" && selected.id === student.id}
+                onSelect={(id) => select("student", id)}
+              />
+            ))}
         </div>
-        <div>
-          <Button variant="primary" icon={Plus} onClick={() => openStudentEditor()}>
-            {uiT("Add student")}
-          </Button>
-          <Button icon={UsersRound} onClick={() => openGroupEditor()}>
-            {uiT("Create group")}
-          </Button>
-        </div>
-      </header>
-      <div className="community-toolbar">
-        <label className="community-search">
-          <Search size={19} aria-hidden="true" />
-          <span className="sr-only">{uiT("Search students or groups")}</span>
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={uiT("Search students or groups")}
-          />
-        </label>
-        <CommunityTabs value={view} onChange={changeView} />
-      </div>
-      <div className={selectedGroup ? "community-layout community-group-directory-layout" : "community-layout"}>
-        <ListPanel
-          view={view}
-          students={activeStudents}
-          archivedStudents={archivedStudents}
-          archivesOpen={archivesOpen}
-          onToggleArchives={() => {
-            if (!confirmDiscard(studentDirty || groupDirty, "Discard your unsaved community changes?")) return;
-            setArchivesOpen((open) => !open);
-          }}
-          onReactivateStudent={(student) => {
-            if (!confirmDiscard(studentDirty || groupDirty, "Discard your unsaved community changes?")) return;
-            return runSave(() => actions.upsertStudent({ ...student, status: "Active" }));
-          }}
-          saving={saving}
-          groups={activeGroups}
-          archivedGroups={archivedGroups}
-          includedInStatistics={archiveScope?.included}
-          groupArchivesOpen={groupArchivesOpen}
-          onToggleGroupArchives={() => {
-            if (!confirmDiscard(studentDirty || groupDirty, "Discard your unsaved community changes?")) return;
-            setGroupArchivesOpen((open) => !open);
-          }}
-          onReactivateGroup={(group) => runSave(() => actions.reactivateGroup(group.id))}
-          onArchiveGroup={(item) => setConfirmTarget({ action: "archive-group", item })}
-          derived={derived}
-          selected={selected}
-          onSelectStudent={(id) => selectRecord("student", id)}
-          onSelectGroup={(id) => selectRecord("group", id)}
-          onEditStudent={openStudentEditor}
-          onEditGroup={openGroupEditor}
-          onArchiveStudent={(item) => setConfirmTarget({ action: "archive-student", item })}
-          onDeleteStudent={(item) => setConfirmTarget({ action: "delete-student", item })}
-          onDeleteGroup={(item) => setConfirmTarget({ action: "delete-group", item })}
-          groupsById={groupsById}
-          state={state}
-          status={status}
-          setStatus={setStatus}
-          filters={filters}
-          setFilters={setFilters}
-        />
-        {selectedStudent && studentDraft ? (
-          <StudentDetail
-            student={selectedStudent}
-            draft={studentDraft}
-            setDraft={setStudentDraft}
-            groupsById={groupsById}
-            state={state}
-            onEdit={() => openStudentEditor(selectedStudent)}
-            onSave={saveStudentDetail}
-            onArchive={() => setConfirmTarget({ action: "archive-student", item: selectedStudent })}
-            saving={saving}
-          />
-        ) : null}
-        {selectedGroup && isGroupArchived(selectedGroup) ? (
-          <ArchivedGroupDetail
-            key={selectedGroup.id}
-            group={selectedGroup}
-            members={groupMembers}
-            state={state}
-            derived={derived}
-            saving={saving}
-            includedInStatistics={archiveScope?.included}
-            onReactivate={() => runSave(() => actions.reactivateGroup(selectedGroup.id))}
-          />
-        ) : selectedGroup && groupDraft ? (
-          <GroupDetail
-            group={selectedGroup}
-            members={groupMembers}
-            onEdit={() => openGroupEditor(selectedGroup)}
-            onManage={() => setMembersGroupId(selectedGroup.id)}
-            onArchive={() => setConfirmTarget({ action: "archive-group", item: selectedGroup })}
-          />
-        ) : null}
-        {!selectedStudent && !selectedGroup ? (
-          <section className="community-detail-panel community-detail-empty">
-            <span className="community-heading-icon">
-              <UsersRound size={24} />
-            </span>
-            <h2>{uiT("Select a student or group")}</h2>
-            <p>{uiT("Details and editing tools will appear here.")}</p>
-          </section>
-        ) : null}
-      </div>
+      ) : null}
+    </>
+  );
 
+  const studentsList = (
+    <>
+      {pending.length ? (
+        <div className="list-group">
+          <div className="gh">
+            <strong>{t("With something pending")}</strong>
+            <span className="muted">{pending.length}</span>
+          </div>
+          {pending.map((month) => (
+            <StudentRow
+              key={month.student.id}
+              student={month.student}
+              context={contextFor(month.student)}
+              selected={selected.type === "student" && selected.id === month.student.id}
+              onSelect={(id) => select("student", id)}
+            />
+          ))}
+        </div>
+      ) : null}
+      {upToDate.length ? (
+        <div className="list-group">
+          <div className="gh">
+            <strong>{t("Up to date")}</strong>
+            <span className="muted">{upToDate.length}</span>
+          </div>
+          {upToDate.map((month) => (
+            <StudentRow
+              key={month.student.id}
+              student={month.student}
+              context={contextFor(month.student)}
+              selected={selected.type === "student" && selected.id === month.student.id}
+              onSelect={(id) => select("student", id)}
+            />
+          ))}
+        </div>
+      ) : null}
+    </>
+  );
+
+  const noResults =
+    (view === "groups"
+      ? !visibleGroups.length && !visibleArchivedGroups.length
+      : !visibleActive.length && !visibleInactive.length) && !(view === "all" && visibleGroups.length);
+
+  const detail =
+    selectedStudent && studentDraft ? (
+      <StudentDetail
+        student={selectedStudent}
+        draft={studentDraft}
+        setDraft={setStudentDraft}
+        month={
+          months.get(selectedStudent.id) ||
+          studentMonths(state, derived, asOf, [selectedStudent]).get(selectedStudent.id)
+        }
+        recent={studentRecentClasses(state, derived, selectedStudent.id)}
+        groupsById={groupsById}
+        onSave={saveStudentDetail}
+        onArchive={() => setConfirmTarget({ action: "archive-student", item: selectedStudent })}
+        onReactivate={() => reactivateStudent(selectedStudent)}
+        onEdit={() => openStudentEditor(selectedStudent)}
+        onOpenTracking={openTracking}
+        saving={saving}
+        dirty={studentDirty}
+      />
+    ) : selectedGroup && isGroupArchived(selectedGroup) ? (
+      <ArchivedGroupView
+        key={selectedGroup.id}
+        group={selectedGroup}
+        members={selectedMembers}
+        history={archivedGroupHistory(state, derived, selectedGroup, selectedMembers)}
+        includedInStatistics={archiveScope?.included}
+        onReactivate={() => reactivateGroup(selectedGroup)}
+        saving={saving}
+      />
+    ) : selectedGroup && groupDraft && billingDraft ? (
+      <GroupDetail
+        key={selectedGroup.id}
+        group={selectedGroup}
+        members={selectedMembers}
+        summary={groupSummaries.get(selectedGroup.id)}
+        grid={groupAttendanceGrid(state, selectedGroup, selectedMembers, asOf)}
+        monthsById={months}
+        next={nextFor(selectedGroup)}
+        asOf={asOf}
+        state={state}
+        draft={groupDraft}
+        setDraft={setGroupDraft}
+        billingDraft={billingDraft}
+        setBillingDraft={setBillingDraft}
+        applyFrom={applyFrom}
+        setApplyFrom={setApplyFrom}
+        switching={normalizeGroupBilling(selectedGroup.billing)?.mode !== "monthly" && billingDraft.mode === "monthly"}
+        onSave={() => saveGroupDetail(selectedGroup)}
+        onArchive={() => setArchiveTarget(selectedGroup)}
+        onEditSchedule={() => openGroupEditor(selectedGroup)}
+        onAddStudent={() => setJoinTarget(selectedGroup)}
+        onOpenStudent={(student) => select("student", student.id)}
+        onOpenNext={() => openNextClass(selectedGroup)}
+        saving={saving}
+        dirty={groupDirty}
+      />
+    ) : (
+      <section className="detail">
+        <EmptyState
+          icon={UsersRound}
+          title={t("Select a student or group")}
+          description={t("Details and editing tools will appear here.")}
+        />
+      </section>
+    );
+
+  const archiveSummary = archiveTarget
+    ? {
+        ...groupSummaries.get(archiveTarget.id),
+        recordedClasses: new Set(
+          state.classLog
+            .filter((row) => row.groupId === archiveTarget.id && row.classStatus === "Completed")
+            .map((row) => `${row.classDate}|${row.startTime}`),
+        ).size,
+      }
+    : null;
+
+  const overlays = (
+    <>
       <Drawer
-        open={Boolean(studentEditorDraft)}
+        open={Boolean(studentEditor)}
         onClose={closeStudentEditor}
-        title={studentEditorDraft?.id ? uiT("Edit student") : uiT("Add student")}
-        description={uiT("Use individual classes, one or many groups, or both.")}
+        title={studentEditor?.id ? t("Edit student") : t("Add student")}
+        description={t("Use individual classes, one or many groups, or both.")}
         footer={
           <>
-            <Button onClick={closeStudentEditor}>{uiT("Cancel")}</Button>
+            {studentEditor?.id ? (
+              <Button
+                variant="ghost"
+                className="is-danger-text footer-start"
+                onClick={() => setConfirmTarget({ action: "delete-student", item: studentEditor })}
+              >
+                {t("Delete student")}
+              </Button>
+            ) : null}
+            <Button onClick={closeStudentEditor}>{t("Cancel")}</Button>
             <Button variant="primary" onClick={saveStudentEditor} disabled={saving}>
-              {saving ? uiT("Saving…") : uiT("Save student")}
+              {saving ? t("Saving…") : t("Save student")}
             </Button>
           </>
         }
       >
-        {studentEditorDraft ? (
+        {studentEditor ? (
           <StudentEditor
-            draft={studentEditorDraft}
-            setDraft={setStudentEditorDraft}
+            draft={studentEditor}
+            setDraft={setStudentEditor}
             groups={state.groups}
             defaultRate={state.settings.hourlyRate}
           />
         ) : null}
       </Drawer>
       <Drawer
-        open={Boolean(groupEditorDraft)}
+        open={Boolean(groupEditor)}
         onClose={closeGroupEditor}
-        title={groupEditorDraft?.id ? uiT("Edit group") : uiT("Create group")}
+        title={groupEditor?.id ? t("Edit group") : t("Create group")}
+        kicker={groupEditor?.id ? t("Schedule and details") : t("New group")}
         footer={
           <>
-            <Button onClick={closeGroupEditor}>{uiT("Cancel")}</Button>
+            {groupEditor?.id ? (
+              <Button
+                variant="ghost"
+                className="is-danger-text footer-start"
+                onClick={() => setConfirmTarget({ action: "delete-group", item: groupEditor })}
+              >
+                {t("Delete group")}
+              </Button>
+            ) : null}
+            <Button onClick={closeGroupEditor}>{t("Cancel")}</Button>
             <Button variant="primary" onClick={saveGroupEditor} disabled={saving}>
-              {saving ? uiT("Saving…") : uiT("Save group")}
+              {saving ? t("Saving…") : groupEditor?.id ? t("Save group") : t("Create group")}
             </Button>
           </>
         }
       >
-        {groupEditorDraft ? (
+        {groupEditor ? (
           <GroupEditor
-            draft={groupEditorDraft}
-            setDraft={setGroupEditorDraft}
+            draft={groupEditor}
+            setDraft={setGroupEditor}
             defaultHours={state.settings.defaultClassHours}
             defaultRate={state.settings.hourlyRate}
-          />
+          >
+            {groupEditor.id ? null : (
+              <BillingFields
+                draft={newGroupBilling}
+                setDraft={setNewGroupBilling}
+                group={groupEditor}
+                state={state}
+                asOf={asOf}
+                defaultRate={state.settings.hourlyRate}
+              />
+            )}
+          </GroupEditor>
         ) : null}
       </Drawer>
-      <Drawer
-        open={Boolean(membersGroup)}
-        onClose={() => setMembersGroupId("")}
-        title={membersGroup ? uiT("Manage {p0}", { p0: membersGroup.name }) : uiT("Manage group")}
-        description={uiT("Students can belong to more than one group.")}
-        size="wide"
-      >
-        {membersGroup ? (
-          <GroupMemberPicker
-            key={membersGroup.id}
-            students={state.students}
-            group={membersGroup}
-            onToggle={toggleMember}
-          />
-        ) : null}
-      </Drawer>
+      <ArchiveGroupDialog
+        open={Boolean(archiveTarget)}
+        group={archiveTarget}
+        members={archiveTarget ? membersOf(archiveTarget) : []}
+        summary={archiveSummary}
+        onClose={() => setArchiveTarget(null)}
+        onConfirm={archiveGroup}
+        saving={saving}
+      />
+      <JoinGroupSheet
+        key={joinTarget?.id || "join"}
+        open={Boolean(joinTarget)}
+        group={joinTarget}
+        candidates={
+          joinTarget ? activeStudents.filter((student) => !studentGroupIdsOf(student).includes(joinTarget.id)) : []
+        }
+        state={state}
+        asOf={asOf}
+        onClose={() => setJoinTarget(null)}
+        onJoin={join}
+        saving={saving}
+      />
       <ConfirmDialog
         open={Boolean(confirmTarget)}
         title={
-          confirmTarget?.action === "archive-group"
-            ? uiT("Archive group {name}?", { name: confirmTarget.item.name })
-            : confirmTarget?.action === "archive-student"
-              ? uiT("Deactivate {p0}?", { p0: confirmTarget.item.fullName })
-              : uiT("Delete {p0}?", { p0: confirmTarget?.item?.fullName || confirmTarget?.item?.name })
+          confirmTarget?.action === "archive-student"
+            ? t("Deactivate {p0}?", { p0: confirmTarget.item.fullName })
+            : t("Delete {p0}?", { p0: confirmTarget?.item?.fullName || confirmTarget?.item?.name })
         }
         description={
-          confirmTarget?.action === "archive-group"
-            ? uiT(
-                "Keep its students, grades, attendance, and payments. The group will be hidden from active groups, upcoming classes, and general statistics.",
-              )
-            : confirmTarget?.action === "archive-student"
-              ? uiT("The student becomes inactive while grades, attendance, and payment history stay available.")
-              : confirmTarget?.action === "delete-student"
-                ? uiT("Students with grades or class history cannot be deleted; deactivate them instead.")
-                : uiT("Groups with assigned students cannot be deleted. Existing class history remains protected.")
+          confirmTarget?.action === "archive-student"
+            ? t("The student becomes inactive while grades, attendance, and payment history stay available.")
+            : confirmTarget?.action === "delete-student"
+              ? t("Students with grades or class history cannot be deleted; deactivate them instead.")
+              : t("Groups with assigned students cannot be deleted. Existing class history remains protected.")
         }
         confirmLabel={
-          confirmTarget?.action === "archive-group"
-            ? uiT("Archive group")
-            : confirmTarget?.action === "archive-student"
-              ? uiT("Deactivate student")
-              : confirmTarget?.action === "delete-group"
-                ? uiT("Delete group")
-                : uiT("Delete student")
+          confirmTarget?.action === "archive-student"
+            ? t("Deactivate student")
+            : confirmTarget?.action === "delete-group"
+              ? t("Delete group")
+              : t("Delete student")
         }
-        tone={confirmTarget?.action.startsWith("archive-") ? "primary" : "danger"}
+        tone={confirmTarget?.action === "archive-student" ? "primary" : "danger"}
         onClose={() => setConfirmTarget(null)}
         onConfirm={() => runSave(confirmAction)}
         busy={saving}
-      >
-        {confirmTarget?.action === "archive-group" ? (
-          <div className="archive-confirmation-note">
-            <p>
-              {uiT(
-                "You can include its history manually from statistics. Its students remain available in other groups and individual classes.",
-              )}
-            </p>
-            <p>{uiT("Archiving does not delete pending balances. You can check them in the group history.")}</p>
+      />
+    </>
+  );
+
+  if (compact) {
+    const sheetMonth = sheetStudent
+      ? months.get(sheetStudent.id) || studentMonths(state, derived, asOf, [sheetStudent]).get(sheetStudent.id)
+      : null;
+    const showStudents = view !== "groups";
+    return (
+      <div className="page community-page is-compact">
+        <div className="community-head">
+          <div>
+            <span className="overline">
+              {t("{students} students · {groups} groups", { students: activeStudents.length, groups: groupCount })}
+            </span>
+            <h1>{t("Community")}</h1>
           </div>
-        ) : null}
-      </ConfirmDialog>
+          <Button
+            variant="primary"
+            icon={Plus}
+            onClick={() => (showStudents ? openStudentEditor() : openGroupEditor())}
+          >
+            {t(showStudents ? "Add" : "Create group")}
+          </Button>
+        </div>
+        <label className="search-control">
+          <Search aria-hidden="true" />
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={t("Search student or group")}
+            aria-label={t("Search student or group")}
+          />
+        </label>
+        <Segmented
+          className="community-switch"
+          tone="soft"
+          value={showStudents ? "students" : "groups"}
+          label={t("Community views")}
+          onChange={(value) => changeView(value)}
+          items={[
+            { value: "students", label: "Students" },
+            { value: "groups", label: "Groups" },
+          ]}
+        />
+        {showStudents ? (
+          <>
+            {pending.length ? (
+              <section>
+                <div className="sh">
+                  <h2>{t("With something pending")}</h2>
+                  <span>{pending.length}</span>
+                </div>
+                <div className="list-rows">
+                  {pending.map((month) => {
+                    const context = contextFor(month.student);
+                    return (
+                      <ListRow
+                        key={month.student.id}
+                        avatar={
+                          <StudentAvatar avatarId={month.student.avatarId} name={month.student.fullName} decorative />
+                        }
+                        name={month.student.fullName}
+                        context={context.text}
+                        contextTone={context.tone}
+                        value={context.value || null}
+                        valueTone="bad"
+                        label={t("Open {name}", { name: month.student.fullName })}
+                        onClick={() => select("student", month.student.id)}
+                      />
+                    );
+                  })}
+                </div>
+              </section>
+            ) : null}
+            {upToDate.length ? (
+              <section>
+                <div className="sh">
+                  <h2>{t("Up to date")}</h2>
+                  <span>{upToDate.length}</span>
+                </div>
+                <div className="list-rows">
+                  {upToDate.map((month) => (
+                    <ListRow
+                      key={month.student.id}
+                      avatar={
+                        <StudentAvatar avatarId={month.student.avatarId} name={month.student.fullName} decorative />
+                      }
+                      name={month.student.fullName}
+                      context={contextFor(month.student).text}
+                      label={t("Open {name}", { name: month.student.fullName })}
+                      onClick={() => select("student", month.student.id)}
+                    />
+                  ))}
+                </div>
+              </section>
+            ) : null}
+            {archivedStudentsToggle}
+          </>
+        ) : (
+          <>
+            <div className="list-rows">
+              {visibleGroups.map((group) => {
+                const summary = groupSummaries.get(group.id);
+                const line = groupPaymentLine(summary, group, t, locale);
+                return (
+                  <ListRow
+                    key={group.id}
+                    avatar={<AttendanceRing value={summary.attendance === null ? NaN : summary.attendance * 100} />}
+                    name={group.name}
+                    context={[groupScheduleShort(group, locale), line.text].filter(Boolean).join(" · ")}
+                    contextTone={line.tone === "st-venc" ? "bad" : line.tone === "st-pend" ? "pend" : ""}
+                    label={t("Open {name}", { name: group.name })}
+                    onClick={() => select("group", group.id)}
+                  />
+                );
+              })}
+            </div>
+            {archivedGroupsToggle}
+          </>
+        )}
+        {noResults ? <p className="muted">{t("No matches.")}</p> : null}
+
+        <BottomSheet open={Boolean(sheetStudent)} onClose={() => setSheet(null)} title={sheetStudent?.fullName || ""}>
+          {sheetStudent && sheetMonth ? (
+            <StudentSheet
+              student={sheetStudent}
+              month={sheetMonth}
+              recent={studentRecentClasses(state, derived, sheetStudent.id, 4)}
+              groupsById={groupsById}
+              asOf={asOf}
+              onEdit={() => openStudentEditor(sheetStudent)}
+            />
+          ) : null}
+        </BottomSheet>
+        <BottomSheet
+          open={Boolean(sheetGroup)}
+          onClose={() => setSheet(null)}
+          title={sheetGroup?.name || ""}
+          kicker={
+            sheetGroup
+              ? isGroupArchived(sheetGroup)
+                ? t("Archived · {date}", { date: formatShortDate(sheetGroup.archivedAt, locale, { weekday: false }) })
+                : groupScheduleShort(sheetGroup, locale)
+              : ""
+          }
+          description={
+            sheetGroup && isGroupArchived(sheetGroup)
+              ? t("{count} students · their history is kept in full", { count: focusMembers.length })
+              : undefined
+          }
+        >
+          {sheetGroup && isGroupArchived(sheetGroup) ? (
+            <ArchivedGroupView
+              group={sheetGroup}
+              members={focusMembers}
+              history={archivedGroupHistory(state, derived, sheetGroup, focusMembers)}
+              includedInStatistics={archiveScope?.included}
+              compact
+              onReactivate={async () => {
+                if (await reactivateGroup(sheetGroup)) setSheet(null);
+              }}
+              saving={saving}
+            />
+          ) : sheetGroup ? (
+            <GroupSheet
+              group={sheetGroup}
+              members={focusMembers}
+              summary={groupSummaries.get(sheetGroup.id)}
+              grid={groupAttendanceGrid(state, sheetGroup, focusMembers, asOf, 3)}
+              monthsById={months}
+              next={nextFor(sheetGroup)}
+              asOf={asOf}
+              state={state}
+              onEditBilling={() => setBillingSheet(true)}
+              onOpenStudent={(student) => setSheet({ type: "student", id: student.id })}
+              onAddStudent={() => setJoinTarget(sheetGroup)}
+              onArchive={() => setArchiveTarget(sheetGroup)}
+            />
+          ) : null}
+        </BottomSheet>
+        <BottomSheet
+          open={Boolean(billingSheet && sheetGroup && groupDraft && billingDraft)}
+          onClose={() => setBillingSheet(false)}
+          title={sheetGroup?.name || ""}
+          kicker={t("Edit group")}
+          backLabel={t("Back")}
+          footer={
+            <Button variant="primary" onClick={() => saveGroupDetail(sheetGroup)} disabled={saving || !groupDirty}>
+              {saving ? t("Saving…") : t("Save changes")}
+            </Button>
+          }
+        >
+          {sheetGroup && groupDraft && billingDraft ? (
+            <div className="billing-sheet">
+              <Field label={t("Group name")}>
+                <Input
+                  value={groupDraft.name}
+                  onChange={(event) => setGroupDraft({ ...groupDraft, name: event.target.value })}
+                />
+              </Field>
+              <BillingFields
+                draft={billingDraft}
+                setDraft={setBillingDraft}
+                group={sheetGroup}
+                members={focusMembers}
+                state={state}
+                asOf={asOf}
+                defaultRate={state.settings?.hourlyRate}
+                applyFrom={applyFrom}
+                setApplyFrom={setApplyFrom}
+                switching={
+                  normalizeGroupBilling(sheetGroup.billing)?.mode !== "monthly" && billingDraft.mode === "monthly"
+                }
+              />
+              <button type="button" className="link-button" onClick={() => openGroupEditor(sheetGroup)}>
+                {t("Edit schedule and details")}
+              </button>
+            </div>
+          ) : null}
+        </BottomSheet>
+        {overlays}
+      </div>
+    );
+  }
+
+  return (
+    <div className="page community-page">
+      <SectionHeading
+        title={t("Community")}
+        description={description}
+        actions={
+          view === "groups" ? (
+            <>
+              <Button icon={Plus} onClick={() => openStudentEditor()}>
+                {t("Add student")}
+              </Button>
+              <Button variant="primary" icon={Plus} onClick={() => openGroupEditor()}>
+                {t("Create group")}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button icon={Plus} onClick={() => openGroupEditor()}>
+                {t("Create group")}
+              </Button>
+              <Button variant="primary" icon={Plus} onClick={() => openStudentEditor()}>
+                {t("Add student")}
+              </Button>
+            </>
+          )
+        }
+      />
+      <div className="community-bar">
+        <Tabs value={view} onChange={(value) => changeView(value)} items={VIEW_TABS} ariaLabel={t("Community views")} />
+        <label className="search-control">
+          <Search aria-hidden="true" />
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={t("Search student or group")}
+            aria-label={t("Search student or group")}
+          />
+        </label>
+      </div>
+      <div className="cols" role="tabpanel">
+        <nav
+          className={`list ${view === "groups" ? "is-groups" : ""}`}
+          aria-label={t(view === "groups" ? "Groups" : "Students")}
+        >
+          {view === "groups" ? groupCards : view === "students" ? studentsList : allList}
+          {noResults ? <p className="muted">{t("No matches.")}</p> : null}
+          {view === "groups" ? archivedGroupsToggle : archivedStudentsToggle}
+          {view === "all" ? archivedGroupsToggle : null}
+        </nav>
+        {detail}
+      </div>
+      {overlays}
     </div>
   );
 }

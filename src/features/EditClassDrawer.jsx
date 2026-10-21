@@ -61,7 +61,9 @@ export function EditClassDrawer({ open, session, state, actions, asOfDate, futur
   const groups = (state.groups || []).filter((group) => group.status !== "Inactive");
   const defaultParticipantIds = useMemo(() => {
     if (draft.format === "individual") return draft.studentId ? [draft.studentId] : [];
-    return activeStudents.filter((student) => studentGroupIdsOf(student).includes(draft.groupId)).map((student) => student.id);
+    return activeStudents
+      .filter((student) => studentGroupIdsOf(student).includes(draft.groupId))
+      .map((student) => student.id);
   }, [activeStudents, draft.format, draft.groupId, draft.studentId]);
   const participantIds = draft.participantMode === "custom" ? draft.participantIds : defaultParticipantIds;
   const visibleStudents = activeStudents.filter(
@@ -177,7 +179,11 @@ export function EditClassDrawer({ open, session, state, actions, asOfDate, futur
               />
             </Field>
             <Field label={t("Duration")} required>
-              <DurationStepper label={t("Duration")} minutes={draft.minutes} onChange={(minutes) => update({ minutes })} />
+              <DurationStepper
+                label={t("Duration")}
+                minutes={draft.minutes}
+                onChange={(minutes) => update({ minutes })}
+              />
             </Field>
           </div>
           <Field label={t("Format")}>
@@ -188,8 +194,20 @@ export function EditClassDrawer({ open, session, state, actions, asOfDate, futur
               onChange={(format) =>
                 update(
                   format === "group"
-                    ? { format, groupId: draft.groupId || groups[0]?.id || "", studentId: "", participantMode: "default", participantIds: [] }
-                    : { format, studentId: draft.studentId || activeStudents[0]?.id || "", groupId: "", participantMode: "default", participantIds: [] },
+                    ? {
+                        format,
+                        groupId: draft.groupId || groups[0]?.id || "",
+                        studentId: "",
+                        participantMode: "default",
+                        participantIds: [],
+                      }
+                    : {
+                        format,
+                        studentId: draft.studentId || activeStudents[0]?.id || "",
+                        groupId: "",
+                        participantMode: "default",
+                        participantIds: [],
+                      },
                 )
               }
               items={[
@@ -203,7 +221,9 @@ export function EditClassDrawer({ open, session, state, actions, asOfDate, futur
               <GroupSelect
                 value={draft.groupId}
                 placeholder="Choose a group"
-                onChange={(event) => update({ groupId: event.target.value, participantMode: "default", participantIds: [] })}
+                onChange={(event) =>
+                  update({ groupId: event.target.value, participantMode: "default", participantIds: [] })
+                }
                 groups={groups.map((group) => ({ id: group.id, name: group.name, mark: groupMark(group.name) }))}
               />
             </Field>
@@ -224,7 +244,9 @@ export function EditClassDrawer({ open, session, state, actions, asOfDate, futur
                 <span>
                   <strong>{t("Participants")}</strong>{" "}
                   <span className="muted">
-                    {t(participantIds.length === 1 ? "{count} student" : "{count} students", { count: participantIds.length })}
+                    {t(participantIds.length === 1 ? "{count} student" : "{count} students", {
+                      count: participantIds.length,
+                    })}
                     {draft.participantMode === "custom" ? ` · ${t("custom list")}` : ""}
                   </span>
                 </span>

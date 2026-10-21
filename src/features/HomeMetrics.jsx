@@ -324,7 +324,9 @@ export function pointDetail(metric, index, context) {
       big: `${percentText(point.value, locale)}%`,
       sub: `${point.title} · ${t(low ? "below {value}%" : "above {value}%", { value: percentText(threshold.attendance, locale) })}`,
       tone: low ? "text-bad" : "text-ok",
-      rows: [{ key: t("Present"), value: t("{present} of {total}", { present: point.present, total: point.total }) }],
+      rows: [
+        { key: t("Present (count)"), value: t("{present} of {total}", { present: point.present, total: point.total }) },
+      ],
       listTitle: t("Missed"),
       list: point.absentIds.map((id) => ({ id, name: nameOf(id), color: RED })),
       emptyMessage: t("Nobody missed. Perfect attendance!"),

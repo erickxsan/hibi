@@ -30,14 +30,22 @@ function joinDays(days, locale, long) {
 export function groupScheduleShort(group, locale) {
   const slots = sortedSlots(group);
   if (!slots.length) return "";
-  return `${joinDays(slots.map((slot) => slot.dayOfWeek), locale, false)} · ${formatTime(slots[0].startTime, locale)}`;
+  return `${joinDays(
+    slots.map((slot) => slot.dayOfWeek),
+    locale,
+    false,
+  )} · ${formatTime(slots[0].startTime, locale)}`;
 }
 
 /** «Lunes y jueves · 4:00 – 6:00 p. m.» */
 export function groupScheduleLong(group, locale) {
   const slots = sortedSlots(group);
   if (!slots.length) return "";
-  const days = joinDays(slots.map((slot) => slot.dayOfWeek), locale, true);
+  const days = joinDays(
+    slots.map((slot) => slot.dayOfWeek),
+    locale,
+    true,
+  );
   return `${days.charAt(0).toUpperCase()}${days.slice(1)} · ${formatTimeRange(slots[0].startTime, slots[0].durationHours, locale)}`;
 }
 
@@ -45,7 +53,11 @@ export function groupScheduleLong(group, locale) {
 export function groupDaysLong(group, locale) {
   const slots = sortedSlots(group);
   if (!slots.length) return "";
-  const days = joinDays(slots.map((slot) => slot.dayOfWeek), locale, true);
+  const days = joinDays(
+    slots.map((slot) => slot.dayOfWeek),
+    locale,
+    true,
+  );
   return `${days.charAt(0).toUpperCase()}${days.slice(1)}`;
 }
 

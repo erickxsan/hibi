@@ -39,7 +39,12 @@ export function Field({ label, hint, error, required, children, className = "" }
     <label className={`field ${className}`.trim()}>
       <span className="field-label" id={labelId}>
         {label}
-        {required ? <span aria-hidden="true"> *</span> : null}
+        {required ? (
+          <span className="req" aria-hidden="true">
+            {" "}
+            *
+          </span>
+        ) : null}
       </span>
       {labelledChild}
       {error ? (

@@ -76,8 +76,11 @@ export function ClassCalendar({ state, derived = undefined, currentDate, primary
     if (tone === "done") return { label: "View record", run: () => onOpen(session) };
     if (tone === "pending" || tone === "next") return { label: "Record class", run: () => onOpen(session) };
     if (tone === "cancelled") return null;
-    const editable = !(session.rows || []).length && (session.classScheduleId || session.scheduleSlotId || session.exceptionId);
-    return editable ? { label: "Edit class", run: () => onEdit(session) } : { label: "Open class", run: () => onOpen(session) };
+    const editable =
+      !(session.rows || []).length && (session.classScheduleId || session.scheduleSlotId || session.exceptionId);
+    return editable
+      ? { label: "Edit class", run: () => onEdit(session) }
+      : { label: "Open class", run: () => onOpen(session) };
   };
 
   return (
@@ -172,7 +175,9 @@ export function ClassCalendar({ state, derived = undefined, currentDate, primary
                 {selectedDate === currentDate ? `${t("Today")} · ` : ""}
                 {weekdayLong(selectedDate, locale)} {dayNumber(selectedDate)}
               </h3>
-              <small className="muted">{t(selected.length === 1 ? "{count} class" : "{count} classes", { count: selected.length })}</small>
+              <small className="muted">
+                {t(selected.length === 1 ? "{count} class" : "{count} classes", { count: selected.length })}
+              </small>
             </div>
           ) : (
             <>

@@ -97,7 +97,9 @@ export function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
   });
   const weekBlocks = sessionsAround.filter((session) => weekDays.includes(session.classDate)).map(blockFor);
   const activeDates = activeDatesInWeek(draft, rule, weekStart);
-  const occurrenceDates = recurring ? nextRecurrenceDates({ ...rule, startDate: draft.startDate }, 12) : [draft.startDate];
+  const occurrenceDates = recurring
+    ? nextRecurrenceDates({ ...rule, startDate: draft.startDate }, 12)
+    : [draft.startDate];
   const busyForClock = sessionsAround
     .filter((session) => occurrenceDates.includes(session.classDate))
     .map((session) => ({
@@ -105,7 +107,9 @@ export function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
       label: `${session.title} (${weekdayShort(session.classDate, locale)})`,
     }));
   const clashes = activeDates.flatMap((date) =>
-    weekBlocks.filter((block) => block.date === date && overlaps(block, start, end)).map((block) => ({ ...block, date })),
+    weekBlocks
+      .filter((block) => block.date === date && overlaps(block, start, end))
+      .map((block) => ({ ...block, date })),
   );
   const conflictDays = [...new Set(clashes.map((block) => new Date(`${block.date}T00:00:00Z`).getUTCDay()))];
   const suggestions = useMemo(() => {
@@ -115,7 +119,9 @@ export function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
     for (const date of weekDays) {
       for (const minute of times) {
         if (options.length >= 2) break;
-        const blocked = weekBlocks.some((block) => block.date === date && overlaps(block, minute, minute + draft.minutes));
+        const blocked = weekBlocks.some(
+          (block) => block.date === date && overlaps(block, minute, minute + draft.minutes),
+        );
         if (!blocked && !(date === draft.startDate && minute === start)) options.push({ date, minute });
       }
     }
@@ -124,9 +130,9 @@ export function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
   }, [clashes.length, draft.minutes, draft.startDate, start, weekStart]);
 
   const baseRate = isGroup
-    ? resolveHourlyRate(state, "", group) ?? 0
+    ? (resolveHourlyRate(state, "", group) ?? 0)
     : student
-      ? resolveHourlyRate(state, student, "") ?? 0
+      ? (resolveHourlyRate(state, student, "") ?? 0)
       : 0;
   const rateText = draft.rate === "" ? String(baseRate) : draft.rate;
   const rate = Number(rateText) || 0;
@@ -263,7 +269,11 @@ export function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
                   id: item.id,
                   name: item.name,
                   mark: groupMark(item.name),
-                  meta: [t(count === 1 ? "{count} student" : "{count} students", { count }), schedule, `${formatMoney(itemRate, locale)}/h`]
+                  meta: [
+                    t(count === 1 ? "{count} student" : "{count} students", { count }),
+                    schedule,
+                    `${formatMoney(itemRate, locale)}/h`,
+                  ]
                     .filter(Boolean)
                     .join(" · "),
                   detail: `${formatMoney(itemRate, locale)}/h`,
@@ -300,7 +310,13 @@ export function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
             <DatePicker
               today={asOfDate}
               classDates={[...new Set(sessionsAround.map((session) => session.classDate))]}
-              repeatDates={recurring ? nextRecurrenceDates({ ...rule, startDate: draft.startDate }, 8).filter((date) => date !== draft.startDate) : []}
+              repeatDates={
+                recurring
+                  ? nextRecurrenceDates({ ...rule, startDate: draft.startDate }, 8).filter(
+                      (date) => date !== draft.startDate,
+                    )
+                  : []
+              }
               value={draft.startDate}
               onChange={(event) => {
                 const startDate = event.target.value;
@@ -324,7 +340,11 @@ export function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
             />
           </Field>
           <Field label={t("Duration")} required>
-            <DurationStepper label={t("Duration")} minutes={draft.minutes} onChange={(minutes) => update({ minutes })} />
+            <DurationStepper
+              label={t("Duration")}
+              minutes={draft.minutes}
+              onChange={(minutes) => update({ minutes })}
+            />
           </Field>
           {recurring ? (
             <Field label={t("Repeat")} required>
@@ -352,7 +372,10 @@ export function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
                     aria-label={weekdayLong(date, locale)}
                     onClick={() =>
                       update({
-                        rule: { ...draft.rule, days: on ? rule.days.filter((item) => item !== day) : [...rule.days, day] },
+                        rule: {
+                          ...draft.rule,
+                          days: on ? rule.days.filter((item) => item !== day) : [...rule.days, day],
+                        },
                       })
                     }
                   >
@@ -387,7 +410,8 @@ export function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
                 onPointerDown={(event) => {
                   if (event.target instanceof Element && event.target.closest(".week-preview-new")) return;
                   const rect = event.currentTarget.getBoundingClientRect();
-                  const minute = Math.round((viewStart + ((event.clientY - rect.top) / rect.height) * span - 15) / 15) * 15;
+                  const minute =
+                    Math.round((viewStart + ((event.clientY - rect.top) / rect.height) * span - 15) / 15) * 15;
                   moveTo(date, Math.max(0, Math.min(1440 - draft.minutes, minute)));
                 }}
               >
@@ -407,7 +431,10 @@ export function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
                     className={`week-preview-new ${clashes.some((block) => block.date === date) ? "is-bad" : ""}`}
                     style={{ top: `${pct(start)}%`, height: `${(draft.minutes / span) * 100}%` }}
                     role="img"
-                    aria-label={t("New class from {start} to {end}", { start: formatTime(start, locale), end: formatTime(end, locale) })}
+                    aria-label={t("New class from {start} to {end}", {
+                      start: formatTime(start, locale),
+                      end: formatTime(end, locale),
+                    })}
                     onPointerDown={(event) => drag(event, "move")}
                   >
                     {formatTime(start, locale).replace(/ .*/, "")}–{formatTime(end, locale).replace(/ .*/, "")}
@@ -421,7 +448,10 @@ export function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
         <div className="conflict-line" aria-live="polite">
           {clashBlock ? (
             <span className="st st-venc">
-              {t("Conflicts with {name} on {day}", { name: clashBlock.label, day: weekdayLong(clashBlock.date, locale) })}
+              {t("Conflicts with {name} on {day}", {
+                name: clashBlock.label,
+                day: weekdayLong(clashBlock.date, locale),
+              })}
             </span>
           ) : (
             <span className="st st-ok">{t("Free time")}</span>
@@ -435,7 +465,8 @@ export function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
                   className="suggestion-button"
                   onClick={() => moveTo(option.date, option.minute)}
                 >
-                  {weekdayShort(option.date, locale).replace(/^./, (c) => c.toUpperCase())} {formatTime(option.minute, locale)}
+                  {weekdayShort(option.date, locale).replace(/^./, (c) => c.toUpperCase())}{" "}
+                  {formatTime(option.minute, locale)}
                 </button>
               ))}
             </span>
@@ -457,9 +488,7 @@ export function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
           </div>
           {isGroup ? (
             <div className="price-figure">
-              <span className="field-label">
-                {t("Per class · {count} students", { count: members.length })}
-              </span>
+              <span className="field-label">{t("Per class · {count} students", { count: members.length })}</span>
               <b>{formatMoney(perStudent * members.length, locale)}</b>
             </div>
           ) : null}
@@ -467,7 +496,10 @@ export function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
         {rateChanged ? (
           <p className="rate-change">
             {isGroup
-              ? t("The rate of {name} will change (was {amount}).", { name: group?.name || "", amount: formatMoney(baseRate, locale) })
+              ? t("The rate of {name} will change (was {amount}).", {
+                  name: group?.name || "",
+                  amount: formatMoney(baseRate, locale),
+                })
               : t("Own rate for {name} (was {amount}).", {
                   name: student?.fullName?.split(" ")[0] || "",
                   amount: formatMoney(baseRate, locale),

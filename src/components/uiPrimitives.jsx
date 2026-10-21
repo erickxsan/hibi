@@ -77,7 +77,7 @@ export function Switch({ checked, onChange, label, className = "", disabled = fa
   );
 }
 
-export function FieldRow({ label, hint, children, className = "" }) {
+export function FieldRow({ label, hint = undefined, children, className = "" }) {
   const labelId = useId();
   const hintId = useId();
   return (
@@ -229,11 +229,7 @@ export function ToastRegion({ toasts, onDismiss }) {
     <div className="toast-region" aria-live="polite" aria-label={uiT("Notifications")}>
       {toasts.map((toast) => (
         <div className={`toast toast-${toast.tone || "success"}`} key={toast.id}>
-          {toast.tone === "error" ? (
-            <AlertCircle aria-hidden="true" />
-          ) : (
-            <HibiStamp size={32} />
-          )}
+          {toast.tone === "error" ? <AlertCircle aria-hidden="true" /> : <HibiStamp size={32} />}
           <span>{uiT(toast.message)}</span>
           <IconButton label={uiT("Dismiss notification")} icon={X} onClick={() => onDismiss(toast.id)} />
         </div>
