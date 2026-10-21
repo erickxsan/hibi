@@ -1508,7 +1508,6 @@ export function registerSpanishTranslations(table) {
   }
 }
 
-
 const DYNAMIC_TRANSLATIONS = [
   [/^Pending balances in the archive: (.+)$/, (match) => "Saldos pendientes en el archivo: " + match[1]],
   [/^Archived on (.+)$/, (match) => "Archivado el " + match[1]],
