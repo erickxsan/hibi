@@ -1,12 +1,15 @@
 // Spanish copy for Comunidad: lists, student and group details, billing and archiving (docs/rediseno-v2).
 export const COMMUNITY_TRANSLATIONS = Object.freeze({
-  "{students} active students in {groups} groups. Choose someone to see their progress and details.":
-    "{students} alumnos activos en {groups} grupos. Elige a alguien para ver su avance y sus datos.",
-  "{groups} groups and {count} individual class. Choose a group to see how it is going and whom to contact.":
-    "{groups} grupos y {count} clase individual. Elige un grupo para ver cómo va y a quién contactar.",
-  "{groups} groups and {count} individual classes. Choose a group to see how it is going and whom to contact.":
-    "{groups} grupos y {count} clases individuales. Elige un grupo para ver cómo va y a quién contactar.",
-  "{students} students · {groups} groups": "{students} alumnos · {groups} grupos",
+  "{students} in {groups}. Choose someone to see their progress and details.":
+    "{students} en {groups}. Elige a alguien para ver su avance y sus datos.",
+  "{count} active student": "{count} alumno activo",
+  "{count} active students": "{count} alumnos activos",
+  "{count} group": "{count} grupo",
+  "{count} groups": "{count} grupos",
+  "{groups} and {count} individual class. Choose a group to see how it is going and whom to contact.":
+    "{groups} y {count} clase individual. Elige un grupo para ver cómo va y a quién contactar.",
+  "{groups} and {count} individual classes. Choose a group to see how it is going and whom to contact.":
+    "{groups} y {count} clases individuales. Elige un grupo para ver cómo va y a quién contactar.",
   "Search student or group": "Buscar alumno o grupo",
   Add: "Agregar",
   "Inactive students · {count}": "Alumnos inactivos · {count}",

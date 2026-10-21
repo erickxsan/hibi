@@ -55,7 +55,7 @@ describe("OnboardingTutorial", () => {
     const user = userEvent.setup();
     const { actions, onComplete } = renderTutorial();
 
-    expect(screen.getByRole("dialog", { name: "Welcome to Hibi!" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Hi, teacher! This is Hibi" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Start" }));
     expect(actions.setOnboardingStep).toHaveBeenCalledWith(2);
 

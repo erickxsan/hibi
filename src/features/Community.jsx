@@ -515,13 +515,18 @@ export default function Community({
     view === "groups"
       ? t(
           individualCount === 1
-            ? "{groups} groups and {count} individual class. Choose a group to see how it is going and whom to contact."
-            : "{groups} groups and {count} individual classes. Choose a group to see how it is going and whom to contact.",
-          { groups: groupCount, count: individualCount },
+            ? "{groups} and {count} individual class. Choose a group to see how it is going and whom to contact."
+            : "{groups} and {count} individual classes. Choose a group to see how it is going and whom to contact.",
+          {
+            groups: t(groupCount === 1 ? "{count} group" : "{count} groups", { count: groupCount }),
+            count: individualCount,
+          },
         )
-      : t("{students} active students in {groups} groups. Choose someone to see their progress and details.", {
-          students: activeStudents.length,
-          groups: groupCount,
+      : t("{students} in {groups}. Choose someone to see their progress and details.", {
+          students: t(activeStudents.length === 1 ? "{count} active student" : "{count} active students", {
+            count: activeStudents.length,
+          }),
+          groups: t(groupCount === 1 ? "{count} group" : "{count} groups", { count: groupCount }),
         });
 
   const archivedStudentsToggle = visibleInactive.length ? (
@@ -612,6 +617,7 @@ export default function Community({
           <button
             type="button"
             key={group.id}
+            data-onboarding-group={group.id}
             className={`gi ${selected.type === "group" && selected.id === group.id ? "on" : ""}`}
             aria-current={selected.id === group.id ? "true" : undefined}
             aria-label={t("Open {name}", { name: group.name })}
@@ -657,7 +663,7 @@ export default function Community({
         const members = membersOf(group).filter(studentMatches);
         const summary = groupSummaries.get(group.id);
         return (
-          <div className="list-group" key={group.id}>
+          <div className="list-group" key={group.id} data-onboarding-group={group.id}>
             <div className="gh">
               <span>
                 <strong>{group.name}</strong>
@@ -979,11 +985,11 @@ export default function Community({
       : null;
     const showStudents = view !== "groups";
     return (
-      <div className="page community-page is-compact">
+      <div className="page community-page is-compact" data-onboarding-tour="community">
         <div className="community-head">
           <div>
             <span className="overline">
-              {t("{students} students · {groups} groups", { students: activeStudents.length, groups: groupCount })}
+              {`${t(activeStudents.length === 1 ? "{count} student" : "{count} students", { count: activeStudents.length })} · ${t(groupCount === 1 ? "{count} group" : "{count} groups", { count: groupCount })}`}
             </span>
             <h1>{t("Community")}</h1>
           </div>
@@ -1239,6 +1245,7 @@ export default function Community({
       </div>
       <div className="cols" role="tabpanel">
         <nav
+          data-onboarding-tour="community"
           className={`list ${view === "groups" ? "is-groups" : ""}`}
           aria-label={t(view === "groups" ? "Groups" : "Students")}
         >

@@ -1374,7 +1374,7 @@ export default function Settings({
   );
 
   const tutorial = onOpenOnboarding ? (
-    <div data-onboarding-tour="settings">
+    <div>
       <h2>{uiT("Welcome tutorial")}</h2>
       <p>{uiT("Revisit Hibi’s main features or set up another group with guidance.")}</p>
       <div className="settings-tour-actions">
@@ -1514,7 +1514,7 @@ export default function Settings({
             uiT("Below {value}", { value: `${Math.round(state.settings.lowAttendanceThreshold * 100)}%` }),
           )}
         </section>
-        <section className="settings-group">
+        <section className="settings-group" data-onboarding-tour="settings">
           <h2 className="overline">{uiT("App")}</h2>
           {valueRow("language", uiT("Language"), languageName)}
           <div className="settings-row">
@@ -1638,7 +1638,7 @@ export default function Settings({
         description={uiT("Class values, language, sounds, backups and privacy.")}
       />
       <div className="settings-cols">
-        <nav className="settings-nav" aria-label={uiT("Settings sections")}>
+        <nav className="settings-nav" aria-label={uiT("Settings sections")} data-onboarding-tour="settings">
           {sections.map((item) => {
             const Icon = item.icon;
             return (

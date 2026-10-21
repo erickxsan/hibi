@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, ArrowRight, CalendarDays, Check, UsersRound } from "lucide-react";
+import { ArrowRight, CalendarDays, Check, UsersRound } from "lucide-react";
+import { HibiStamp } from "../components/BrandMark";
 import { Button } from "../components/ui";
 import { getUiLocale, useI18n } from "../i18n";
 import { formatOnboardingDate, ONBOARDING_STEPS, ONBOARDING_TOUR_START_STEP, tourStep } from "./onboardingModel";
@@ -209,7 +210,7 @@ export default function ContextualTour({
         }
       >
         <header className="onboarding-tour-heading">
-          <img src="/onboarding/hibi-guide.webp" alt={uiT("")} className="onboarding-tour-avatar" />
+          <HibiStamp className="onboarding-tour-avatar" size={52} />
           <div>
             <p className="onboarding-tour-location">
               {t(config.label) + " · " + ordinal + " " + t("of") + " " + tourLength}
@@ -245,18 +246,18 @@ export default function ContextualTour({
             {uiT("Skip tour")}
           </button>
           {canGoBack ? (
-            <Button className="onboarding-tour-back" icon={ArrowLeft} disabled={busy} onClick={() => onMove(step - 1)}>
+            <Button className="onboarding-tour-back" disabled={busy} onClick={() => onMove(step - 1)}>
               {uiT("Back")}
             </Button>
           ) : null}
           <Button
-            className="onboarding-tour-next"
+            className="onboarding-tour-next has-trailing-icon"
             variant="primary"
-            icon={finish ? Check : ArrowRight}
             disabled={busy || !targetReady}
             onClick={() => (finish ? onComplete() : onMove(step + 1))}
           >
             {finish ? uiT("Finish tour") : uiT("Next")}
+            {finish ? <Check aria-hidden="true" size={18} /> : <ArrowRight aria-hidden="true" size={18} />}
           </Button>
         </footer>
       </div>

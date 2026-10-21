@@ -5,7 +5,7 @@ test.beforeEach(async ({ page }) => {
   await page.evaluate(() => localStorage.clear());
   await page.reload();
 
-  const welcomeDialog = page.getByRole("dialog", { name: "Welcome to Hibi!" });
+  const welcomeDialog = page.getByRole("dialog", { name: "Hi, teacher! This is Hibi" });
   await expect(welcomeDialog).toBeVisible();
   await welcomeDialog.getByRole("button", { name: "Explore on my own" }).click();
   await expect(welcomeDialog).toBeHidden();

@@ -304,7 +304,7 @@ export default function Home({
             })}
           </p>
         </header>
-        <section aria-labelledby="home-today-title">
+        <section aria-labelledby="home-today-title" data-onboarding-tour="home">
           <div className="sh">
             <h2 id="home-today-title">{t("Today")}</h2>
             <button
@@ -377,7 +377,7 @@ export default function Home({
         <p>{headline}</p>
       </header>
 
-      <section aria-labelledby="home-today-title">
+      <section aria-labelledby="home-today-title" data-onboarding-tour="home">
         <div className="sh">
           <h2 id="home-today-title">{t("Today's classes")}</h2>
           <div className="sh-meta">

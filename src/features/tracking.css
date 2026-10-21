@@ -682,10 +682,9 @@ button.tkpi:first-child {
 
 .tracking-breakdown .tr {
   display: grid;
-  grid-template-columns: minmax(130px, 1fr) minmax(150px, 1.4fr) minmax(150px, 1.4fr) minmax(100px, 0.9fr) minmax(
-      100px,
-      0.9fr
-    ) minmax(100px, 0.9fr);
+  grid-template-columns:
+    minmax(130px, 1fr) minmax(150px, 1.4fr) minmax(150px, 1.4fr) minmax(100px, 0.9fr) minmax(100px, 0.9fr)
+    minmax(100px, 0.9fr);
   gap: 14px;
   align-items: center;
   padding: 10px 0;

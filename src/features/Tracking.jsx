@@ -837,7 +837,7 @@ export default function Tracking({
     const sheetPoint = sheet?.type === "point" ? metric.points[sheet.index] : null;
     const sheetStudent = sheet?.type === "student" ? students.find((row) => row.student.id === sheet.id) : null;
     return (
-      <div className="page tracking-page is-compact">
+      <div className="page tracking-page is-compact" data-onboarding-tour="tracking">
         <div className="tracking-head">
           <div>
             <span className="overline">{t("Report date")}</span>
@@ -1233,7 +1233,7 @@ export default function Tracking({
           </button>
         </p>
       ) : null}
-      <div className="tracking-kpis">
+      <div className="tracking-kpis" data-onboarding-tour="tracking">
         {kpiStrip.map((kpi) =>
           kpi.id ? (
             <button

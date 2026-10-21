@@ -6,6 +6,7 @@ import { COMMUNITY_TRANSLATIONS } from "./communityTranslations.js";
 import { TRACKING_TRANSLATIONS } from "./trackingTranslations.js";
 import { SETTINGS_TRANSLATIONS } from "./settingsTranslations.js";
 import { AUTH_TRANSLATIONS } from "./authTranslations.js";
+import { TUTORIAL_TRANSLATIONS } from "./tutorialTranslations.js";
 
 export const LANGUAGE_STORAGE_KEY = "hibi:language:v1";
 
@@ -23,6 +24,7 @@ export const SPANISH_TRANSLATIONS = Object.freeze({
   ...TRACKING_TRANSLATIONS,
   ...SETTINGS_TRANSLATIONS,
   ...AUTH_TRANSLATIONS,
+  ...TUTORIAL_TRANSLATIONS,
   "Archived groups": "Grupos archivados",
   "Archived group": "Archivado",
   "Archive group": "Archivar grupo",
