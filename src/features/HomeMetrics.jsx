@@ -15,6 +15,7 @@ import {
   weekdayLong,
   weekdayShort,
 } from "../utils/displayFormat";
+import "../components/charts.css";
 import { debtsThrough, defaultPointIndex, monthProjection, studentPeriodRows } from "./homeDashboardModel";
 
 const RED = "var(--bermellon)";
@@ -604,7 +605,7 @@ export function MetricCard({ metric, summary, context, onOpen }) {
   const [left, right] = plotCaptions(metric, locale);
   const chips = detail.list.slice(0, 3);
   return (
-    <article className={`mini k-${metric.metric}`} aria-label={`${summary.name}: ${summary.value}${summary.unit}`}>
+    <article className={`mini hibi-chart k-${metric.metric}`} aria-label={`${summary.name}: ${summary.value}${summary.unit}`}>
       <div className="nm">
         <span>{summary.name}</span>
         <button
@@ -1016,7 +1017,7 @@ export function MetricExplorer({
         ]
       : [];
   return (
-    <div className={`xp k-${open}`}>
+    <div className={`xp hibi-chart k-${open}`}>
       <div className="xp-head">
         <div className="sw" role="tablist" aria-label={t("Charts")}>
           {["attendance", "grade", "collections"].map((id) => (

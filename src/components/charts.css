@@ -1,0 +1,390 @@
+/* Shared chart marks: dots joined by a line, bars, thresholds and tooltips (Inicio, Seguimiento). */
+.hibi-chart {
+  --c: var(--jade);
+  --cs: var(--jade-soft);
+}
+
+.hibi-chart.is-indigo {
+  --c: var(--indigo);
+  --cs: var(--indigo-soft);
+}
+
+.hibi-chart .mplot {
+  position: relative;
+  height: 84px;
+  margin: 16px 8px 6px;
+}
+
+.hibi-chart .mbars {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 5px;
+  border-bottom: 1px solid var(--line);
+}
+
+.hibi-chart .mb {
+  position: relative;
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 4px 4px 0 0;
+}
+
+.hibi-chart .mb i {
+  position: relative;
+  display: block;
+  width: 100%;
+  border-radius: 4px 4px 0 0;
+  background: var(--c);
+  transform-origin: bottom;
+  animation: ch-up 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.hibi-chart .mb.dim i {
+  opacity: 0.4;
+}
+
+.hibi-chart .mb:hover i,
+.hibi-chart .mb.on i {
+  opacity: 1;
+}
+
+.hibi-chart .mb.fut {
+  cursor: default;
+}
+
+.hibi-chart .mb.fut i {
+  background: transparent;
+  border: 1.5px dashed var(--line-control);
+  border-bottom: 0;
+  box-sizing: border-box;
+  animation: none;
+}
+
+.hibi-chart .mb.on::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  width: 5px;
+  height: 5px;
+  margin-left: -2.5px;
+  border-radius: 50%;
+  background: var(--sumi);
+}
+
+.hibi-chart .mb .pk {
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  width: 9px;
+  height: 9px;
+  margin-left: -4.5px;
+  border-radius: 50%;
+  background: var(--ocre);
+  box-shadow: 0 0 0 2px var(--papel);
+}
+
+.hibi-chart .mcap {
+  display: flex;
+  justify-content: space-between;
+  font: 600 11px/14px var(--font-sans);
+  color: var(--sumi-muted);
+}
+
+.hibi-chart svg.ln polyline {
+  fill: none;
+  stroke: var(--c);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.hibi-chart svg.ln polyline.pj {
+  stroke: var(--line-control);
+  stroke-dasharray: 5 5;
+}
+
+.hibi-chart svg.ln polygon {
+  fill: var(--cs);
+  opacity: 0.75;
+}
+
+.hibi-chart .dt {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  border-radius: 50%;
+  transform: translate(-50%, 50%);
+  background: var(--papel);
+  border: 2.5px solid var(--c);
+  cursor: pointer;
+  z-index: 2;
+  transition: box-shadow 0.15s;
+  animation: ch-pop 0.4s cubic-bezier(0.2, 0.7, 0.2, 1.3) both;
+}
+
+.hibi-chart .dt::before {
+  content: "";
+  position: absolute;
+  inset: -12px;
+  border-radius: 50%;
+}
+
+.hibi-chart .dt:hover {
+  box-shadow: 0 0 0 5px var(--cs);
+}
+
+.hibi-chart .dt.low {
+  border-color: var(--bermellon);
+}
+
+.hibi-chart .dt.on {
+  background: var(--c);
+  box-shadow:
+    0 0 0 4px var(--papel),
+    0 0 0 6px var(--c);
+}
+
+.hibi-chart .dt.low.on {
+  background: var(--bermellon);
+  box-shadow:
+    0 0 0 4px var(--papel),
+    0 0 0 6px var(--bermellon);
+}
+
+.hibi-chart .dt.fut {
+  width: 12px;
+  height: 12px;
+  border: 2px dashed var(--sumi-subtle);
+}
+
+.hibi-chart .dt.unreg {
+  border: 2px dashed var(--ocre);
+  background: var(--ocre-soft);
+}
+
+.hibi-chart .dt.fut.on,
+.hibi-chart .dt.unreg.on {
+  box-shadow:
+    0 0 0 4px var(--papel),
+    0 0 0 6px var(--sumi-subtle);
+}
+
+.hibi-chart .dt .tip,
+.hibi-chart .bar .tip,
+.hibi-chart .mb .tip {
+  display: none;
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--sumi);
+  color: var(--papel);
+  font: 700 12px/16px var(--font-sans);
+  white-space: nowrap;
+  z-index: 5;
+  box-shadow: var(--shadow-overlay);
+  pointer-events: none;
+}
+
+.hibi-chart .dt:hover .tip,
+.hibi-chart .dt:focus-visible .tip,
+.hibi-chart .bar:hover .tip,
+.hibi-chart .bar:focus-visible .tip,
+.hibi-chart .mb:hover .tip,
+.hibi-chart .mb:focus-visible .tip {
+  display: block;
+}
+
+.hibi-chart .mplot .dt {
+  width: 11px;
+  height: 11px;
+  border-width: 2px;
+}
+
+.hibi-chart .mplot .dt.on {
+  box-shadow:
+    0 0 0 3px var(--papel),
+    0 0 0 4.5px var(--c);
+}
+
+.hibi-chart .mplot .dt.low.on {
+  box-shadow:
+    0 0 0 3px var(--papel),
+    0 0 0 4.5px var(--bermellon);
+}
+
+.hibi-chart .mplot .dt.fut {
+  width: 8px;
+  height: 8px;
+  border-width: 1.5px;
+}
+
+.hibi-chart .mplot .dt::before {
+  inset: -9px;
+}
+
+.hibi-chart .rg {
+  position: absolute;
+  width: 6px;
+  margin-left: -3px;
+  border-radius: 3px;
+  background: var(--cs);
+  z-index: 1;
+}
+
+.hibi-chart .thr {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1.5px dashed var(--bermellon);
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.8;
+}
+
+.hibi-chart .thr b {
+  position: absolute;
+  right: 0;
+  top: -20px;
+  padding: 0 4px;
+  background: var(--papel);
+  font: 700 11px/14px var(--font-sans);
+  color: var(--bermellon-ink);
+}
+
+.hibi-chart .xl2 {
+  position: absolute;
+  bottom: -26px;
+  transform: translateX(-50%);
+  font: 600 12px/16px var(--font-sans);
+  color: var(--sumi-muted);
+  white-space: nowrap;
+}
+
+.hibi-chart .xl2.on {
+  color: var(--sumi);
+  font-weight: 800;
+}
+
+.hibi-chart .bplot {
+  position: relative;
+  height: 240px;
+  margin: 16px 12px 34px 48px;
+}
+
+.hibi-chart .grid {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+.hibi-chart .grid b {
+  position: absolute;
+  left: -48px;
+  top: -8px;
+  width: 40px;
+  text-align: right;
+  font: 600 11px/14px var(--font-sans);
+  color: var(--sumi-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.hibi-chart .bars {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  border-bottom: 1px solid var(--line-control);
+}
+
+.hibi-chart .bar {
+  position: relative;
+  flex: 1;
+  max-width: 80px;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.hibi-chart .bar .col {
+  position: absolute;
+  inset: 0 6px;
+  display: flex;
+  flex-direction: column-reverse;
+}
+
+.hibi-chart .bar .col i {
+  display: block;
+  flex: none;
+  border-radius: 4px 4px 0 0;
+  background: var(--c);
+  transform-origin: bottom;
+  animation: ch-up 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.hibi-chart .bar .col .ph {
+  background: transparent;
+  border: 1.5px dashed var(--line-control);
+  border-bottom: 0;
+  box-sizing: border-box;
+  animation: none;
+}
+
+.hibi-chart .bar.dim .col i {
+  opacity: 0.4;
+}
+
+.hibi-chart .bar:hover .col i {
+  opacity: 1;
+}
+
+.hibi-chart .bar.on {
+  background: var(--washi);
+}
+
+.hibi-chart .bar.fut {
+  cursor: default;
+}
+
+.hibi-chart .bar .xl {
+  position: absolute;
+  left: -6px;
+  right: -6px;
+  bottom: -26px;
+  text-align: center;
+  font: 600 12px/16px var(--font-sans);
+  color: var(--sumi-muted);
+  white-space: nowrap;
+}
+
+.hibi-chart .bar.on .xl {
+  color: var(--sumi);
+  font-weight: 800;
+}
+
+.hibi-chart .xp-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+}
