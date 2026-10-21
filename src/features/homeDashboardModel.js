@@ -75,13 +75,13 @@ export function periodRange(asOf, period) {
   };
 }
 
-function matchesGroup(filter, groupId) {
+export function matchesGroup(filter, groupId) {
   if (!filter || filter === "all") return true;
   if (filter === "individual") return !groupId;
   return groupId === filter;
 }
 
-function sessionAttendance(session) {
+export function sessionAttendance(session) {
   const rows = (session.rows || []).filter(
     (row) => row.classStatus === "Completed" && ["P", "L", "A"].includes(row.attendance),
   );
@@ -127,7 +127,7 @@ function gradeSessionGroup(grade) {
 }
 
 /** One point per graded assignment: average, range and who is missing a grade (0–10 scale). */
-function assignmentsIn(state, start, end, groupFilter = "all") {
+export function assignmentsIn(state, start, end, groupFilter = "all") {
   const byKey = new Map();
   for (const grade of state.grades || []) {
     if (!grade.date || grade.date < start || grade.date > end) continue;

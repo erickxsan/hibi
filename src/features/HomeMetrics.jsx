@@ -58,13 +58,13 @@ function pointLabel(point, period, locale) {
   return `${weekdayShort(point.date, locale)} ${dayNumber(point.date)}`;
 }
 
-function bucketLabel(bucket, locale) {
+export function bucketLabel(bucket, locale) {
   if (bucket.kind === "month") return monthShort(bucket.start, locale);
   if (bucket.kind === "week") return `${dayNumber(bucket.start)} ${monthShort(bucket.start, locale)}`;
   return weekdayShort(bucket.start, locale);
 }
 
-function bucketTitle(bucket, t, locale) {
+export function bucketTitle(bucket, t, locale) {
   if (bucket.kind === "month") return capitalize(monthLong(bucket.start, locale));
   if (bucket.kind === "week")
     return t("From {start} to {end}", {
@@ -379,6 +379,8 @@ function DotPlot({ metric, selected, onSelect, threshold, size = "mini", labels 
     ? `${x(registered[0].index).toFixed(2)},100 ${line} ${x(registered.at(-1).index).toFixed(2)},100`
     : "";
   const limit = metric.metric === "attendance" ? threshold.attendance * 100 : threshold.grade * 10;
+  // Dense charts label every few points so the dates never overlap.
+  const labelStep = Math.max(1, Math.ceil(count / 8));
   return (
     <>
       <span className="thr" style={{ bottom: `${limit}%` }}>
@@ -443,7 +445,8 @@ function DotPlot({ metric, selected, onSelect, threshold, size = "mini", labels 
               className={`xl2 ${index === selected ? "on" : ""}`}
               style={{ left: `${x(index)}%` }}
             >
-              {index > 0 && points[index - 1].date === point.date && !point.month
+              {(index > 0 && points[index - 1].date === point.date && !point.month) ||
+              (index % labelStep !== 0 && index !== points.length - 1 && index !== selected)
                 ? ""
                 : pointLabel(point, metric.period, locale)}
             </span>
@@ -454,7 +457,7 @@ function DotPlot({ metric, selected, onSelect, threshold, size = "mini", labels 
 }
 
 /** Top of the collections scale, shared by the bars, the accumulated line and the grid labels. */
-function collectionsMax(points, view, projection) {
+export function collectionsMax(points, view, projection) {
   if (view === "cumulative") {
     const sums = cumulative(points);
     const lastReal = points.reduce((found, point, index) => (!point.future ? index : found), 0);
@@ -463,7 +466,7 @@ function collectionsMax(points, view, projection) {
   return Math.max(...points.map((point) => point.value), 1) * 1.08;
 }
 
-function compactMoney(value, locale) {
+export function compactMoney(value, locale) {
   if (value >= 1000)
     return `$${new Intl.NumberFormat(locale, { maximumFractionDigits: value >= 10_000 ? 0 : 1 }).format(value / 1000)}k`;
   return formatMoney(Math.round(value), locale);
@@ -475,7 +478,7 @@ function cumulative(points) {
 }
 
 /** Collections by payment date: bars, or the accumulated line with the projection pace. */
-function BarPlot({ metric, selected, onSelect, size = "mini", view = "rhythm", projection = 0 }) {
+function BarPlot({ metric, selected, onSelect, size = "mini", view = "rhythm", projection = 0, mineFor = null }) {
   const { t, locale } = useI18n();
   const points = metric.points;
   const values = points.map((point) => point.value);
@@ -545,7 +548,7 @@ function BarPlot({ metric, selected, onSelect, size = "mini", view = "rhythm", p
           <button
             type="button"
             key={point.key}
-            className={`${size === "big" ? "bar" : "mb"} ${point.future ? "fut" : index === selected ? "on" : "dim"}`}
+            className={`${size === "big" ? "bar" : "mb"} ${point.future ? "fut" : index === selected ? "on" : selected >= 0 ? "dim" : ""}`}
             aria-label={tip}
             aria-pressed={index === selected}
             disabled={point.future}
@@ -556,7 +559,11 @@ function BarPlot({ metric, selected, onSelect, size = "mini", view = "rhythm", p
                 <i
                   className={point.future ? "ph" : ""}
                   style={{ height: `${height}%`, animationDelay: `${0.15 + index * 0.05}s` }}
-                />
+                >
+                  {mineFor && !point.future && mineFor(point) > 0 ? (
+                    <i className="mine" style={{ height: `${(mineFor(point) / (point.value || 1)) * 100}%` }} />
+                  ) : null}
+                </i>
               </span>
             ) : (
               <i style={{ height: `${height}%`, animationDelay: `${0.15 + index * 0.05}s` }}>
@@ -572,9 +579,17 @@ function BarPlot({ metric, selected, onSelect, size = "mini", view = "rhythm", p
   );
 }
 
-function Plot({ metric, selected, onSelect, threshold, size, view = "rhythm", projection = 0 }) {
+export function Plot({ metric, selected, onSelect, threshold, size, view = "rhythm", projection = 0, mineFor = null }) {
   return metric.metric === "collections" ? (
-    <BarPlot metric={metric} selected={selected} onSelect={onSelect} size={size} view={view} projection={projection} />
+    <BarPlot
+      metric={metric}
+      selected={selected}
+      onSelect={onSelect}
+      size={size}
+      view={view}
+      projection={projection}
+      mineFor={mineFor}
+    />
   ) : (
     <DotPlot
       metric={metric}
@@ -605,7 +620,10 @@ export function MetricCard({ metric, summary, context, onOpen }) {
   const [left, right] = plotCaptions(metric, locale);
   const chips = detail.list.slice(0, 3);
   return (
-    <article className={`mini hibi-chart k-${metric.metric}`} aria-label={`${summary.name}: ${summary.value}${summary.unit}`}>
+    <article
+      className={`mini hibi-chart k-${metric.metric}`}
+      aria-label={`${summary.name}: ${summary.value}${summary.unit}`}
+    >
       <div className="nm">
         <span>{summary.name}</span>
         <button

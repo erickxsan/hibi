@@ -384,35 +384,6 @@
   }
 }
 
-@keyframes ch-draw {
-  from {
-    clip-path: inset(0 100% 0 0);
-  }
-  to {
-    clip-path: inset(0 0 0 0);
-  }
-}
-
-@keyframes ch-up {
-  from {
-    transform: scaleY(0);
-  }
-  to {
-    transform: scaleY(1);
-  }
-}
-
-@keyframes ch-pop {
-  from {
-    opacity: 0;
-    transform: translate(-50%, 50%) scale(0.3);
-  }
-  to {
-    opacity: 1;
-    transform: translate(-50%, 50%) scale(1);
-  }
-}
-
 /* ---------- Tarjeta de la clase elegida ---------- */
 .home-page .dcard {
   margin-top: 18px;
@@ -769,16 +740,6 @@
 
 .home-page .mmsg {
   font: 700 12px/16px var(--font-sans);
-}
-
-/* Puntos y líneas */
-.home-page svg.ln {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-  animation: ch-draw 1s 0.1s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
 /* ---------- Detalle de una métrica ---------- */

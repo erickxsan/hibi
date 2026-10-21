@@ -47,7 +47,7 @@ export function groupNamesOf(student, groupsById, t) {
   const names = studentGroupIdsOf(student)
     .map((id) => groupsById.get(id)?.name)
     .filter(Boolean);
-  if (student.isIndividual) names.push(t("individual"));
+  if (student.isIndividual) names.push(t("Individual"));
   return names.join(" · ");
 }
 

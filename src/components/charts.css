@@ -99,6 +99,15 @@
   color: var(--sumi-muted);
 }
 
+.hibi-chart svg.ln {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  animation: ch-draw 1s 0.1s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
 .hibi-chart svg.ln polyline {
   fill: none;
   stroke: var(--c);
@@ -387,4 +396,57 @@
   display: grid;
   place-items: center;
   margin: 0;
+}
+
+/* A selected student's share of a bar. */
+.hibi-chart .bar .col i {
+  position: relative;
+}
+
+.hibi-chart .bar .col i.mine {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  border-radius: 4px 4px 0 0;
+  background: var(--jade-strong);
+  opacity: 1;
+  animation: none;
+}
+
+@keyframes ch-draw {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes ch-up {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes ch-pop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 50%) scale(0.3);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 50%) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hibi-chart *,
+  .tracking-bars * {
+    animation: none !important;
+  }
 }

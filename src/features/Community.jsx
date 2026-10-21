@@ -390,6 +390,10 @@ export default function Community({
       const first = state.groups.find(isGroupArchived);
       if (first) select("group", first.id);
     }
+    if (intent?.type === "open-student" && state.students.some((student) => student.id === intent.id)) {
+      changeView("students", { replace: true });
+      select("student", intent.id);
+    }
     if (intent === "students" || intent === "groups" || intent === "all") changeView(intent, { replace: true });
     if (intent === "add-student") openStudentEditor();
     if (intent === "add-group") openGroupEditor();

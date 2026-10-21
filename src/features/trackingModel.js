@@ -1,586 +1,389 @@
-import { moneyDifference, sumMoney, roundMoney } from "../domain/money.js";
-import { addDays, endOfMonth, parseDateOnly, startOfMonth, startOfWeek } from "../domain/dates";
-import { gradeGroupId } from "../domain/semanticIdentity";
-import { classWorkspaceSessionKey } from "./classesWorkspaceModel";
+import { sumMoney } from "../domain/money.js";
+import { addDays, addMonths, endOfMonth, startOfMonth, startOfWeek } from "../domain/dates";
+import { deriveMonthlyCharges, isMonthlyGroup, normalizeGroupBilling, periodOf } from "../domain/monthlyBilling";
+import { buildClassWorkspaceSessionsForRange } from "./classesWorkspaceModel";
+import { assignmentsIn, debtsThrough, matchesGroup, paymentsBetween, sessionAttendance } from "./homeDashboardModel";
+import { studentGroupIdsOf } from "./groupLabels";
 
-export const TRACKING_TABS = Object.freeze(["grades", "attendance", "payments"]);
+/*
+ * Seguimiento: one period and one scope (all, a group or individual classes) feed the KPIs,
+ * the chart, the linked student list, the student's history and the breakdown table.
+ */
 export const TRACKING_PERIODS = Object.freeze(["week", "month", "thirty", "all"]);
 
 function finite(value) {
   return typeof value === "number" && Number.isFinite(value);
 }
 
-function sum(rows, selector) {
-  return rows.reduce((total, row) => total + (finite(selector(row)) ? selector(row) : 0), 0);
+function daysBetween(start, end) {
+  return Math.round((Date.parse(end) - Date.parse(start)) / 86_400_000);
 }
 
-// Keep input order for historical identities and floating-point payment sums.
-// Build this index per report so edits never reuse stale rows.
-function rowsByStudent(rows) {
-  const index = new Map();
-  for (const row of rows) {
-    const entries = index.get(row.studentId);
-    if (entries) entries.push(row);
-    else index.set(row.studentId, [row]);
+function earliestRecord(state) {
+  const dates = [
+    ...(state.classLog || []).map((row) => row.classDate),
+    ...(state.grades || []).map((grade) => grade.date),
+  ].filter(Boolean);
+  return dates.length ? dates.sort()[0] : "";
+}
+
+/** The consulted range up to the report date and the comparable range before it. */
+export function trackingRange(asOf, period = "month", state = null) {
+  if (period === "week") {
+    const start = startOfWeek(asOf, 1);
+    const span = daysBetween(start, asOf);
+    return { period, start, end: asOf, previousStart: addDays(start, -7), previousEnd: addDays(start, span - 7) };
   }
-  return index;
-}
-
-function inclusiveDayCount(start, end) {
-  return Math.max(1, Math.round((parseDateOnly(end).getTime() - parseDateOnly(start).getTime()) / 86_400_000) + 1);
-}
-
-function studentGroupIds(student) {
-  return Array.isArray(student?.groupIds) ? student.groupIds : student?.groupId ? [student.groupId] : [];
-}
-
-function normalize(value) {
-  return String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLocaleLowerCase()
-    .trim();
-}
-
-function matchesSearch(values, search) {
-  const needle = normalize(search);
-  return !needle || normalize(values.join(" ")).includes(needle);
-}
-
-export function trackingRange(asOfDate, period = "month", datedRows = []) {
-  const end = asOfDate;
-  const earliest =
-    datedRows
-      .map((row) => row.date || row.classDate || row.paymentDate)
-      .filter(Boolean)
-      .sort()[0] || asOfDate;
-  const start =
-    period === "week"
-      ? startOfWeek(asOfDate, 1)
-      : period === "thirty"
-        ? addDays(asOfDate, -29)
-        : period === "all"
-          ? earliest
-          : startOfMonth(asOfDate);
-  return { start, end, period };
-}
-
-export function inTrackingRange(date, range) {
-  return Boolean(date && date >= range.start && date <= range.end);
-}
-
-export function studentsForGroup(state, groupId) {
-  const archived = state.groups?.some((group) => group.id === groupId && group.status === "Inactive");
-  const historyIds = archived
-    ? new Set([
-        ...(state.classLog || []).filter((row) => row.groupId === groupId).map((row) => row.studentId),
-        ...(state.grades || []).filter((row) => gradeGroupId(row) === groupId).map((row) => row.studentId),
-      ])
-    : new Set();
-  return (state.students || []).filter(
-    (student) =>
-      (archived || student.status !== "Inactive") &&
-      (studentGroupIds(student).includes(groupId) || historyIds.has(student.id)),
-  );
-}
-
-export function buildAssessmentOptions(state, gradeRows, groupId, range) {
-  const studentIds = new Set(studentsForGroup(state, groupId).map((student) => student.id));
-  const options = new Map();
-  for (const row of gradeRows) {
-    if (
-      !studentIds.has(row.studentId) ||
-      gradeGroupId(row) !== groupId ||
-      !inTrackingRange(row.date, range) ||
-      !row.assessment
-    )
-      continue;
-    const maximum = row.maxScore ?? row.maximum ?? 0;
-    const key = `${row.date}|${row.assessment}|${maximum}`;
-    if (!options.has(key)) options.set(key, { key, date: row.date, assessment: row.assessment, maximum });
+  if (period === "thirty") {
+    return {
+      period,
+      start: addDays(asOf, -29),
+      end: asOf,
+      previousStart: addDays(asOf, -59),
+      previousEnd: addDays(asOf, -30),
+    };
   }
-  return [...options.values()].sort(
-    (left, right) => right.date.localeCompare(left.date) || left.assessment.localeCompare(right.assessment),
-  );
-}
-
-function gradeStatus(percentage) {
-  if (percentage == null) return { label: "Not graded", tone: "neutral" };
-  if (percentage >= 0.9) return { label: "Excellent", tone: "success" };
-  if (percentage >= 0.8) return { label: "Very good", tone: "success" };
-  if (percentage >= 0.6) return { label: "Fair", tone: "warning" };
-  return { label: "Needs support", tone: "danger" };
-}
-
-export function buildGradeTracking(
-  state,
-  gradeRows,
-  { mode, groupId, studentId, assessmentKey, range, search = "", classRows = [] },
-) {
-  const classesByStudentDate = new Map();
-  const classesByStudentGroupDate = new Map();
-  for (const row of classRows) {
-    if (row.classStatus === "Cancelled") continue;
-    const key = `${row.studentId}|${row.classDate}`;
-    const groupKey = `${row.studentId}|${row.groupId}|${row.classDate}`;
-    if (!classesByStudentDate.has(key)) classesByStudentDate.set(key, row);
-    if (!classesByStudentGroupDate.has(groupKey)) classesByStudentGroupDate.set(groupKey, row);
+  if (period === "all") {
+    const first = state ? earliestRecord(state) : "";
+    return { period, start: first && first < asOf ? first : asOf, end: asOf, previousStart: "", previousEnd: "" };
   }
-  const studentsById = new Map((state.students || []).map((student) => [student.id, student]));
-  const roster =
-    mode === "student"
-      ? (state.students || []).filter((student) => student.id === studentId)
-      : studentsForGroup(state, groupId);
-  const rosterIds = new Set(roster.map((student) => student.id));
-  let rows = gradeRows.filter(
-    (row) =>
-      rosterIds.has(row.studentId) &&
-      (mode !== "group" || gradeGroupId(row) === groupId) &&
-      inTrackingRange(row.date, range),
-  );
-  const assessment =
-    mode === "group"
-      ? buildAssessmentOptions(state, gradeRows, groupId, range).find((item) => item.key === assessmentKey)
-      : null;
-  if (assessment)
-    rows = rows.filter((row) => `${row.date}|${row.assessment}|${row.maxScore ?? row.maximum ?? 0}` === assessment.key);
-  rows = rows.filter((row) => matchesSearch([row.studentName, row.assessment, row.category], search));
-
-  const tableRows =
-    mode === "group" && assessment
-      ? roster
-          .filter((student) => matchesSearch([student.fullName, student.code], search))
-          .map((student) => {
-            const grade = rows.find((row) => row.studentId === student.id);
-            const maximum = grade?.maxScore ?? grade?.maximum ?? assessment.maximum;
-            const percentage = finite(grade?.score) && finite(maximum) && maximum > 0 ? grade.score / maximum : null;
-            const relatedClass = classesByStudentGroupDate.get(`${student.id}|${groupId}|${assessment.date}`);
-            const sessionKey =
-              grade?.classSessionKey ||
-              (relatedClass
-                ? classWorkspaceSessionKey({
-                    ...relatedClass,
-                    studentId: relatedClass.groupId ? "" : relatedClass.studentId,
-                  })
-                : "");
-            return {
-              id: student.id,
-              student,
-              grade,
-              date: assessment.date,
-              assessment: assessment.assessment,
-              score: grade?.score ?? null,
-              maximum,
-              percentage,
-              status: gradeStatus(percentage),
-              sessionKey,
-            };
-          })
-      : rows
-          .map((grade) => {
-            const student = studentsById.get(grade.studentId);
-            const maximum = grade.maxScore ?? grade.maximum ?? 0;
-            const percentage = finite(grade.score) && finite(maximum) && maximum > 0 ? grade.score / maximum : null;
-            const relatedClass = classesByStudentDate.get(`${grade.studentId}|${grade.date}`);
-            const sessionKey =
-              grade.classSessionKey ||
-              (relatedClass
-                ? classWorkspaceSessionKey({
-                    ...relatedClass,
-                    studentId: relatedClass.groupId ? "" : relatedClass.studentId,
-                  })
-                : "");
-            return {
-              id: grade.id,
-              student,
-              grade,
-              date: grade.date,
-              assessment: grade.assessment,
-              score: grade.score ?? null,
-              maximum,
-              percentage,
-              status: gradeStatus(percentage),
-              sessionKey,
-            };
-          })
-          .sort((left, right) => right.date.localeCompare(left.date));
-
-  const graded = tableRows.filter((row) => row.percentage != null);
-  const percentages = graded.map((row) => row.percentage);
-  const average = percentages.length ? sum(percentages, (value) => value) / percentages.length : null;
-  const distribution = [
-    { label: "0–59", value: percentages.filter((value) => value < 0.6).length, tone: "red" },
-    { label: "60–69", value: percentages.filter((value) => value >= 0.6 && value < 0.7).length, tone: "orange" },
-    { label: "70–79", value: percentages.filter((value) => value >= 0.7 && value < 0.8).length, tone: "yellow" },
-    { label: "80–89", value: percentages.filter((value) => value >= 0.8 && value < 0.9).length, tone: "sage" },
-    { label: "90–100", value: percentages.filter((value) => value >= 0.9).length, tone: "green" },
-  ];
-  const series =
-    mode === "student"
-      ? graded
-          .slice()
-          .sort((a, b) => a.date.localeCompare(b.date))
-          .map((row) => ({ label: row.date, value: row.percentage }))
-      : [];
+  const start = startOfMonth(asOf);
+  const previousStart = addMonths(start, -1);
+  const sameDay = addDays(previousStart, Number(asOf.slice(8, 10)) - 1);
   return {
-    assessment,
-    tableRows,
-    average,
-    best: percentages.length ? Math.max(...percentages) : null,
-    worst: percentages.length ? Math.min(...percentages) : null,
-    gradedCount: graded.length,
-    missingCount: tableRows.length - graded.length,
-    distribution,
-    series,
+    period: "month",
+    start,
+    end: asOf,
+    previousStart,
+    previousEnd: sameDay > endOfMonth(previousStart) ? endOfMonth(previousStart) : sameDay,
   };
 }
 
-function attendanceStatus(rate) {
-  if (rate == null) return { label: "No data", tone: "neutral" };
-  if (rate >= 0.85) return { label: "Good", tone: "success" };
-  if (rate >= 0.75) return { label: "At risk", tone: "warning" };
-  return { label: "Low attendance", tone: "danger" };
+/** Recorded and unrecorded classes of the range, each with its attendance and its assignment. */
+export function trackingSessions(state, range, scope = "all") {
+  if (!range.start) return [];
+  const assignments = assignmentsIn(state, range.start, range.end, scope);
+  return buildClassWorkspaceSessionsForRange(state, range.start, range.end, range.end)
+    .filter(
+      (session) =>
+        matchesGroup(scope, session.groupId || "") &&
+        !["Cancelled", "Scheduled", "Rescheduled"].includes(session.statusLabel),
+    )
+    .map((session) => {
+      const attendance = sessionAttendance(session);
+      return {
+        session,
+        key: session.key,
+        date: session.classDate,
+        startTime: session.startTime,
+        title: session.title,
+        groupId: session.groupId || "",
+        kind: attendance ? "reg" : "unreg",
+        value: attendance?.ratio ?? null,
+        present: attendance?.present ?? 0,
+        total: attendance?.total ?? 0,
+        absentIds: attendance?.absentIds ?? [],
+        studentIds: (session.rows || []).map((row) => row.studentId),
+        assignment: assignments.find((item) => item.sessionKey === session.key) || null,
+      };
+    });
 }
 
-function attended(code) {
-  return code === "P" || code === "L";
+function attendanceOf(sessions) {
+  const present = sessions.reduce((sum, item) => sum + item.present, 0);
+  const total = sessions.reduce((sum, item) => sum + item.total, 0);
+  return { present, total, value: total ? present / total : null };
 }
 
-export function buildAttendanceTracking(state, classRows, { mode, groupId, studentId, range, search = "" }) {
-  const studentsById = new Map((state.students || []).map((student) => [student.id, student]));
-  const groupsById = new Map((state.groups || []).map((group) => [group.id, group]));
-  const currentRoster =
-    mode === "student"
-      ? (state.students || []).filter((student) => student.id === studentId)
-      : studentsForGroup(state, groupId);
-  const rosterIds = new Set(currentRoster.map((student) => student.id));
-  const relevant = classRows.filter(
+function gradeValues(assignments) {
+  return assignments.flatMap((item) => item.grades.map((grade) => grade.value));
+}
+
+function average(values) {
+  return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+}
+
+export function inScope(student, scope) {
+  if (scope === "all") return true;
+  if (scope === "individual") return Boolean(student.isIndividual) || !studentGroupIdsOf(student).length;
+  return studentGroupIdsOf(student).includes(scope);
+}
+
+/** Every active student of the scope with their figures for the range. */
+export function trackingStudents(state, derived, range, scope = "all") {
+  const derivedRows = derived?.classLog || [];
+  const assignments = range.start ? assignmentsIn(state, range.start, range.end, scope) : [];
+  const debts = new Map(debtsThrough(state, derivedRows, range.end, scope).map((item) => [item.studentId, item]));
+  const payments = range.start ? paymentsBetween(state, derivedRows, range.start, range.end, scope) : [];
+  const charges = deriveMonthlyCharges(state, range.end, { includeArchived: false });
+  return (state.students || [])
+    .filter((student) => student.status !== "Inactive" && inScope(student, scope))
+    .map((student) => {
+      const rows = derivedRows
+        .filter(
+          (row) =>
+            row.studentId === student.id &&
+            row.classStatus === "Completed" &&
+            row.classDate >= range.start &&
+            row.classDate <= range.end &&
+            ["P", "L", "A"].includes(row.attendance) &&
+            matchesGroup(scope, row.groupId || ""),
+        )
+        .sort((left, right) => left.classDate.localeCompare(right.classDate));
+      const absences = rows.filter((row) => row.attendance === "A").length;
+      const grades = assignments.flatMap((item) =>
+        item.grades.filter((grade) => grade.studentId === student.id).map((grade) => ({ ...grade, item })),
+      );
+      const own = payments.filter((item) => item.studentId === student.id);
+      const debt = debts.get(student.id);
+      const monthlyDue = charges.filter(
+        (charge) =>
+          charge.studentId === student.id &&
+          matchesGroup(scope, charge.groupId) &&
+          ["pending", "overdue"].includes(charge.status) &&
+          charge.dueDate <= range.end,
+      );
+      return {
+        student,
+        classes: rows.length,
+        absences,
+        attendance: rows.length ? (rows.length - absences) / rows.length : null,
+        sequence: rows.map((row) => ({ date: row.classDate, code: row.attendance === "A" ? "A" : "P" })),
+        grades: grades.map((grade) => grade.value),
+        gradeItems: grades,
+        average: average(grades.map((grade) => grade.value)),
+        ungraded: assignments.filter((item) => item.missing.includes(student.id)).map((item) => item.assessment),
+        paid: sumMoney(own, (item) => item.amount),
+        payments: own,
+        owed: debt?.amount || 0,
+        overdue: debt?.overdue || 0,
+        reasons: debt?.reasons || [],
+        monthlyDue,
+      };
+    });
+}
+
+/** Payment buckets for the bars: days for a short range, weeks for a month, months for longer ones. */
+export function trackingBuckets(range) {
+  if (!range.start) return [];
+  const length = daysBetween(range.start, range.end);
+  const buckets = [];
+  if (length <= 13) {
+    for (let date = range.start; date <= range.end; date = addDays(date, 1))
+      buckets.push({ start: date, end: date, label: date, kind: "day", future: false });
+    return buckets;
+  }
+  if (length <= 92) {
+    let cursor = range.start;
+    while (cursor <= range.end) {
+      const weekEnd = addDays(startOfWeek(cursor, 1), 6);
+      const end = weekEnd > range.end ? range.end : weekEnd;
+      buckets.push({ start: cursor, end, label: cursor, kind: "week", future: false });
+      cursor = addDays(end, 1);
+    }
+    return buckets;
+  }
+  for (let month = startOfMonth(range.start); month <= range.end; month = addMonths(month, 1)) {
+    const start = month < range.start ? range.start : month;
+    const end = endOfMonth(month) > range.end ? range.end : endOfMonth(month);
+    buckets.push({ start, end, label: month, kind: "month", future: false });
+  }
+  return buckets;
+}
+
+/**
+ * The three charts in the shape the shared plots read.
+ * @returns {{ metric: string, period: string, points: any[] }}
+ */
+export function trackingMetric(state, derived, range, scope, tab) {
+  if (tab === "attendance") {
+    return { metric: "attendance", period: range.period, points: trackingSessions(state, range, scope) };
+  }
+  if (tab === "grades") {
+    const points = (range.start ? assignmentsIn(state, range.start, range.end, scope) : [])
+      .filter((item) => item.average !== null)
+      .map((item) => ({
+        kind: "reg",
+        key: item.key,
+        date: item.date,
+        value: item.average,
+        assignment: item,
+        groupId: item.groupId,
+      }));
+    return { metric: "grade", period: range.period, points };
+  }
+  const derivedRows = derived?.classLog || [];
+  const points = trackingBuckets(range).map((bucket) => {
+    const payments = paymentsBetween(state, derivedRows, bucket.start, bucket.end, scope);
+    return { ...bucket, key: bucket.start, payments, value: sumMoney(payments, (item) => item.amount) };
+  });
+  return { metric: "collections", period: range.period, points };
+}
+
+/** Headline figures of each tab, with the comparison against the previous range. */
+export function trackingKpis(state, derived, range, scope, students) {
+  const sessions = trackingSessions(state, range, scope);
+  const registered = sessions.filter((item) => item.kind === "reg");
+  const attendance = attendanceOf(registered);
+  const previousAttendance = range.previousStart
+    ? attendanceOf(trackingSessions(state, { start: range.previousStart, end: range.previousEnd }, scope))
+    : { value: null };
+  const threshold = finite(state.settings?.lowAttendanceThreshold) ? state.settings.lowAttendanceThreshold : 0.8;
+  const gradeThreshold = (finite(state.settings?.lowGradeThreshold) ? state.settings.lowGradeThreshold : 0.7) * 10;
+  const assignments = range.start ? assignmentsIn(state, range.start, range.end, scope) : [];
+  const values = gradeValues(assignments);
+  const previousValues = range.previousStart
+    ? gradeValues(assignmentsIn(state, range.previousStart, range.previousEnd, scope))
+    : [];
+  const derivedRows = derived?.classLog || [];
+  const payments = range.start ? paymentsBetween(state, derivedRows, range.start, range.end, scope) : [];
+  const previousPayments = range.previousStart
+    ? paymentsBetween(state, derivedRows, range.previousStart, range.previousEnd, scope)
+    : [];
+  const charged = derivedRows.filter(
     (row) =>
       row.classStatus === "Completed" &&
-      (mode === "overview" || rosterIds.has(row.studentId)) &&
-      (mode !== "group" || row.groupId === groupId) &&
-      inTrackingRange(row.classDate, range) &&
-      (mode !== "overview" || matchesSearch([row.studentName, row.classTitle, row.groupName], search)),
+      row.classDate >= range.start &&
+      row.classDate <= range.end &&
+      matchesGroup(scope, row.groupId || "") &&
+      finite(row.charge) &&
+      row.charge > 0,
   );
-  const relevantByStudent = mode === "student" ? null : rowsByStudent(relevant);
-  const roster =
-    mode === "overview"
-      ? [...relevantByStudent.keys()].filter(Boolean).map((id) => {
-          const historicalRow = relevantByStudent.get(id)[0];
-          return (
-            studentsById.get(id) || {
-              id,
-              fullName: historicalRow?.studentName || "Unknown student",
-              code: historicalRow?.studentCode || "",
-              status: "Inactive",
-              groupIds: historicalRow?.groupId ? [historicalRow.groupId] : [],
-            }
-          );
-        })
-      : currentRoster;
-  const tableRows =
-    mode === "student"
-      ? relevant
-          .filter((row) => matchesSearch([row.classTitle, row.groupName, row.classDate], search))
-          .sort((a, b) => b.classDate.localeCompare(a.classDate))
-          .map((row) => ({
-            id: row.id,
-            student: roster[0],
-            classDate: row.classDate,
-            startTime: row.startTime || "",
-            classTitle: row.classTitle || row.groupName || "Class",
-            attendance: row.attendance,
-            present: attended(row.attendance) ? 1 : 0,
-            absent: row.attendance === "A" ? 1 : 0,
-            rate: ["P", "L", "A"].includes(row.attendance) ? (attended(row.attendance) ? 1 : 0) : null,
-            status: attendanceStatus(
-              ["P", "L", "A"].includes(row.attendance) ? (attended(row.attendance) ? 1 : 0) : null,
-            ),
-            sessionKey: classWorkspaceSessionKey({ ...row, studentId: row.groupId ? "" : row.studentId }),
-          }))
-      : roster
-          .filter((student) => mode === "overview" || matchesSearch([student.fullName, student.code], search))
-          .map((student) => {
-            const rows = relevantByStudent.get(student.id) || [];
-            const recorded = rows.filter((row) => ["P", "L", "A"].includes(row.attendance));
-            const present = recorded.filter((row) => attended(row.attendance)).length;
-            const absent = recorded.filter((row) => row.attendance === "A").length;
-            const rate = recorded.length ? present / recorded.length : null;
-            const lastRow = rows.slice().sort((left, right) => right.classDate.localeCompare(left.classDate))[0];
-            const groupNames = [
-              ...new Set(rows.map((row) => row.groupName || groupsById.get(row.groupId)?.name).filter(Boolean)),
-            ];
-            return {
-              id: student.id,
-              student,
-              present,
-              absent,
-              rate,
-              lastClass:
-                rows
-                  .map((row) => row.classDate)
-                  .sort()
-                  .at(-1) || "",
-              status: attendanceStatus(rate),
-              groupName: groupNames.join(", "),
-              sessionKey: lastRow
-                ? classWorkspaceSessionKey({ ...lastRow, studentId: lastRow.groupId ? "" : lastRow.studentId })
-                : "",
-            };
-          })
-          .filter((row) => mode !== "overview" || row.rate != null)
-          .sort((left, right) => {
-            if (mode !== "overview") return 0;
-            if (left.rate == null) return 1;
-            if (right.rate == null) return -1;
-            return left.rate - right.rate || right.absent - left.absent;
-          });
-  const recorded = relevant.filter((row) => ["P", "L", "A"].includes(row.attendance));
-  const present = recorded.filter((row) => attended(row.attendance)).length;
-  const absent = recorded.filter((row) => row.attendance === "A").length;
-  const sessions = new Set(
-    relevant.map((row) => classWorkspaceSessionKey({ ...row, studentId: row.groupId ? "" : row.studentId })),
-  ).size;
-  const weeksByDate = new Map();
-  const weekForDate = (date) => {
-    if (!weeksByDate.has(date)) weeksByDate.set(date, startOfWeek(date, 1));
-    return weeksByDate.get(date);
-  };
-  const weekly = new Map();
-  for (const row of recorded) {
-    const week = weekForDate(row.classDate);
-    const current = weekly.get(week) || { label: week, present: 0, total: 0 };
-    current.total += 1;
-    if (attended(row.attendance)) current.present += 1;
-    weekly.set(week, current);
-  }
-  const series = [...weekly.values()]
-    .sort((a, b) => a.label.localeCompare(b.label))
-    .map((item) => ({ label: item.label, value: item.total ? item.present / item.total : 0 }));
-  const studentWeekly = new Map();
-  for (const row of recorded) {
-    const week = weekForDate(row.classDate);
-    const values = studentWeekly.get(row.studentId) || new Map();
-    const current = values.get(week) || { present: 0, total: 0 };
-    current.total += 1;
-    if (attended(row.attendance)) current.present += 1;
-    values.set(week, current);
-    studentWeekly.set(row.studentId, values);
-  }
-  const improvingStudents = [...studentWeekly.values()].filter((values) => {
-    const weeks = [...values.entries()].sort(([left], [right]) => left.localeCompare(right));
-    if (weeks.length < 2) return false;
-    const first = weeks[0][1];
-    const last = weeks.at(-1)[1];
-    return last.present / last.total > first.present / first.total;
-  }).length;
-  const sessionRows = new Map();
-  for (const row of recorded) {
-    const key = classWorkspaceSessionKey({ ...row, studentId: row.groupId ? "" : row.studentId });
-    const current = sessionRows.get(key) || {
-      key,
-      classDate: row.classDate,
-      startTime: row.startTime || "",
-      title:
-        row.groupName ||
-        groupsById.get(row.groupId)?.name ||
-        row.classTitle ||
-        studentsById.get(row.studentId)?.fullName ||
-        "Class",
-      present: 0,
-      total: 0,
-    };
-    current.total += 1;
-    if (attended(row.attendance)) current.present += 1;
-    sessionRows.set(key, current);
-  }
-  const lowestSessions = [...sessionRows.values()]
-    .map((item) => ({ ...item, rate: item.total ? item.present / item.total : null }))
-    .sort((left, right) => left.rate - right.rate || right.classDate.localeCompare(left.classDate))
-    .slice(0, 2);
+  const collected = sumMoney(payments, (item) => item.amount);
+  const previousCollected = sumMoney(previousPayments, (item) => item.amount);
   return {
-    tableRows,
-    average: recorded.length ? present / recorded.length : null,
-    sessions,
-    present,
-    absent,
-    total: recorded.length,
-    series,
-    repeatedAbsenceStudents: tableRows.filter((row) => row.absent >= 2).length,
-    perfectAttendanceStudents: tableRows.filter((row) => row.rate === 1).length,
-    improvingStudents,
-    lowestSessions,
-    threshold: finite(state.settings?.lowAttendanceThreshold) ? state.settings.lowAttendanceThreshold : 0.8,
+    threshold,
+    gradeThreshold,
+    attendance: {
+      value: attendance.value,
+      delta:
+        finite(attendance.value) && finite(previousAttendance.value)
+          ? attendance.value - previousAttendance.value
+          : null,
+      present: attendance.present,
+      records: attendance.total,
+      absences: attendance.total - attendance.present,
+      registered: registered.length,
+      unregistered: sessions.length - registered.length,
+      low: students.filter((row) => row.classes && row.attendance < threshold),
+      withAbsences: students.filter((row) => row.absences > 0),
+    },
+    grades: {
+      value: average(values),
+      delta: values.length && previousValues.length ? average(values) - average(previousValues) : null,
+      count: values.length,
+      graded: assignments.filter((item) => item.average !== null).length,
+      low: students.filter((row) => row.grades.some((value) => value < gradeThreshold)),
+      ungraded: students.filter((row) => row.ungraded.length),
+    },
+    payments: {
+      collected,
+      delta: previousCollected ? (collected - previousCollected) / previousCollected : null,
+      monthlyCount: payments.filter((item) => item.kind === "monthly").length,
+      paymentCount: payments.length,
+      owed: sumMoney(students, (row) => row.owed),
+      overdue: sumMoney(students, (row) => row.overdue),
+      overdueStudents: students.filter((row) => row.overdue > 0),
+      pendingStudents: students.filter((row) => row.owed > 0 && !row.overdue),
+      paidClasses: charged.filter((row) => !(Number(row.outstanding) > 0)).length,
+      unpaidClasses: charged.filter((row) => Number(row.outstanding) > 0).length,
+    },
   };
 }
 
-function paymentStatus(row, asOfDate) {
-  const charge = roundMoney(finite(row.charge) ? row.charge : 0);
-  const paid = roundMoney(
-    finite(row.recognizedPaid) ? row.recognizedPaid : finite(row.amountPaid) ? row.amountPaid : 0,
+/** «Mensualidades · mes» per monthly group of the scope: who paid, who owes and the progress. */
+export function monthlyBlocks(state, asOf, scope = "all") {
+  const period = periodOf(asOf);
+  const charges = deriveMonthlyCharges(state, asOf, { includeArchived: false }).filter(
+    (charge) => charge.period === period,
   );
-  if (charge > 0 && paid >= charge) return { label: "Paid", tone: "success" };
-  if (row.classDate < asOfDate) return { label: "Overdue", tone: "danger" };
-  return { label: "Pending", tone: "warning" };
-}
-
-export function buildPaymentTracking(
-  state,
-  classRows,
-  { mode, groupId, studentId, sessionKey, range, search = "", projectionTotal },
-) {
-  const asOfDate = state.settings?.asOfDate || range.end;
-  const useStudentOwner = mode === "student" || (mode === "class" && !groupId);
-  const archivedIds = new Set(
-    (state.groups || []).filter((group) => group.status === "Inactive").map((group) => group.id),
-  );
-  const historicalIds = new Set(classRows.filter((row) => archivedIds.has(row.groupId)).map((row) => row.studentId));
-  const activeStudents = (state.students || []).filter(
-    (student) => student.status !== "Inactive" || historicalIds.has(student.id),
-  );
-  const roster =
-    mode === "overview"
-      ? activeStudents
-      : useStudentOwner
-        ? activeStudents.filter((student) => student.id === studentId)
-        : studentsForGroup(state, groupId);
-  const rosterIds = new Set(roster.map((student) => student.id));
-  const groupScoped = (mode === "group" || mode === "class") && Boolean(groupId);
-  let relevant = classRows.filter(
-    (row) =>
-      row.classStatus !== "Cancelled" &&
-      rosterIds.has(row.studentId) &&
-      (!groupScoped || row.groupId === groupId) &&
-      inTrackingRange(row.classDate, range),
-  );
-  if (mode === "class" && sessionKey)
-    relevant = relevant.filter(
-      (row) => classWorkspaceSessionKey({ ...row, studentId: row.groupId ? "" : row.studentId }) === sessionKey,
-    );
-  relevant = relevant.filter((row) => matchesSearch([row.studentName, row.classTitle, row.groupName], search));
-  const sessions = new Map();
-  for (const row of classRows.filter(
-    (item) => item.classStatus !== "Cancelled" && inTrackingRange(item.classDate, range),
-  )) {
-    if (groupId && row.groupId !== groupId) continue;
-    if (!groupId && useStudentOwner && row.studentId !== studentId) continue;
-    const key = classWorkspaceSessionKey({ ...row, studentId: row.groupId ? "" : row.studentId });
-    if (!sessions.has(key))
-      sessions.set(key, {
-        key,
-        classDate: row.classDate,
-        startTime: row.startTime || "",
-        title: row.classTitle || row.groupName || row.studentName || "Class",
-      });
-  }
-  const studentsById = new Map((state.students || []).map((student) => [student.id, student]));
-  const aggregateByStudent = mode === "group" || mode === "overview";
-  const relevantByStudent = aggregateByStudent ? rowsByStudent(relevant) : null;
-  const tableRows = aggregateByStudent
-    ? roster
-        .filter((student) => matchesSearch([student.fullName, student.code], search))
-        .map((student) => {
-          const rows = relevantByStudent.get(student.id) || [];
-          const charged = sumMoney(rows, (row) => row.charge);
-          const paid = sumMoney(rows, (row) => row.recognizedPaid);
-          const pending = moneyDifference(charged, paid);
-          const lastPayment =
-            rows
-              .map((row) => row.paymentDate)
-              .filter(Boolean)
-              .sort()
-              .at(-1) || "";
-          const overdue = rows.some((row) => paymentStatus(row, asOfDate).label === "Overdue");
-          return {
-            id: student.id,
-            student,
-            charged,
-            paid,
-            pending,
-            lastPayment,
-            status:
-              pending <= 0 && charged > 0
-                ? { label: "Up to date", tone: "success" }
-                : overdue
-                  ? { label: "Overdue", tone: "danger" }
-                  : { label: "Pending", tone: "warning" },
-          };
-        })
-    : relevant
-        .map((row) => ({
-          id: row.id,
-          student: studentsById.get(row.studentId),
-          classDate: row.classDate,
-          startTime: row.startTime || "",
-          classTitle: row.classTitle || row.groupName || "Class",
-          charged: finite(row.charge) ? row.charge : 0,
-          paid: finite(row.recognizedPaid) ? row.recognizedPaid : 0,
-          pending: finite(row.outstanding)
-            ? row.outstanding
-            : moneyDifference(row.charge || 0, row.recognizedPaid || 0),
-          paymentDate: row.paymentDate || "",
-          status: paymentStatus(row, asOfDate),
-          sessionKey: classWorkspaceSessionKey({ ...row, studentId: row.groupId ? "" : row.studentId }),
+  return (state.groups || [])
+    .filter(
+      (group) =>
+        group.status !== "Inactive" && isMonthlyGroup(group, period) && (scope === "all" || scope === group.id),
+    )
+    .map((group) => {
+      const rows = charges
+        .filter((charge) => charge.groupId === group.id)
+        .map((charge) => ({
+          charge,
+          student: (state.students || []).find((student) => student.id === charge.studentId),
         }))
-        .sort((a, b) => b.classDate.localeCompare(a.classDate));
-  const generated = sumMoney(relevant, (row) => row.charge);
-  const collected = sumMoney(relevant, (row) => row.recognizedPaid);
-  const pending = moneyDifference(generated, collected);
-  const paidStudents = new Set(
-    relevant.filter((row) => paymentStatus(row, asOfDate).label === "Paid").map((row) => row.studentId),
-  ).size;
-  const pendingStudents = new Set(
-    relevant.filter((row) => paymentStatus(row, asOfDate).label !== "Paid").map((row) => row.studentId),
-  ).size;
-  const paidClasses = relevant.filter((row) => paymentStatus(row, asOfDate).label === "Paid").length;
-  const unpaidClasses = relevant.length - paidClasses;
-  const overdueRows = relevant.filter((row) => paymentStatus(row, asOfDate).label === "Overdue");
-  const overdue = sumMoney(overdueRows, (row) =>
-    finite(row.outstanding)
-      ? row.outstanding
-      : moneyDifference(row.charge || 0, row.recognizedPaid || row.amountPaid || 0),
-  );
-  const daily = new Map();
-  for (const row of relevant)
-    daily.set(row.classDate, (daily.get(row.classDate) || 0) + (finite(row.recognizedPaid) ? row.recognizedPaid : 0));
-  const series = [...daily.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([label, value]) => ({ label, value }));
-  let runningCollected = 0;
-  const cumulativeSeries = series.map((item) => {
-    runningCollected = roundMoney(runningCollected + item.value);
-    return { ...item, value: runningCollected };
-  });
-  const projectionEnd =
-    range.period === "month" ? endOfMonth(asOfDate) : range.period === "week" ? addDays(range.start, 6) : range.end;
-  const elapsedDays = inclusiveDayCount(range.start, asOfDate > projectionEnd ? projectionEnd : asOfDate);
-  const totalDays = inclusiveDayCount(range.start, projectionEnd);
-  const paceProjection = collected > 0 ? roundMoney((collected / elapsedDays) * totalDays) : 0;
-  const projection = Math.max(
-    collected,
-    finite(projectionTotal) && projectionTotal >= 0 ? projectionTotal : paceProjection,
-  );
-  return {
-    tableRows,
-    sessions: [...sessions.values()].sort(
-      (a, b) => b.classDate.localeCompare(a.classDate) || b.startTime.localeCompare(a.startTime),
-    ),
-    generated,
-    collected,
-    pending,
-    overdue,
-    overdueClasses: overdueRows.length,
-    paidStudents,
-    pendingStudents,
-    paidClasses,
-    unpaidClasses,
-    series,
-    cumulativeSeries,
-    projection,
-    projectionGap: moneyDifference(projection, collected),
-    projectionStart: range.start,
-    projectionEnd,
-    actualEnd: asOfDate,
-    totalStudents: new Set(relevant.map((row) => row.studentId)).size,
-  };
+        .filter((item) => item.student)
+        .sort((left, right) => (left.charge.status === "paid" ? 0 : 1) - (right.charge.status === "paid" ? 0 : 1));
+      const counted = rows.filter((item) => item.charge.status !== "waived");
+      const paid = counted.filter((item) => item.charge.status === "paid");
+      const perClass = (state.students || []).filter(
+        (student) =>
+          student.status !== "Inactive" &&
+          studentGroupIdsOf(student).includes(group.id) &&
+          !rows.some((item) => item.student.id === student.id),
+      );
+      return {
+        group,
+        billing: normalizeGroupBilling(group.billing),
+        period,
+        dueDate: rows[0]?.charge.dueDate || "",
+        rows,
+        paidCount: paid.length,
+        total: counted.length,
+        paidAmount: sumMoney(paid, (item) => item.charge.amount),
+        expectedAmount: sumMoney(counted, (item) => item.charge.amount),
+        perClass,
+      };
+    })
+    .filter((block) => block.rows.length);
+}
+
+/** Breakdown: one row per student and class in the range, newest first. */
+export function trackingRecords(state, derived, range, scope = "all", studentId = "") {
+  const studentsById = new Map((state.students || []).map((student) => [student.id, student]));
+  const groupsById = new Map((state.groups || []).map((group) => [group.id, group]));
+  return (derived?.classLog || [])
+    .filter(
+      (row) =>
+        row.classDate >= range.start &&
+        row.classDate <= range.end &&
+        ["Completed", "Cancelled"].includes(row.classStatus) &&
+        matchesGroup(scope, row.groupId || "") &&
+        (!studentId || row.studentId === studentId) &&
+        studentsById.has(row.studentId),
+    )
+    .sort(
+      (left, right) =>
+        right.classDate.localeCompare(left.classDate) ||
+        String(right.startTime).localeCompare(String(left.startTime)) ||
+        String(studentsById.get(left.studentId)?.fullName).localeCompare(
+          String(studentsById.get(right.studentId)?.fullName),
+        ),
+    )
+    .map((row) => {
+      const key = `${row.classDate}|${row.groupId ? `g:${row.groupId}` : `s:${row.studentId}`}|${row.startTime}`;
+      const grade = (state.grades || []).find(
+        (item) => item.studentId === row.studentId && item.classSessionKey === key,
+      );
+      const value =
+        grade && finite(grade.score) && finite(grade.maxScore) && grade.maxScore > 0
+          ? (grade.score / grade.maxScore) * 10
+          : null;
+      return {
+        row,
+        key,
+        student: studentsById.get(row.studentId),
+        className: row.groupId ? groupsById.get(row.groupId)?.name || "" : "",
+        assessment: grade?.assessment || "",
+        grade: value,
+        ungraded: Boolean(grade) && value === null,
+        payment:
+          row.classStatus === "Cancelled" || row.attendance === "A"
+            ? "none"
+            : Number(row.outstanding) > 0
+              ? "pending"
+              : Number(row.amountPaid) > 0
+                ? "paid"
+                : Number(row.charge) === 0
+                  ? "covered"
+                  : "none",
+      };
+    });
 }

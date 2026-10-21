@@ -1,97 +1,67 @@
-const EMPTY_ROWS = Object.freeze([]);
-import { ArchivedGroupsScope } from "../components/ArchivedGroupsScope";
-import { useI18n } from "../i18n/index.jsx";
 import { useEffect, useMemo, useState } from "react";
+import { CalendarDays, Download, X } from "lucide-react";
+import { useI18n } from "../i18n/index.jsx";
 import {
-  BarChart3,
-  CalendarDays,
-  CheckCircle2,
-  CircleAlert,
-  CircleDollarSign,
-  Clock3,
-  FileSpreadsheet,
-  Lightbulb,
-  MoreHorizontal,
-  RotateCcw,
-  Search,
-  Settings2,
-  Star,
-  TrendingDown,
-  TrendingUp,
-  UserRound,
-  UserRoundCheck,
-  UsersRound,
-} from "lucide-react";
-import { Button, Drawer, EmptyState, Field, IconButton, Input, Select, StatusBadge } from "../components/ui";
+  BottomSheet,
+  Button,
+  Drawer,
+  Field,
+  IconButton,
+  Input,
+  ListRow,
+  SectionHeading,
+  Segmented,
+  Select,
+  Tabs,
+} from "../components/ui";
 import { StudentAvatar } from "../components/StudentAvatar";
+import { ArchivedGroupsScope } from "../components/ArchivedGroupsScope";
+import { useCompactViewport } from "../components/OverlayContext";
 import { useHistoryBackedState } from "../hooks/useHistoryNavigation";
-import { getUiLocale } from "../i18n";
-import { createNumberFormatter } from "../utils/numberFormatter";
+import { todayDateOnly } from "../domain/dates";
 import {
-  buildAssessmentOptions,
-  buildAttendanceTracking,
-  buildGradeTracking,
-  buildPaymentTracking,
+  dayNumber,
+  formatDayMonth,
+  formatMoney,
+  formatScore,
+  formatShortDate,
+  formatTime,
+  monthLong,
+  monthShort,
+} from "../utils/displayFormat";
+import { defaultPointIndex, monthProjection, shortNames } from "./homeDashboardModel";
+import { bucketTitle, collectionsMax, compactMoney, Plot } from "./HomeMetrics";
+import { groupNamesOf } from "./CommunityStudent";
+import {
+  monthlyBlocks,
+  trackingKpis,
+  trackingMetric,
   trackingRange,
+  trackingRecords,
+  trackingStudents,
 } from "./trackingModel";
+import "../components/charts.css";
+import "./tracking.css";
 
 const TAB_ITEMS = [
   { value: "grades", label: "Grades" },
   { value: "attendance", label: "Attendance" },
   { value: "payments", label: "Payments" },
 ];
-const PERIOD_ITEMS = [
-  { value: "week", label: "This week" },
-  { value: "month", label: "This month" },
-  { value: "thirty", label: "Last 30 days" },
-  { value: "all", label: "All records" },
-];
-const PAYMENT_SCOPE_ITEMS = [
-  { value: "overview", label: "Overview" },
+const MODE_ITEMS = [
+  { value: "summary", label: "Summary" },
   { value: "breakdown", label: "Breakdown" },
 ];
-const ATTENDANCE_SCOPE_ITEMS = [
-  { value: "overview", label: "Overview" },
-  { value: "breakdown", label: "Breakdown" },
-];
-const PAYMENT_MODE_ITEMS = [
-  { value: "group", label: "Group" },
-  { value: "student", label: "Student" },
-  { value: "class", label: "Class" },
-];
-const PAYMENT_CHART_ITEMS = [
-  { value: "evolution", label: "Payment evolution" },
-  { value: "projection", label: "Collected vs. projection" },
-];
+const TAB_VALUES = TAB_ITEMS.map((item) => item.value);
 
-/** @param {string} value @param {Intl.DateTimeFormatOptions} [options] */
-function formatDate(value, options = { day: "2-digit", month: "short", year: "numeric" }) {
-  if (!value) return "—";
-  return new Intl.DateTimeFormat(getUiLocale(), options).format(new Date(`${value}T12:00:00`));
+function capitalize(text) {
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
 }
 
-function formatTime(value) {
-  if (!value) return "";
-  const [hour, minute] = value.split(":").map(Number);
-  return new Intl.DateTimeFormat(getUiLocale(), {
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(2026, 0, 1, hour, minute));
-}
-
-function percent(value, digits = 0) {
-  return value == null ? "—" : `${(value * 100).toFixed(digits)}%`;
-}
-
-function gradeValue(value, maximum) {
-  if (value == null) return "—";
-  return `${Number(value).toFixed(Number(value) % 1 ? 1 : 0)} / ${maximum || 10}`;
-}
-
-const formatMoney = createNumberFormatter({ style: "currency", currency: "MXN", maximumFractionDigits: 2 });
-
-function money(value) {
-  return formatMoney(Number(value || 0), getUiLocale());
+function percentText(ratio, locale) {
+  return Number.isFinite(ratio)
+    ? `${new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(ratio * 100)}%`
+    : "—";
 }
 
 function escapeExcel(value) {
@@ -106,11 +76,7 @@ function downloadExcel(filename, title, rows) {
   const headers = [...new Set(rows.flatMap((row) => Object.keys(row)))];
   const table = `<table><caption>${escapeExcel(title)}</caption><thead><tr>${headers.map((header) => `<th>${escapeExcel(header)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${headers.map((header) => `<td>${escapeExcel(row[header])}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
   const html = `<!doctype html><html><head><meta charset="utf-8"></head><body>${table}</body></html>`;
-  const url = URL.createObjectURL(
-    new Blob(["\ufeff", html], {
-      type: "application/vnd.ms-excel;charset=utf-8",
-    }),
-  );
+  const url = URL.createObjectURL(new Blob(["﻿", html], { type: "application/vnd.ms-excel;charset=utf-8" }));
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = filename;
@@ -118,1638 +84,1460 @@ function downloadExcel(filename, title, rows) {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-function TrackingTabs({ value, onChange }) {
-  const { t: uiT } = useI18n();
+function attendanceWord(row, t) {
+  if (row.classStatus === "Cancelled") return { tone: "st-prog", text: t("Cancelled") };
+  if (row.attendance === "A") return { tone: "st-venc", text: t("Absent") };
+  if (row.attendance === "E") return { tone: "st-prog", text: t("Excused") };
+  return { tone: "st-ok", text: t("Present") };
+}
+
+function paymentWord(record, t) {
+  if (record.payment === "paid") return { tone: "st-ok", text: t("Paid") };
+  if (record.payment === "pending") return { tone: "st-pend", text: t("Pending") };
+  if (record.payment === "covered") return { tone: "st-prog", text: t("Monthly fee") };
+  return { tone: "", text: "—" };
+}
+
+/** «Mensualidades · octubre» for one monthly group: progress and «Marcar pagada» / «Deshacer». */
+function MonthlyBlock({ block, asOf, onToggle, busy, compact = false }) {
+  const { t, locale } = useI18n();
+  const month = monthLong(`${block.period}-01`, locale);
+  const due = block.billing?.due;
+  const dueText =
+    due?.type === "nthClass"
+      ? t("due at class {nth} of the month", { nth: due.nth === "last" ? t("last (class)") : `${due.nth}.ª` })
+      : t("due on day {day}", { day: due?.day ?? "" });
+  const pct = block.expectedAmount ? Math.round((block.paidAmount / block.expectedAmount) * 100) : 0;
   return (
-    <div className="tracking-tabs" role="tablist" aria-label={uiT("Tracking views")}>
-      {TAB_ITEMS.map((item) => (
-        <button
-          key={item.value}
-          type="button"
-          role="tab"
-          id={`tracking-tab-${item.value}`}
-          aria-controls={`tracking-panel-${item.value}`}
-          tabIndex={value === item.value ? 0 : -1}
-          onKeyDown={(event) => {
-            const index = TAB_ITEMS.findIndex((tab) => tab.value === value);
-            let next;
-            if (event.key === "ArrowRight") next = (index + 1) % TAB_ITEMS.length;
-            if (event.key === "ArrowLeft") next = (index + TAB_ITEMS.length - 1) % TAB_ITEMS.length;
-            if (event.key === "Home") next = 0;
-            if (event.key === "End") next = TAB_ITEMS.length - 1;
-            if (next === undefined) return;
-            event.preventDefault();
-            onChange(TAB_ITEMS[next].value);
-            document.getElementById(`tracking-tab-${TAB_ITEMS[next].value}`)?.focus();
-          }}
-          aria-selected={value === item.value}
-          className={value === item.value ? "active" : ""}
-          onClick={() => onChange(item.value)}
+    <section className="mens" aria-label={t("Monthly fees · {month} · {group}", { month, group: block.group.name })}>
+      <div className="mhd">
+        {compact ? (
+          <div className="mhd-top">
+            <span className="overline">{t("Monthly fees · {month}", { month })}</span>
+            <span className="mhd-count">
+              <b>{t("{paid} of {total}", { paid: block.paidCount, total: block.total })}</b>
+              <small>{t("paid (plural)")}</small>
+            </span>
+          </div>
+        ) : (
+          <span className="overline">{t("Monthly fees · {month}", { month })}</span>
+        )}
+        <h2>{block.group.name}</h2>
+        <p>
+          {t("{amount} a month", { amount: formatMoney(block.billing?.monthlyFee || 0, locale) })} · {dueText}
+          {block.dueDate === asOf
+            ? ` (${t("today")})`
+            : block.dueDate
+              ? ` (${formatShortDate(block.dueDate, locale)})`
+              : ""}
+        </p>
+        {compact ? null : (
+          <div className="mprog">
+            <b>{t("{paid} of {total}", { paid: block.paidCount, total: block.total })}</b>
+            <span>
+              {t("paid · {amount} of {expected}", {
+                amount: formatMoney(block.paidAmount, locale),
+                expected: formatMoney(block.expectedAmount, locale),
+              })}
+            </span>
+          </div>
+        )}
+        <div
+          className="pbar"
+          role="progressbar"
+          aria-label={t("Monthly fees paid")}
+          aria-valuenow={pct}
+          aria-valuemin={0}
+          aria-valuemax={100}
         >
-          {uiT(item.label)}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function ModeSwitch({ value, onChange, items, label = "View by" }) {
-  const { t: uiT } = useI18n();
-  return (
-    <div className="tracking-mode">
-      <strong>{uiT(label)}</strong>
-      <div role="group" aria-label={uiT(label)}>
-        {items.map((item) => (
-          <button
-            key={item.value}
-            type="button"
-            className={value === item.value ? "active" : ""}
-            aria-pressed={value === item.value}
-            disabled={item.disabled}
-            title={item.disabled ? uiT("Create a group in Community to use this view") : undefined}
-            onClick={() => onChange(item.value)}
-          >
-            {uiT(item.label)}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function TrackingSelect({ label, value, onChange, children, searchable = false }) {
-  const { t: uiT } = useI18n();
-  return (
-    <label className="tracking-select">
-      <strong>{uiT(label)}</strong>
-      <Select aria-label={uiT(label)} value={value} onChange={onChange} searchable={searchable}>
-        {children}
-      </Select>
-    </label>
-  );
-}
-
-function Metric({ icon: Icon, label, value, note = undefined, tone = "green" }) {
-  const { t: uiT } = useI18n();
-  return (
-    <div className={`tracking-metric ${tone}`}>
-      <span>
-        <Icon size={24} aria-hidden="true" />
-      </span>
-      <div>
-        <small>{uiT(label)}</small>
-        <strong>{value}</strong>
-        {note ? <em>{uiT(note)}</em> : null}
-      </div>
-    </div>
-  );
-}
-
-function MetricStrip({ title, children }) {
-  const { t: uiT } = useI18n();
-  return (
-    <section className="tracking-summary" data-onboarding-tour="tracking">
-      <h2>{uiT(title)}</h2>
-      <div>{children}</div>
-    </section>
-  );
-}
-
-function TrendChart({
-  title,
-  series,
-  valueFormatter = percent,
-  maximum = undefined,
-  threshold = undefined,
-  footer = undefined,
-  className = "",
-}) {
-  const { t: uiT } = useI18n();
-  if (!series.length)
-    return (
-      <div className={`tracking-chart ${className}`.trim()}>
-        <h3>{uiT(title)}</h3>
-        <EmptyState
-          icon={BarChart3}
-          title={uiT("No trend yet")}
-          description={uiT("The chart will appear after records are saved in this period.")}
-        />
-      </div>
-    );
-  const width = 760;
-  const height = 168;
-  const padding = { left: 42, right: 20, top: 24, bottom: 34 };
-  const max = maximum ?? Math.max(1, ...series.map((item) => item.value || 0));
-  const points = series.map((item, index) => ({
-    ...item,
-    x: padding.left + (index / Math.max(series.length - 1, 1)) * (width - padding.left - padding.right),
-    y: padding.top + (1 - (item.value || 0) / max) * (height - padding.top - padding.bottom),
-  }));
-  const line = points
-    .map((point, index) => `${index ? "L" : "M"}${point.x.toFixed(1)} ${point.y.toFixed(1)}`)
-    .join(" ");
-  const area = `${line} L${points.at(-1).x} ${height - padding.bottom} L${points[0].x} ${height - padding.bottom} Z`;
-  return (
-    <div className={`tracking-chart ${className}`.trim()}>
-      <h3>{uiT(title)}</h3>
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={uiT(title)}>
-        <g className="tracking-grid">
-          {[0, 0.25, 0.5, 0.75, 1].map((ratio) => (
-            <line
-              key={ratio}
-              x1={padding.left}
-              x2={width - padding.right}
-              y1={padding.top + ratio * (height - padding.top - padding.bottom)}
-              y2={padding.top + ratio * (height - padding.top - padding.bottom)}
-            />
-          ))}
-        </g>
-        {threshold != null ? (
-          <g className="tracking-threshold">
-            <line
-              x1={padding.left}
-              x2={width - padding.right}
-              y1={padding.top + (1 - threshold / max) * (height - padding.top - padding.bottom)}
-              y2={padding.top + (1 - threshold / max) * (height - padding.top - padding.bottom)}
-            />
-            <text
-              x={padding.left + 4}
-              y={padding.top + (1 - threshold / max) * (height - padding.top - padding.bottom) - 5}
-            >
-              {percent(threshold)}
-            </text>
-          </g>
+          <i style={{ width: `${pct}%` }} />
+        </div>
+        {!compact && block.perClass.length ? (
+          <small>
+            {t(
+              block.perClass.length === 1
+                ? "{names} pays per class in this group; their payments stay in the list."
+                : "{names} pay per class in this group; their payments stay in the list.",
+              {
+                names: shortNames(
+                  block.perClass.map((student) => student.fullName),
+                  locale,
+                ),
+              },
+            )}
+          </small>
         ) : null}
-        <path className="tracking-area" d={area} />
-        <path className="tracking-line" d={line} />
-        {points.map((point) => (
-          <g key={`${point.label}-${point.x}`}>
-            <circle cx={point.x} cy={point.y} r="4" />
-            <text className="tracking-point-value" x={point.x} y={point.y - 10} textAnchor="middle">
-              {valueFormatter(point.value)}
-            </text>
-            <text className="tracking-axis-label" x={point.x} y={height - 10} textAnchor="middle">
-              {formatDate(point.label, { day: "numeric", month: "short" })}
-            </text>
-          </g>
-        ))}
-      </svg>
-      {footer}
-    </div>
-  );
-}
-
-function DistributionChart({ items }) {
-  const { t: uiT } = useI18n();
-  const max = Math.max(1, ...items.map((item) => item.value));
-  return (
-    <div className="tracking-chart tracking-distribution">
-      <h3>{uiT("Grade distribution")}</h3>
-      <div>
-        {items.map((item) => (
-          <span key={uiT(item.label)}>
-            <i>
-              <b className={item.tone} style={{ height: `${Math.max(5, (item.value / max) * 100)}%` }} />
-            </i>
-            <strong>{item.value}</strong>
-            <small>{uiT(item.label)}</small>
-          </span>
-        ))}
       </div>
-    </div>
-  );
-}
-
-function InsightPanel({ title, insights, footer = undefined }) {
-  const { t: uiT } = useI18n();
-  return (
-    <aside className="tracking-side-card">
-      <h3>
-        <Lightbulb size={20} aria-hidden="true" />
-        {uiT(title)}
-      </h3>
-      <ul>
-        {insights.map((insight, index) => {
-          const Icon = insight.icon || CheckCircle2;
+      <div className="mlist">
+        {block.rows.map(({ charge, student }) => {
+          const paid = charge.status === "paid";
+          const sub = paid
+            ? charge.paidAt === asOf
+              ? t("Paid today")
+              : `${charge.adjusted ? `${t("Own fee")} · ` : compact ? `${t("Group fee")} · ` : ""}${t("paid on {day}", { day: dayNumber(charge.paidAt) })}`
+            : charge.status === "waived"
+              ? t("Free this month")
+              : charge.dueDate === asOf
+                ? t("Due today")
+                : charge.status === "overdue"
+                  ? t("Overdue · {date}", { date: formatShortDate(charge.dueDate, locale, { weekday: false }) })
+                  : t("Due {date}", { date: formatShortDate(charge.dueDate, locale) });
           return (
-            <li className={insight.tone || "green"} key={`${insight.text}-${index}`}>
-              <span>
-                <Icon size={15} aria-hidden="true" />
+            <div className="mrow" key={charge.id}>
+              <StudentAvatar avatarId={student.avatarId} name={student.fullName} size="small" decorative />
+              <span className="nm">
+                <strong>{student.fullName}</strong>
+                <small className={charge.status === "overdue" ? "text-bad" : undefined}>{sub}</small>
               </span>
-              <p>{uiT(insight.text)}</p>
-            </li>
+              {compact && paid ? null : <span className="mamt">{formatMoney(charge.amount, locale)}</span>}
+              {paid ? (
+                <span className="mok">
+                  <span className="st st-ok">{t("Paid (fee)")}</span>
+                  {charge.paidAt === asOf ? (
+                    <button type="button" className="mlk" disabled={busy} onClick={() => onToggle(charge, false)}>
+                      {t("Undo")}
+                    </button>
+                  ) : null}
+                </span>
+              ) : charge.status === "waived" ? null : (
+                <button type="button" className="mbtn" disabled={busy} onClick={() => onToggle(charge, true)}>
+                  {t("Mark paid (fee)")}
+                </button>
+              )}
+            </div>
           );
         })}
-      </ul>
-      {footer}
-    </aside>
-  );
-}
-
-function RecentPanel({ title, rows, renderRow, footer = undefined }) {
-  const { t: uiT } = useI18n();
-  return (
-    <aside className="tracking-side-card tracking-recent">
-      <h3>
-        <CalendarDays size={19} aria-hidden="true" />
-        {uiT(title)}
-      </h3>
-      {rows.length ? (
-        <div>{rows.map(renderRow)}</div>
-      ) : (
-        <p className="tracking-empty-copy">{uiT("No matching records in this period.")}</p>
-      )}
-      {footer}
-    </aside>
-  );
-}
-
-function RelatedClassButton({ sessionKey, onOpen }) {
-  const { t: uiT } = useI18n();
-  return (
-    <IconButton
-      label={uiT("View related class")}
-      icon={MoreHorizontal}
-      disabled={!sessionKey}
-      onClick={() => onOpen(sessionKey)}
-    />
-  );
-}
-
-function StudentCell({ student }) {
-  const { t: uiT } = useI18n();
-  return (
-    <span className="tracking-person">
-      <StudentAvatar avatarId={student?.avatarId} name={student?.fullName} size="tiny" decorative />
-      <span>
-        <strong>{student?.fullName || uiT("Unknown student")}</strong>
-        <small>{student?.code || ""}</small>
-      </span>
-    </span>
-  );
-}
-
-function useTablePagination(rows) {
-  const [page, setPage] = useState(1);
-  const pageSize = 25;
-  const pages = Math.max(1, Math.ceil(rows.length / pageSize));
-  const currentPage = Math.min(page, pages);
-  useEffect(() => setPage(1), [rows]);
-  return {
-    rows: rows.slice((currentPage - 1) * pageSize, currentPage * pageSize),
-    page: currentPage,
-    pages,
-    setPage,
-  };
-}
-
-function TablePagination({ pagination }) {
-  const { t: uiT } = useI18n();
-  if (pagination.pages <= 1) return null;
-  return (
-    <div className="tracking-table-pagination">
-      <span role="status">
-        {uiT("Page")} {pagination.page} / {pagination.pages}
-      </span>
-      <Button
-        aria-label={uiT("Previous page")}
-        disabled={pagination.page <= 1}
-        onClick={() => pagination.setPage(pagination.page - 1)}
-      >
-        {uiT("Previous")}
-      </Button>
-      <Button
-        aria-label={uiT("Next page")}
-        disabled={pagination.page >= pagination.pages}
-        onClick={() => pagination.setPage(pagination.page + 1)}
-      >
-        {uiT("Next")}
-      </Button>
-    </div>
-  );
-}
-
-function GradeView({ data, mode, onOpenClass }) {
-  const { t: uiT } = useI18n();
-  const pagination = useTablePagination(data.tableRows);
-  const insights = [
-    {
-      icon: TrendingUp,
-      text:
-        data.average == null
-          ? "No grades have been recorded in this view yet."
-          : `The current average is ${percent(data.average, 0)}.`,
-    },
-    {
-      icon: Star,
-      text:
-        data.best == null ? "A best result will appear after grading." : `The best result is ${percent(data.best, 0)}.`,
-    },
-    {
-      icon: CircleAlert,
-      tone: data.tableRows.filter((row) => row.percentage != null && row.percentage < 0.6).length ? "orange" : "green",
-      text: `${data.tableRows.filter((row) => row.percentage != null && row.percentage < 0.6).length} students scored below 60%.`,
-    },
-    {
-      icon: UserRound,
-      tone: data.missingCount ? "blue" : "green",
-      text: `${data.missingCount} assignments remain without a grade.`,
-    },
-  ];
-  return (
-    <div className="tracking-content-grid">
-      <main>
-        <MetricStrip title={mode === "student" ? uiT("Student summary") : uiT("Assessment summary")}>
-          <Metric icon={TrendingUp} label={uiT("Average grade")} value={percent(data.average)} />
-          <Metric icon={Star} label={uiT("Best result")} value={percent(data.best)} />
-          <Metric icon={TrendingDown} label={uiT("Lowest result")} value={percent(data.worst)} tone="red" />
-          <Metric icon={UsersRound} label={uiT("Graded assignments")} value={data.gradedCount} tone="blue" />
-          <Metric icon={UserRound} label={uiT("Not graded")} value={data.missingCount} tone="orange" />
-        </MetricStrip>
-        {mode === "student" ? (
-          <TrendChart title={uiT("Grade evolution")} series={data.series} />
-        ) : (
-          <DistributionChart items={data.distribution} />
-        )}
-        <section className="tracking-table-shell tracking-table-grades" aria-label={uiT("Grade details")}>
-          <table>
-            <thead>
-              <tr>
-                {mode === "group" ? <th>{uiT("Student")}</th> : <th>{uiT("Assignment")}</th>}
-                <th className="tracking-col-date">{uiT("Date")}</th>
-                <th>{uiT("Grade")}</th>
-                <th className="tracking-col-secondary">{uiT("Percentage")}</th>
-                <th>{uiT("Status")}</th>
-                <th>
-                  <span className="sr-only">{uiT("Actions")}</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {pagination.rows.map((row) => (
-                <tr key={row.id}>
-                  {mode === "group" ? (
-                    <td>
-                      <StudentCell student={row.student} />
-                    </td>
-                  ) : (
-                    <td>
-                      <strong>{row.assessment}</strong>
-                    </td>
-                  )}
-                  <td className="tracking-col-date">{formatDate(row.date)}</td>
-                  <td className={row.percentage != null && row.percentage < 0.6 ? "danger-value" : "good-value"}>
-                    {gradeValue(row.score, row.maximum)}
-                  </td>
-                  <td className="tracking-col-secondary">{percent(row.percentage)}</td>
-                  <td>
-                    <StatusBadge tone={row.status.tone}>{uiT(row.status.label)}</StatusBadge>
-                  </td>
-                  <td>
-                    <RelatedClassButton sessionKey={row.sessionKey} onOpen={onOpenClass} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <TablePagination pagination={pagination} />
-          {!data.tableRows.length ? (
-            <EmptyState
-              icon={Star}
-              title={uiT("No grades found")}
-              description={uiT("Try another group, student, assessment, or period.")}
-            />
-          ) : null}
-        </section>
-      </main>
-      <aside className="tracking-sidebar">
-        <InsightPanel
-          title={mode === "student" ? uiT("Student insights") : uiT("Assessment insights")}
-          insights={insights}
-        />
-        <RecentPanel
-          title={uiT("Latest assignments")}
-          rows={data.tableRows.filter((row) => row.percentage != null).slice(0, 3)}
-          renderRow={(row) => (
-            <div className="tracking-recent-row" key={`recent-${row.id}`}>
-              <span>
-                <strong>{row.assessment}</strong>
-                <small>{formatDate(row.date)}</small>
-              </span>
-              <b>{gradeValue(row.score, row.maximum)}</b>
-            </div>
-          )}
-        />
-      </aside>
-    </div>
-  );
-}
-
-function AttendanceOverviewSummary({ data }) {
-  const { t: uiT } = useI18n();
-  const rate = data.average == null ? 0 : Math.max(0, Math.min(1, data.average));
-  return (
-    <section className="attendance-overview-summary" aria-labelledby="attendance-overview-heading">
-      <h2 id="attendance-overview-heading">{uiT("Attendance summary")}</h2>
-      <div>
-        <div
-          className="attendance-rate-ring"
-          style={{ "--attendance-rate": `${rate * 360}deg` }}
-          role="img"
-          aria-label={uiT("Average attendance {p0}", { p0: percent(data.average) })}
-        >
-          <span>
-            <strong>{percent(data.average)}</strong>
-            <small>{uiT("Average attendance")}</small>
-          </span>
-        </div>
-        <div className="attendance-rate-copy">
-          <p>{uiT("Calculated from present and absent records.")}</p>
-          <strong>{uiT("P / (P + A)")}</strong>
-        </div>
-        <div className="attendance-overview-metrics">
-          <Metric icon={CalendarDays} label={uiT("Recorded classes")} value={data.sessions} tone="blue" />
-          <Metric icon={UserRoundCheck} label={uiT("Present")} value={data.present} />
-          <Metric icon={UserRound} label={uiT("Absent")} value={data.absent} tone="red" />
-        </div>
       </div>
+      {compact ? (
+        <p className="mfoot">
+          {t("{amount} of {expected}", {
+            amount: formatMoney(block.paidAmount, locale),
+            expected: formatMoney(block.expectedAmount, locale),
+          })}
+          {block.perClass.length
+            ? ` · ${t(
+                block.perClass.length === 1
+                  ? "{names} pays per class in this group."
+                  : "{names} pay per class in this group.",
+                {
+                  names: shortNames(
+                    block.perClass.map((student) => student.fullName),
+                    locale,
+                  ),
+                },
+              )}`
+            : ""}
+        </p>
+      ) : null}
     </section>
   );
 }
 
-function AttendanceCompositionPanel({ data }) {
-  const { t: uiT } = useI18n();
-  const presentRatio = data.total ? data.present / data.total : 0;
-  const absentRatio = data.total ? data.absent / data.total : 0;
+/** Rows of a student's history inside the range. */
+function StudentHistory({ row, records, groupsById, onClose, onOpenStudent }) {
+  const { t, locale } = useI18n();
+  const student = row.student;
+  const threshold = 0.8;
   return (
-    <aside className="tracking-side-card attendance-composition" aria-labelledby="attendance-period-heading">
-      <h3 id="attendance-period-heading">{uiT("Period status")}</h3>
-      <p>{uiT("Attendance composition (all records)")}</p>
-      {data.total ? (
-        <>
-          <div
-            className="attendance-composition-bar"
-            role="img"
-            aria-label={uiT("Present {p0}, absent {p1}", { p0: percent(presentRatio), p1: percent(absentRatio) })}
-          >
-            <span className="present" style={{ width: `${presentRatio * 100}%` }}>
-              {data.present} ({percent(presentRatio)})
-            </span>
-            <span className="absent" style={{ width: `${absentRatio * 100}%` }}>
-              {data.absent} ({percent(absentRatio)})
-            </span>
-          </div>
-          <dl>
-            <div>
-              <dt>
-                <i className="present" /> {uiT(" Present")}
-              </dt>
-              <dd>
-                {data.present} ({percent(presentRatio)})
-              </dd>
-            </div>
-            <div>
-              <dt>
-                <i className="absent" /> {uiT(" Absent")}
-              </dt>
-              <dd>
-                {data.absent} ({percent(absentRatio)})
-              </dd>
-            </div>
-          </dl>
-          <footer>
-            <span>{uiT("Total records")}</span>
-            <strong>{data.total}</strong>
-          </footer>
-        </>
-      ) : (
-        <p className="tracking-empty-copy">{uiT("No attendance records to summarize.")}</p>
-      )}
-    </aside>
-  );
-}
-
-function attendanceSignalText(count, singular, plural = singular) {
-  return `${count} ${count === 1 ? singular : plural}`;
-}
-
-function AttendanceSignalsPanel({ data }) {
-  const { t: uiT } = useI18n();
-  const lowest = data.lowestSessions || [];
-  const signals = [
-    {
-      icon: CircleAlert,
-      tone: "red",
-      title: attendanceSignalText(
-        data.repeatedAbsenceStudents,
-        "student with repeated absences",
-        "students with repeated absences",
-      ),
-      detail: uiT("They missed 2 or more classes in the period."),
-    },
-    {
-      icon: UserRoundCheck,
-      tone: "green",
-      title: attendanceSignalText(
-        data.perfectAttendanceStudents,
-        "student with perfect attendance",
-        "students with perfect attendance",
-      ),
-      detail: uiT("They did not miss any class in the period."),
-    },
-    {
-      icon: TrendingUp,
-      tone: "green",
-      title: attendanceSignalText(data.improvingStudents, "student improving", "students improving"),
-      detail: uiT("Their attendance increased from the previous week."),
-    },
-    {
-      icon: CalendarDays,
-      tone: "blue",
-      title: "Lowest-attendance classes",
-      detail: lowest.length
-        ? lowest.map((item) => `${item.title} ${formatTime(item.startTime)} (${percent(item.rate)})`).join(" · ")
-        : uiT("No classes with attendance records in this period."),
-    },
-  ];
-  return (
-    <aside className="tracking-side-card attendance-signals" aria-labelledby="attendance-signals-heading">
-      <h3 id="attendance-signals-heading">
-        <Lightbulb size={20} aria-hidden="true" />
-        {uiT("Important signals")}
-      </h3>
-      <ul>
-        {signals.map(({ icon: Icon, tone, title, detail }) => (
-          <li className={tone} key={uiT(title)}>
-            <span>
-              <Icon size={15} aria-hidden="true" />
-            </span>
-            <p>
-              <strong>{uiT(title)}</strong>
-              <small>{detail}</small>
-            </p>
-          </li>
-        ))}
-      </ul>
-    </aside>
-  );
-}
-
-function AttendanceOverview({ data, onOpenClass }) {
-  const { t: uiT } = useI18n();
-  const pagination = useTablePagination(data.tableRows);
-  return (
-    <div className="tracking-content-grid attendance-overview-grid">
-      <main>
-        <AttendanceOverviewSummary data={data} />
-        <TrendChart
-          title={uiT("Attendance evolution by week")}
-          series={data.series}
-          maximum={1}
-          threshold={data.threshold}
-          className="attendance-overview-trend"
-          footer={
-            <div className="attendance-chart-legend" aria-hidden="true">
-              <span>{uiT("Attendance")}</span>
-              <span>
-                {uiT("Risk threshold (")}
-                {percent(data.threshold)})
+    <section className="stu" aria-labelledby="tracking-student-title">
+      <div className="stuh">
+        <StudentAvatar avatarId={student.avatarId} name={student.fullName} />
+        <div className="stuh-title">
+          <h3 id="tracking-student-title">{student.fullName}</h3>
+          <span>{groupNamesOf(student, groupsById, t) || t("Individual")}</span>
+        </div>
+        <button type="button" className="link-button" onClick={onOpenStudent}>
+          {t("View profile")}
+        </button>
+        <IconButton label={t("Close history")} icon={X} onClick={onClose} />
+      </div>
+      <div className="stats">
+        <div>
+          <span>{t("Attendance")}</span>
+          <b className={row.attendance !== null && row.attendance < threshold ? "text-bad" : ""}>
+            {percentText(row.attendance, locale)}
+          </b>
+        </div>
+        <div>
+          <span>{t("Average")}</span>
+          <b>{formatScore(row.average, locale)}</b>
+        </div>
+        <div>
+          <span>{t("Paid")}</span>
+          <b>{formatMoney(row.paid, locale)}</b>
+        </div>
+        <div>
+          <span>{t("To collect")}</span>
+          <b className={row.owed ? (row.overdue ? "text-bad" : "text-pend") : ""}>
+            {row.owed ? formatMoney(row.owed, locale) : "—"}
+          </b>
+        </div>
+      </div>
+      <div className="hist" role="table" aria-label={t("History of {name}", { name: student.fullName })}>
+        <div className="hr th" role="row">
+          <span role="columnheader">{t("Date")}</span>
+          <span role="columnheader">{t("Class")}</span>
+          <span role="columnheader">{t("Attendance")}</span>
+          <span role="columnheader">{t("Grade")}</span>
+          <span role="columnheader">{t("Payment")}</span>
+        </div>
+        {records.map((record) => {
+          const attendance = attendanceWord(record.row, t);
+          const payment = paymentWord(record, t);
+          return (
+            <div className="hr" role="row" key={record.row.id}>
+              <span role="cell" className="tnum">
+                {formatShortDate(record.row.classDate, locale)}
+              </span>
+              <span role="cell">
+                {[record.className || t("Individual"), record.assessment].filter(Boolean).join(" · ")}
+              </span>
+              <span role="cell">
+                <span className={`st ${attendance.tone}`}>{attendance.text}</span>
+              </span>
+              <span role="cell" className="tnum hr-grade">
+                {record.grade === null ? (record.ungraded ? t("Ungraded") : "—") : formatScore(record.grade, locale)}
+              </span>
+              <span role="cell">
+                {payment.tone ? <span className={`st ${payment.tone}`}>{payment.text}</span> : "—"}
               </span>
             </div>
-          }
-        />
-        <section className="attendance-follow-up" aria-labelledby="attendance-follow-up-heading">
-          <h3 id="attendance-follow-up-heading">{uiT("Students requiring follow-up")}</h3>
-          <div className="tracking-table-shell tracking-table-attendance" aria-label={uiT("Attendance details")}>
-            <table>
-              <thead>
-                <tr>
-                  <th>{uiT("Student")}</th>
-                  <th>{uiT("Group")}</th>
-                  <th>{uiT("Attendance")}</th>
-                  <th className="tracking-col-secondary">{uiT("Absences")}</th>
-                  <th className="tracking-col-date">{uiT("Last class")}</th>
-                  <th>{uiT("Status")}</th>
-                  <th>
-                    <span className="sr-only">{uiT("Actions")}</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {pagination.rows.map((row) => (
-                  <tr key={row.id}>
-                    <td>
-                      <StudentCell student={row.student} />
-                    </td>
-                    <td>{row.groupName || "—"}</td>
-                    <td className={row.rate != null && row.rate < data.threshold ? "danger-value" : "good-value"}>
-                      {percent(row.rate)}
-                    </td>
-                    <td className={`tracking-col-secondary ${row.absent ? "danger-value" : ""}`.trim()}>
-                      {row.absent}
-                    </td>
-                    <td className="tracking-col-date">{formatDate(row.lastClass)}</td>
-                    <td>
-                      <StatusBadge tone={row.status.tone}>{uiT(row.status.label)}</StatusBadge>
-                    </td>
-                    <td>
-                      <RelatedClassButton sessionKey={row.sessionKey} onOpen={onOpenClass} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <TablePagination pagination={pagination} />
-            {!data.tableRows.length ? (
-              <EmptyState
-                icon={UserRoundCheck}
-                title={uiT("No attendance found")}
-                description={uiT("No attendance has been recorded in this period.")}
-              />
-            ) : null}
-          </div>
-        </section>
-      </main>
-      <aside className="tracking-sidebar">
-        <AttendanceCompositionPanel data={data} />
-        <AttendanceSignalsPanel data={data} />
-      </aside>
-    </div>
-  );
-}
-
-function AttendanceView({ data, mode, scope = "breakdown", onOpenClass }) {
-  const { t: uiT } = useI18n();
-  const pagination = useTablePagination(data.tableRows);
-  if (scope === "overview") return <AttendanceOverview data={data} onOpenClass={onOpenClass} />;
-  const low = data.tableRows.filter((row) => row.rate != null && row.rate < 0.8);
-  const highCount = data.tableRows.filter((row) => row.rate != null && row.rate >= 0.9).length;
-  const insights = [
-    {
-      icon: TrendingUp,
-      text:
-        data.average == null
-          ? "No attendance has been recorded in this period."
-          : `Average attendance is ${percent(data.average)}.`,
-    },
-    {
-      icon: CheckCircle2,
-      text: `${highCount} ${highCount === 1 ? "record is" : "records are"} at or above 90%.`,
-    },
-    {
-      icon: CircleAlert,
-      tone: low.length ? "orange" : "green",
-      text: `${low.length} ${mode === "group" ? "students are" : "classes are"} below 80%.`,
-    },
-    {
-      icon: CalendarDays,
-      tone: "blue",
-      text: `${data.sessions} ${data.sessions === 1 ? "class session was" : "class sessions were"} included.`,
-    },
-  ];
-  return (
-    <div className="tracking-content-grid">
-      <main>
-        <MetricStrip title={uiT("Attendance summary")}>
-          <Metric icon={UsersRound} label={uiT("Average attendance")} value={percent(data.average)} />
-          <Metric icon={CalendarDays} label={uiT("Recorded classes")} value={data.sessions} />
-          <Metric icon={UserRoundCheck} label={uiT("Present")} value={data.present} note={`of ${data.total}`} />
-          <Metric icon={UserRound} label={uiT("Absent")} value={data.absent} note={`of ${data.total}`} tone="orange" />
-        </MetricStrip>
-        <TrendChart title={uiT("Attendance evolution by week")} series={data.series} />
-        <section className="tracking-table-shell tracking-table-attendance" aria-label={uiT("Attendance details")}>
-          <table>
-            <thead>
-              <tr>
-                {mode === "group" ? <th>{uiT("Student")}</th> : <th>{uiT("Class")}</th>}
-                <th>{uiT("Attendance")}</th>
-                <th className="tracking-col-secondary">{uiT("Present")}</th>
-                <th className="tracking-col-secondary">{uiT("Absences")}</th>
-                <th className="tracking-col-date">{mode === "group" ? uiT("Last class") : uiT("Date")}</th>
-                <th>{uiT("Status")}</th>
-                <th>
-                  <span className="sr-only">{uiT("Actions")}</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {pagination.rows.map((row) => (
-                <tr key={row.id}>
-                  {mode === "group" ? (
-                    <td>
-                      <StudentCell student={row.student} />
-                    </td>
-                  ) : (
-                    <td>
-                      <strong>{row.classTitle}</strong>
-                    </td>
-                  )}
-                  <td className={row.rate != null && row.rate < 0.8 ? "danger-value" : "good-value"}>
-                    {percent(row.rate)}
-                  </td>
-                  <td className="tracking-col-secondary">{row.present}</td>
-                  <td className={`tracking-col-secondary ${row.absent ? "danger-value" : ""}`.trim()}>{row.absent}</td>
-                  <td className="tracking-col-date">{formatDate(row.lastClass || row.classDate)}</td>
-                  <td>
-                    <StatusBadge tone={row.status.tone}>{uiT(row.status.label)}</StatusBadge>
-                  </td>
-                  <td>
-                    <RelatedClassButton sessionKey={row.sessionKey} onOpen={onOpenClass} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <TablePagination pagination={pagination} />
-          {!data.tableRows.length ? (
-            <EmptyState
-              icon={UserRoundCheck}
-              title={uiT("No attendance found")}
-              description={uiT("Try another group, student, or period.")}
-            />
-          ) : null}
-        </section>
-      </main>
-      <aside className="tracking-sidebar">
-        <InsightPanel title={uiT("Period insights")} insights={insights} />
-        <RecentPanel
-          title={mode === "group" ? uiT("Attendance below 80%") : uiT("Recent absences")}
-          rows={low.slice(0, 4)}
-          renderRow={(row) => (
-            <div className="tracking-recent-row" key={`low-${row.id}`}>
-              {mode === "group" ? (
-                <StudentCell student={row.student} />
-              ) : (
-                <span>
-                  <strong>{row.classTitle}</strong>
-                  <small>{formatDate(row.classDate)}</small>
-                </span>
-              )}
-              <b className="warning-value">{percent(row.rate)}</b>
-            </div>
-          )}
-        />
-      </aside>
-    </div>
-  );
-}
-
-function PaymentBar({ data }) {
-  const { t: uiT } = useI18n();
-  const ratio = data.generated > 0 ? Math.min(1, data.collected / data.generated) : 0;
-  return (
-    <div className="tracking-payment-chart">
-      <h3>{uiT("Collected vs. pending")}</h3>
-      <div className="payment-chart-labels">
-        <span>
-          {uiT("Collected ")}
-          <strong>{percent(ratio)}</strong>
-        </span>
-        <span>
-          {uiT("Pending ")}
-          <strong>{percent(1 - ratio)}</strong>
-        </span>
-      </div>
-      <div className="payment-chart-track">
-        <span style={{ width: `${ratio * 100}%` }} />
-        <i style={{ width: `${(1 - ratio) * 100}%` }} />
-      </div>
-      <div className="payment-chart-values">
-        <strong>{money(data.collected)}</strong>
-        <span>
-          {uiT("Total generated ")}
-          <b>{money(data.generated)}</b>
-        </span>
-        <strong>{money(data.pending)}</strong>
-      </div>
-    </div>
-  );
-}
-
-function dateTime(value) {
-  return new Date(`${value}T12:00:00Z`).getTime();
-}
-
-function chartPath(points) {
-  return points.map((point, index) => `${index ? "L" : "M"}${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(" ");
-}
-
-function PaymentProjectionChart({ data }) {
-  const { t: uiT } = useI18n();
-  const width = 760;
-  const height = 190;
-  const padding = { left: 48, right: 22, top: 18, bottom: 34 };
-  const startTime = dateTime(data.projectionStart);
-  const endTime = Math.max(startTime + 1, dateTime(data.projectionEnd));
-  const x = (date) =>
-    padding.left + ((dateTime(date) - startTime) / (endTime - startTime)) * (width - padding.left - padding.right);
-  const maximum = Math.max(data.projection, data.collected, 1);
-  const y = (value) => padding.top + (1 - value / maximum) * (height - padding.top - padding.bottom);
-  const actualSeries = [{ label: data.projectionStart, value: 0 }, ...data.cumulativeSeries];
-  if (actualSeries.at(-1)?.label !== data.actualEnd) {
-    actualSeries.push({ label: data.actualEnd, value: data.collected });
-  }
-  const actualPoints = actualSeries.map((item) => ({ ...item, x: x(item.label), y: y(item.value) }));
-  const projectionPoints = [
-    { label: data.projectionStart, value: 0, x: x(data.projectionStart), y: y(0) },
-    { label: data.projectionEnd, value: data.projection, x: x(data.projectionEnd), y: y(data.projection) },
-  ];
-  const actualPath = chartPath(actualPoints);
-  const projectionPath = chartPath(projectionPoints);
-  const areaPath = `${actualPath} L${actualPoints.at(-1).x.toFixed(1)} ${height - padding.bottom} L${actualPoints[0].x.toFixed(1)} ${height - padding.bottom} Z`;
-  return (
-    <div className="payment-projection-chart">
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        role="img"
-        aria-label={uiT("Collected {p0} versus projected {p1}", {
-          p0: money(data.collected),
-          p1: money(data.projection),
+          );
         })}
-      >
-        <g className="tracking-grid">
-          {[0, 0.25, 0.5, 0.75, 1].map((ratio) => (
-            <line
-              key={ratio}
-              x1={padding.left}
-              x2={width - padding.right}
-              y1={padding.top + ratio * (height - padding.top - padding.bottom)}
-              y2={padding.top + ratio * (height - padding.top - padding.bottom)}
-            />
-          ))}
-        </g>
-        <path className="payment-projection-area" d={areaPath} />
-        <path className="payment-projection-line" d={projectionPath} />
-        <path className="tracking-line" d={actualPath} />
-        {actualPoints.slice(1).map((point) => (
-          <circle key={`${point.label}-${point.value}`} cx={point.x} cy={point.y} r="3.5" />
-        ))}
-        <circle className="projection-end" cx={projectionPoints[1].x} cy={projectionPoints[1].y} r="4" />
-        <text className="tracking-axis-label" x={padding.left} y={height - 9} textAnchor="start">
-          {formatDate(data.projectionStart, { month: "short", day: "numeric" })}
-        </text>
-        <text className="tracking-axis-label" x={x(data.actualEnd)} y={height - 9} textAnchor="middle">
-          {uiT("Today")}
-        </text>
-        <text className="tracking-axis-label" x={width - padding.right} y={height - 9} textAnchor="end">
-          {formatDate(data.projectionEnd, { month: "short", day: "numeric" })}
-        </text>
-      </svg>
-    </div>
-  );
-}
-
-function PaymentAnalytics({ data, value, onChange }) {
-  const { t: uiT } = useI18n();
-  return (
-    <section className="payment-analytics" aria-label={uiT("Payment analytics")}>
-      <header>
-        <div className="payment-chart-toggle" role="tablist" aria-label={uiT("Payment chart")}>
-          {PAYMENT_CHART_ITEMS.map((item) => (
-            <button
-              key={item.value}
-              type="button"
-              role="tab"
-              aria-selected={value === item.value}
-              className={value === item.value ? "active" : ""}
-              onClick={() => onChange(item.value)}
-            >
-              {uiT(item.label)}
-            </button>
-          ))}
-        </div>
-        {value === "projection" ? (
-          <div className="payment-forecast-values">
-            <span className="actual">
-              <small>{uiT("Actual")}</small>
-              <strong>{money(data.collected)}</strong>
-            </span>
-            <span className="projection">
-              <small>{uiT("Projection")}</small>
-              <strong>{money(data.projection)}</strong>
-            </span>
-            <span>
-              <small>{uiT("Gap")}</small>
-              <strong>{money(data.projectionGap)}</strong>
-            </span>
-            <span className="overdue">
-              <small>{uiT("Overdue")}</small>
-              <strong>{money(data.overdue)}</strong>
-            </span>
-          </div>
-        ) : null}
-      </header>
-      {value === "projection" ? (
-        <PaymentProjectionChart data={data} />
-      ) : (
-        <TrendChart title={uiT("Payment evolution")} series={data.series} valueFormatter={money} />
-      )}
+        {!records.length ? <p className="muted">{t("No classes in this period.")}</p> : null}
+      </div>
     </section>
-  );
-}
-
-function PaymentView({ data, mode, scope, chartView, onChartViewChange, onOpenClass }) {
-  const { t: uiT } = useI18n();
-  const pagination = useTablePagination(data.tableRows);
-  const pendingRows = data.tableRows.filter(
-    (row) => row.pending > 0 || row.status?.label === "Pending" || row.status?.label === "Overdue",
-  );
-  const insights = [
-    {
-      icon: CircleDollarSign,
-      text: `${percent(data.generated ? data.collected / data.generated : null)} of the generated value has been collected.`,
-    },
-    {
-      icon: CheckCircle2,
-      text:
-        scope === "overview"
-          ? `${data.paidClasses} paid class ${data.paidClasses === 1 ? "record" : "records"}.`
-          : `${data.paidStudents} ${data.paidStudents === 1 ? "student has" : "students have"} paid.`,
-    },
-    {
-      icon: Clock3,
-      tone: pendingRows.length ? "orange" : "green",
-      text:
-        scope === "overview"
-          ? `${data.unpaidClasses} pending class ${data.unpaidClasses === 1 ? "record" : "records"}.`
-          : `${data.pendingStudents} ${data.pendingStudents === 1 ? "student still has" : "students still have"} a pending balance.`,
-    },
-    {
-      icon: CircleAlert,
-      tone: data.overdueClasses ? "red" : "green",
-      text: `${data.overdueClasses} overdue ${data.overdueClasses === 1 ? "record" : "records"}.`,
-    },
-  ];
-  const aggregateByStudent = mode === "group" || mode === "overview";
-  return (
-    <div className="tracking-content-grid">
-      <main>
-        <MetricStrip title={mode === "class" ? uiT("Class collection summary") : uiT("Payment summary")}>
-          <Metric icon={CircleDollarSign} label={uiT("Generated value")} value={money(data.generated)} />
-          <Metric icon={CheckCircle2} label={uiT("Amount collected")} value={money(data.collected)} />
-          <Metric icon={Clock3} label={uiT("Pending amount")} value={money(data.pending)} tone="orange" />
-          {mode === "class" ? (
-            <>
-              <Metric
-                icon={UsersRound}
-                label={uiT("Students paid")}
-                value={data.paidStudents}
-                note={`of ${data.totalStudents}`}
-                tone="blue"
-              />
-              <Metric
-                icon={UserRound}
-                label={uiT("Students pending")}
-                value={data.pendingStudents}
-                note={`of ${data.totalStudents}`}
-                tone="orange"
-              />
-            </>
-          ) : (
-            <>
-              <Metric icon={CalendarDays} label={uiT("Paid classes")} value={data.paidClasses} tone="blue" />
-              <Metric icon={CalendarDays} label={uiT("Unpaid classes")} value={data.unpaidClasses} tone="orange" />
-            </>
-          )}
-        </MetricStrip>
-        <PaymentBar data={data} />
-        {mode === "class" ? null : <PaymentAnalytics data={data} value={chartView} onChange={onChartViewChange} />}
-        <section className="tracking-table-shell tracking-table-payments" aria-label={uiT("Payment details")}>
-          <table>
-            <thead>
-              <tr>
-                {mode === "student" ? <th>{uiT("Class")}</th> : <th>{uiT("Student")}</th>}
-                <th>{aggregateByStudent ? uiT("Paid") : uiT("Amount")}</th>
-                {aggregateByStudent ? <th>{uiT("Pending")}</th> : null}
-                <th>{uiT("Payment status")}</th>
-                <th className="tracking-col-date">{uiT("Payment date")}</th>
-                <th>
-                  <span className="sr-only">{uiT("Actions")}</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {pagination.rows.map((row) => (
-                <tr key={row.id}>
-                  {mode === "student" ? (
-                    <td>
-                      <strong>{row.classTitle}</strong>
-                      <small>{formatDate(row.classDate)}</small>
-                    </td>
-                  ) : (
-                    <td>
-                      <StudentCell student={row.student} />
-                    </td>
-                  )}
-                  <td>{money(aggregateByStudent ? row.paid : row.charged)}</td>
-                  {aggregateByStudent ? (
-                    <td className={row.pending ? "warning-value" : ""}>{money(row.pending)}</td>
-                  ) : null}
-                  <td>
-                    <StatusBadge tone={row.status.tone}>{uiT(row.status.label)}</StatusBadge>
-                  </td>
-                  <td className="tracking-col-date">{formatDate(row.lastPayment || row.paymentDate)}</td>
-                  <td>
-                    <RelatedClassButton sessionKey={row.sessionKey} onOpen={onOpenClass} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <TablePagination pagination={pagination} />
-          {!data.tableRows.length ? (
-            <EmptyState
-              icon={CircleDollarSign}
-              title={uiT("No payments found")}
-              description={uiT("Try another group, student, class, or period.")}
-            />
-          ) : null}
-        </section>
-      </main>
-      <aside className="tracking-sidebar">
-        <InsightPanel title={uiT("Collection summary")} insights={insights} />
-        <RecentPanel
-          title={scope === "overview" ? uiT("Pending overall") : uiT("Pending in this view")}
-          rows={pendingRows.slice(0, 4)}
-          renderRow={(row) => (
-            <div className="tracking-recent-row" key={`pending-${row.id}`}>
-              <StudentCell student={row.student} />
-              <b className="warning-value">{money(row.pending || row.charged)}</b>
-            </div>
-          )}
-        />
-      </aside>
-    </div>
   );
 }
 
 export default function Tracking({
-  state = undefined,
-  derived = undefined,
+  state,
+  derived,
   actions = undefined,
-  openPage,
-  intent,
-  clearIntent,
-  archiveScope,
+  openPage = undefined,
+  intent = undefined,
+  clearIntent = undefined,
+  archiveScope = undefined,
 }) {
-  const { t: uiT } = useI18n();
-  const groups = state.groups || EMPTY_ROWS;
-  const students = (state.students || []).filter((student) => student.status !== "Inactive");
-  const gradeRows = derived.gradeRows || state.grades || EMPTY_ROWS;
-  const classRows = derived.classLogRows || derived.classLog || state.classLog || EMPTY_ROWS;
-  const [tab, setTab] = useState("grades");
-  const [period, setPeriod] = useState("month");
-  const [search, setSearch] = useState("");
-  const [gradeMode, setGradeMode] = useState(() => (groups.length ? "group" : "student"));
-  const [attendanceMode, setAttendanceMode] = useState(() => (groups.length ? "group" : "student"));
-  const [attendanceScope, setAttendanceScope] = useState("overview");
-  const [paymentMode, setPaymentMode] = useState(() => (groups.length ? "group" : "student"));
-  const [paymentScope, setPaymentScope] = useState("overview");
-  const [paymentChart, setPaymentChart] = useState("projection");
-  const [groupId, setGroupId] = useState(groups[0]?.id || "");
-  useEffect(() => {
-    if (!groups.some((group) => group.id === groupId)) setGroupId(groups[0]?.id || "");
-  }, [groups, groupId]);
-  const [studentId, setStudentId] = useState(students[0]?.id || "");
-  const [assessmentKey, setAssessmentKey] = useState("");
-  const [sessionKey, setSessionKey] = useState("");
-  const liveDate = state.settings?.asOfDate || new Date().toISOString().slice(0, 10);
-  const [historicalDate, setHistoricalDate] = useState("");
-  const [dateSettingsOpen, setDateSettingsOpen] = useState(false);
-  const [dateModeDraft, setDateModeDraft] = useState("automatic");
+  const { t, locale } = useI18n();
+  const compact = useCompactViewport();
+  const liveDate = state.settings?.asOfDate || todayDateOnly();
+  const [reportDate, setReportDate] = useState("");
   const [dateDraft, setDateDraft] = useState(liveDate);
-  const reportDate = historicalDate || liveDate;
-  const reportState = useMemo(
-    () => ({
-      ...state,
-      settings: {
-        ...state.settings,
-        asOfDate: reportDate,
-        selectedMonth: `${reportDate.slice(0, 7)}-01`,
-      },
-    }),
-    [reportDate, state],
-  );
+  const [dateOpen, setDateOpen] = useState(false);
+  const asOf = reportDate || liveDate;
+  const [tab, setTab] = useState("attendance");
+  const [mode, setMode] = useState("summary");
+  const [period, setPeriod] = useState("month");
+  const [scope, setScope] = useState("all");
+  const [selected, setSelected] = useState(null);
+  const [focus, setFocus] = useState(false);
+  const [kpiFilter, setKpiFilter] = useState("");
+  const [studentId, setStudentId] = useState("");
+  const [view, setView] = useState("rhythm");
+  const [chip, setChip] = useState("all");
+  const [sheet, setSheet] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const reset = () => {
+    setSelected(null);
+    setFocus(false);
+    setKpiFilter("");
+    setChip("all");
+  };
   const changeTab = useHistoryBackedState({
     key: "tracking-tab",
     value: tab,
-    onChange: setTab,
-    defaultValue: "grades",
-    allowedValues: TAB_ITEMS.map((item) => item.value),
-  });
-  const changePaymentScope = useHistoryBackedState({
-    key: "tracking-payment-scope",
-    value: paymentScope,
-    onChange: setPaymentScope,
-    defaultValue: "overview",
-    allowedValues: PAYMENT_SCOPE_ITEMS.map((item) => item.value),
-  });
-  const changeAttendanceScope = useHistoryBackedState({
-    key: "tracking-attendance-scope",
-    value: attendanceScope,
-    onChange: setAttendanceScope,
-    defaultValue: "overview",
-    allowedValues: ATTENDANCE_SCOPE_ITEMS.map((item) => item.value),
-  });
-  const changePaymentChart = useHistoryBackedState({
-    key: "tracking-payment-chart",
-    value: paymentChart,
-    onChange: setPaymentChart,
-    defaultValue: "projection",
-    allowedValues: PAYMENT_CHART_ITEMS.map((item) => item.value),
+    onChange: (value) => {
+      setTab(value);
+      reset();
+    },
+    defaultValue: "attendance",
+    allowedValues: TAB_VALUES,
   });
   useEffect(() => {
     if (intent?.type !== "open-tracking") return;
-    if (intent.tab && TAB_ITEMS.some((item) => item.value === intent.tab)) {
-      changeTab(intent.tab, { replace: true });
-    }
-    if (PAYMENT_SCOPE_ITEMS.some((item) => item.value === intent.paymentScope)) {
-      changePaymentScope(intent.paymentScope, { replace: true });
-    }
-    if (ATTENDANCE_SCOPE_ITEMS.some((item) => item.value === intent.attendanceScope)) {
-      changeAttendanceScope(intent.attendanceScope, { replace: true });
-    }
-    if (PAYMENT_CHART_ITEMS.some((item) => item.value === intent.paymentChart)) {
-      changePaymentChart(intent.paymentChart, { replace: true });
-    }
+    if (TAB_VALUES.includes(intent.tab)) changeTab(intent.tab, { replace: true });
     clearIntent?.();
-  }, [changeAttendanceScope, changePaymentChart, changePaymentScope, changeTab, clearIntent, intent]);
-  const range = useMemo(
-    () => trackingRange(reportDate, period, [...gradeRows, ...classRows]),
-    [classRows, gradeRows, period, reportDate],
-  );
-  const assessments = useMemo(
-    () => buildAssessmentOptions(reportState, gradeRows, groupId, range),
-    [gradeRows, groupId, range, reportState],
-  );
-  useEffect(() => {
-    if (!assessments.some((item) => item.key === assessmentKey)) setAssessmentKey(assessments[0]?.key || "");
-  }, [assessmentKey, assessments]);
-  const gradeData = useMemo(
-    () =>
-      tab === "grades"
-        ? buildGradeTracking(reportState, gradeRows, {
-            mode: gradeMode,
-            groupId,
-            studentId,
-            assessmentKey,
-            range,
-            search,
-            classRows,
-          })
-        : null,
-    [tab, assessmentKey, classRows, gradeMode, gradeRows, groupId, range, search, reportState, studentId],
-  );
-  const activeAttendanceMode = attendanceScope === "overview" ? "overview" : attendanceMode;
-  const attendanceData = useMemo(
-    () =>
-      tab === "attendance"
-        ? buildAttendanceTracking(reportState, classRows, {
-            mode: activeAttendanceMode,
-            groupId,
-            studentId,
-            range,
-            search,
-          })
-        : null,
-    [tab, activeAttendanceMode, classRows, groupId, range, reportState, search, studentId],
-  );
-  const activePaymentMode = paymentScope === "overview" ? "overview" : paymentMode;
-  const overviewProjection = period === "month" ? derived.dashboard?.recentProjection : undefined;
-  const paymentBase = useMemo(
-    () =>
-      tab === "payments"
-        ? buildPaymentTracking(reportState, classRows, {
-            mode: activePaymentMode,
-            groupId,
-            studentId,
-            sessionKey: "",
-            range,
-            search,
-            projectionTotal: activePaymentMode === "overview" ? overviewProjection : undefined,
-          })
-        : null,
-    [tab, activePaymentMode, classRows, groupId, overviewProjection, range, reportState, search, studentId],
-  );
-  useEffect(() => {
-    if (tab !== "payments" || !paymentBase) return;
-    if (!paymentBase.sessions.some((item) => item.key === sessionKey))
-      setSessionKey(paymentBase.sessions[0]?.key || "");
-  }, [tab, paymentBase, sessionKey]);
-  const paymentData = useMemo(() => {
-    // Only class mode changes the report when a session is selected.
-    if (tab !== "payments" || activePaymentMode !== "class" || !sessionKey) return paymentBase;
-    return buildPaymentTracking(reportState, classRows, {
-      mode: activePaymentMode,
-      groupId,
-      studentId,
-      sessionKey,
-      range,
-      search,
-      projectionTotal: undefined,
-    });
-  }, [tab, activePaymentMode, classRows, groupId, paymentBase, range, search, sessionKey, reportState, studentId]);
+  }, [changeTab, clearIntent, intent]);
 
-  const activeMode = tab === "grades" ? gradeMode : tab === "attendance" ? activeAttendanceMode : activePaymentMode;
-  const modeItems =
-    tab === "payments"
-      ? PAYMENT_MODE_ITEMS.map((item) => ({ ...item, disabled: item.value === "group" && !groups.length }))
-      : [
-          { value: "group", label: "Group", disabled: !groups.length },
-          { value: "student", label: "Student" },
-        ];
-  const setMode = tab === "grades" ? setGradeMode : tab === "attendance" ? setAttendanceMode : setPaymentMode;
-  const useStudentOwner = activeMode === "student" || (tab === "payments" && activeMode === "class" && !groups.length);
-  const openRelatedClass = (key) =>
-    openPage?.("classes", key ? { type: "open-history-class", sessionKey: key } : "class-history");
+  const groupsById = useMemo(() => new Map((state.groups || []).map((group) => [group.id, group])), [state.groups]);
+  const range = useMemo(() => trackingRange(asOf, period, state), [asOf, period, state]);
+  const students = useMemo(() => trackingStudents(state, derived, range, scope), [derived, range, scope, state]);
+  const kpis = useMemo(
+    () => trackingKpis(state, derived, range, scope, students),
+    [derived, range, scope, state, students],
+  );
+  const metric = useMemo(() => trackingMetric(state, derived, range, scope, tab), [derived, range, scope, state, tab]);
+  const blocks = useMemo(
+    () => (tab === "payments" ? monthlyBlocks(state, asOf, scope) : []),
+    [asOf, scope, state, tab],
+  );
+  const projection = useMemo(
+    () => (period === "month" && scope === "all" ? monthProjection(state, derived?.classLog || [], asOf) : null),
+    [asOf, derived, period, scope, state],
+  );
+  const records = useMemo(
+    () =>
+      mode === "breakdown" || studentId
+        ? trackingRecords(state, derived, range, scope, mode === "breakdown" ? "" : studentId)
+        : [],
+    [derived, mode, range, scope, state, studentId],
+  );
+  const threshold = { attendance: kpis.threshold, grade: kpis.gradeThreshold };
+  const index = selected === null || selected >= metric.points.length ? defaultPointIndex(metric) : selected;
+  const point = focus ? metric.points[index] : null;
+  const selectedRow = students.find((row) => row.student.id === studentId) || null;
+
+  const groupChips = [
+    { value: "all", label: t("All") },
+    ...(state.groups || [])
+      .filter((group) => group.status !== "Inactive")
+      .map((group) => ({ value: group.id, label: group.name })),
+    ...((state.students || []).some(
+      (student) => student.status !== "Inactive" && (student.isIndividual || !(student.groupIds || []).length),
+    )
+      ? [{ value: "individual", label: t("Individual (plural)") }]
+      : []),
+  ];
+  const periodOptions = [
+    {
+      value: "month",
+      label: t("This month · {month}", { month: monthLong(asOf, locale) }),
+      short: capitalize(monthLong(asOf, locale)),
+      meta: t("{start} to {end} · through today", {
+        start: dayNumber(range.period === "month" ? range.start : `${asOf.slice(0, 7)}-01`),
+        end: formatShortDate(asOf, locale, { weekday: false }),
+      }),
+    },
+    { value: "week", label: t("This week"), short: t("This week"), meta: "" },
+    { value: "thirty", label: t("Last 30 days"), short: t("30 days"), meta: "" },
+    { value: "all", label: t("All records"), short: t("All"), meta: "" },
+  ];
+
+  // The linked list: sorted by what needs attention, filtered by a figure or by the chosen point.
+  let list = [...students];
+  if (tab === "attendance") list.sort((left, right) => (left.attendance ?? 2) - (right.attendance ?? 2));
+  if (tab === "grades")
+    list.sort(
+      (left, right) => right.ungraded.length - left.ungraded.length || (left.average ?? 11) - (right.average ?? 11),
+    );
+  if (tab === "payments") list.sort((left, right) => right.owed - left.owed || right.paid - left.paid);
+  let focusLabel = null;
+  const kpiSets = {
+    low: tab === "attendance" ? kpis.attendance.low : kpis.grades.low,
+    ungraded: kpis.grades.ungraded,
+    owed: students.filter((row) => row.owed > 0),
+  };
+  if (kpiFilter && kpiSets[kpiFilter]) {
+    const ids = new Set(kpiSets[kpiFilter].map((row) => row.student.id));
+    list = list.filter((row) => ids.has(row.student.id));
+    focusLabel = {
+      title: t(
+        kpiFilter === "low"
+          ? tab === "attendance"
+            ? "Students below {value}%"
+            : "With a low grade"
+          : kpiFilter === "ungraded"
+            ? "Ungraded"
+            : "To collect",
+        { value: Math.round(kpis.threshold * 100) },
+      ),
+      sub: t(ids.size === 1 ? "{count} student" : "{count} students", { count: ids.size }),
+    };
+  } else if (point) {
+    if (tab === "payments") {
+      const ids = new Set(point.payments.map((item) => item.studentId));
+      list = list.filter((row) => ids.has(row.student.id));
+      focusLabel = {
+        title: bucketTitle(point, t, locale),
+        sub: point.payments.length
+          ? `${t(point.payments.length === 1 ? "{count} payment" : "{count} payments", { count: point.payments.length })} · ${formatMoney(point.value, locale)}`
+          : t("No payments in this stretch."),
+      };
+    } else if (tab === "attendance") {
+      const ids = new Set(point.studentIds);
+      list = list
+        .filter((row) => ids.has(row.student.id))
+        .sort(
+          (left, right) =>
+            Number(point.absentIds.includes(right.student.id)) - Number(point.absentIds.includes(left.student.id)),
+        );
+      focusLabel = {
+        title: `${formatShortDate(point.date, locale)} · ${point.title}`,
+        sub:
+          point.kind !== "reg"
+            ? t("Not recorded")
+            : point.absentIds.length
+              ? `${t("{present} of {total}", { present: point.present, total: point.total })} · ${t("{names} missed", {
+                  names: shortNames(
+                    point.absentIds.map((id) => students.find((row) => row.student.id === id)?.student.fullName || ""),
+                    locale,
+                  ),
+                })}`
+              : `${t("{present} of {total}", { present: point.present, total: point.total })} · ${t("nobody missed")}`,
+      };
+    } else if (point.assignment) {
+      const grades = new Map(point.assignment.grades.map((grade) => [grade.studentId, grade.value]));
+      const ids = new Set([...grades.keys(), ...point.assignment.missing]);
+      list = list
+        .filter((row) => ids.has(row.student.id))
+        .sort((left, right) => (grades.get(left.student.id) ?? -1) - (grades.get(right.student.id) ?? -1));
+      focusLabel = {
+        title: `${point.assignment.assessment} · ${formatShortDate(point.date, locale)}`,
+        sub: `${point.assignment.groupId ? `${groupsById.get(point.assignment.groupId)?.name || ""} · ` : ""}${t("average {value}", { value: formatScore(point.assignment.average, locale) })}`,
+      };
+    }
+  }
+
+  const rowView = (row) => {
+    const result = {
+      sub: groupNamesOf(row.student, groupsById, t) || t("Individual"),
+      value: "",
+      tone: "",
+      squares: null,
+      bars: null,
+      status: null,
+      hit: false,
+    };
+    if (tab === "attendance") {
+      result.value = percentText(row.attendance, locale);
+      result.tone = row.attendance !== null && row.attendance < kpis.threshold ? "text-bad" : "";
+      result.squares = row.sequence.slice(-6);
+      if (point && point.kind === "reg") {
+        result.hit = point.absentIds.includes(row.student.id);
+        result.sub = t(result.hit ? "Missed on {date}" : "Present on {date}", {
+          date: formatShortDate(point.date, locale),
+        });
+      } else if (row.absences) {
+        result.sub = `${t(row.absences === 1 ? "{count} absence" : "{count} absences", { count: row.absences })} · ${result.sub}`;
+      }
+    } else if (tab === "grades") {
+      result.value = formatScore(row.average, locale);
+      result.tone = row.average !== null && row.average < kpis.gradeThreshold ? "text-bad" : "";
+      result.bars = row.grades;
+      if (point?.assignment) {
+        const grade = point.assignment.grades.find((item) => item.studentId === row.student.id);
+        result.hit = (grade && grade.value < kpis.gradeThreshold) || point.assignment.missing.includes(row.student.id);
+        result.sub = grade
+          ? `${point.assignment.assessment}: ${formatScore(grade.value, locale)}`
+          : t("No grade in {assessment}", { assessment: point.assignment.assessment });
+      } else if (row.ungraded.length) {
+        result.sub = t("Ungraded: {names}", { names: row.ungraded.join(", ") });
+        result.status = { tone: "st-pend", text: t("Needs a grade") };
+      } else if (row.grades.some((value) => value < kpis.gradeThreshold))
+        result.status = { tone: "st-venc", text: t("Low grade") };
+    } else {
+      result.value = formatMoney(row.owed || row.paid, locale);
+      result.tone = row.owed ? (row.overdue ? "text-bad" : "text-pend") : "";
+      result.status = row.owed
+        ? { tone: row.overdue ? "st-venc" : "st-pend", text: t(row.overdue ? "Overdue" : "Pending") }
+        : { tone: "st-ok", text: t("Up to date") };
+      const monthly = row.monthlyDue[0];
+      if (point) {
+        const amount = point.payments
+          .filter((item) => item.studentId === row.student.id)
+          .reduce((sum, item) => sum + item.amount, 0);
+        result.sub = t("Paid {amount} in this stretch", { amount: formatMoney(amount, locale) });
+      } else if (monthly) {
+        result.sub = `${t("Monthly fee")} · ${
+          monthly.dueDate === asOf
+            ? t("due today")
+            : t("due {date}", { date: formatShortDate(monthly.dueDate, locale, { weekday: false }) })
+        } · ${groupsById.get(monthly.groupId)?.name || ""}`;
+      } else result.sub = `${t("Paid {amount}", { amount: formatMoney(row.paid, locale) })} · ${result.sub}`;
+    }
+    return result;
+  };
+
+  const toggleMonthly = async (charge, paid) => {
+    if (!actions?.setMonthlyPaid || busy) return;
+    setBusy(true);
+    try {
+      await actions.setMonthlyPaid({
+        studentId: charge.studentId,
+        groupId: charge.groupId,
+        period: charge.period,
+        amount: charge.amount,
+        paid,
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const exportVisible = () => {
-    const exportRows =
-      tab === "grades"
-        ? gradeData.tableRows.map((row) => ({
-            Student: row.student?.fullName || "",
-            Assignment: row.assessment,
-            Date: row.date,
-            Grade: row.score ?? "",
-            Maximum: row.maximum,
-            Percentage: percent(row.percentage),
-            Status: row.status.label,
+    const rows =
+      mode === "breakdown" || tab === "attendance" || tab === "grades"
+        ? trackingRecords(state, derived, range, scope).map((record) => ({
+            [t("Date")]: record.row.classDate,
+            [t("Class")]: record.className || t("Individual"),
+            [t("Student")]: record.student.fullName,
+            [t("Attendance")]: attendanceWord(record.row, t).text,
+            [t("Assignment")]: record.assessment,
+            [t("Grade")]: record.grade === null ? "" : formatScore(record.grade, locale),
+            [t("Payment")]: paymentWord(record, t).text,
           }))
-        : tab === "attendance"
-          ? attendanceData.tableRows.map((row) => ({
-              Student: row.student?.fullName || "",
-              Group: row.groupName || "",
-              Class: row.classTitle || "",
-              Date: row.lastClass || row.classDate || "",
-              Attendance: percent(row.rate),
-              Present: row.present,
-              Absences: row.absent,
-              Status: row.status.label,
-            }))
-          : paymentData.tableRows.map((row) => ({
-              Student: row.student?.fullName || "",
-              Class: row.classTitle || "",
-              Date: row.classDate || "",
-              Charged: row.charged ?? "",
-              Paid: row.paid ?? "",
-              Pending: row.pending ?? "",
-              Status: row.status.label,
-              PaymentDate: row.lastPayment || row.paymentDate || "",
-            }));
-    if (!exportRows.length) return actions.notify?.("There is nothing to export in this view.", "error");
+        : students.map((row) => ({
+            [t("Student")]: row.student.fullName,
+            [t("Groups")]: groupNamesOf(row.student, groupsById, t),
+            [t("Paid")]: row.paid,
+            [t("Owed")]: row.owed,
+            [t("Overdue")]: row.overdue,
+          }));
+    if (!rows.length) return actions?.notify?.("There is nothing to export in this view.", "error");
     downloadExcel(
       `hibi-${tab}-${range.start}-${range.end}.xls`,
-      uiT("Hibi {section} · {start} to {end}", {
-        section: uiT(TAB_ITEMS.find((item) => item.value === tab).label),
-        start: formatDate(range.start),
-        end: formatDate(range.end),
-      }) +
-        " · " +
-        uiT(archiveScope?.included ? "Includes archived groups" : "Archived groups excluded"),
-      exportRows.map((row) =>
-        Object.fromEntries(
-          Object.entries(row).map(([header, value]) => [uiT(header), header === "Status" ? uiT(value) : value]),
-        ),
-      ),
+      `${t("Hibi {section} · {start} to {end}", {
+        section: t(TAB_ITEMS.find((item) => item.value === tab).label),
+        start: formatShortDate(range.start, locale, { weekday: false }),
+        end: formatShortDate(range.end, locale, { weekday: false }),
+      })} · ${t(archiveScope?.included ? "Includes archived groups" : "Archived groups excluded")}`,
+      rows,
     );
-    actions.notify?.("Excel export downloaded");
+    actions?.notify?.("Excel export downloaded");
   };
 
-  const openDateSettings = () => {
-    setDateModeDraft(historicalDate ? "historical" : "automatic");
-    setDateDraft(historicalDate || liveDate);
-    setDateSettingsOpen(true);
+  const kpiStrip =
+    tab === "attendance"
+      ? [
+          {
+            label: t("Average attendance"),
+            value: percentText(kpis.attendance.value, locale),
+            note:
+              kpis.attendance.delta !== null
+                ? `${kpis.attendance.delta >= 0 ? "↑" : "↓"} ${t("{value} pp vs. the previous period", { value: Math.abs(Math.round(kpis.attendance.delta * 100)) })}`
+                : t("{present} of {total} records", {
+                    present: kpis.attendance.present,
+                    total: kpis.attendance.records,
+                  }),
+            noteTone: kpis.attendance.delta === null ? "" : kpis.attendance.delta >= 0 ? "text-ok" : "text-bad",
+          },
+          {
+            label: t("Recorded classes"),
+            value: String(kpis.attendance.registered),
+            note: kpis.attendance.unregistered
+              ? t("{count} not recorded", { count: kpis.attendance.unregistered })
+              : t("Everything recorded"),
+            noteTone: kpis.attendance.unregistered ? "text-pend" : "text-ok",
+          },
+          {
+            label: t("Absences"),
+            value: String(kpis.attendance.absences),
+            note: t("of {count} records", { count: kpis.attendance.records }),
+          },
+          {
+            id: "low",
+            label: t("Below {value}%", { value: Math.round(kpis.threshold * 100) }),
+            value: String(kpis.attendance.low.length),
+            valueTone: kpis.attendance.low.length ? "text-bad" : "text-ok",
+            note: kpis.attendance.low.length
+              ? shortNames(
+                  kpis.attendance.low.map((row) => row.student.fullName),
+                  locale,
+                )
+              : t("Nobody"),
+          },
+        ]
+      : tab === "grades"
+        ? [
+            {
+              label: t("Average"),
+              value: kpis.grades.value === null ? "—" : `${formatScore(kpis.grades.value, locale)} /10`,
+              note:
+                kpis.grades.delta !== null
+                  ? Math.round(kpis.grades.delta * 10) === 0
+                    ? t("Same as the previous period")
+                    : `${kpis.grades.delta >= 0 ? "↑" : "↓"} ${t("{value} vs. the previous period", { value: formatScore(Math.abs(kpis.grades.delta), locale) })}`
+                  : t(kpis.grades.count === 1 ? "{count} grade" : "{count} grades", { count: kpis.grades.count }),
+              noteTone: "text-data",
+            },
+            {
+              label: t("Graded assignments"),
+              value: String(kpis.grades.graded),
+              note: t(kpis.grades.count === 1 ? "{count} grade" : "{count} grades", { count: kpis.grades.count }),
+            },
+            {
+              id: "low",
+              label: t("Low grades"),
+              value: String(kpis.grades.low.length),
+              valueTone: kpis.grades.low.length ? "text-bad" : "text-ok",
+              note: kpis.grades.low.length
+                ? shortNames(
+                    kpis.grades.low.map((row) => row.student.fullName),
+                    locale,
+                  )
+                : t("Nobody below {value}", { value: formatScore(kpis.gradeThreshold, locale) }),
+            },
+            {
+              id: "ungraded",
+              label: t("Ungraded"),
+              value: String(kpis.grades.ungraded.length),
+              valueTone: kpis.grades.ungraded.length ? "text-pend" : "text-ok",
+              note: kpis.grades.ungraded.length
+                ? shortNames(
+                    kpis.grades.ungraded.map((row) => row.student.fullName),
+                    locale,
+                  )
+                : t("Everything graded"),
+            },
+          ]
+        : [
+            {
+              label: t("Collected"),
+              value: formatMoney(kpis.payments.collected, locale),
+              note: kpis.payments.monthlyCount
+                ? t(
+                    kpis.payments.monthlyCount === 1 ? "Includes {count} monthly fee" : "Includes {count} monthly fees",
+                    {
+                      count: kpis.payments.monthlyCount,
+                    },
+                  )
+                : t(kpis.payments.paymentCount === 1 ? "{count} payment" : "{count} payments", {
+                    count: kpis.payments.paymentCount,
+                  }),
+            },
+            {
+              id: "owed",
+              label: t("To collect"),
+              value: formatMoney(kpis.payments.owed, locale),
+              valueTone: kpis.payments.owed ? "text-bad" : "text-ok",
+              note: kpis.payments.overdue
+                ? t("{amount} overdue (sum)", { amount: formatMoney(kpis.payments.overdue, locale) })
+                : t("Nothing overdue"),
+              noteTone: kpis.payments.overdue ? "text-bad" : "",
+            },
+            {
+              label: t("Month projection"),
+              value: projection ? formatMoney(projection.projected, locale) : "—",
+              note: projection
+                ? projection.monthlyDue
+                  ? t("With {amount} in pending monthly fees", { amount: formatMoney(projection.monthlyDue, locale) })
+                  : t("Upcoming classes at their rate")
+                : t("This month with all groups"),
+            },
+            {
+              label: t("Paid classes"),
+              value: String(kpis.payments.paidClasses),
+              note: kpis.payments.unpaidClasses
+                ? t("{count} unpaid", { count: kpis.payments.unpaidClasses })
+                : t("Everything paid"),
+              noteTone: kpis.payments.unpaidClasses ? "text-pend" : "text-ok",
+            },
+          ];
+
+  const chartTitle =
+    tab === "attendance"
+      ? t("Attendance by class")
+      : tab === "grades"
+        ? t("Average by assignment")
+        : t("Collections by payment date");
+  const chartCaption =
+    tab === "attendance"
+      ? t("Each point is a recorded class · tap one to filter the list")
+      : tab === "grades"
+        ? t("Each point is an assignment · tap one to filter the list")
+        : t("Tap a bar to see who paid in that stretch");
+  const ticks =
+    tab === "attendance"
+      ? ["0%", "50%", "100%"]
+      : tab === "grades"
+        ? ["0", "5", "10"]
+        : [0, 0.5, 1].map((fraction) =>
+            compactMoney(collectionsMax(metric.points, view, projection?.projected || 0) * fraction, locale),
+          );
+  const listTitle = focusLabel
+    ? t("Students · {count} in the filter", { count: list.length })
+    : t(
+        tab === "attendance"
+          ? "Students · lowest attendance first"
+          : tab === "grades"
+            ? "Students · what is pending first"
+            : "Students · what is owed first",
+      );
+
+  const pickPoint = (value) => {
+    setSelected(value);
+    setFocus(true);
+    setKpiFilter("");
   };
-  const applyDateSettings = () => {
-    setHistoricalDate(dateModeDraft === "historical" ? dateDraft : "");
-    setDateSettingsOpen(false);
-  };
-  return (
-    <>
-      <div className="page tracking-page">
-        <header className="tracking-heading">
+  const scopeNode = archiveScope?.count ? (
+    <ArchivedGroupsScope scope={archiveScope} variant={compact ? "card" : "pill"} compact={compact} />
+  ) : null;
+
+  if (compact) {
+    const mobileChips =
+      tab === "attendance"
+        ? [
+            { value: "all", label: t("All"), count: students.length },
+            {
+              value: "low",
+              label: t("Below {value}%", { value: Math.round(kpis.threshold * 100) }),
+              count: kpis.attendance.low.length,
+            },
+            { value: "absences", label: t("With absences"), count: kpis.attendance.withAbsences.length },
+          ]
+        : tab === "grades"
+          ? [
+              { value: "all", label: t("All"), count: students.length },
+              { value: "low", label: t("Low grades"), count: kpis.grades.low.length },
+              { value: "ungraded", label: t("Ungraded"), count: kpis.grades.ungraded.length },
+            ]
+          : [
+              { value: "all", label: t("All"), count: students.length },
+              { value: "overdue", label: t("Overdue"), count: kpis.payments.overdueStudents.length },
+              { value: "pending", label: t("Pending"), count: kpis.payments.pendingStudents.length },
+            ];
+    const chipSets = {
+      low: tab === "attendance" ? kpis.attendance.low : kpis.grades.low,
+      absences: kpis.attendance.withAbsences,
+      ungraded: kpis.grades.ungraded,
+      overdue: kpis.payments.overdueStudents,
+      pending: kpis.payments.pendingStudents,
+    };
+    const mobileList = chip !== "all" && chipSets[chip] ? list.filter((row) => chipSets[chip].includes(row)) : list;
+    const bars = tab === "payments" ? metric.points : metric.points.filter((item) => item.kind === "reg");
+    // Past a dozen bars the values crowd each other; the sheet still shows each one.
+    const dense = bars.length > 12;
+    const max = tab === "payments" ? Math.max(...bars.map((item) => item.value), 1) : 1;
+    const hero =
+      tab === "attendance"
+        ? {
+            value: percentText(kpis.attendance.value, locale),
+            delta: kpiStrip[0].note,
+            deltaTone: kpiStrip[0].noteTone,
+            line: `${t(
+              kpis.attendance.low.length === 1 ? "{count} student below {value}%" : "{count} students below {value}%",
+              {
+                count: kpis.attendance.low.length,
+                value: Math.round(kpis.threshold * 100),
+              },
+            )} · ${t(kpis.attendance.absences === 1 ? "{count} absence" : "{count} absences", { count: kpis.attendance.absences })}`,
+          }
+        : tab === "grades"
+          ? {
+              value: kpis.grades.value === null ? "—" : formatScore(kpis.grades.value, locale),
+              delta: kpiStrip[0].note,
+              deltaTone: "text-data",
+              line: `${t(kpis.grades.low.length === 1 ? "{count} with a low grade" : "{count} with low grades", { count: kpis.grades.low.length })} · ${t(
+                "{count} ungraded",
+                { count: kpis.grades.ungraded.length },
+              )}`,
+            }
+          : {
+              value: formatMoney(kpis.payments.collected, locale),
+              delta: kpiStrip[0].note,
+              deltaTone: "",
+              line: `${t("To collect {amount}", { amount: formatMoney(kpis.payments.owed, locale) })}${
+                kpis.payments.overdue
+                  ? ` · ${t("{amount} overdue (sum)", { amount: formatMoney(kpis.payments.overdue, locale) })}`
+                  : ""
+              }`,
+            };
+    const sheetPoint = sheet?.type === "point" ? metric.points[sheet.index] : null;
+    const sheetStudent = sheet?.type === "student" ? students.find((row) => row.student.id === sheet.id) : null;
+    return (
+      <div className="page tracking-page is-compact">
+        <div className="tracking-head">
           <div>
-            <h1>
-              {uiT("Tracking ")}
-              <span aria-hidden="true">🌿</span>
-            </h1>
-            <p>{uiT("Review grades, attendance, and payments for students and groups.")}</p>
+            <span className="overline">{t("Report date")}</span>
+            <h1>{t("Tracking")}</h1>
           </div>
-          <div className="tracking-top-actions">
-            <TrackingSelect label={uiT("Period")} value={period} onChange={(event) => setPeriod(event.target.value)}>
-              {PERIOD_ITEMS.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {uiT(item.label)}
+          <Select
+            small
+            aria-label={t("Report period")}
+            value={period}
+            onChange={(event) => {
+              setPeriod(event.target.value);
+              reset();
+            }}
+          >
+            {periodOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.short}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <Segmented
+          tone="soft"
+          className="tracking-switch"
+          value={tab}
+          label={t("Tracking views")}
+          onChange={(value) => changeTab(value)}
+          items={[
+            { value: "attendance", label: "Attendance" },
+            { value: "grades", label: "Grades" },
+            { value: "payments", label: "Payments" },
+          ]}
+        />
+        {scopeNode}
+        <div className="tracking-hero">
+          <b>{hero.value}</b>
+          {hero.delta ? <span className={hero.deltaTone}>{hero.delta}</span> : null}
+          <small>{hero.line}</small>
+        </div>
+        {blocks.map((block) => (
+          <MonthlyBlock key={block.group.id} block={block} asOf={asOf} onToggle={toggleMonthly} busy={busy} compact />
+        ))}
+        {bars.length ? (
+          <div className="tracking-bars">
+            <div className="ch" role="group" aria-label={chartTitle}>
+              {tab === "payments" ? null : (
+                <span
+                  className="thr"
+                  style={{ bottom: `${tab === "attendance" ? kpis.threshold * 100 : kpis.gradeThreshold * 10}%` }}
+                >
+                  <b>
+                    {tab === "attendance"
+                      ? `${Math.round(kpis.threshold * 100)}%`
+                      : formatScore(kpis.gradeThreshold, locale)}
+                  </b>
+                </span>
+              )}
+              {bars.map((item) => {
+                const pointIndex = metric.points.indexOf(item);
+                const ratio = tab === "payments" ? item.value / max : tab === "grades" ? item.value / 10 : item.value;
+                const low =
+                  tab === "attendance"
+                    ? item.value < kpis.threshold
+                    : tab === "grades"
+                      ? item.value < kpis.gradeThreshold
+                      : false;
+                const label =
+                  tab === "payments"
+                    ? item.value
+                      ? compactMoney(item.value, locale)
+                      : ""
+                    : tab === "attendance"
+                      ? percentText(item.value, locale)
+                      : formatScore(item.value, locale);
+                return (
+                  <button
+                    type="button"
+                    key={item.key}
+                    className={`cb ${low ? "is-low" : ""} ${tab === "grades" ? "is-grade" : ""}`}
+                    aria-label={`${tab === "payments" ? bucketTitle(item, t, locale) : `${formatShortDate(item.date, locale)} · ${item.title || item.assignment?.assessment || ""}`}: ${label || formatMoney(0, locale)}`}
+                    onClick={() => setSheet({ type: "point", index: pointIndex })}
+                  >
+                    {dense ? null : <em>{label}</em>}
+                    <i style={{ height: `${Math.max(3, ratio * 100)}%` }} />
+                  </button>
+                );
+              })}
+            </div>
+            <div className="cx" aria-hidden="true">
+              {bars.map((item, index) => (
+                <span key={item.key}>
+                  {dense && index % 2 && index !== bars.length - 1
+                    ? ""
+                    : tab === "payments"
+                      ? item.kind === "month"
+                        ? monthShort(item.start, locale)
+                        : dayNumber(item.start)
+                      : dayNumber(item.date)}
+                </span>
+              ))}
+            </div>
+            <p className="muted">
+              {t(
+                tab === "attendance"
+                  ? "Each bar is a class. Tap it to see who missed."
+                  : tab === "grades"
+                    ? "Each bar is an assignment. Tap it to see the grades."
+                    : "Each bar is a stretch with collections. Tap it to see who paid.",
+              )}
+            </p>
+          </div>
+        ) : (
+          <p className="muted">{t("No data in this period.")}</p>
+        )}
+        <section>
+          <div className="sh">
+            <h2>{t("Students")}</h2>
+            <span>{t(students.length === 1 ? "{count} student" : "{count} students", { count: students.length })}</span>
+          </div>
+          <div className="chip-row" role="group" aria-label={t("Filter students")}>
+            {mobileChips.map((item) => (
+              <button
+                type="button"
+                key={item.value}
+                className={`chip ${chip === item.value ? "is-active" : ""}`}
+                aria-pressed={chip === item.value}
+                onClick={() => setChip(item.value)}
+              >
+                {item.label}
+                <b>{item.count}</b>
+              </button>
+            ))}
+          </div>
+          <div className="list-rows">
+            {mobileList.map((row) => {
+              const look = rowView(row);
+              return (
+                <ListRow
+                  key={row.student.id}
+                  avatar={<StudentAvatar avatarId={row.student.avatarId} name={row.student.fullName} decorative />}
+                  name={row.student.fullName}
+                  context={
+                    tab === "payments"
+                      ? row.owed
+                        ? `${t(row.overdue ? "Overdue" : "Pending")} · ${
+                            row.monthlyDue.length
+                              ? t("monthly fee")
+                              : row.reasons
+                                  .filter((item) => item.kind === "class")
+                                  .map((item) => formatShortDate(item.date, locale))
+                                  .slice(0, 2)
+                                  .join(", ")
+                          }`
+                        : t("Paid {amount}", { amount: formatMoney(row.paid, locale) })
+                      : tab === "attendance"
+                        ? `${groupNamesOf(row.student, groupsById, t) || t("Individual")} · ${t("{present} of {total}", { present: row.classes - row.absences, total: row.classes })}`
+                        : look.sub
+                  }
+                  value={tab === "payments" && !row.owed ? t("Up to date") : look.value}
+                  valueTone={tab === "payments" && !row.owed ? "ok" : look.tone.replace("text-", "")}
+                  onClick={() => setSheet({ type: "student", id: row.student.id })}
+                />
+              );
+            })}
+            {!mobileList.length ? <p className="muted">{t("Nobody in this filter.")}</p> : null}
+          </div>
+        </section>
+        <Button icon={Download} className="tracking-export" onClick={exportVisible}>
+          {t("Export to Excel")}
+        </Button>
+        <BottomSheet
+          open={Boolean(sheetPoint)}
+          onClose={() => setSheet(null)}
+          kicker={sheetPoint ? (tab === "payments" ? t("Collections") : formatShortDate(sheetPoint.date, locale)) : ""}
+          title={
+            sheetPoint
+              ? tab === "payments"
+                ? bucketTitle(sheetPoint, t, locale)
+                : tab === "grades"
+                  ? sheetPoint.assignment?.assessment
+                  : sheetPoint.title
+              : ""
+          }
+          description={
+            sheetPoint && tab === "attendance"
+              ? (state.grades || []).find((grade) => grade.classSessionKey === sheetPoint.key)?.assessment
+              : undefined
+          }
+        >
+          {sheetPoint ? (
+            <div className="point-sheet">
+              {tab === "attendance" ? (
+                <>
+                  <div className="point-big">
+                    <b>{t("{present} of {total}", { present: sheetPoint.present, total: sheetPoint.total })}</b>
+                    {sheetPoint.absentIds.length ? (
+                      <span className="text-bad">
+                        {t("{names} missed", {
+                          names: shortNames(
+                            sheetPoint.absentIds.map(
+                              (id) => (state.students || []).find((s) => s.id === id)?.fullName || "",
+                            ),
+                            locale,
+                          ),
+                        })}
+                      </span>
+                    ) : (
+                      <span className="text-ok">{t("nobody missed")}</span>
+                    )}
+                  </div>
+                  <h3 className="overline">{t("Attendance")}</h3>
+                  <div className="list-rows">
+                    {sheetPoint.session.rows.map((item) => {
+                      const student = (state.students || []).find((s) => s.id === item.studentId);
+                      if (!student) return null;
+                      const absent = item.attendance === "A";
+                      return (
+                        <ListRow
+                          key={item.id}
+                          avatar={<StudentAvatar avatarId={student.avatarId} name={student.fullName} decorative />}
+                          name={student.fullName}
+                          context={t(absent ? "Absent" : "Present")}
+                          value={absent ? "A" : "P"}
+                          valueTone={absent ? "bad" : ""}
+                          onClick={() => setSheet({ type: "student", id: student.id })}
+                        />
+                      );
+                    })}
+                  </div>
+                </>
+              ) : tab === "grades" ? (
+                <>
+                  <div className="point-big">
+                    <b>{formatScore(sheetPoint.value, locale)}</b>
+                    <span>{t("average · {date}", { date: formatShortDate(sheetPoint.date, locale) })}</span>
+                  </div>
+                  <div className="list-rows">
+                    {[...sheetPoint.assignment.grades]
+                      .sort((left, right) => left.value - right.value)
+                      .map((grade) => {
+                        const student = (state.students || []).find((s) => s.id === grade.studentId);
+                        return student ? (
+                          <ListRow
+                            key={grade.studentId}
+                            avatar={<StudentAvatar avatarId={student.avatarId} name={student.fullName} decorative />}
+                            name={student.fullName}
+                            value={formatScore(grade.value, locale)}
+                            valueTone={grade.value < kpis.gradeThreshold ? "bad" : ""}
+                          />
+                        ) : null;
+                      })}
+                    {sheetPoint.assignment.missing.map((id) => {
+                      const student = (state.students || []).find((s) => s.id === id);
+                      return student ? (
+                        <ListRow
+                          key={id}
+                          avatar={<StudentAvatar avatarId={student.avatarId} name={student.fullName} decorative />}
+                          name={student.fullName}
+                          context={t("No grade yet")}
+                          contextTone="pend"
+                          value="—"
+                        />
+                      ) : null;
+                    })}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="point-big">
+                    <b>{formatMoney(sheetPoint.value, locale)}</b>
+                    <span>
+                      {t(sheetPoint.payments.length === 1 ? "{count} payment" : "{count} payments", {
+                        count: sheetPoint.payments.length,
+                      })}
+                    </span>
+                  </div>
+                  <div className="list-rows">
+                    {sheetPoint.payments.map((payment) => {
+                      const student = (state.students || []).find((s) => s.id === payment.studentId);
+                      return student ? (
+                        <ListRow
+                          key={payment.id}
+                          avatar={<StudentAvatar avatarId={student.avatarId} name={student.fullName} decorative />}
+                          name={student.fullName}
+                          context={`${payment.kind === "monthly" ? t("Monthly fee") : groupsById.get(payment.groupId)?.name || t("Individual")} · ${formatShortDate(payment.date, locale)}`}
+                          value={formatMoney(payment.amount, locale)}
+                        />
+                      ) : null;
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          ) : null}
+        </BottomSheet>
+        <BottomSheet
+          open={Boolean(sheetStudent)}
+          onClose={() => setSheet(null)}
+          title={sheetStudent?.student.fullName || ""}
+          kicker={periodOptions.find((option) => option.value === period)?.short}
+        >
+          {sheetStudent ? (
+            <StudentHistory
+              row={sheetStudent}
+              records={trackingRecords(state, derived, range, scope, sheetStudent.student.id)}
+              groupsById={groupsById}
+              onClose={() => setSheet(null)}
+              onOpenStudent={() => openPage?.("community", { type: "open-student", id: sheetStudent.student.id })}
+            />
+          ) : null}
+        </BottomSheet>
+      </div>
+    );
+  }
+
+  return (
+    <div className="page tracking-page">
+      <SectionHeading
+        title={t("Tracking")}
+        description={t("Grades, attendance and payments of your students and groups.")}
+        actions={
+          <>
+            <Select
+              aria-label={t("Report period")}
+              className="tracking-period"
+              value={period}
+              onChange={(event) => {
+                setPeriod(event.target.value);
+                reset();
+              }}
+            >
+              {periodOptions.map((option) => (
+                <option
+                  key={option.value}
+                  value={option.value}
+                  data-meta={
+                    option.value === period && reportDate
+                      ? t("Up to {date}", { date: formatDayMonth(asOf, locale) })
+                      : undefined
+                  }
+                >
+                  {option.label}
                 </option>
               ))}
-            </TrackingSelect>
-            <label className="tracking-search">
-              <Search size={18} aria-hidden="true" />
-              <span className="sr-only">{uiT("Search students or groups")}</span>
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder={uiT("Search students or groups…")}
-              />
-            </label>
-            <Button icon={FileSpreadsheet} onClick={exportVisible}>
-              {uiT("Export Excel")}
-            </Button>
-            <Button icon={Settings2} onClick={openDateSettings}>
-              {uiT("Report date")}
-            </Button>
-          </div>
-        </header>
-        <TrackingTabs value={tab} onChange={changeTab} />
-        <ArchivedGroupsScope scope={archiveScope} />
-        {historicalDate ? (
-          <div className="tracking-historical-banner" role="status">
-            <span>
-              <CalendarDays size={18} aria-hidden="true" />
-              <span>
-                <strong>{uiT("Historical view")}</strong>
-                <small>
-                  {uiT("Data calculated through ")}
-                  {formatDate(reportDate)}.
-                </small>
-              </span>
-            </span>
-            <Button icon={RotateCcw} onClick={() => setHistoricalDate("")}>
-              {uiT("Back to today")}
-            </Button>
-          </div>
-        ) : null}
-        <div className="tracking-context">
-          {tab === "payments" ? (
-            <>
-              <ModeSwitch
-                label={uiT("Scope")}
-                value={paymentScope}
-                onChange={changePaymentScope}
-                items={PAYMENT_SCOPE_ITEMS}
-              />
-              {paymentScope === "overview" ? (
-                <span className="tracking-scope-summary">{uiT("All groups, students, and classes")}</span>
-              ) : (
-                <>
-                  <ModeSwitch value={paymentMode} onChange={setPaymentMode} items={modeItems} />
-                  {useStudentOwner ? (
-                    <TrackingSelect
-                      label={uiT("Student")}
-                      value={studentId}
-                      onChange={(event) => setStudentId(event.target.value)}
-                      searchable
-                    >
-                      {students.map((student) => (
-                        <option key={student.id} value={student.id}>
-                          {student.fullName}
-                        </option>
-                      ))}
-                    </TrackingSelect>
-                  ) : (
-                    <TrackingSelect
-                      label={uiT("Group")}
-                      value={groupId}
-                      onChange={(event) => setGroupId(event.target.value)}
-                      searchable
-                    >
-                      {groups.map((group) => (
-                        <option key={group.id} value={group.id}>
-                          {group.name}
-                          {group.status === "Inactive" ? " · " + uiT("Archived group") : ""}
-                        </option>
-                      ))}
-                    </TrackingSelect>
-                  )}
-                  {paymentMode === "class" ? (
-                    <TrackingSelect
-                      label={uiT("Class")}
-                      value={sessionKey}
-                      onChange={(event) => setSessionKey(event.target.value)}
-                      searchable
-                    >
-                      {paymentBase.sessions.length ? (
-                        paymentBase.sessions.map((item) => (
-                          <option key={item.key} value={item.key}>
-                            {formatDate(item.classDate)} · {formatTime(item.startTime)} · {item.title}
-                          </option>
-                        ))
-                      ) : (
-                        <option value="">{uiT("No classes")}</option>
-                      )}
-                    </TrackingSelect>
-                  ) : null}
-                </>
-              )}
-            </>
-          ) : tab === "attendance" ? (
-            <>
-              <ModeSwitch
-                label={uiT("Scope")}
-                value={attendanceScope}
-                onChange={changeAttendanceScope}
-                items={ATTENDANCE_SCOPE_ITEMS}
-              />
-              {attendanceScope === "overview" ? (
-                <span className="tracking-scope-summary">{uiT("All groups, students, and classes")}</span>
-              ) : (
-                <>
-                  <ModeSwitch value={attendanceMode} onChange={setAttendanceMode} items={modeItems} />
-                  {attendanceMode === "student" ? (
-                    <TrackingSelect
-                      label={uiT("Student")}
-                      value={studentId}
-                      onChange={(event) => setStudentId(event.target.value)}
-                      searchable
-                    >
-                      {students.map((student) => (
-                        <option key={student.id} value={student.id}>
-                          {student.fullName}
-                        </option>
-                      ))}
-                    </TrackingSelect>
-                  ) : (
-                    <TrackingSelect
-                      label={uiT("Group")}
-                      value={groupId}
-                      onChange={(event) => setGroupId(event.target.value)}
-                      searchable
-                    >
-                      {groups.map((group) => (
-                        <option key={group.id} value={group.id}>
-                          {group.name}
-                          {group.status === "Inactive" ? " · " + uiT("Archived group") : ""}
-                        </option>
-                      ))}
-                    </TrackingSelect>
-                  )}
-                </>
-              )}
-            </>
-          ) : (
-            <>
-              <ModeSwitch value={activeMode} onChange={setMode} items={modeItems} />
-              {useStudentOwner ? (
-                <TrackingSelect
-                  label={uiT("Student")}
-                  value={studentId}
-                  onChange={(event) => setStudentId(event.target.value)}
-                  searchable
-                >
-                  {students.map((student) => (
-                    <option key={student.id} value={student.id}>
-                      {student.fullName}
-                    </option>
-                  ))}
-                </TrackingSelect>
-              ) : (
-                <TrackingSelect
-                  label={uiT("Group")}
-                  value={groupId}
-                  onChange={(event) => setGroupId(event.target.value)}
-                  searchable
-                >
-                  {groups.map((group) => (
-                    <option key={group.id} value={group.id}>
-                      {group.name}
-                      {group.status === "Inactive" ? " · " + uiT("Archived group") : ""}
-                    </option>
-                  ))}
-                </TrackingSelect>
-              )}
-              {tab === "grades" && gradeMode === "group" ? (
-                <TrackingSelect
-                  label={uiT("Assignment")}
-                  value={assessmentKey}
-                  onChange={(event) => setAssessmentKey(event.target.value)}
-                  searchable
-                >
-                  {assessments.length ? (
-                    assessments.map((item) => (
-                      <option key={item.key} value={item.key}>
-                        {item.assessment} · {formatDate(item.date)}
-                      </option>
-                    ))
-                  ) : (
-                    <option value="">{uiT("No assignments")}</option>
-                  )}
-                </TrackingSelect>
-              ) : null}
-              {tab === "payments" && paymentMode === "class" ? (
-                <TrackingSelect
-                  label={uiT("Class")}
-                  value={sessionKey}
-                  onChange={(event) => setSessionKey(event.target.value)}
-                  searchable
-                >
-                  {paymentBase.sessions.length ? (
-                    paymentBase.sessions.map((item) => (
-                      <option key={item.key} value={item.key}>
-                        {formatDate(item.classDate)} · {formatTime(item.startTime)} · {item.title}
-                      </option>
-                    ))
-                  ) : (
-                    <option value="">{uiT("No classes")}</option>
-                  )}
-                </TrackingSelect>
-              ) : null}
-            </>
-          )}
-        </div>
-        <section role="tabpanel" id={`tracking-panel-${tab}`} aria-labelledby={`tracking-tab-${tab}`} tabIndex={0}>
-          {tab === "grades" ? <GradeView data={gradeData} mode={gradeMode} onOpenClass={openRelatedClass} /> : null}
-          {tab === "attendance" ? (
-            <AttendanceView
-              data={attendanceData}
-              mode={activeAttendanceMode}
-              scope={attendanceScope}
-              onOpenClass={openRelatedClass}
+            </Select>
+            <IconButton
+              label={
+                reportDate ? t("Report date: {date}", { date: formatShortDate(reportDate, locale) }) : t("Report date")
+              }
+              icon={CalendarDays}
+              className={reportDate ? "is-active" : ""}
+              onClick={() => {
+                setDateDraft(asOf);
+                setDateOpen(true);
+              }}
             />
-          ) : null}
-          {tab === "payments" ? (
-            <PaymentView
-              data={paymentData}
-              mode={activePaymentMode}
-              scope={paymentScope}
-              chartView={paymentChart}
-              onChartViewChange={changePaymentChart}
-              onOpenClass={openRelatedClass}
-            />
-          ) : null}
-        </section>
+            <Button icon={Download} onClick={exportVisible}>
+              {t("Export Excel")}
+            </Button>
+          </>
+        }
+      />
+      <div className="tracking-bar">
+        <Tabs value={tab} onChange={(value) => changeTab(value)} items={TAB_ITEMS} ariaLabel={t("Tracking views")} />
+        <Segmented value={mode} onChange={setMode} label={t("Show")} items={MODE_ITEMS} />
       </div>
+      <div className="tracking-scope">
+        <div className="chip-row" role="group" aria-label={t("Scope")}>
+          <span className="overline">{t("Scope")}</span>
+          {groupChips.map((item) => (
+            <button
+              type="button"
+              key={item.value}
+              className={`chip ${scope === item.value ? "is-active" : ""}`}
+              aria-pressed={scope === item.value}
+              onClick={() => {
+                setScope(item.value);
+                reset();
+                setStudentId("");
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        {scopeNode}
+      </div>
+      {reportDate ? (
+        <p className="notice tracking-date-note">
+          {t("Showing figures up to {date}.", { date: formatDayMonth(reportDate, locale) })}{" "}
+          <button type="button" className="link-button" onClick={() => setReportDate("")}>
+            {t("Back to today")}
+          </button>
+        </p>
+      ) : null}
+      <div className="tracking-kpis">
+        {kpiStrip.map((kpi) =>
+          kpi.id ? (
+            <button
+              type="button"
+              key={kpi.label}
+              className={`tkpi ${kpiFilter === kpi.id ? "on" : ""}`}
+              aria-pressed={kpiFilter === kpi.id}
+              onClick={() => {
+                setKpiFilter(kpiFilter === kpi.id ? "" : kpi.id);
+                setFocus(false);
+              }}
+            >
+              <span>{kpi.label}</span>
+              <b className={kpi.valueTone || ""}>{kpi.value}</b>
+              <small className={kpi.noteTone || ""}>{kpi.note}</small>
+            </button>
+          ) : (
+            <div className="tkpi" key={kpi.label}>
+              <span>{kpi.label}</span>
+              <b className={kpi.valueTone || ""}>{kpi.value}</b>
+              <small className={kpi.noteTone || ""}>{kpi.note}</small>
+            </div>
+          ),
+        )}
+      </div>
+      {blocks.map((block) => (
+        <MonthlyBlock key={block.group.id} block={block} asOf={asOf} onToggle={toggleMonthly} busy={busy} />
+      ))}
+      {mode === "summary" ? (
+        <div className={`tracking-cols hibi-chart ${tab === "grades" ? "is-indigo" : ""}`}>
+          <section className="tracking-chart" aria-labelledby="tracking-chart-title">
+            <div className="chead">
+              <div>
+                <h2 id="tracking-chart-title">{chartTitle}</h2>
+                <p>{chartCaption}</p>
+              </div>
+              {tab === "payments" ? (
+                <Segmented
+                  value={view}
+                  label={t("Collections view")}
+                  onChange={(value) => {
+                    setView(value);
+                    setFocus(false);
+                  }}
+                  items={[
+                    { value: "rhythm", label: "Pace" },
+                    { value: "cumulative", label: "Accumulated" },
+                  ]}
+                />
+              ) : null}
+            </div>
+            <div className={`bplot ${studentId ? "is-dim" : ""}`}>
+              {ticks.map((label, tickIndex) => (
+                <span className="grid" key={tickIndex} style={{ bottom: `${tickIndex * 50}%` }}>
+                  <b>{label}</b>
+                </span>
+              ))}
+              {metric.points.length ? (
+                <Plot
+                  metric={metric}
+                  selected={focus ? index : -1}
+                  onSelect={pickPoint}
+                  threshold={threshold}
+                  size="big"
+                  view={view}
+                  projection={projection?.projected || 0}
+                  mineFor={
+                    tab === "payments" && studentId
+                      ? (bucket) =>
+                          bucket.payments
+                            .filter((item) => item.studentId === studentId)
+                            .reduce((sum, item) => sum + item.amount, 0)
+                      : null
+                  }
+                />
+              ) : (
+                <p className="muted xp-empty">{t("No data in this period.")}</p>
+              )}
+              {tab === "attendance" && selectedRow ? (
+                <div className="srow" aria-label={t("Attendance of {name}", { name: selectedRow.student.fullName })}>
+                  {metric.points.map((item, pointIndex) => {
+                    const mark = selectedRow.sequence.find(
+                      (entry) => entry.date === item.date && item.studentIds.includes(selectedRow.student.id),
+                    );
+                    if (!mark) return null;
+                    const x = metric.points.length === 1 ? 50 : 4 + (pointIndex * 92) / (metric.points.length - 1);
+                    return (
+                      <span
+                        key={item.key}
+                        className={mark.code === "A" ? "is-absent" : "is-present"}
+                        style={{ left: `${x}%` }}
+                      >
+                        {mark.code}
+                      </span>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+            <div className="leg">
+              {tab === "attendance" ? (
+                <>
+                  <span>
+                    <i className="leg-dot" />
+                    {t("Recorded class")}
+                  </span>
+                  <span>
+                    <i className="leg-dot is-unreg" />
+                    {t("Not recorded")}
+                  </span>
+                  <span>
+                    <i className="leg-line" />
+                    {t("Threshold {value}%", { value: Math.round(kpis.threshold * 100) })}
+                  </span>
+                </>
+              ) : tab === "grades" ? (
+                <>
+                  <span>
+                    <i className="leg-dot" />
+                    {t("Average of the assignment")}
+                  </span>
+                  <span>
+                    <i className="leg-range" />
+                    {t("From lowest to highest")}
+                  </span>
+                  <span>
+                    <i className="leg-line" />
+                    {t("Low grade · {value}", { value: formatScore(kpis.gradeThreshold, locale) })}
+                  </span>
+                </>
+              ) : (
+                <span>
+                  <i className="leg-bar" />
+                  {t(view === "cumulative" ? "Accumulated collections" : "Collections by payment date")}
+                </span>
+              )}
+            </div>
+            {focusLabel ? (
+              <div className="focus" aria-live="polite">
+                <span className="overline">{t("Showing")}</span>
+                <b>{focusLabel.title}</b>
+                <span className="muted">{focusLabel.sub}</span>
+                <button
+                  type="button"
+                  className="xbtn"
+                  onClick={() => {
+                    setFocus(false);
+                    setKpiFilter("");
+                  }}
+                >
+                  {t("Clear filter")}
+                </button>
+              </div>
+            ) : null}
+            {selectedRow ? (
+              <StudentHistory
+                row={selectedRow}
+                records={records}
+                groupsById={groupsById}
+                onClose={() => setStudentId("")}
+                onOpenStudent={() => openPage?.("community", { type: "open-student", id: selectedRow.student.id })}
+              />
+            ) : null}
+          </section>
+          <aside className="tlist" aria-labelledby="tracking-list-title">
+            <div className="lh">
+              <h2 id="tracking-list-title" className="overline">
+                {listTitle}
+              </h2>
+              <span>{t("Tap to see their history")}</span>
+            </div>
+            {list.map((row) => {
+              const look = rowView(row);
+              return (
+                <button
+                  type="button"
+                  key={row.student.id}
+                  className={`tsr ${studentId === row.student.id ? "on" : look.hit ? "hit" : ""}`}
+                  aria-pressed={studentId === row.student.id}
+                  onClick={() => setStudentId(studentId === row.student.id ? "" : row.student.id)}
+                >
+                  <StudentAvatar avatarId={row.student.avatarId} name={row.student.fullName} size="small" decorative />
+                  <span className="nm">
+                    <strong>{row.student.fullName}</strong>
+                    <small>{look.sub}</small>
+                  </span>
+                  <span className="rv">
+                    <b className={look.tone}>{look.value}</b>
+                    {look.squares?.length ? (
+                      <span className="mini" aria-hidden="true">
+                        {look.squares.map((entry, squareIndex) => (
+                          <span key={squareIndex} className={entry.code === "A" ? "is-absent" : "is-present"} />
+                        ))}
+                      </span>
+                    ) : null}
+                    {look.bars?.length ? (
+                      <span className="mini" aria-hidden="true">
+                        {look.bars.map((value, barIndex) => (
+                          <i
+                            key={barIndex}
+                            style={{ height: `${value * 10}%` }}
+                            className={value < kpis.gradeThreshold ? "is-low" : ""}
+                          />
+                        ))}
+                      </span>
+                    ) : null}
+                    {look.status ? <span className={`st ${look.status.tone}`}>{look.status.text}</span> : null}
+                  </span>
+                </button>
+              );
+            })}
+            {!list.length ? <p className="muted tlist-empty">{t("Nobody in this filter.")}</p> : null}
+          </aside>
+        </div>
+      ) : (
+        <section className="tracking-breakdown" aria-labelledby="tracking-breakdown-title">
+          <div className="chead">
+            <h2 id="tracking-breakdown-title">{t("Breakdown by class and student")}</h2>
+            <span className="muted">
+              {t(records.length === 1 ? "{count} record" : "{count} records", { count: records.length })}
+            </span>
+          </div>
+          <div className="table-scroll" tabIndex={0} role="region" aria-label={t("Breakdown")}>
+            <div className="tb" role="table" aria-label={t("Records")}>
+              <div className="tr th" role="row">
+                <span role="columnheader">{t("Date")}</span>
+                <span role="columnheader">{t("Class")}</span>
+                <span role="columnheader">{t("Student")}</span>
+                <span role="columnheader">{t("Attendance")}</span>
+                <span role="columnheader">{t("Grade")}</span>
+                <span role="columnheader">{t("Payment")}</span>
+              </div>
+              {records.map((record) => {
+                const attendance = attendanceWord(record.row, t);
+                const payment = paymentWord(record, t);
+                return (
+                  <div className="tr" role="row" key={record.row.id}>
+                    <span role="cell" className="tnum">
+                      {formatShortDate(record.row.classDate, locale)} · {formatTime(record.row.startTime, locale)}
+                    </span>
+                    <span role="cell">
+                      {[record.className || t("Individual"), record.assessment].filter(Boolean).join(" · ")}
+                    </span>
+                    <span role="cell" className="tr-name">
+                      {record.student.fullName}
+                    </span>
+                    <span role="cell">
+                      <span className={`st ${attendance.tone}`}>{attendance.text}</span>
+                    </span>
+                    <span
+                      role="cell"
+                      className={`tnum tr-grade ${record.grade !== null && record.grade < kpis.gradeThreshold ? "text-bad" : ""}`}
+                    >
+                      {record.grade === null
+                        ? record.ungraded
+                          ? t("Ungraded")
+                          : "—"
+                        : formatScore(record.grade, locale)}
+                    </span>
+                    <span role="cell">
+                      {payment.tone ? <span className={`st ${payment.tone}`}>{payment.text}</span> : "—"}
+                    </span>
+                  </div>
+                );
+              })}
+              {!records.length ? <p className="muted">{t("No classes in this period.")}</p> : null}
+            </div>
+          </div>
+        </section>
+      )}
       <Drawer
-        open={dateSettingsOpen}
-        onClose={() => setDateSettingsOpen(false)}
-        title={uiT("Report date")}
-        description={uiT("Choose the last day to include in Tracking.")}
+        open={dateOpen}
+        onClose={() => setDateOpen(false)}
+        title={t("Report date")}
+        description={t("See the figures as they were on another day. Saved records do not change.")}
         size="compact"
         footer={
           <>
-            <Button onClick={() => setDateSettingsOpen(false)}>{uiT("Cancel")}</Button>
+            <Button
+              onClick={() => {
+                setReportDate("");
+                setDateOpen(false);
+                reset();
+              }}
+            >
+              {t("Use today")}
+            </Button>
             <Button
               variant="primary"
-              disabled={dateModeDraft === "historical" && !dateDraft}
-              onClick={applyDateSettings}
+              onClick={() => {
+                setReportDate(dateDraft && dateDraft !== liveDate ? dateDraft : "");
+                setDateOpen(false);
+                reset();
+              }}
             >
-              {uiT("Apply date")}
+              {t("Apply")}
             </Button>
           </>
         }
       >
-        <div className="tracking-date-settings">
-          <div className="tracking-date-mode" role="group" aria-label={uiT("Reporting date mode")}>
-            <button
-              type="button"
-              className={dateModeDraft === "automatic" ? "active" : ""}
-              aria-pressed={dateModeDraft === "automatic"}
-              onClick={() => setDateModeDraft("automatic")}
-            >
-              {uiT("Use today")}
-            </button>
-            <button
-              type="button"
-              className={dateModeDraft === "historical" ? "active" : ""}
-              aria-pressed={dateModeDraft === "historical"}
-              onClick={() => setDateModeDraft("historical")}
-            >
-              {uiT("Choose another date")}
-            </button>
-          </div>
-          {dateModeDraft === "historical" ? (
-            <>
-              <Field label={uiT("Show data through")}>
-                <Input
-                  type="date"
-                  max={liveDate}
-                  value={dateDraft}
-                  onInput={(event) => setDateDraft(event.currentTarget.value)}
-                />
-              </Field>
-              <div className="tracking-date-note historical">
-                <CalendarDays size={19} aria-hidden="true" />
-                <div>
-                  <strong>{uiT("Historical preview")}</strong>
-                  <p>
-                    {uiT("You will see grades, attendance, and payments recorded through")}{" "}
-                    <time dateTime={dateDraft}>{formatDate(dateDraft)}</time>.
-                  </p>
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="tracking-date-note">
-              <CalendarDays size={19} aria-hidden="true" />
-              <div>
-                <strong>
-                  {uiT("Using today: ")}
-                  <time dateTime={liveDate}>{formatDate(liveDate)}</time>
-                </strong>
-                <p>{uiT("Hibi will update this date automatically each day.")}</p>
-              </div>
-            </div>
-          )}
-        </div>
+        <Field label={t("Report date")}>
+          <Input type="date" value={dateDraft} max={liveDate} onChange={(event) => setDateDraft(event.target.value)} />
+        </Field>
       </Drawer>
-    </>
+    </div>
   );
 }

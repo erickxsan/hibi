@@ -2084,3 +2084,54 @@
   min-height: 32px;
   border: 0;
 }
+
+.scope.is-pill {
+  gap: 10px;
+  margin: 0 0 0 auto;
+  padding: 6px 12px 6px 6px;
+  border-radius: var(--radius-pill);
+  font: 600 13px/18px var(--font-sans);
+  color: var(--sumi);
+}
+
+.scope.is-pill small {
+  font: 600 12px/16px var(--font-sans);
+  color: var(--ocre-ink);
+}
+
+.scope.is-pill.on small {
+  color: var(--indigo);
+}
+
+.scope.is-card {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: var(--radius-xl);
+  font: 500 14px/20px var(--font-sans);
+}
+
+.scope-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.scope-card-head svg {
+  width: 20px;
+  height: 20px;
+  color: var(--sumi-muted);
+}
+
+.scope-card-head b {
+  flex: 1;
+  font: 700 15px/20px var(--font-sans);
+}
+
+.scope.is-card .scope-balance {
+  margin-left: 0;
+  align-self: flex-start;
+  font-size: 14px;
+}

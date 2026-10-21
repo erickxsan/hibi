@@ -2,252 +2,179 @@
 
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createGroup, createStarterState, createStudent } from "../domain";
+import { useClassManager } from "../hooks/useClassManager";
+import { I18nProvider } from "../i18n";
+import { LANGUAGE_STORAGE_KEY } from "../i18n/translations";
 import Tracking from "./Tracking";
-import { I18nProvider } from "../i18n/index.jsx";
 
-const state = {
-  settings: { asOfDate: "2026-07-25", lowAttendanceThreshold: 0.8 },
-  groups: [{ id: "g1", name: "Math" }],
-  students: [
-    { id: "s1", fullName: "Ana", code: "A-1", status: "Active", groupIds: ["g1"] },
-    { id: "s2", fullName: "Ben", code: "B-2", status: "Active", groupIds: ["g1"] },
-  ],
-  grades: [
-    {
-      id: "grade-1",
-      date: "2026-07-20",
-      studentId: "s1",
-      studentName: "Ana",
-      assessment: "Fractions",
-      score: 9,
-      maxScore: 10,
-      classSessionKey: "2026-07-20|g:g1|10:00",
-    },
-    {
-      id: "grade-2",
-      date: "2026-07-20",
-      studentId: "s2",
-      studentName: "Ben",
-      assessment: "Fractions",
-      score: 7,
-      maxScore: 10,
-      classSessionKey: "2026-07-20|g:g1|10:00",
-    },
-  ],
-};
+const AS_OF = "2026-10-21";
 
-const classRows = [
-  {
-    id: "c1",
-    classDate: "2026-07-20",
-    startTime: "10:00",
-    groupId: "g1",
-    groupName: "Math",
-    studentId: "s1",
-    studentName: "Ana",
-    classStatus: "Completed",
-    attendance: "P",
-    charge: 100,
-    recognizedPaid: 100,
-    outstanding: 0,
-    paymentDate: "2026-07-20",
-  },
-  {
-    id: "c2",
-    classDate: "2026-07-20",
-    startTime: "10:00",
-    groupId: "g1",
-    groupName: "Math",
-    studentId: "s2",
-    studentName: "Ben",
-    classStatus: "Completed",
-    attendance: "A",
-    charge: 100,
-    recognizedPaid: 0,
-    outstanding: 100,
-    paymentDate: "",
-  },
-];
-
-function renderTracking({ notify = vi.fn(), openPage = vi.fn() } = {}) {
+function row(id, classDate, studentId, attendance, amountPaid, groupId = "g1") {
   return {
-    notify,
-    openPage,
-    ...render(
-      <Tracking state={state} derived={{ classLogRows: classRows }} actions={{ notify }} openPage={openPage} />,
-    ),
+    id,
+    classDate,
+    studentId,
+    groupId,
+    startTime: "16:00",
+    scheduleSlotId: "slot-mon",
+    scheduleOccurrenceDate: classDate,
+    classStatus: "Completed",
+    attendance,
+    hours: 2,
+    appliedHourlyRate: 75,
+    appliedCharge: attendance === "A" ? 0 : 150,
+    amountPaid,
+    paymentState: attendance === "A" ? "" : amountPaid ? "Paid" : "Pending",
+    paymentDate: amountPaid ? classDate : null,
+    paymentMethod: amountPaid ? "Cash" : "",
+    paymentReference: "",
+    notes: "",
   };
 }
 
-describe("Tracking attendance overview", () => {
-  beforeEach(() => {
-    window.history.replaceState({}, "", "/");
+function trackingState() {
+  const state = createStarterState({
+    settings: { onboardingVersion: 2, onboardingStep: 9, asOfDate: AS_OF, hourlyRate: 100, defaultClassHours: 2 },
   });
-  it("pages a large payment table without changing totals and resets after filtering", async () => {
+  state.groups = [
+    createGroup({
+      id: "g1",
+      name: "Primaria 5A",
+      hourlyRate: 75,
+      weeklySchedule: [{ id: "slot-mon", dayOfWeek: 1, startTime: "16:00", durationHours: 2 }],
+    }),
+    createGroup({
+      id: "g2",
+      name: "Prepa",
+      weeklySchedule: [{ id: "slot-tue", dayOfWeek: 2, startTime: "17:00", durationHours: 1 }],
+      billing: { mode: "monthly", monthlyFee: 1200, due: { type: "dayOfMonth", day: 5 }, effectiveFrom: "2026-10" },
+    }),
+  ];
+  state.students = [
+    createStudent({ id: "s1", code: "LUN-1", fullName: "Luna López", groupIds: ["g1"], avatarId: "rabbit" }),
+    createStudent({ id: "s2", code: "DIE-2", fullName: "Diego Soto", groupIds: ["g1"], avatarId: "bear" }),
+    createStudent({ id: "s3", code: "SOF-3", fullName: "Sofía Martín", groupIds: ["g2"], avatarId: "owl" }),
+  ];
+  state.classLog = [
+    row("r1", "2026-10-05", "s1", "A", 0),
+    row("r2", "2026-10-05", "s2", "P", 150),
+    row("r3", "2026-10-12", "s1", "A", 0),
+    row("r4", "2026-10-12", "s2", "P", 150),
+    row("r5", "2026-10-19", "s1", "P", 0),
+    row("r6", "2026-10-19", "s2", "P", 150),
+  ];
+  return state;
+}
+
+function Harness({ persistence, openPage }) {
+  const manager = useClassManager({ persistence });
+  return (
+    <I18nProvider>
+      <Tracking {...manager} openPage={openPage} />
+    </I18nProvider>
+  );
+}
+
+function setup(state = trackingState()) {
+  const persistence = { initialState: state, mode: "cloud", save: vi.fn(async (next) => next) };
+  const openPage = vi.fn();
+  render(<Harness persistence={persistence} openPage={openPage} />);
+  return { persistence, openPage, saved: () => persistence.save.mock.calls.at(-1)?.[0] };
+}
+
+function setCompact(matches) {
+  window.matchMedia.mockImplementation((query) => ({
+    matches,
+    media: query,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  }));
+}
+
+afterEach(() => {
+  localStorage.removeItem(LANGUAGE_STORAGE_KEY);
+  setCompact(false);
+});
+
+describe("Tracking on desktop", () => {
+  it("opens on attendance and filters the list from a figure", async () => {
     const user = userEvent.setup();
-    const students = Array.from({ length: 55 }, (_, i) => ({
-      ...state.students[0],
-      id: `student-${i}`,
-      code: `S${i}`,
-      fullName: `Person ${i}`,
-    }));
-    const rows = students.map((student, i) => ({
-      ...classRows[0],
-      id: `row-${i}`,
-      studentId: student.id,
-      studentName: student.fullName,
-    }));
-    render(<Tracking state={{ ...state, students }} derived={{ classLogRows: rows }} actions={{}} />);
-    await user.click(screen.getByRole("tab", { name: "Payments", exact: true }));
-    const table = screen.getByRole("table");
-    expect(within(table).getAllByRole("row")).toHaveLength(26);
-    expect(screen.getAllByText(/5,500\.00/).length).toBeGreaterThan(0);
-    await user.click(screen.getByRole("button", { name: "Next page", exact: true }));
-    expect(within(table).queryByText("Person 0")).not.toBeInTheDocument();
-    expect(within(table).getByText("Person 25")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Next page", exact: true }));
-    expect(within(table).getAllByRole("row")).toHaveLength(6);
-    expect(screen.getByRole("button", { name: "Next page", exact: true })).toBeDisabled();
-    await user.type(screen.getByRole("textbox", { name: "Search students or groups" }), "Person 0");
-    expect(within(table).getByText("Person 0")).toBeInTheDocument();
-    expect(within(table).getAllByRole("row")).toHaveLength(2);
-    expect(screen.queryByRole("button", { name: "Next page", exact: true })).not.toBeInTheDocument();
+    setup();
+    expect(screen.getByRole("tab", { name: "Attendance" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText("Average attendance")).toBeInTheDocument();
+    const list = screen.getByRole("complementary", { name: "Students · lowest attendance first" });
+    const names = within(list)
+      .getAllByRole("button")
+      .map((button) => button.textContent);
+    expect(names[0]).toContain("Luna López");
+    await user.click(screen.getByRole("button", { name: /Below 80%/ }));
+    const filtered = screen.getByRole("complementary", { name: /Students · 1 in the filter/ });
+    expect(within(filtered).getAllByRole("button")).toHaveLength(1);
+    expect(within(filtered).getByText("Luna López")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Clear filter" }));
+    expect(screen.getByRole("complementary", { name: "Students · lowest attendance first" })).toBeInTheDocument();
   });
-  it("preserves user class names in Spanish attendance signals and payment selectors", async () => {
+
+  it("opens a student's history and leads to their profile", async () => {
     const user = userEvent.setup();
-    localStorage.setItem("hibi:language:v1", "es");
-    const rows = classRows.map((row) => ({ ...row, classTitle: "Home", groupName: "Home" }));
-    render(
-      <I18nProvider>
-        <Tracking state={state} derived={{ classLogRows: rows }} actions={{}} />
-      </I18nProvider>,
+    const { openPage } = setup();
+    await user.click(screen.getByRole("button", { name: /Diego Soto/ }));
+    const history = screen.getByRole("region", { name: "Diego Soto" });
+    expect(within(history).getByRole("table", { name: "History of Diego Soto" })).toBeInTheDocument();
+    expect(within(history).getAllByRole("row").length).toBeGreaterThan(1);
+    await user.click(within(history).getByRole("button", { name: "View profile" }));
+    expect(openPage).toHaveBeenCalledWith("community", { type: "open-student", id: "s2" });
+  });
+
+  it("scopes the figures to one group", async () => {
+    const user = userEvent.setup();
+    setup();
+    await user.click(screen.getByRole("button", { name: "Prepa" }));
+    const list = screen.getByRole("complementary", { name: "Students · lowest attendance first" });
+    expect(within(list).getAllByRole("button")).toHaveLength(1);
+    expect(within(list).getByText("Sofía Martín")).toBeInTheDocument();
+  });
+
+  it("marks a monthly fee as paid from the Payments tab", async () => {
+    const user = userEvent.setup();
+    const { saved } = setup();
+    await user.click(screen.getByRole("tab", { name: "Payments" }));
+    expect(screen.getByText("Monthly fees · October")).toBeInTheDocument();
+    expect(screen.getByText("0 of 1")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Mark paid (fee)" }));
+    await waitFor(() =>
+      expect(saved().students.find((student) => student.id === "s3").monthlyPayments).toEqual([
+        expect.objectContaining({ groupId: "g2", period: "2026-10", amount: 1200 }),
+      ]),
     );
-    await user.click(screen.getByRole("tab", { name: "Asistencia" }));
-    expect(screen.getByText(/Home.*50%/)).toBeInTheDocument();
-    await user.click(screen.getByRole("tab", { name: "Pagos" }));
-    await user.click(screen.getByRole("button", { name: "Desglose", exact: true }));
-    await user.click(screen.getByRole("button", { name: "Clase", exact: true }));
-    const classSelector = screen.getByRole("combobox", { name: "Clase", exact: true });
-    expect(classSelector).toHaveTextContent("Home");
-    expect(classSelector).not.toHaveTextContent("Inicio");
+    expect(await screen.findByText("1 of 1")).toBeInTheDocument();
   });
 
-  it("opens the global P/A overview and preserves the existing breakdown", async () => {
+  it("lists every record in the breakdown without charging absences", async () => {
     const user = userEvent.setup();
-    const view = renderTracking();
-
-    await user.click(screen.getByRole("tab", { name: "Attendance" }));
-
-    const scope = screen.getByRole("group", { name: "Scope" });
-    expect(within(scope).getByRole("button", { name: "Overview" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByText("All groups, students, and classes")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Students requiring follow-up" })).toBeInTheDocument();
-    expect(screen.getByText("P / (P + A)")).toBeInTheDocument();
-    expect(screen.queryByText("Late")).not.toBeInTheDocument();
-    expect(screen.queryByText("Excused")).not.toBeInTheDocument();
-
-    await user.click(screen.getAllByRole("button", { name: "View related class" })[0]);
-    expect(view.openPage).toHaveBeenCalledWith("classes", {
-      type: "open-history-class",
-      sessionKey: "2026-07-20|g:g1|10:00",
-    });
-
-    await user.click(within(scope).getByRole("button", { name: "Breakdown" }));
-
-    expect(screen.getByRole("group", { name: "View by" })).toBeInTheDocument();
-    expect(screen.getByText("Attendance summary")).toBeInTheDocument();
-    expect(screen.queryByText("All groups, students, and classes")).not.toBeInTheDocument();
-  });
-
-  it("keeps report controls and payment analytics working alongside the attendance overview", async () => {
-    const user = userEvent.setup();
-    const view = renderTracking();
-    const createObjectURL = vi.fn(() => "blob:tracking-export");
-    const revokeObjectURL = vi.fn();
-    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectURL });
-    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: revokeObjectURL });
-    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
-
-    expect(screen.getAllByText("9 / 10")).not.toHaveLength(0);
-    await user.click(screen.getByRole("tab", { name: "Attendance" }));
-    await user.type(screen.getByPlaceholderText("Search students or groups…"), "Ana");
-    expect(screen.getByText("Ana")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Export Excel" }));
-    expect(createObjectURL).toHaveBeenCalledOnce();
-    expect(anchorClick).toHaveBeenCalledOnce();
-    expect(view.notify).toHaveBeenCalledWith("Excel export downloaded");
-
-    await user.click(screen.getByRole("button", { name: "Report date" }));
-    await user.click(screen.getByRole("button", { name: "Choose another date" }));
-    await waitFor(() => expect(screen.getByRole("combobox", { name: "Show data through" })).toBeEnabled());
-    await user.click(screen.getByRole("combobox", { name: "Show data through" }));
-    await user.click(screen.getByRole("button", { name: "Monday, July 20, 2026" }));
-    await user.click(screen.getByRole("button", { name: "Apply date" }));
-    expect(screen.getByText("Historical view")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("tab", { name: "Payments" }));
-    expect(screen.getByText("Payment summary")).toBeInTheDocument();
-    await user.click(screen.getByRole("tab", { name: "Payment evolution" }));
-    expect(screen.getByRole("tab", { name: "Payment evolution" })).toHaveClass("active");
-
-    anchorClick.mockRestore();
-  });
-
-  it("preserves class selection across payment modes and refreshes it after records change", async () => {
-    const user = userEvent.setup();
-    const actions = { notify: vi.fn() };
-    const earlier = classRows.map((row) => ({ ...row, classTitle: "Earlier class" }));
-    const later = {
-      ...classRows[0],
-      id: "later",
-      classDate: "2026-07-24",
-      classTitle: "Later class",
-      charge: 300,
-      recognizedPaid: 300,
-      paymentDate: "2026-07-24",
-    };
-    const view = render(<Tracking state={state} derived={{ classLogRows: [...earlier, later] }} actions={actions} />);
-    const generatedValue = () => screen.getByText("Generated value").parentElement.querySelector("strong");
-    await user.click(screen.getByRole("tab", { name: "Payments" }));
-    expect(generatedValue()).toHaveTextContent("$500");
-    await user.click(within(screen.getByRole("group", { name: "Scope" })).getByRole("button", { name: "Breakdown" }));
-    const modes = screen.getByRole("group", { name: "View by" });
-    await user.click(within(modes).getByRole("button", { name: "Class", exact: true }));
-    expect(generatedValue()).toHaveTextContent("$300");
-
-    const classSelector = screen.getByText("Class", { selector: "strong" }).closest("label");
-    await user.click(within(classSelector).getByRole("combobox"));
-    await user.click(screen.getByRole("option", { name: /Earlier class/ }));
-    expect(generatedValue()).toHaveTextContent("$200");
-    await user.click(within(modes).getByRole("button", { name: "Group", exact: true }));
-    expect(generatedValue()).toHaveTextContent("$500");
-    await user.click(within(modes).getByRole("button", { name: "Class", exact: true }));
-    expect(generatedValue()).toHaveTextContent("$200");
-
-    view.rerender(<Tracking state={state} derived={{ classLogRows: [later] }} actions={actions} />);
-    expect(generatedValue()).toHaveTextContent("$300");
-    view.rerender(<Tracking state={state} derived={{ classLogRows: [{ ...later, charge: 450 }] }} actions={actions} />);
-    expect(generatedValue()).toHaveTextContent("$450");
-    await user.click(within(screen.getByRole("group", { name: "Scope" })).getByRole("button", { name: "Overview" }));
-    expect(generatedValue()).toHaveTextContent("$450");
+    setup();
+    await user.click(screen.getByRole("button", { name: "Breakdown" }));
+    const table = screen.getByRole("table", { name: "Records" });
+    const rows = within(table).getAllByRole("row").slice(1);
+    expect(rows).toHaveLength(6);
+    const absent = rows.filter((item) => item.textContent.includes("Absent"));
+    expect(absent).toHaveLength(2);
+    for (const item of absent) expect(item.textContent).not.toMatch(/Pending|Paid/);
   });
 });
 
-it("supports roving keyboard focus and links the active tracking panel", async () => {
-  render(<Tracking state={state} derived={{ gradeRows: state.grades, classLogRows: classRows }} actions={{}} />);
-  const grades = screen.getByRole("tab", { name: "Grades" });
-  grades.focus();
-  const user = userEvent.setup();
-  await user.keyboard("{ArrowRight}");
-  const attendance = screen.getByRole("tab", { name: "Attendance" });
-  expect(attendance).toHaveFocus();
-  expect(attendance).toHaveAttribute("tabindex", "0");
-  expect(grades).toHaveAttribute("tabindex", "-1");
-  expect(screen.getByRole("tabpanel")).toHaveAttribute("aria-labelledby", attendance.id);
-  await user.keyboard("{End}");
-  expect(screen.getByRole("tab", { name: "Payments" })).toHaveFocus();
-  await user.keyboard("{Home}");
-  expect(grades).toHaveFocus();
+describe("Tracking on mobile", () => {
+  it("shows the bars, the filter chips and the student sheet", async () => {
+    setCompact(true);
+    const user = userEvent.setup();
+    setup();
+    const chips = screen.getByRole("group", { name: "Filter students" });
+    await user.click(within(chips).getByRole("button", { name: /With absences/ }));
+    expect(screen.getAllByRole("button", { name: /^Open |Luna López/ }).length).toBeGreaterThan(0);
+    expect(screen.queryByText("Diego Soto")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Luna López/ }));
+    expect(await screen.findByRole("dialog", { name: "Luna López" })).toBeInTheDocument();
+  });
 });
