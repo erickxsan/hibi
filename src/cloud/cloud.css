@@ -3,16 +3,16 @@
   min-height: 100vh;
   place-items: center;
   padding: 28px;
-  background: var(--canvas);
+  background: var(--washi);
 }
 
 .cloud-state-card,
 .cloud-migration-card {
   width: min(680px, 100%);
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: 22px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
+  background: var(--papel);
+  box-shadow: var(--shadow-overlay);
 }
 
 .cloud-state-card {
@@ -29,7 +29,7 @@
 }
 
 .encryption-gate-icon {
-  color: var(--primary, #31584b);
+  color: var(--bermellon-strong, #31584b);
 }
 
 .encryption-progress,
@@ -46,7 +46,7 @@
 
 .encryption-progress {
   align-items: center;
-  background: color-mix(in srgb, var(--primary, #31584b) 9%, white);
+  background: color-mix(in srgb, var(--bermellon-strong, #31584b) 9%, white);
 }
 
 .encryption-progress .cloud-state-spinner {
@@ -58,13 +58,13 @@
 .encryption-error {
   flex-direction: column;
   gap: 3px;
-  color: var(--danger, #a53b32);
-  background: color-mix(in srgb, var(--danger, #a53b32) 8%, white);
+  color: var(--bermellon-ink, #a53b32);
+  background: color-mix(in srgb, var(--bermellon-ink, #a53b32) 8%, white);
 }
 
 .remember-device-choice {
   cursor: pointer;
-  background: var(--surface-subtle, #f6f5f0);
+  background: var(--washi, #f6f5f0);
 }
 
 .remember-device-choice input {
@@ -78,7 +78,7 @@
 
 .remember-device-choice small,
 .encryption-compatibility-note {
-  color: var(--muted, #6b706d);
+  color: var(--sumi-muted, #6b706d);
 }
 
 .encryption-primary-actions,
@@ -96,7 +96,7 @@
 
 .recovery-unlock-form {
   padding-top: 12px;
-  border-top: 1px solid var(--border, #deded8);
+  border-top: 1px solid var(--line, #deded8);
 }
 
 .encryption-password-form {
@@ -120,19 +120,20 @@
 .cloud-state-card h1,
 .cloud-migration-card h1 {
   margin: 0;
-  letter-spacing: -0.035em;
+  font: 800 28px/1.2 var(--font-sans);
+  letter-spacing: -0.01em;
 }
 .cloud-state-card p {
   margin: 0;
-  color: var(--muted);
+  color: var(--sumi-muted);
 }
 
 .cloud-state-spinner {
   width: 24px;
   height: 24px;
   margin: 8px;
-  border: 3px solid var(--teal-soft);
-  border-top-color: var(--teal-strong);
+  border: 3px solid var(--jade-soft);
+  border-top-color: var(--jade-strong);
   border-radius: 50%;
   animation: cloud-spin 700ms linear infinite;
 }
@@ -150,21 +151,21 @@
   flex: 0 0 52px;
   place-items: center;
   border-radius: 15px;
-  background: var(--teal-soft);
-  color: var(--teal-strong);
+  background: var(--jade-soft);
+  color: var(--jade-strong);
 }
 
 .cloud-error-card .cloud-state-icon {
-  background: var(--danger-soft);
-  color: var(--danger);
+  background: var(--bermellon-soft);
+  color: var(--bermellon-ink);
 }
 
 .cloud-deletion-card {
   max-width: 520px;
 }
 .cloud-deletion-card .cloud-state-icon {
-  background: var(--danger-soft);
-  color: var(--danger);
+  background: var(--bermellon-soft);
+  color: var(--bermellon-ink);
 }
 .cloud-deletion-card .field {
   width: 100%;
@@ -174,7 +175,7 @@
   max-width: 580px;
 }
 .cloud-deletion-complete .cloud-state-icon {
-  background: var(--olive-soft);
+  background: var(--jade-soft);
   color: #426c46;
 }
 .deletion-receipt {
@@ -188,12 +189,12 @@
   display: grid;
   gap: 3px;
   padding: 10px 12px;
-  border: 1px solid var(--border-soft);
+  border: 1px solid var(--line-soft);
   border-radius: 10px;
   background: #fbf8f1;
 }
 .deletion-receipt dt {
-  color: var(--muted);
+  color: var(--sumi-muted);
   font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
@@ -210,9 +211,9 @@
   gap: 0.75rem;
   justify-items: center;
   padding: 0.9rem;
-  border: 1px solid color-mix(in srgb, var(--danger) 28%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bermellon-ink) 28%, transparent);
   border-radius: 0.9rem;
-  background: color-mix(in srgb, var(--danger) 7%, transparent);
+  background: color-mix(in srgb, var(--bermellon-ink) 7%, transparent);
 }
 
 .cloud-local-purge-warning p {
@@ -239,11 +240,11 @@
 }
 .cloud-migration-heading > div > p:last-child {
   margin: 8px 0 0;
-  color: var(--muted);
+  color: var(--sumi-muted);
 }
 .cloud-eyebrow {
   margin: 0 0 3px;
-  color: var(--teal-strong);
+  color: var(--jade-strong);
   font-size: 11px;
   font-weight: 850;
   letter-spacing: 0.08em;
@@ -261,7 +262,7 @@
   display: grid;
   gap: 2px;
   padding: 14px;
-  border: 1px solid var(--border-soft);
+  border: 1px solid var(--line-soft);
   border-radius: 12px;
   background: #fbf8f1;
 }
@@ -270,7 +271,7 @@
   font-size: 21px;
 }
 .cloud-migration-counts span {
-  color: var(--muted);
+  color: var(--sumi-muted);
   font-size: 11px;
   font-weight: 700;
 }
@@ -281,7 +282,7 @@
   gap: 10px;
   padding: 13px;
   border-radius: 12px;
-  background: var(--olive-soft);
+  background: var(--jade-soft);
   color: #426c46;
 }
 
@@ -295,7 +296,7 @@
 }
 .cloud-migration-error {
   margin-top: 12px;
-  color: var(--danger);
+  color: var(--bermellon-ink);
 }
 .cloud-migration-actions {
   justify-content: flex-end;
@@ -312,9 +313,9 @@
   align-items: center;
   gap: 6px;
   padding: 0 10px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: 999px;
-  background: var(--mustard-soft);
+  background: var(--ocre-soft);
   color: #65501d;
   font-size: 11px;
   font-weight: 800;
@@ -381,5 +382,150 @@
 @media (prefers-reduced-motion: reduce) {
   .cloud-state-spinner {
     animation-duration: 0.01ms;
+  }
+}
+
+/* Language switch on full-screen cloud states (sign-in gate, deletion pending). */
+.cloud-language-toggle {
+  position: fixed;
+  z-index: 3;
+  top: max(16px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right));
+}
+
+/* Pending operations: unsynced edits and conflicts above the page. */
+.pending-operations {
+  margin: 0 0 20px;
+  padding: 18px 20px;
+  border: 1px solid var(--ocre);
+  border-radius: var(--radius-lg);
+  background: var(--papel);
+  box-shadow: var(--shadow-card);
+}
+
+.pending-operations-heading {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.pending-operations-heading > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--ocre);
+}
+
+.pending-operations-heading h2 {
+  margin: 0;
+  font: 800 16px/22px var(--font-sans);
+}
+
+.pending-operations-heading p,
+.pending-operations-note,
+.pending-operations-waiting,
+.pending-conflict-table thead th {
+  color: var(--sumi-muted);
+}
+
+.pending-operations-heading p {
+  margin: 4px 0 0;
+}
+
+.pending-operations-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+
+.pending-operations-error {
+  margin: 12px 0 0;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bermellon-soft);
+  color: var(--bermellon-ink);
+}
+
+.pending-operations-list {
+  display: grid;
+  gap: 14px;
+  margin: 14px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pending-operations-waiting {
+  margin: 0 0 10px;
+  font-size: 13px;
+}
+
+.pending-conflict {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--washi);
+}
+
+.pending-conflict-record,
+.pending-conflict-hint,
+.pending-conflict-actions {
+  margin-top: 10px;
+}
+
+.pending-conflict-record h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.pending-conflict-note {
+  margin: 0 0 6px;
+}
+
+.pending-conflict-table {
+  overflow-x: auto;
+}
+
+.pending-conflict-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.pending-conflict-table th,
+.pending-conflict-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.pending-conflict-table thead th {
+  font-weight: 600;
+  overflow-wrap: normal;
+  white-space: nowrap;
+}
+
+.pending-conflict-table tr.is-conflict {
+  background: var(--ocre-soft);
+}
+
+.pending-conflict-badge {
+  display: block;
+  color: var(--bermellon-ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.pending-conflict-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 780px) {
+  .pending-operations {
+    padding: 14px;
   }
 }

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { AlertTriangle, CloudOff, RefreshCw } from "lucide-react";
 import { useI18n } from "../i18n/index.jsx";
 import { Button } from "../components/ui";
+import "./cloud.css";
 
 const COLLECTION_LABELS = {
   settings: "Settings",

@@ -6,11 +6,11 @@ function Recovery({ onRetry, canReload }) {
     <section role="alert" className="empty-state">
       <h1>{t("This view could not be loaded")}</h1>
       <p>{t("Your saved records are still available. Try opening the view again.")}</p>
-      <button type="button" onClick={onRetry}>
+      <button type="button" className="button button-primary" onClick={onRetry}>
         {t("Try again")}
       </button>
       {canReload ? (
-        <button type="button" onClick={() => window.location.reload()}>
+        <button type="button" className="button button-secondary" onClick={() => window.location.reload()}>
           {t("Reload application")}
         </button>
       ) : (
