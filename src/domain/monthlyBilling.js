@@ -89,7 +89,7 @@ export function normalizeBillingByGroup(value) {
     .filter(([groupId]) => typeof groupId === "string" && groupId.trim())
     .map(([groupId, override]) => [groupId.trim(), normalizeOverride(override)])
     .filter(([, override]) => override);
-  return entries.length ? Object.fromEntries(entries.sort(([a], [b]) => a.localeCompare(b))) : null;
+  return entries.length ? Object.fromEntries(entries.sort(([a], [b]) => String(a).localeCompare(String(b)))) : null;
 }
 
 export function normalizeMonthlyPayments(value) {
@@ -191,7 +191,8 @@ export function monthlyDueDate(state, group, period) {
   if (billing.due.type === "dayOfMonth") return addDays(start, billing.due.day - 1);
   const dates = groupClassDates(state, group, period);
   if (!dates.length) return endOfMonth(start);
-  return billing.due.nth === "last" ? dates.at(-1) : dates[Math.min(billing.due.nth, dates.length) - 1];
+  const nth = billing.due.nth;
+  return nth === "last" ? dates.at(-1) : dates[Math.min(Number(nth), dates.length) - 1];
 }
 
 /** How a student pays inside a group in a given month. */

@@ -385,7 +385,7 @@ export function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
                 className={`week-preview-col ${on ? "is-on" : ""}`}
                 aria-label={weekdayLong(date, locale)}
                 onPointerDown={(event) => {
-                  if (event.target.closest(".week-preview-new")) return;
+                  if (event.target instanceof Element && event.target.closest(".week-preview-new")) return;
                   const rect = event.currentTarget.getBoundingClientRect();
                   const minute = Math.round((viewStart + ((event.clientY - rect.top) / rect.height) * span - 15) / 15) * 15;
                   moveTo(date, Math.max(0, Math.min(1440 - draft.minutes, minute)));

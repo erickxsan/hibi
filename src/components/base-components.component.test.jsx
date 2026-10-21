@@ -78,6 +78,7 @@ describe("Hibi base controls", () => {
         aria-label="Start date"
         value="2026-10-20"
         today="2026-10-20"
+        allowPast={false}
         classDates={["2026-10-21"]}
         repeatDates={["2026-10-22"]}
         onChange={change}

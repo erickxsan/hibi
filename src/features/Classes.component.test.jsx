@@ -88,17 +88,16 @@ function renderClasses(state = classState(), overrides = {}) {
 
 async function markAnaPresent(user) {
   const attendance = screen.getByRole("group", { name: "Attendance for Ana" });
-  await user.click(within(attendance).getByTitle("Present"));
-  return within(attendance).getByTitle("Present");
+  await user.click(within(attendance).getByRole("button", { name: "Present" }));
+  return within(attendance).getByRole("button", { name: "Present" });
 }
 
 describe("Classes remote draft safety", () => {
-  it("defaults new attendance to absent", () => {
+  it("starts new attendance unmarked", () => {
     renderClasses();
-    expect(within(screen.getByRole("group", { name: "Attendance for Ana" })).getByTitle("Absent")).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    const attendance = screen.getByRole("group", { name: "Attendance for Ana" });
+    expect(within(attendance).getByRole("button", { name: "Present" })).toHaveAttribute("aria-pressed", "false");
+    expect(within(attendance).getByRole("button", { name: "Absent" })).toHaveAttribute("aria-pressed", "false");
   });
 
   it("does not rehydrate a dirty draft for an unrelated state update", async () => {
@@ -145,7 +144,7 @@ describe("Classes remote draft safety", () => {
 
     expect(await screen.findByRole("alert")).toBeInTheDocument();
     expect(present).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByText("Registered")).toBeInTheDocument();
+    expect(screen.getAllByText("Completed").length).toBeGreaterThan(0);
     expect(view.navigationWarning()).toMatch(/Discard your unsaved class changes/);
   });
 
@@ -168,10 +167,9 @@ describe("Classes remote draft safety", () => {
     view.rerenderState({ ...withRemoteGrade(state), grades: [] });
     expect(await screen.findByRole("alert")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Reload remote version" }));
-    expect(within(screen.getByRole("group", { name: "Attendance for Ana" })).getByTitle("Absent")).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    expect(
+      within(screen.getByRole("group", { name: "Attendance for Ana" })).getByRole("button", { name: "Present" }),
+    ).toHaveAttribute("aria-pressed", "false");
     expect(view.navigationWarning()).toBe("");
   });
 
@@ -185,12 +183,12 @@ describe("Classes remote draft safety", () => {
     expect(await screen.findByRole("alert")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Rebase my draft" }));
 
-    expect(within(screen.getByRole("group", { name: "Attendance for Ana" })).getByTitle("Present")).toHaveAttribute(
+    expect(within(screen.getByRole("group", { name: "Attendance for Ana" })).getByRole("button", { name: "Present" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
     expect(screen.getByRole("textbox", { name: "Assignment name" })).toHaveValue("Remote quiz");
-    expect(screen.getByRole("spinbutton", { name: /Grade for Ana/ })).toHaveValue(12);
+    expect(screen.getByRole("textbox", { name: /Grade for Ana/ })).toHaveValue("12");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(view.navigationWarning()).toMatch(/Discard your unsaved class changes/);
   });
@@ -234,7 +232,7 @@ describe("Classes remote draft safety", () => {
 
     await user.click(screen.getByRole("tab", { name: "Calendar" }));
     expect(screen.getByRole("tab", { name: "Next class" })).toHaveAttribute("aria-selected", "true");
-    expect(within(screen.getByRole("group", { name: "Attendance for Ana" })).getByTitle("Present")).toHaveAttribute(
+    expect(within(screen.getByRole("group", { name: "Attendance for Ana" })).getByRole("button", { name: "Present" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
@@ -242,29 +240,16 @@ describe("Classes remote draft safety", () => {
     await user.click(screen.getByRole("tab", { name: "Calendar" }));
     expect(screen.getByRole("tab", { name: "Calendar" })).toHaveAttribute("aria-selected", "true");
 
-    await user.click(screen.getByRole("button", { name: /Wednesday, July 15, 1 class/ }));
-    const calendarView = screen.getByRole("group", { name: "Calendar view" });
-    await user.click(within(calendarView).getByRole("button", { name: "Week" }));
-    await user.click(screen.getByRole("checkbox", { name: "Show weekends" }));
-    await user.click(screen.getByRole("button", { name: "Previous week" }));
-    await user.click(screen.getByRole("button", { name: "Next week" }));
+    await user.click(screen.getByRole("button", { name: "Next month" }));
+    await user.click(screen.getByRole("button", { name: "Previous month" }));
     await user.click(screen.getByRole("button", { name: "Today" }));
-    const ownerFilter = screen.getByRole("combobox", { name: "Filter calendar by student or group" });
-    await user.click(ownerFilter);
-    await user.click(screen.getByRole("option", { name: "Math" }));
-    await user.click(ownerFilter);
-    await user.click(screen.getByRole("option", { name: "All classes" }));
-    await user.click(screen.getByRole("button", { name: "Search calendar" }));
-
-    const agenda = screen.getByRole("complementary", { name: /Classes on/ });
-    await user.click(within(agenda).getByText("Math"));
-    await user.click(within(agenda).getByRole("button", { name: "Open class" }));
+    await user.click(screen.getByRole("button", { name: /^July 15, 1 class/ }));
+    await user.click(screen.getByRole("button", { name: "Record class" }));
 
     expect(screen.getByRole("tab", { name: "Next class" })).toHaveAttribute("aria-selected", "true");
-    expect(within(screen.getByRole("group", { name: "Attendance for Ana" })).getByTitle("Absent")).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    expect(
+      within(screen.getByRole("group", { name: "Attendance for Ana" })).getByRole("button", { name: "Present" }),
+    ).toHaveAttribute("aria-pressed", "false");
     expect(view.navigationWarning()).toBe("");
     confirm.mockRestore();
   }, 10_000);
@@ -313,6 +298,7 @@ describe("historical settlement", () => {
       intent: { type: "open-history-class", sessionKey: session.key },
       clearIntent: vi.fn(),
     });
+    await user.click(await screen.findByRole("button", { name: "Edit record" }));
     await screen.findByRole("button", { name: "Save changes" });
     await user.click(
       within(screen.getByRole("group", { name: "Payment for Ana" })).getByRole("button", { name: "Paid" }),

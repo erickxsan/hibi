@@ -1,6 +1,7 @@
 // Spanish copy for the «Sello sereno» redesign (docs/rediseno-v2).
 export const REDESIGN_TRANSLATIONS = Object.freeze({
   Adjustments: "Ajustes",
+  individual: "individual",
   Shorter: "Menos tiempo",
   Longer: "Más tiempo",
   Synced: "Sincronizado",

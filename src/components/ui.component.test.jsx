@@ -22,8 +22,8 @@ describe("interactive UI primitives", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "Students" })).toHaveAttribute("aria-pressed", "true");
-    await user.click(screen.getByRole("button", { name: "Groups" }));
+    expect(screen.getByRole("tab", { name: "Students" })).toHaveAttribute("aria-selected", "true");
+    await user.click(screen.getByRole("tab", { name: "Groups" }));
     expect(onChange).toHaveBeenCalledWith("groups");
   });
 

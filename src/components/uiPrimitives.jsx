@@ -19,12 +19,13 @@ export function StatusBadge({ children, tone = "neutral", icon: Icon }) {
 export function Tabs({ value, onChange, items, ariaLabel }) {
   const { t: uiT } = useI18n();
   return (
-    <div className="tabs" role="group" aria-label={ariaLabel}>
+    <div className="tabs" role="tablist" aria-label={ariaLabel}>
       {items.map((item) => (
         <button
           key={item.value}
           type="button"
-          aria-pressed={value === item.value}
+          role="tab"
+          aria-selected={value === item.value}
           className={value === item.value ? "tab is-active" : "tab"}
           onClick={() => onChange(item.value)}
         >
@@ -104,29 +105,37 @@ export function FieldRow({ label, hint, children, className = "" }) {
 export function ListRow({
   avatar,
   name,
-  context,
-  value,
-  onClick,
+  context = null,
+  value = null,
+  onClick = undefined,
   disabled = false,
   className = "",
   contextTone = "",
   valueTone = "",
   label = undefined,
 }) {
-  return (
-    <button
-      type="button"
-      className={`list-row ${avatar ? "" : "no-avatar"} ${className}`.trim()}
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={label}
-    >
+  const content = (
+    <>
       {avatar}
       <span className="list-row-text">
         <strong>{name}</strong>
         {context ? <small className={contextTone ? `text-${contextTone}` : undefined}>{context}</small> : null}
       </span>
       <span className={`list-row-value ${valueTone ? `text-${valueTone}` : ""}`.trim()}>{value}</span>
+    </>
+  );
+  const classes = `list-row ${avatar ? "" : "no-avatar"} ${className}`.trim();
+  // A row without an action is plain information, not a control.
+  if (!onClick) {
+    return (
+      <div className={`${classes} is-static`} aria-label={label}>
+        {content}
+      </div>
+    );
+  }
+  return (
+    <button type="button" className={classes} onClick={onClick} disabled={disabled} aria-label={label}>
+      {content}
       <ChevronRight className="list-row-chev" aria-hidden="true" />
     </button>
   );
