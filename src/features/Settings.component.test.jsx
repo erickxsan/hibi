@@ -38,6 +38,10 @@ function renderSettings(overrides = {}) {
   return { ...view, actions, onDeleteAccount };
 }
 
+function openSection(name) {
+  fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${name}`) }));
+}
+
 describe("Settings privacy actions", () => {
   it("offers source password recovery for an old backup after rotation in the same workspace", async () => {
     const state = createStarterState();
@@ -56,6 +60,7 @@ describe("Settings privacy actions", () => {
     });
     const file = new File([text], "old.hibi", { type: "application/json" });
     file.text = async () => text;
+    openSection("Records and backups");
     fireEvent.change(container.querySelector('input[type="file"][accept*=".hibi"]'), { target: { files: [file] } });
     const dialog = await screen.findByRole("dialog", { name: "Unlock the source backup" });
     fireEvent.change(within(dialog).getByLabelText("Source workspace encryption password"), {
@@ -69,6 +74,7 @@ describe("Settings privacy actions", () => {
   });
   it("disables server security mutations in a read-only preview", () => {
     renderSettings({ encryption: { enabled: true, writesEnabled: false, wrappers: [] } });
+    openSection("Data & privacy");
     expect(screen.getByRole("button", { name: "Change encryption password" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Create recovery key" })).toBeDisabled();
   });
@@ -76,6 +82,7 @@ describe("Settings privacy actions", () => {
     const user = userEvent.setup();
     const changePassword = vi.fn(async () => undefined);
     renderSettings({ encryption: { enabled: true, wrappers: [], changePassword } });
+    openSection("Data & privacy");
     await user.click(screen.getByRole("button", { name: "Change encryption password" }));
     fireEvent.change(screen.getByLabelText("Current encryption password"), { target: { value: "a" } });
     expect(screen.queryByText(/easy to guess/)).not.toBeInTheDocument();
@@ -99,7 +106,7 @@ describe("Settings privacy actions", () => {
     const user = userEvent.setup();
     const { actions } = renderSettings({ actions: { updateSettings: vi.fn(async () => false) } });
     const duration = screen.getByRole("spinbutton", { name: /Default duration/ });
-    const save = screen.getByRole("button", { name: "Save defaults" });
+    const save = screen.getByRole("button", { name: "Save values" });
 
     await user.clear(duration);
     await user.type(duration, "3");
@@ -139,6 +146,7 @@ describe("Settings privacy actions", () => {
       </I18nProvider>,
     );
 
+    openSection("Welcome tutorial");
     await user.click(screen.getByRole("button", { name: "Start tour" }));
     expect(onOpenOnboarding).toHaveBeenLastCalledWith("tour");
     await user.click(screen.getByRole("button", { name: "Guided setup" }));
@@ -148,6 +156,7 @@ describe("Settings privacy actions", () => {
   it("labels reset as recoverable and requires the RESET phrase", async () => {
     const user = userEvent.setup();
     const { actions } = renderSettings();
+    openSection("Data & privacy");
     expect(screen.getByText(/not permanent deletion/i)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Reset workspace" }));
     const dialog = screen.getByRole("dialog", { name: "Reset this workspace?" });
@@ -161,6 +170,7 @@ describe("Settings privacy actions", () => {
   it("requires the permanent deletion phrase before invoking the account flow", async () => {
     const user = userEvent.setup();
     const { onDeleteAccount } = renderSettings();
+    openSection("Data & privacy");
     await user.click(screen.getByRole("button", { name: "Delete account and data" }));
     const dialog = screen.getByRole("dialog", { name: "Permanently delete account and data?" });
     const confirm = within(dialog).getByRole("button", { name: "Delete permanently" });
@@ -168,5 +178,40 @@ describe("Settings privacy actions", () => {
     await user.type(within(dialog).getByLabelText("Type DELETE MY ACCOUNT to confirm"), "DELETE MY ACCOUNT");
     await user.click(confirm);
     expect(onDeleteAccount).toHaveBeenCalledWith({ confirmation: "DELETE MY ACCOUNT" });
+  });
+
+  it("previews what the class values change before saving them", async () => {
+    const user = userEvent.setup();
+    const { actions } = renderSettings();
+    expect(screen.getByText("No changes to save")).toBeInTheDocument();
+    const rate = screen.getByRole("spinbutton", { name: /Hourly rate/ });
+    await user.clear(rate);
+    await user.type(rate, "120");
+    expect(screen.getByText(/A new 2 h class costs \$240 per student/)).toBeInTheDocument();
+    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Save values" }));
+    expect(actions.updateSettings).toHaveBeenCalledWith(expect.objectContaining({ hourlyRateMxn: 120 }));
+  });
+
+  it("changes one value from a sheet on mobile", async () => {
+    window.matchMedia.mockImplementation((query) => ({
+      matches: true,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+    const user = userEvent.setup();
+    const { actions } = renderSettings();
+    await user.click(screen.getByRole("button", { name: /Hourly rate/ }));
+    const sheet = await screen.findByRole("dialog", { name: "Hourly rate" });
+    await user.click(within(sheet).getByRole("button", { name: "More" }));
+    await user.click(within(sheet).getByRole("button", { name: "Save" }));
+    expect(actions.updateSettings).toHaveBeenCalledWith(expect.objectContaining({ hourlyRateMxn: 60 }));
+    window.matchMedia.mockImplementation((query) => ({
+      matches: false,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
   });
 });

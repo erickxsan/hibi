@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Clock3,
   Download,
@@ -13,9 +13,33 @@ import {
   Trash2,
   Upload,
   UsersRound,
-  Volume2,
 } from "lucide-react";
-import { Button, ConfirmDialog, Drawer, Field, Input, Select } from "../components/ui";
+import {
+  BottomSheet,
+  Button,
+  ConfirmDialog,
+  Drawer,
+  Field,
+  Input,
+  ListRow,
+  SectionHeading,
+  Select,
+  Switch,
+} from "../components/ui";
+import { StudentAvatar } from "../components/StudentAvatar";
+import { useCompactViewport } from "../components/OverlayContext";
+import { todayDateOnly } from "../domain/dates";
+import {
+  formatHours,
+  formatMoney,
+  formatPercent,
+  formatScore,
+  formatShortDate,
+  monthLong,
+} from "../utils/displayFormat";
+import { shortNames } from "./homeDashboardModel";
+import { settingsEffects } from "./settingsModel";
+import "./settings.css";
 import { importState, MAX_BACKUP_BYTES } from "../domain";
 import { draftChanged, useUnsavedChanges } from "../hooks/useUnsavedChanges";
 import { LanguageToggle, useI18n } from "../i18n";
@@ -26,6 +50,60 @@ import { setupResumeStep } from "../onboarding/onboardingModel";
 function settingsDraft(settings) {
   return { ...settings, hourlyRateMxn: settings.hourlyRate };
 }
+
+// Mobile rows open a sheet with −/+ for one class value at a time.
+const MOBILE_FIELDS = {
+  defaultClassHours: {
+    group: "Classes",
+    title: "Default duration",
+    hint: "New classes start with this length; each class can still change it.",
+    unit: "per class",
+    min: 0.25,
+    max: 12,
+    step: 0.25,
+    format: (value, locale) => formatHours(value, locale),
+  },
+  hourlyRateMxn: {
+    group: "Classes",
+    title: "Hourly rate",
+    hint: "The general one. Groups with their own rate do not change.",
+    unit: "MXN per hour",
+    min: 0,
+    max: 100000,
+    step: 10,
+    format: (value, locale) => formatMoney(value, locale),
+  },
+  recentProjectionWeeks: {
+    group: "Classes",
+    title: "Projection window",
+    hint: "Weeks of collections used to project the month.",
+    unit: "weeks",
+    min: 1,
+    max: 52,
+    step: 1,
+    format: (value) => String(value),
+  },
+  lowGradeThreshold: {
+    group: "Alerts",
+    title: "Low grade",
+    hint: "Grades below this value are flagged.",
+    unit: "out of 10",
+    min: 0,
+    max: 1,
+    step: 0.05,
+    format: (value, locale) => formatScore(value * 10, locale),
+  },
+  lowAttendanceThreshold: {
+    group: "Alerts",
+    title: "Low attendance",
+    hint: "Students below this attendance are flagged.",
+    unit: "attendance",
+    min: 0,
+    max: 1,
+    step: 0.05,
+    format: (value) => `${Math.round(value * 100)}%`,
+  },
+};
 
 async function sha256(text) {
   const bytes = new TextEncoder().encode(text);
@@ -41,8 +119,10 @@ export default function Settings({
   registerNavigationBlocker,
   onDeleteAccount,
   onOpenOnboarding,
+  derived = undefined,
+  account = undefined,
 }) {
-  const { t: uiT, locale } = useI18n();
+  const { t: uiT, locale, language } = useI18n();
   const { t } = useI18n();
   const [draft, setDraft] = useState(() => settingsDraft(state.settings));
   const [saving, setSaving] = useState(false);
@@ -97,6 +177,7 @@ export default function Settings({
     try {
       const saved = await actions.updateSettings(draft);
       if (saved) baselineRef.current = draft;
+      return saved;
     } finally {
       setSaving(false);
     }
@@ -227,486 +308,28 @@ export default function Settings({
     if (next) playHibiSound("selection");
   };
 
-  return (
-    <div className="page settings-page">
-      <div className="page-heading">
-        <div>
-          <h1>{uiT("Settings")}</h1>
-          <p>{uiT("Manage classroom defaults, language, sounds, backup, and privacy.")}</p>
-        </div>
-      </div>
-      <section className="settings-stack">
-        <article className="settings-card">
-          <div className="settings-icon yellow">
-            <Clock3 size={22} />
-          </div>
-          <div className="settings-content">
-            <h2>{uiT("Classroom defaults")}</h2>
-            <p>{uiT("Used when recording classes and calculating alerts and projections.")}</p>
-            <div className="settings-controls settings-controls-expanded">
-              <Field label={uiT("Default duration")}>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.25"
-                  value={draft.defaultClassHours}
-                  onChange={(event) => setDraft({ ...draft, defaultClassHours: Number(event.target.value) })}
-                />
-                <small>{uiT("hours")}</small>
-              </Field>
-              <Field label={uiT("Hourly rate")}>
-                <Input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={draft.hourlyRateMxn}
-                  onChange={(event) => setDraft({ ...draft, hourlyRateMxn: Number(event.target.value) })}
-                />
-                <small>{uiT("MXN / hour")}</small>
-              </Field>
-              <Field label={uiT("Projection window")}>
-                <Input
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={draft.recentProjectionWeeks}
-                  onChange={(event) => setDraft({ ...draft, recentProjectionWeeks: Number(event.target.value) })}
-                />
-                <small>{uiT("weeks")}</small>
-              </Field>
-              <Field label={uiT("Low grade threshold")}>
-                <Input
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="1"
-                  value={Math.round(draft.lowGradeThreshold * 100)}
-                  onChange={(event) => setDraft({ ...draft, lowGradeThreshold: Number(event.target.value) / 100 })}
-                />
-                <small>{uiT("percent")}</small>
-              </Field>
-              <Field label={uiT("Low attendance threshold")}>
-                <Input
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="1"
-                  value={Math.round(draft.lowAttendanceThreshold * 100)}
-                  onChange={(event) => setDraft({ ...draft, lowAttendanceThreshold: Number(event.target.value) / 100 })}
-                />
-                <small>{uiT("percent")}</small>
-              </Field>
-              <Button variant="primary" onClick={save} disabled={!dirty || saving}>
-                {saving ? uiT("Saving…") : uiT("Save defaults")}
-              </Button>
-            </div>
-          </div>
-        </article>
-        {onOpenOnboarding ? (
-          <article className="settings-card settings-tour-card" data-onboarding-tour="settings">
-            <div className="settings-icon lilac">
-              <Sparkles size={22} />
-            </div>
-            <div className="settings-content">
-              <h2>{uiT("Welcome tutorial")}</h2>
-              <p>{uiT("Revisit Hibi’s main features or set up another group with guidance.")}</p>
-              <div className="settings-tour-actions">
-                <Button icon={Sparkles} onClick={() => onOpenOnboarding("tour")}>
-                  {uiT("Start tour")}
-                </Button>
-                <Button icon={UsersRound} onClick={() => onOpenOnboarding("setup")}>
-                  {setupResumeStep(state.settings) ? uiT("Resume guided setup") : uiT("Guided setup")}
-                </Button>
-              </div>
-              <div className="settings-tour-security">
-                <LockKeyhole aria-hidden="true" size={18} />
-                <span>
-                  <strong>{uiT("End-to-end encryption")}</strong>
-                  <small>{uiT("Your tutorial progress and classroom data stay protected with E2EE.")}</small>
-                </span>
-              </div>
-            </div>
-          </article>
-        ) : null}
-        <article className="settings-card">
-          <div className="settings-icon blue">
-            <Globe2 size={22} />
-          </div>
-          <div className="settings-content">
-            <h2>{uiT("Interface")}</h2>
-            <p>{uiT("Choose the interface language and whether Hibi plays gentle feedback sounds.")}</p>
-            <div className="interface-settings">
-              <div className="interface-setting">
-                <span>
-                  <strong>{uiT("Language")}</strong>
-                  <small>{uiT("Choose the interface language.")}</small>
-                </span>
-                <LanguageToggle className="settings-language" />
-              </div>
-              <div className="interface-setting">
-                <span className="sound-setting-copy">
-                  <Volume2 aria-hidden="true" size={18} />
-                  <span>
-                    <strong>{uiT("Sound effects")}</strong>
-                    <small>{uiT("A few gentle cues for saves, attendance, payments, and avatars.")}</small>
-                  </span>
-                </span>
-                <button
-                  className="sound-toggle"
-                  type="button"
-                  role="switch"
-                  aria-checked={soundsEnabled}
-                  aria-label={soundsEnabled ? uiT("Turn sound effects off") : uiT("Turn sound effects on")}
-                  onClick={toggleSounds}
-                >
-                  <span aria-hidden="true" />
-                  <b>{soundsEnabled ? uiT("On") : uiT("Off")}</b>
-                </button>
-              </div>
-            </div>
-          </div>
-        </article>
-        <article className="settings-card">
-          <div className="settings-icon sage">
-            <Download size={22} />
-          </div>
-          <div className="settings-content">
-            <h2>{uiT("Records, backups & recovery")}</h2>
-            <p>
-              {persistenceMode === "cloud"
-                ? uiT("Add records safely or keep a complete recovery copy of your private cloud workspace.")
-                : uiT("Add records safely and export a backup regularly.")}
-            </p>
-            <div className="settings-data-actions">
-              <div className="settings-data-action safe-import-action">
-                <span>
-                  <strong>{uiT("Import records")}</strong>
-                  <small>
-                    {uiT("Add records from another Hibi JSON backup. Existing records and settings are never removed.")}
-                  </small>
-                </span>
-                <Button
-                  variant="primary"
-                  icon={FilePlus2}
-                  disabled={recordImportBusy}
-                  onClick={() => recordsFileRef.current?.click()}
-                >
-                  {recordImportBusy ? uiT("Reading…") : uiT("Import records")}
-                </Button>
-              </div>
-              <div className="settings-data-action">
-                <span>
-                  <strong>{uiT("Backup & recovery")}</strong>
-                  <small>
-                    {uiT("Download everything, or intentionally replace the workspace from a trusted full backup.")}
-                  </small>
-                </span>
-                <div className="button-cluster">
-                  {encryption?.enabled ? (
-                    <Button variant="primary" icon={LockKeyhole} onClick={actions.exportEncryptedBackup}>
-                      {uiT("Download encrypted .hibi")}
-                    </Button>
-                  ) : null}
-                  <Button icon={Download} onClick={actions.exportJson}>
-                    {encryption?.enabled ? uiT("Export readable JSON") : uiT("Download backup")}
-                  </Button>
-                  <Button icon={Upload} onClick={() => fileRef.current?.click()}>
-                    {uiT("Restore full backup")}
-                  </Button>
-                  {persistenceMode === "cloud" ? (
-                    <Button icon={History} onClick={openRecoveryHistory}>
-                      {uiT("Recovery history")}
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-            <input
-              ref={recordsFileRef}
-              type="file"
-              accept=".json,application/json"
-              hidden
-              onChange={previewRecordImport}
-            />
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".hibi,.json,application/json,application/vnd.hibi.encrypted+json"
-              hidden
-              onChange={importFile}
-            />
-            {encryption?.enabled ? (
-              <p className="settings-inline-warning">
-                <strong>{uiT(".hibi is recommended.")}</strong>{" "}
-                {uiT(
-                  " JSON exports are readable files intended only for advanced local use; Hibi never uploads their plaintext during import.",
-                )}
-              </p>
-            ) : null}
-          </div>
-        </article>
-        {encryption?.enabled ? (
-          <article className="settings-card encryption-settings-card">
-            <div className="settings-icon sage">
-              <KeyRound size={22} />
-            </div>
-            <div className="settings-content">
-              <h2>{uiT("Workspace encryption & access")}</h2>
-              <p>
-                {uiT("E2EE protocol v")}
-                {encryption.profile?.protocolVersion}
-                {uiT("; unlocked with ")}
-                {uiT(encryption.method || "a local key")}
-                {uiT(
-                  ". Your password wraps the same stable master key, so changing it does not re-encrypt your records.",
-                )}
-              </p>
-              <div className="workspace-key-list" aria-label={uiT("Workspace key wrappers")}>
-                {encryption.wrappers
-                  .filter((wrapper) => !wrapper.revokedAt)
-                  .map((wrapper) => (
-                    <div className="workspace-key-row" key={wrapper.wrapperId}>
-                      <span>
-                        <strong>{uiT(wrapper.label)}</strong>
-                        <small>
-                          {wrapper.type === "password" ? uiT("Password-derived key") : uiT("Recovery key")}{" "}
-                          {uiT(" · added")} {new Date(wrapper.createdAt).toLocaleDateString(locale)}
-                          {wrapper.lastUsedAt
-                            ? uiT(" · last used {p0}", { p0: new Date(wrapper.lastUsedAt).toLocaleDateString(locale) })
-                            : uiT(" · not used yet")}
-                        </small>
-                      </span>
-                      <Button
-                        disabled={
-                          securityBusy ||
-                          cloudSecurityReadOnly ||
-                          wrapper.type === "password" ||
-                          encryption.wrappers.filter((item) => !item.revokedAt).length <= 1
-                        }
-                        onClick={async () => {
-                          setSecurityBusy(true);
-                          setSecurityError("");
-                          try {
-                            await encryption.revokeWrapper(wrapper.wrapperId);
-                          } catch (error) {
-                            setSecurityError(error?.message || "That workspace key could not be revoked.");
-                          } finally {
-                            setSecurityBusy(false);
-                          }
-                        }}
-                      >
-                        {uiT("Revoke")}
-                      </Button>
-                    </div>
-                  ))}
-              </div>
-              {encryption.rememberedDevices?.length ? (
-                <div className="workspace-key-list" aria-label={uiT("Remembered devices")}>
-                  {encryption.rememberedDevices.map((device) => (
-                    <div className="workspace-key-row" key={device.deviceId}>
-                      <span>
-                        <strong>{uiT("This remembered browser")}</strong>
-                        <small>
-                          {uiT("Added ")}
-                          {new Date(device.createdAt).toLocaleDateString(locale)} {uiT(" · last used")}{" "}
-                          {new Date(device.lastUsedAt).toLocaleDateString(locale)}
-                        </small>
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-              {cloudSecurityReadOnly ? (
-                <p role="status">{uiT("This preview is read-only. Security changes are disabled.")}</p>
-              ) : null}
-              <p>
-                {uiT(
-                  "Forget this device removes remembered access. Local backups remain encrypted in this browser. Use Clear local copies on a shared device after syncing pending changes.",
-                )}
-              </p>
-              <div className="button-cluster workspace-key-actions">
-                <Button
-                  icon={KeyRound}
-                  disabled={securityBusy || cloudSecurityReadOnly}
-                  onClick={() => {
-                    setSecurityError("");
-                    setCurrentEncryptionPassword("");
-                    setNewEncryptionPassword("");
-                    setNewEncryptionPasswordConfirmation("");
-                    setPasswordChangeOpen(true);
-                  }}
-                >
-                  {uiT("Change encryption password")}
-                </Button>
-                <Button
-                  icon={KeyRound}
-                  disabled={securityBusy || cloudSecurityReadOnly}
-                  onClick={async () => {
-                    setSecurityBusy(true);
-                    setSecurityError("");
-                    try {
-                      setRecoveryReveal(await encryption.createRecoveryKey());
-                    } catch (error) {
-                      setSecurityError(error?.message || "A recovery key could not be created.");
-                    } finally {
-                      setSecurityBusy(false);
-                    }
-                  }}
-                >
-                  {uiT("Create recovery key")}
-                </Button>
-                <Button
-                  disabled={securityBusy}
-                  onClick={async () => {
-                    setSecurityBusy(true);
-                    setSecurityError("");
-                    try {
-                      await encryption.rememberDevice();
-                      actions.notify("This device will remember the workspace key");
-                    } catch (error) {
-                      setSecurityError(error?.message || "This device could not be remembered.");
-                    } finally {
-                      setSecurityBusy(false);
-                    }
-                  }}
-                >
-                  {uiT("Remember this device")}
-                </Button>
-                <Button
-                  disabled={securityBusy}
-                  onClick={async () => {
-                    setSecurityBusy(true);
-                    setSecurityError("");
-                    try {
-                      await encryption.forgetDevice();
-                      actions.notify("Remembered-device access removed");
-                    } catch (error) {
-                      setSecurityError(error?.message || "Remembered-device access could not be removed.");
-                    } finally {
-                      setSecurityBusy(false);
-                    }
-                  }}
-                >
-                  {uiT("Forget this device")}
-                </Button>
-                <Button
-                  disabled={securityBusy}
-                  onClick={async () => {
-                    setSecurityBusy(true);
-                    setSecurityError("");
-                    try {
-                      await encryption.clearLocalCopies();
-                      actions.notify("Local encrypted copies and remembered access cleared");
-                    } catch (error) {
-                      setSecurityError(error?.message || "Local copies could not be cleared.");
-                    } finally {
-                      setSecurityBusy(false);
-                    }
-                  }}
-                >
-                  {uiT("Clear local copies")}
-                </Button>
-                <Button
-                  variant="danger"
-                  icon={RotateCcw}
-                  disabled={securityBusy || cloudSecurityReadOnly}
-                  onClick={() => {
-                    setRotationProgress("");
-                    setRotationOpen(true);
-                  }}
-                >
-                  {uiT("Emergency key rotation")}
-                </Button>
-              </div>
-              {recoveryReveal ? (
-                <div className="recovery-key-reveal" role="status">
-                  <strong>{uiT("Save this recovery key now. Hibi support cannot reconstruct it.")}</strong>
-                  <code>{recoveryReveal}</code>
-                  <Button
-                    onClick={() =>
-                      navigator.clipboard?.writeText(recoveryReveal).then(() => actions.notify("Recovery key copied"))
-                    }
-                  >
-                    {uiT("Copy key")}
-                  </Button>
-                </div>
-              ) : null}
-              {securityError ? (
-                <p className="field-error" role="alert">
-                  {uiT(securityError)}
-                </p>
-              ) : null}
-            </div>
-          </article>
-        ) : null}
-        <article className="settings-card">
-          <div className="settings-icon lilac">
-            <LockKeyhole size={22} />
-          </div>
-          <div className="settings-content">
-            <h2>{uiT("Data & privacy")}</h2>
-            <p>
-              {encryption?.enabled
-                ? uiT(
-                    "Cloud records and snapshots are end-to-end encrypted. Files you export remain under your control.",
-                  )
-                : uiT("Backups include student, parent, grade, attendance, and payment data. Store them privately.")}
-            </p>
-            {persistenceMode === "cloud" ? (
-              <div className="privacy-actions">
-                <div className="danger-line secondary-danger">
-                  <span>
-                    <strong>{uiT("Remove old browser copy")}</strong>
-                    <small>{uiT("Your signed-in cloud workspace and recovery history are not affected.")}</small>
-                  </span>
-                  <Button onClick={() => setClearTarget("local")}>{uiT("Remove local copy")}</Button>
-                </div>
-                <div className="danger-line workspace-reset-line">
-                  <span>
-                    <strong>{uiT("Reset workspace")}</strong>
-                    <small>
-                      {uiT(
-                        "Clears active students, groups, grades, classes, schedules, and payments. Server snapshots and encrypted copies on this device have a 30-day recovery window. Expired device copies are purged the next time Hibi opens on that device. This is not permanent deletion.",
-                      )}
-                    </small>
-                  </span>
-                  <Button
-                    icon={RotateCcw}
-                    onClick={() => {
-                      setResetConfirmation("");
-                      setResetOpen(true);
-                    }}
-                  >
-                    {uiT("Reset workspace")}
-                  </Button>
-                </div>
-                <div className="danger-line permanent-delete-line">
-                  <span>
-                    <strong>{uiT("Delete account and data")}</strong>
-                    <small>
-                      {uiT(
-                        "Permanently erases active records, snapshots, imports, synchronization history, the Auth account, and this account&apos;s copies on the current device. There is no recovery.",
-                      )}
-                    </small>
-                  </span>
-                  <Button
-                    variant="danger"
-                    icon={Trash2}
-                    onClick={() => {
-                      setDeleteConfirmation("");
-                      setDeleteError("");
-                      setDeleteOpen(true);
-                    }}
-                  >
-                    {uiT("Delete account and data")}
-                  </Button>
-                </div>
-              </div>
-            ) : null}
-          </div>
-        </article>
-      </section>
+  const compact = useCompactViewport();
+  const asOf = state.settings.asOfDate || todayDateOnly();
+  const effects = useMemo(() => settingsEffects(state, derived, draft, asOf), [asOf, derived, draft, state]);
+  const resumeStep = setupResumeStep(state.settings);
+  const [section, setSection] = useState("classes");
+  const [mobileSheet, setMobileSheet] = useState("");
+  const sheetField = MOBILE_FIELDS[mobileSheet];
+  const sheetValue = sheetField ? Number(draft[mobileSheet]) || 0 : 0;
+  const openSheet = (id) => {
+    setDraft(baselineRef.current);
+    setMobileSheet(id);
+  };
+  const stepSheet = (direction) => {
+    const next = Math.min(sheetField.max, Math.max(sheetField.min, sheetValue + direction * sheetField.step));
+    setDraft({ ...draft, [mobileSheet]: Number(next.toFixed(2)) });
+  };
+  const saveSheet = async () => {
+    if (await save()) setMobileSheet("");
+  };
 
+  const dialogs = (
+    <>
       <Drawer
         open={Boolean(pendingRecordImport)}
         onClose={() => setPendingRecordImport(null)}
@@ -1298,6 +921,750 @@ export default function Settings({
           </Field>
         </div>
       </Drawer>
+    </>
+  );
+
+  const records = (
+    <>
+      <h2>{uiT("Records, backups & recovery")}</h2>
+      <p>
+        {persistenceMode === "cloud"
+          ? uiT("Add records safely or keep a complete recovery copy of your private cloud workspace.")
+          : uiT("Add records safely and export a backup regularly.")}
+      </p>
+      <div className="settings-data-actions">
+        <div className="settings-data-action safe-import-action">
+          <span>
+            <strong>{uiT("Import records")}</strong>
+            <small>
+              {uiT("Add records from another Hibi JSON backup. Existing records and settings are never removed.")}
+            </small>
+          </span>
+          <Button
+            variant="primary"
+            icon={FilePlus2}
+            disabled={recordImportBusy}
+            onClick={() => recordsFileRef.current?.click()}
+          >
+            {recordImportBusy ? uiT("Reading…") : uiT("Import records")}
+          </Button>
+        </div>
+        <div className="settings-data-action">
+          <span>
+            <strong>{uiT("Backup & recovery")}</strong>
+            <small>
+              {uiT("Download everything, or intentionally replace the workspace from a trusted full backup.")}
+            </small>
+          </span>
+          <div className="button-cluster">
+            {encryption?.enabled ? (
+              <Button variant="primary" icon={LockKeyhole} onClick={actions.exportEncryptedBackup}>
+                {uiT("Download encrypted .hibi")}
+              </Button>
+            ) : null}
+            <Button icon={Download} onClick={actions.exportJson}>
+              {encryption?.enabled ? uiT("Export readable JSON") : uiT("Download backup")}
+            </Button>
+            <Button icon={Upload} onClick={() => fileRef.current?.click()}>
+              {uiT("Restore full backup")}
+            </Button>
+            {persistenceMode === "cloud" ? (
+              <Button icon={History} onClick={openRecoveryHistory}>
+                {uiT("Recovery history")}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+      <input ref={recordsFileRef} type="file" accept=".json,application/json" hidden onChange={previewRecordImport} />
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".hibi,.json,application/json,application/vnd.hibi.encrypted+json"
+        hidden
+        onChange={importFile}
+      />
+      {encryption?.enabled ? (
+        <p className="settings-inline-warning">
+          <strong>{uiT(".hibi is recommended.")}</strong>{" "}
+          {uiT(
+            " JSON exports are readable files intended only for advanced local use; Hibi never uploads their plaintext during import.",
+          )}
+        </p>
+      ) : null}
+    </>
+  );
+  const encryptionBlock = encryption?.enabled ? (
+    <div className="settings-block encryption-settings-card">
+      <h2>{uiT("Workspace encryption & access")}</h2>
+      <p>
+        {uiT("E2EE protocol v")}
+        {encryption.profile?.protocolVersion}
+        {uiT("; unlocked with ")}
+        {uiT(encryption.method || "a local key")}
+        {uiT(". Your password wraps the same stable master key, so changing it does not re-encrypt your records.")}
+      </p>
+      <div className="workspace-key-list" aria-label={uiT("Workspace key wrappers")}>
+        {encryption.wrappers
+          .filter((wrapper) => !wrapper.revokedAt)
+          .map((wrapper) => (
+            <div className="workspace-key-row" key={wrapper.wrapperId}>
+              <span>
+                <strong>{uiT(wrapper.label)}</strong>
+                <small>
+                  {wrapper.type === "password" ? uiT("Password-derived key") : uiT("Recovery key")} {uiT(" · added")}{" "}
+                  {new Date(wrapper.createdAt).toLocaleDateString(locale)}
+                  {wrapper.lastUsedAt
+                    ? uiT(" · last used {p0}", { p0: new Date(wrapper.lastUsedAt).toLocaleDateString(locale) })
+                    : uiT(" · not used yet")}
+                </small>
+              </span>
+              <Button
+                disabled={
+                  securityBusy ||
+                  cloudSecurityReadOnly ||
+                  wrapper.type === "password" ||
+                  encryption.wrappers.filter((item) => !item.revokedAt).length <= 1
+                }
+                onClick={async () => {
+                  setSecurityBusy(true);
+                  setSecurityError("");
+                  try {
+                    await encryption.revokeWrapper(wrapper.wrapperId);
+                  } catch (error) {
+                    setSecurityError(error?.message || "That workspace key could not be revoked.");
+                  } finally {
+                    setSecurityBusy(false);
+                  }
+                }}
+              >
+                {uiT("Revoke")}
+              </Button>
+            </div>
+          ))}
+      </div>
+      {encryption.rememberedDevices?.length ? (
+        <div className="workspace-key-list" aria-label={uiT("Remembered devices")}>
+          {encryption.rememberedDevices.map((device) => (
+            <div className="workspace-key-row" key={device.deviceId}>
+              <span>
+                <strong>{uiT("This remembered browser")}</strong>
+                <small>
+                  {uiT("Added ")}
+                  {new Date(device.createdAt).toLocaleDateString(locale)} {uiT(" · last used")}{" "}
+                  {new Date(device.lastUsedAt).toLocaleDateString(locale)}
+                </small>
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {cloudSecurityReadOnly ? (
+        <p role="status">{uiT("This preview is read-only. Security changes are disabled.")}</p>
+      ) : null}
+      <p>
+        {uiT(
+          "Forget this device removes remembered access. Local backups remain encrypted in this browser. Use Clear local copies on a shared device after syncing pending changes.",
+        )}
+      </p>
+      <div className="button-cluster workspace-key-actions">
+        <Button
+          icon={KeyRound}
+          disabled={securityBusy || cloudSecurityReadOnly}
+          onClick={() => {
+            setSecurityError("");
+            setCurrentEncryptionPassword("");
+            setNewEncryptionPassword("");
+            setNewEncryptionPasswordConfirmation("");
+            setPasswordChangeOpen(true);
+          }}
+        >
+          {uiT("Change encryption password")}
+        </Button>
+        <Button
+          icon={KeyRound}
+          disabled={securityBusy || cloudSecurityReadOnly}
+          onClick={async () => {
+            setSecurityBusy(true);
+            setSecurityError("");
+            try {
+              setRecoveryReveal(await encryption.createRecoveryKey());
+            } catch (error) {
+              setSecurityError(error?.message || "A recovery key could not be created.");
+            } finally {
+              setSecurityBusy(false);
+            }
+          }}
+        >
+          {uiT("Create recovery key")}
+        </Button>
+        <Button
+          disabled={securityBusy}
+          onClick={async () => {
+            setSecurityBusy(true);
+            setSecurityError("");
+            try {
+              await encryption.rememberDevice();
+              actions.notify("This device will remember the workspace key");
+            } catch (error) {
+              setSecurityError(error?.message || "This device could not be remembered.");
+            } finally {
+              setSecurityBusy(false);
+            }
+          }}
+        >
+          {uiT("Remember this device")}
+        </Button>
+        <Button
+          disabled={securityBusy}
+          onClick={async () => {
+            setSecurityBusy(true);
+            setSecurityError("");
+            try {
+              await encryption.forgetDevice();
+              actions.notify("Remembered-device access removed");
+            } catch (error) {
+              setSecurityError(error?.message || "Remembered-device access could not be removed.");
+            } finally {
+              setSecurityBusy(false);
+            }
+          }}
+        >
+          {uiT("Forget this device")}
+        </Button>
+        <Button
+          disabled={securityBusy}
+          onClick={async () => {
+            setSecurityBusy(true);
+            setSecurityError("");
+            try {
+              await encryption.clearLocalCopies();
+              actions.notify("Local encrypted copies and remembered access cleared");
+            } catch (error) {
+              setSecurityError(error?.message || "Local copies could not be cleared.");
+            } finally {
+              setSecurityBusy(false);
+            }
+          }}
+        >
+          {uiT("Clear local copies")}
+        </Button>
+        <Button
+          variant="danger"
+          icon={RotateCcw}
+          disabled={securityBusy || cloudSecurityReadOnly}
+          onClick={() => {
+            setRotationProgress("");
+            setRotationOpen(true);
+          }}
+        >
+          {uiT("Emergency key rotation")}
+        </Button>
+      </div>
+      {recoveryReveal ? (
+        <div className="recovery-key-reveal" role="status">
+          <strong>{uiT("Save this recovery key now. Hibi support cannot reconstruct it.")}</strong>
+          <code>{recoveryReveal}</code>
+          <Button
+            onClick={() =>
+              navigator.clipboard?.writeText(recoveryReveal).then(() => actions.notify("Recovery key copied"))
+            }
+          >
+            {uiT("Copy key")}
+          </Button>
+        </div>
+      ) : null}
+      {securityError ? (
+        <p className="field-error" role="alert">
+          {uiT(securityError)}
+        </p>
+      ) : null}
+    </div>
+  ) : null;
+  const privacy = (
+    <>
+      <h2>{uiT("Data & privacy")}</h2>
+      <p>
+        {encryption?.enabled
+          ? uiT("Cloud records and snapshots are end-to-end encrypted. Files you export remain under your control.")
+          : uiT("Backups include student, parent, grade, attendance, and payment data. Store them privately.")}
+      </p>
+      {persistenceMode === "cloud" ? (
+        <div className="privacy-actions">
+          <div className="danger-line secondary-danger">
+            <span>
+              <strong>{uiT("Remove old browser copy")}</strong>
+              <small>{uiT("Your signed-in cloud workspace and recovery history are not affected.")}</small>
+            </span>
+            <Button onClick={() => setClearTarget("local")}>{uiT("Remove local copy")}</Button>
+          </div>
+          <div className="danger-line workspace-reset-line">
+            <span>
+              <strong>{uiT("Reset workspace")}</strong>
+              <small>
+                {uiT(
+                  "Clears active students, groups, grades, classes, schedules, and payments. Server snapshots and encrypted copies on this device have a 30-day recovery window. Expired device copies are purged the next time Hibi opens on that device. This is not permanent deletion.",
+                )}
+              </small>
+            </span>
+            <Button
+              icon={RotateCcw}
+              onClick={() => {
+                setResetConfirmation("");
+                setResetOpen(true);
+              }}
+            >
+              {uiT("Reset workspace")}
+            </Button>
+          </div>
+          <div className="danger-line permanent-delete-line">
+            <span>
+              <strong>{uiT("Delete account and data")}</strong>
+              <small>
+                {uiT(
+                  "Permanently erases active records, snapshots, imports, synchronization history, the Auth account, and this account&apos;s copies on the current device. There is no recovery.",
+                )}
+              </small>
+            </span>
+            <Button
+              variant="danger"
+              icon={Trash2}
+              onClick={() => {
+                setDeleteConfirmation("");
+                setDeleteError("");
+                setDeleteOpen(true);
+              }}
+            >
+              {uiT("Delete account and data")}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+      {encryptionBlock}
+    </>
+  );
+
+  const unitField = (key, label, unit, { min = 0, max = undefined, step = 1, percent = false } = {}) => (
+    <Field label={label}>
+      <span className="unit-input">
+        <Input
+          type="number"
+          min={min}
+          max={max}
+          step={step}
+          value={percent ? Math.round(draft[key] * 100) : draft[key]}
+          onChange={(event) =>
+            setDraft({ ...draft, [key]: percent ? Number(event.target.value) / 100 : Number(event.target.value) })
+          }
+        />
+        <span aria-hidden="true">{unit}</span>
+      </span>
+    </Field>
+  );
+
+  const saveFooter = (
+    <div className="settings-save">
+      <span className="muted">{dirty ? uiT("Unsaved changes") : uiT("No changes to save")}</span>
+      <Button variant="primary" onClick={save} disabled={!dirty || saving}>
+        {saving ? uiT("Saving…") : uiT("Save values")}
+      </Button>
+    </div>
+  );
+
+  const classes = (
+    <>
+      <h2>{uiT("Class values")}</h2>
+      <p>{uiT("Used when recording new classes and to calculate alerts and projections.")}</p>
+      <div className="settings-grid">
+        {unitField("defaultClassHours", uiT("Default duration"), uiT("hours"), { step: 0.25 })}
+        {unitField("hourlyRateMxn", uiT("Hourly rate"), uiT("MXN / hour"))}
+        {unitField("recentProjectionWeeks", uiT("Projection window"), uiT("weeks"), { min: 1 })}
+        {unitField("lowGradeThreshold", uiT("Low grade, below"), "%", { max: 100, percent: true })}
+        {unitField("lowAttendanceThreshold", uiT("Low attendance, below"), "%", { max: 100, percent: true })}
+      </div>
+      <div className="settings-effects">
+        <h3 className="overline">{uiT("With these values")}</h3>
+        <div className="fx">
+          <span>
+            <b>
+              {uiT("A new {hours} class costs {amount} per student", {
+                hours: formatHours(draft.defaultClassHours, locale),
+                amount: formatMoney(effects.classCost, locale),
+              })}
+            </b>
+            <small>
+              {effects.ownRates.length
+                ? uiT("{names} keep their own rate.", { names: shortNames(effects.ownRates, locale) })
+                : uiT("Every group uses this rate.")}
+            </small>
+          </span>
+          <span className="v">{formatMoney(effects.classCost, locale)}</span>
+        </div>
+        <div className="fx">
+          <span>
+            <b>{uiT("Projection for {month}", { month: monthLong(asOf, locale) })}</b>
+            <small>{uiT("Collected so far plus the fees and classes left this month.")}</small>
+          </span>
+          <span className="v">{formatMoney(effects.projection, locale)}</span>
+        </div>
+        <div className="fx">
+          <span>
+            <b>
+              {uiT(
+                effects.lowAttendance.length === 1
+                  ? "{count} student with low attendance"
+                  : "{count} students with low attendance",
+                {
+                  count: effects.lowAttendance.length,
+                },
+              )}
+            </b>
+            <small>
+              {effects.lowAttendance.length
+                ? effects.lowAttendance
+                    .slice(0, 3)
+                    .map((row) => `${row.student.fullName} ${formatPercent(row.attendance, locale)}`)
+                    .join(" · ")
+                : uiT("Nobody this month.")}
+            </small>
+          </span>
+          <span className="settings-avatars" aria-hidden="true">
+            {effects.lowAttendance.slice(0, 3).map((row) => (
+              <StudentAvatar
+                key={row.student.id}
+                avatarId={row.student.avatarId}
+                name={row.student.fullName}
+                size="small"
+                decorative
+              />
+            ))}
+          </span>
+        </div>
+        <div className="fx">
+          <span>
+            <b>
+              {uiT(
+                effects.lowGradeCount === 1 ? "{count} student with a low grade" : "{count} students with a low grade",
+                {
+                  count: effects.lowGradeCount,
+                },
+              )}
+            </b>
+            <small>
+              {effects.lowGrades.length
+                ? effects.lowGrades
+                    .slice(0, 2)
+                    .map((item) =>
+                      uiT("{name} got {grade} in {assessment} ({date}).", {
+                        name: item.name,
+                        grade: formatScore(item.value, locale),
+                        assessment: item.assessment,
+                        date: formatShortDate(item.date, locale),
+                      }),
+                    )
+                    .join(" ")
+                : uiT("Nobody this month.")}
+            </small>
+          </span>
+          {effects.lowGrades.length ? <span className="st st-venc">{uiT("Review")}</span> : <span />}
+        </div>
+      </div>
+      {saveFooter}
+    </>
+  );
+
+  const tutorial = onOpenOnboarding ? (
+    <div data-onboarding-tour="settings">
+      <h2>{uiT("Welcome tutorial")}</h2>
+      <p>{uiT("Revisit Hibi’s main features or set up another group with guidance.")}</p>
+      <div className="settings-tour-actions">
+        <Button icon={Sparkles} onClick={() => onOpenOnboarding("tour")}>
+          {uiT("Start tour")}
+        </Button>
+        <Button icon={UsersRound} onClick={() => onOpenOnboarding("setup")}>
+          {resumeStep ? uiT("Resume guided setup") : uiT("Guided setup")}
+        </Button>
+      </div>
+      <div className="settings-note">
+        <LockKeyhole aria-hidden="true" size={18} />
+        <span>
+          <strong>{uiT("End-to-end encryption")}</strong>
+          <small>{uiT("Your tutorial progress and classroom data stay protected with E2EE.")}</small>
+        </span>
+      </div>
+    </div>
+  ) : null;
+
+  const soundSwitch = (
+    <Switch
+      checked={soundsEnabled}
+      onChange={toggleSounds}
+      label={soundsEnabled ? uiT("Turn sound effects off") : uiT("Turn sound effects on")}
+    />
+  );
+  const interfaceSection = (
+    <>
+      <h2>{uiT("Interface")}</h2>
+      <p>{uiT("Choose the interface language and whether Hibi plays gentle feedback sounds.")}</p>
+      <div className="fx">
+        <span>
+          <b>{uiT("Language")}</b>
+          <small>{uiT("Choose the interface language.")}</small>
+        </span>
+        <LanguageToggle className="settings-language" />
+      </div>
+      <div className="fx">
+        <span>
+          <b>{uiT("Sound effects")}</b>
+          <small>{uiT("A few gentle cues for saves, attendance, payments, and avatars.")}</small>
+        </span>
+        {soundSwitch}
+      </div>
+    </>
+  );
+
+  const languageName = language === "es" ? "Español" : "English";
+  const sections = [
+    {
+      id: "classes",
+      icon: Clock3,
+      title: uiT("Class values"),
+      summary: uiT("{hours} · {rate} per hour · projection over {weeks} weeks", {
+        hours: formatHours(state.settings.defaultClassHours, locale),
+        rate: formatMoney(state.settings.hourlyRate, locale),
+        weeks: state.settings.recentProjectionWeeks,
+      }),
+      content: classes,
+    },
+    ...(tutorial
+      ? [
+          {
+            id: "tutorial",
+            icon: Sparkles,
+            title: uiT("Welcome tutorial"),
+            summary: resumeStep ? uiT("Guided setup in progress") : uiT("Tour and guided setup"),
+            content: tutorial,
+          },
+        ]
+      : []),
+    {
+      id: "interface",
+      icon: Globe2,
+      title: uiT("Interface"),
+      summary: `${languageName} · ${soundsEnabled ? uiT("sounds on") : uiT("sounds off")}`,
+      content: interfaceSection,
+    },
+    {
+      id: "records",
+      icon: Download,
+      title: uiT("Records and backups"),
+      summary:
+        persistenceMode === "cloud" ? uiT("Cloud copy with recovery history") : uiT("Saved only in this browser"),
+      status: persistenceMode === "cloud" ? null : { tone: "st-pend", text: uiT("Back up regularly") },
+      content: records,
+    },
+    {
+      id: "privacy",
+      icon: LockKeyhole,
+      title: uiT("Data & privacy"),
+      summary: encryption?.enabled ? uiT("End-to-end encryption") : uiT("Your backups stay with you"),
+      status: encryption?.enabled ? { tone: "st-ok", text: uiT("Active") } : null,
+      content: privacy,
+    },
+  ];
+  const current = sections.find((item) => item.id === section) || sections[0];
+
+  if (compact) {
+    const valueRow = (id, label, value) => (
+      <ListRow key={id} name={label} value={value} onClick={() => openSheet(id)} />
+    );
+    const sheet = sheetField;
+    return (
+      <div className="page settings-page is-compact">
+        <div className="settings-mobile-head">
+          {account?.email ? (
+            <span className="overline">{uiT("Your account · {email}", { email: account.email })}</span>
+          ) : null}
+          <h1>{uiT("Settings (short)")}</h1>
+        </div>
+        <section className="settings-group">
+          <h2 className="overline">{uiT("Classes")}</h2>
+          {valueRow(
+            "defaultClassHours",
+            uiT("Default duration"),
+            formatHours(state.settings.defaultClassHours, locale),
+          )}
+          {valueRow("hourlyRateMxn", uiT("Hourly rate"), formatMoney(state.settings.hourlyRate, locale))}
+          {valueRow(
+            "recentProjectionWeeks",
+            uiT("Projection"),
+            uiT("{count} weeks", { count: state.settings.recentProjectionWeeks }),
+          )}
+        </section>
+        <section className="settings-group">
+          <h2 className="overline">{uiT("Alerts")}</h2>
+          {valueRow(
+            "lowGradeThreshold",
+            uiT("Low grade"),
+            uiT("Below {value}", { value: formatScore(state.settings.lowGradeThreshold * 10, locale) }),
+          )}
+          {valueRow(
+            "lowAttendanceThreshold",
+            uiT("Low attendance"),
+            uiT("Below {value}", { value: `${Math.round(state.settings.lowAttendanceThreshold * 100)}%` }),
+          )}
+        </section>
+        <section className="settings-group">
+          <h2 className="overline">{uiT("App")}</h2>
+          {valueRow("language", uiT("Language"), languageName)}
+          <div className="settings-row">
+            <span>{uiT("Sound effects")}</span>
+            {soundSwitch}
+          </div>
+          {tutorial ? valueRow("tutorial", uiT("Welcome tutorial"), uiT("See it again")) : null}
+        </section>
+        <section className="settings-group">
+          <h2 className="overline">{uiT("Your data")}</h2>
+          <ListRow
+            name={uiT("Records and backups")}
+            value={persistenceMode === "cloud" ? uiT("In the cloud") : uiT("This browser")}
+            valueTone={persistenceMode === "cloud" ? "ok" : "pend"}
+            onClick={() => openSheet("records")}
+          />
+          <ListRow
+            name={encryption?.enabled ? uiT("End-to-end encryption") : uiT("Data & privacy")}
+            value={encryption?.enabled ? uiT("Active") : ""}
+            valueTone="ok"
+            onClick={() => openSheet("privacy")}
+          />
+          {account?.onSignOut ? (
+            <button type="button" className="settings-signout" onClick={account.onSignOut}>
+              {uiT("Sign out")}
+            </button>
+          ) : null}
+        </section>
+        <BottomSheet
+          open={Boolean(sheet)}
+          onClose={() => setMobileSheet("")}
+          kicker={sheet ? uiT(sheet.group) : ""}
+          title={sheet ? uiT(sheet.title) : ""}
+          description={sheet?.hint ? uiT(sheet.hint) : undefined}
+          footer={
+            <Button variant="primary" className="is-block" onClick={saveSheet} disabled={!dirty || saving}>
+              {saving ? uiT("Saving…") : uiT("Save")}
+            </Button>
+          }
+        >
+          {sheet ? (
+            <div className="settings-sheet">
+              <div className="settings-stepper">
+                <button
+                  type="button"
+                  aria-label={uiT("Less")}
+                  disabled={sheetValue <= sheet.min}
+                  onClick={() => stepSheet(-1)}
+                >
+                  −
+                </button>
+                <span>
+                  <b>{sheet.format(sheetValue, locale)}</b>
+                  <small>{uiT(sheet.unit)}</small>
+                </span>
+                <button
+                  type="button"
+                  aria-label={uiT("More")}
+                  disabled={sheetValue >= sheet.max}
+                  onClick={() => stepSheet(1)}
+                >
+                  +
+                </button>
+              </div>
+              <ul className="settings-sheet-effects">
+                <li>
+                  {uiT("{hours} class: {amount} per student.", {
+                    hours: formatHours(draft.defaultClassHours, locale),
+                    amount: formatMoney(effects.classCost, locale),
+                  })}
+                </li>
+                <li>
+                  {uiT("Projection for {month}: {amount}.", {
+                    month: monthLong(asOf, locale),
+                    amount: formatMoney(effects.projection, locale),
+                  })}
+                </li>
+                <li className={effects.lowAttendance.length ? "is-bad" : ""}>
+                  {uiT(
+                    effects.lowAttendance.length === 1
+                      ? "{count} student with low attendance"
+                      : "{count} students with low attendance",
+                    { count: effects.lowAttendance.length },
+                  )}
+                </li>
+                {effects.ownRates.length ? (
+                  <li className="is-muted">
+                    {uiT("{names} keep their own rate.", { names: shortNames(effects.ownRates, locale) })}
+                  </li>
+                ) : null}
+              </ul>
+            </div>
+          ) : null}
+        </BottomSheet>
+        <BottomSheet
+          open={["language", "tutorial", "records", "privacy"].includes(mobileSheet)}
+          onClose={() => setMobileSheet("")}
+          title={
+            mobileSheet === "language"
+              ? uiT("Language")
+              : (sections.find((item) => item.id === mobileSheet)?.title ?? "")
+          }
+        >
+          <div className="settings-detail is-sheet">
+            {mobileSheet === "language" ? (
+              <LanguageToggle className="settings-language" />
+            ) : (
+              sections.find((item) => item.id === mobileSheet)?.content
+            )}
+          </div>
+        </BottomSheet>
+        {dialogs}
+      </div>
+    );
+  }
+
+  return (
+    <div className="page settings-page">
+      <SectionHeading
+        title={uiT("Settings")}
+        description={uiT("Class values, language, sounds, backups and privacy.")}
+      />
+      <div className="settings-cols">
+        <nav className="settings-nav" aria-label={uiT("Settings sections")}>
+          {sections.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                type="button"
+                key={item.id}
+                className={`settings-sec ${current.id === item.id ? "is-active" : ""}`}
+                aria-current={current.id === item.id ? "true" : undefined}
+                onClick={() => setSection(item.id)}
+              >
+                <Icon aria-hidden="true" size={20} />
+                <span>
+                  <strong>{item.title}</strong>
+                  <small>{item.summary}</small>
+                  {item.status ? <span className={`st ${item.status.tone}`}>{item.status.text}</span> : null}
+                </span>
+              </button>
+            );
+          })}
+        </nav>
+        <section className="settings-detail" aria-label={current.title}>
+          {current.content}
+        </section>
+      </div>
+
+      {dialogs}
     </div>
   );
 }

@@ -6,7 +6,8 @@ import { LANGUAGE_STORAGE_KEY } from "./translations.js";
 import { AuthScreen } from "../auth/AuthScreen.jsx";
 import { AccountDeletionPending } from "../cloud/CloudStates.jsx";
 import { WorkspaceEncryptionGate } from "../cloud/WorkspaceEncryptionGate.jsx";
-import { AttendancePanel } from "../features/Home.jsx";
+import { createGroup, createStarterState, createStudent, deriveAll } from "../domain";
+import Tracking from "../features/Tracking.jsx";
 
 function renderSpanish(component) {
   localStorage.setItem(LANGUAGE_STORAGE_KEY, "es");
@@ -52,18 +53,39 @@ describe("Spanish screens and opaque user content", () => {
   });
 
   it("translates dashboard quantities while retaining an English group name", () => {
-    renderSpanish(
-      <AttendancePanel
-        title="Average attendance this week"
-        sessions={[
-          { key: "one", scopeId: "group:a", groupId: "a", title: "Home", attended: 1, expected: 1, attendance: 1 },
-        ]}
-        previousSessions={[]}
-        onOpen={vi.fn()}
-      />,
-    );
-    expect(screen.getByRole("status")).toHaveTextContent("Home · 1 alumno");
-    expect(screen.getByText("Asistencia de 1 clase")).toBeInTheDocument();
+    const state = createStarterState({ settings: { asOfDate: "2026-10-21", hourlyRate: 100 } });
+    state.groups = [
+      createGroup({
+        id: "a",
+        name: "Home",
+        weeklySchedule: [{ id: "slot", dayOfWeek: 1, startTime: "16:00", durationHours: 1 }],
+      }),
+    ];
+    state.students = [createStudent({ id: "s1", code: "S1", fullName: "Luna López", groupIds: ["a"] })];
+    state.classLog = [
+      {
+        id: "r1",
+        classDate: "2026-10-19",
+        studentId: "s1",
+        groupId: "a",
+        startTime: "16:00",
+        scheduleSlotId: "slot",
+        scheduleOccurrenceDate: "2026-10-19",
+        classStatus: "Completed",
+        attendance: "P",
+        hours: 1,
+        appliedHourlyRate: 100,
+        appliedCharge: 100,
+        amountPaid: 100,
+        paymentState: "Paid",
+        paymentDate: "2026-10-19",
+        paymentMethod: "Cash",
+      },
+    ];
+    renderSpanish(<Tracking state={state} derived={deriveAll(state, "2026-10-21")} />);
+    expect(screen.getByRole("heading", { name: "Asistencia por clase" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Home" })).toBeInTheDocument();
+    expect(screen.getByText("Asistencia promedio")).toBeInTheDocument();
     expect(translateMessage("Collection period: {p0}", { p0: uiText("Weekly") }, "es")).toBe(
       "Periodo de cobros: Semanal",
     );

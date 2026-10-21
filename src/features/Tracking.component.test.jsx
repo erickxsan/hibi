@@ -143,7 +143,7 @@ describe("Tracking on desktop", () => {
     await user.click(screen.getByRole("tab", { name: "Payments" }));
     expect(screen.getByText("Monthly fees · October")).toBeInTheDocument();
     expect(screen.getByText("0 of 1")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Mark paid (fee)" }));
+    await user.click(screen.getByRole("button", { name: "Mark paid" }));
     await waitFor(() =>
       expect(saved().students.find((student) => student.id === "s3").monthlyPayments).toEqual([
         expect.objectContaining({ groupId: "g2", period: "2026-10", amount: 1200 }),

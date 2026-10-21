@@ -23,6 +23,10 @@ function initialLanguage() {
     : SUPPORTED_LANGUAGES.ENGLISH;
 }
 
+// Keys that read the same in English carry a context marker («Paid (fee)», «last (class)») so Spanish can tell
+// them apart; English drops the marker.
+const CONTEXT_MARKER = / \((?:plural|fee|count|class|debt|sum|short)\)(?=\s*$)/;
+
 // Only UI sources are translated. String parameters remain opaque user data.
 export function translateMessage(key, parameters = {}, language = activeLanguage) {
   const original = String(key ?? "");
@@ -51,7 +55,7 @@ export function translateMessage(key, parameters = {}, language = activeLanguage
     translateUiText(trimmed, language) +
     source.slice(source.indexOf(trimmed) + trimmed.length);
   for (const [marker, value] of values) result = result.replaceAll(marker, value);
-  return result;
+  return result.replace(CONTEXT_MARKER, "");
 }
 
 export function getUiLanguage() {

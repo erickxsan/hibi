@@ -183,6 +183,23 @@ export default function ClassManagerApplication({
     if (navigate("grades", { replace: true })) setIntent(PAYMENT_OVERVIEW_INTENT);
   }, [navigate, page]);
 
+  const handleSignOut = useCallback(async () => {
+    if (!onSignOut || signingOut) return;
+    setSigningOut(true);
+    try {
+      await onSignOut();
+    } finally {
+      setSigningOut(false);
+    }
+  }, [onSignOut, signingOut]);
+  const settingsAccount = useMemo(
+    () =>
+      user
+        ? { email: user.email, onSignOut: onSignOut && manager.syncStatus !== "saving" ? handleSignOut : undefined }
+        : undefined,
+    [handleSignOut, manager.syncStatus, onSignOut, user],
+  );
+
   const pageContent = useMemo(() => {
     const common = {
       ...manager,
@@ -214,7 +231,7 @@ export default function ClassManagerApplication({
     if (page === "classes") return <Classes {...common} />;
     if (page === "grades" || page === "payments")
       return <Tracking {...common} state={statisticsState} derived={statisticsDerived} />;
-    if (page === "settings") return <Settings {...common} />;
+    if (page === "settings") return <Settings {...common} account={settingsAccount} />;
     return (
       <Home
         {...common}
@@ -241,17 +258,8 @@ export default function ClassManagerApplication({
     openPage,
     page,
     registerNavigationBlocker,
+    settingsAccount,
   ]);
-
-  const handleSignOut = async () => {
-    if (!onSignOut || signingOut) return;
-    setSigningOut(true);
-    try {
-      await onSignOut();
-    } finally {
-      setSigningOut(false);
-    }
-  };
 
   const shellPage = page === "students" || page === "groups" ? "community" : page === "payments" ? "grades" : page;
 

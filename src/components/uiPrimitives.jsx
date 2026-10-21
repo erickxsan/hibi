@@ -103,7 +103,7 @@ export function FieldRow({ label, hint = undefined, children, className = "" }) 
 }
 
 export function ListRow({
-  avatar,
+  avatar = null,
   name,
   context = null,
   value = null,

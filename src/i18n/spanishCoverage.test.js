@@ -6,7 +6,25 @@ import { describe, expect, it } from "vitest";
 import { translateToSpanish } from "./translations.js";
 
 const sourceRoot = fileURLToPath(new URL("../", import.meta.url));
-const neutralCopy = new Set(["hibi", "Hibi", "Individual", "No", "h", "h ·", "P", "A", "HIBI1-…", "P / (P + A)"]);
+const neutralCopy = new Set([
+  "hibi",
+  "Hibi",
+  "Individual",
+  "individual",
+  "App",
+  "No",
+  "h",
+  "h ·",
+  "P",
+  "A",
+  "HIBI1-…",
+  "P / (P + A)",
+  "Tutor · {phone}",
+  "{value} pp vs. {previous}",
+  "{value} vs. {previous}",
+  "{value}% vs. {previous}",
+  "{title}, {range}, {state}",
+]);
 const templateSamples = {
   "Save {p0} future {p1}": "Save 2 future classes",
   "{p0} {p1} today": "2 classes today",
