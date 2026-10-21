@@ -13,14 +13,16 @@ test("keeps real names and live counts correct after switching Spanish to Englis
     localStorage.setItem("hibi:language:v1", "en");
   });
   await page.goto("/community");
-  await expect(page.locator(".community-active-count strong")).toHaveText("2");
+  await expect(page.getByText(/^2 active students in /)).toBeVisible();
   await page.locator(".hibi-sidebar").getByRole("link", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: /^Interface/ }).click();
   await page.getByRole("button", { name: "ES", exact: true }).click();
   await page.locator(".hibi-sidebar").getByRole("link", { name: "Comunidad", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Comunidad", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Abrir Home", exact: true })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Todos", exact: true })).toBeVisible();
   await page.locator(".hibi-sidebar").getByRole("link", { name: "Configuración", exact: true }).click();
+  await page.getByRole("button", { name: /^Interfaz/ }).click();
   await page.getByRole("button", { name: "EN", exact: true }).click();
   await page.locator(".hibi-sidebar").getByRole("link", { name: "Community", exact: true }).click();
   await page.getByRole("button", { name: "Add student", exact: true }).click();
@@ -28,7 +30,7 @@ test("keeps real names and live counts correct after switching Spanish to Englis
   await editor.getByLabel(/Student ID/).fill("S3");
   await editor.getByLabel(/Full name/).fill("Settings");
   await editor.getByRole("button", { name: "Save student", exact: true }).click();
-  await expect(page.locator(".community-active-count strong")).toHaveText("3");
+  await expect(page.getByText(/^3 active students in /)).toBeVisible();
   await expect(page.getByRole("button", { name: "Open Settings", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Open Home", exact: true })).toBeVisible();
 });
@@ -105,17 +107,14 @@ test("records mobile timing with 1000 students and exercises the paged directory
   });
   await page.goto("/community");
   await slowExpect(page.getByRole("button", { name: "Open Person 0000", exact: true })).toBeVisible();
-  await slowExpect(page.getByRole("table", { name: "Students", exact: true }).getByRole("row")).toHaveCount(26);
-  await page.getByRole("button", { name: "Next page", exact: true }).first().click();
+  await page.getByRole("searchbox").or(page.getByLabel("Search student or group")).first().fill("Person 0025");
   await slowExpect(page.getByRole("button", { name: "Open Person 0025", exact: true })).toBeVisible();
-  await slowExpect(page.getByRole("table", { name: "Students", exact: true }).getByRole("row")).toHaveCount(26);
+  await slowExpect(page.getByRole("button", { name: "Open Person 0000", exact: true })).toHaveCount(0);
   await page.locator(".hibi-mobile-nav").getByRole("link", { name: "Tracking", exact: true }).click();
-  await slowExpect(page.getByRole("tab", { name: "Grades", exact: true })).toBeVisible();
-  await page.getByRole("tab", { name: "Payments", exact: true }).click();
-  await slowExpect(page.getByRole("tabpanel")).toBeVisible();
-  await slowExpect(page.locator(".tracking-table-payments tbody tr")).toHaveCount(25);
-  await page.getByRole("button", { name: "Next page", exact: true }).click();
-  await slowExpect(page.locator(".tracking-table-payments tbody tr")).toHaveCount(25);
+  await slowExpect(page.getByRole("button", { name: "Grades", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Payments", exact: true }).click();
+  await slowExpect(page.getByText("1000 students", { exact: true })).toBeVisible();
+  await slowExpect(page.getByRole("button", { name: /^Person 0000/ })).toBeVisible();
   await page.evaluate(
     () => new Promise((resolve) => globalThis.requestAnimationFrame(() => globalThis.requestAnimationFrame(resolve))),
   );

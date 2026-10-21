@@ -737,7 +737,7 @@ export default function Classes({
         )}
         actions={
           <Button icon={Plus} onClick={() => setNewClassOpen(true)}>
-            {t(compact ? "New" : "New class")}
+            {t(compact ? "New (class)" : "New class")}
           </Button>
         }
       />

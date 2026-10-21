@@ -33,16 +33,16 @@ for (const width of [360, 390, 768, 1024, 1440]) {
         expect(content.x).toBeGreaterThanOrEqual(sidebar.x + sidebar.width);
       }
       const archive = page.locator('[aria-controls="community-archived-students"]');
-      await expect(archive).toContainText("Archivados");
+      await expect(archive).toContainText("Alumnos inactivos · 1");
       await expect(archive).toHaveAttribute("aria-expanded", "false");
-      await expect(page.locator(".community-archived-row")).toHaveCount(0);
+      await expect(page.locator("#community-archived-students")).toHaveCount(0);
       await archive.scrollIntoViewIfNeeded();
       const closedBox = await archive.boundingBox();
       expect(closedBox.height).toBeLessThanOrEqual(48);
       if (width < 1100) expect(closedBox.height).toBeGreaterThanOrEqual(44);
       await page.screenshot({ path: testInfo.outputPath("closed.png"), fullPage: true });
       await archive.click();
-      const row = page.locator(".community-archived-row");
+      const row = page.locator("#community-archived-students .sr").filter({ hasText: "María Fernanda" });
       await expect(row).toContainText("María Fernanda");
       const reactivate = row.getByRole("button", { name: "Reactivar", exact: true });
       await expect(reactivate).toBeVisible();
@@ -56,11 +56,13 @@ for (const width of [360, 390, 768, 1024, 1440]) {
       );
       await page.screenshot({ path: testInfo.outputPath("open.png"), fullPage: true });
       await reactivate.click();
-      await expect(archive).toContainText("0");
-      await expect(page.locator(".community-student-table")).toContainText("María Fernanda");
+      // With nobody inactive the archive toggle goes away and the student is back in the list.
+      await expect(archive).toHaveCount(0);
+      const opener = page.getByRole("button", { name: /^Abrir María Fernanda/ });
+      await expect(opener.first()).toBeVisible();
       await page.reload();
-      await expect(archive).toHaveAttribute("aria-expanded", "false");
-      await expect(page.locator(".community-student-table")).toContainText("María Fernanda");
+      await expect(archive).toHaveCount(0);
+      await expect(opener.first()).toBeVisible();
       const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("minimal-class-manager:v1")));
       expect(saved.students.find((student) => student.id === "archived")).toMatchObject({
         status: "Active",

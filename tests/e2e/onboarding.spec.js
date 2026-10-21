@@ -68,8 +68,10 @@ test("sets up, resumes, saves the schedule and students, and completes the guide
   await page.getByRole("button", { name: "Empezar", exact: true }).click();
   await page.getByLabel("Nombre del grupo").fill("Inglés B1");
   await page.getByLabel("Materia", { exact: true }).fill("Inglés");
-  await page.getByRole("combobox", { name: "Duración" }).click();
-  await page.getByRole("option", { name: "1 hora", exact: true }).click();
+  // Duration is free: −/+ in 15-minute steps, from the default 2 h down to 1 h.
+  const duration = page.getByRole("group", { name: "Duración del día de clase 1" });
+  for (let step = 0; step < 4; step += 1) await duration.getByRole("button", { name: "Menos tiempo" }).click();
+  await expect(duration.getByRole("textbox")).toHaveValue(/^1:00/);
   await page.getByRole("button", { name: "Añadir otro día" }).click();
   await page.getByRole("combobox", { name: "Día", exact: true }).nth(1).click();
   await page.getByRole("option", { name: "Miércoles", exact: true }).click();
@@ -97,8 +99,10 @@ test("sets up, resumes, saves the schedule and students, and completes the guide
   expect(saved.groups[0].weeklySchedule).toHaveLength(2);
   expect(saved.students).toHaveLength(2);
   expect(saved.settings.onboardingVersion).toBe(2);
+  expect(saved.groups[0].weeklySchedule.map((slot) => slot.durationHours)).toEqual([1, 1]);
   await page.reload();
   await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByRole("button", { name: /^Tutorial de bienvenida/ }).click();
   await page.getByRole("button", { name: "Iniciar recorrido" }).click();
   const card = page.locator(".onboarding-context-callout");
   await expect(card.locator(".onboarding-tour-next")).toBeEnabled();
@@ -106,7 +110,8 @@ test("sets up, resumes, saves the schedule and students, and completes the guide
   await page.keyboard.press("Escape");
   await expect(card).toHaveCount(0);
   await page.goto("/settings");
-  await page.getByRole("button", { name: "Configuración guiada" }).click();
+  await page.getByRole("button", { name: /^Tutorial de bienvenida/ }).click();
+  await page.getByRole("button", { name: "Configuración guiada", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Crea tu primer grupo" })).toBeVisible();
   await expect(page.getByLabel("Nombre del grupo")).toHaveValue("");
   await page.getByRole("button", { name: "Continuar después" }).click();

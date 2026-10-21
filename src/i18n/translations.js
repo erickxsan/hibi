@@ -1141,6 +1141,7 @@ const EXPLICIT_TRANSLATIONS = Object.freeze({
     "En los conflictos se conserva la versión actual de Hibi, salvo que elijas explícitamente la versión importada.",
   "This exact file was already imported.": "Este archivo exacto ya fue importado.",
   New: "Nuevos",
+  "New (class)": "Nueva",
   "Exact duplicates": "Duplicados exactos",
   "Needs review": "Requieren revisión",
   "Will be deleted": "Se eliminarán",

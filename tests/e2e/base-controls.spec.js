@@ -38,9 +38,10 @@ for (const width of [1440, 390]) {
         localStorage.setItem("minimal-class-manager:v1", JSON.stringify(state));
       });
       await page.goto("/classes");
-      await page.getByRole("button", { name: "Nueva clase", exact: true }).click();
+      // The mobile header shortens the action to «Nueva».
+      await page.getByRole("button", { name: width < 600 ? "Nueva" : "Nueva clase", exact: true }).click();
       const editor = page.getByRole("dialog", { name: "Nueva clase", exact: true });
-      await editor.getByRole("combobox", { name: "Fecha de inicio" }).click();
+      await editor.getByRole("combobox", { name: "Empieza", exact: true }).click();
       const calendar = page.getByRole("dialog", { name: "Elegir fecha" });
       await expect(calendar).toBeVisible();
       expect([35, 42]).toContain(await calendar.locator(".date-day").count());
