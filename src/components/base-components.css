@@ -2135,3 +2135,32 @@
   align-self: flex-start;
   font-size: 14px;
 }
+
+/* Idioma EN / ES: segmented, as in Acceso and Configuración. */
+.language-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  background: var(--papel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.language-toggle > svg {
+  display: none;
+}
+.language-toggle button {
+  min-height: 36px;
+  min-width: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--sumi-muted);
+  font: 700 14px/20px var(--font-sans);
+  cursor: pointer;
+}
+.language-toggle button.is-active {
+  background: var(--sumi);
+  color: var(--papel);
+}

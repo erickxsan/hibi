@@ -1,8 +1,8 @@
 import { useI18n } from "../i18n/index.jsx";
 import { useEffect, useId, useRef, useState } from "react";
 import HCaptcha from "@hcaptcha/react-hcaptcha";
-import { ArrowLeft, Check, Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
-import { BrandMark } from "../components/BrandMark";
+import { ArrowLeft, Check, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
+import { HibiLogo, HibiStamp } from "../components/BrandMark";
 import { LanguageToggle } from "../i18n";
 import "./auth.css";
 
@@ -36,7 +36,7 @@ export const AUTH_MODES = Object.freeze({
 const MODE_COPY = {
   [AUTH_MODES.SIGN_IN]: {
     title: "Welcome back",
-    description: "Sign in to continue managing your classes.",
+    description: "Sign in to continue with your classes.",
     action: "Sign in",
   },
   [AUTH_MODES.SIGN_UP]: {
@@ -81,12 +81,16 @@ function AuthField({
   type = "text",
   value,
   children = undefined,
+  labelAction = undefined,
 }) {
   return (
     <div className="auth-field">
-      <label className="auth-field-label" htmlFor={id}>
-        {label}
-      </label>
+      <span className="auth-field-head">
+        <label className="auth-field-label" htmlFor={id}>
+          {label}
+        </label>
+        {labelAction}
+      </span>
       <span className="auth-control-wrap">
         <Icon aria-hidden="true" size={18} strokeWidth={1.9} />
         <input
@@ -105,7 +109,7 @@ function AuthField({
   );
 }
 
-function PasswordField({ autoComplete, describedBy = undefined, id, label, onChange, value }) {
+function PasswordField({ autoComplete, describedBy = undefined, id, label, onChange, value, labelAction = undefined }) {
   const { t: uiT } = useI18n();
   const [visible, setVisible] = useState(false);
 
@@ -119,6 +123,7 @@ function PasswordField({ autoComplete, describedBy = undefined, id, label, onCha
       onChange={onChange}
       autoComplete={autoComplete}
       describedBy={describedBy}
+      labelAction={labelAction}
     >
       <button
         className="auth-reveal-button"
@@ -304,37 +309,33 @@ export function AuthScreen({
     <main className="auth-screen">
       <section className="auth-frame" aria-labelledby={`${formId}-title`}>
         <aside className="auth-brand-panel" aria-label={uiT("hibi")}>
-          <div className="auth-brand-lockup" aria-label={uiT("hibi, teaching day by day")}>
-            <BrandMark />
-            <span>
-              <strong>{uiT("hibi")}</strong>
-              <small>{uiT("Teaching, day by day.")}</small>
-            </span>
-          </div>
-          <div className="auth-brand-copy">
-            <h2>
-              {uiT("Teaching organized.")}
-              <br />
-              {uiT("Time reclaimed.")}
-            </h2>
-            <p>{uiT("One calm place for your students, grades, classes, and payments.")}</p>
-          </div>
-          <img
-            className="auth-brand-art"
-            src="/hibi-logo.png"
-            alt={uiT("hibi cat resting on a class planner")}
-            loading="lazy"
-            decoding="async"
-          />
-          <div className="auth-color-notes" aria-hidden="true">
-            <span />
-            <span />
-            <span />
-          </div>
+          <HibiLogo className="auth-logo" height={44} />
+          <h2>
+            {uiT("Teaching organized.")} <span>{uiT("Time reclaimed.")}</span>
+          </h2>
+          <p>{uiT("One calm place for your students, grades, classes, and payments.")}</p>
+          <ul className="auth-points">
+            <li>
+              <Check aria-hidden="true" size={18} />
+              {uiT("Take attendance in seconds: present or absent.")}
+            </li>
+            <li>
+              <Check aria-hidden="true" size={18} />
+              {uiT("Payments and pending items always in sight.")}
+            </li>
+            <li>
+              <ShieldCheck aria-hidden="true" size={18} />
+              {uiT("Your data, end-to-end encrypted.")}
+            </li>
+          </ul>
+          <HibiStamp className="auth-mascot" size={150} />
+          <img className="auth-watermark" src="/brand/hibi-sello-plano.svg" alt="" aria-hidden="true" />
         </aside>
 
         <div className="auth-form-panel">
-          <LanguageToggle className="auth-language-toggle" />
+          <div className="auth-language-row">
+            <LanguageToggle className="auth-language-toggle" />
+          </div>
           {mode === AUTH_MODES.FORGOT_PASSWORD || mode === AUTH_MODES.RESET_PASSWORD ? (
             <button className="auth-back-button" type="button" onClick={() => changeMode(AUTH_MODES.SIGN_IN)}>
               <ArrowLeft aria-hidden="true" size={17} />
@@ -365,7 +366,7 @@ export function AuthScreen({
                 {uiT("Continue with Google")}
               </button>
               <div className="auth-divider">
-                <span>{uiT("or use an existing email account")}</span>
+                <span>{uiT("or with your email")}</span>
               </div>
             </>
           ) : null}
@@ -392,17 +393,18 @@ export function AuthScreen({
                 onChange={(event) => setPassword(event.target.value)}
                 autoComplete={mode === AUTH_MODES.SIGN_IN ? "current-password" : "new-password"}
                 describedBy={needsStrongPassword ? requirementsId : undefined}
+                labelAction={
+                  mode === AUTH_MODES.SIGN_IN && onForgotPassword ? (
+                    <button
+                      className="auth-text-button auth-forgot-link"
+                      type="button"
+                      onClick={() => changeMode(AUTH_MODES.FORGOT_PASSWORD)}
+                    >
+                      {uiT("Forgot it?")}
+                    </button>
+                  ) : undefined
+                }
               />
-            ) : null}
-
-            {mode === AUTH_MODES.SIGN_IN && onForgotPassword ? (
-              <button
-                className="auth-text-button auth-forgot-link"
-                type="button"
-                onClick={() => changeMode(AUTH_MODES.FORGOT_PASSWORD)}
-              >
-                {uiT("Forgot password?")}
-              </button>
             ) : null}
 
             {needsStrongPassword ? (
