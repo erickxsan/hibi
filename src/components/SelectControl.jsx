@@ -198,7 +198,7 @@ function ChoiceControl({
         <span className="multi-select-summary">
           <span>{selected.length ? t("{p0} selected", { p0: selected.length }) : t("None selected")}</span>
           {selected.length ? (
-            <button type="button" disabled={disabled} onClick={() => onChange([])}>
+            <button type="button" className="link-button" disabled={disabled} onClick={() => onChange([])}>
               {t("Clear")}
             </button>
           ) : null}
@@ -215,7 +215,7 @@ function ChoiceControl({
               aria-label={t("Remove {p0}", { p0: option.label })}
               onClick={() => onChange(selectedValues.filter((item) => item !== String(option.value)))}
             >
-              {option.label}
+              <span>{option.label}</span>
               <X size={13} aria-hidden="true" />
             </button>
           ))}

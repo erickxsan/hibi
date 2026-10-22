@@ -35,6 +35,21 @@ export const SETTINGS_TRANSLATIONS = Object.freeze({
   "Saved only in this browser": "Guardado solo en este navegador",
   "Back up regularly": "Conviene respaldar",
   "Your backups stay with you": "Tus respaldos quedan contigo",
+  "Stored only in this browser": "Guardado solo en este navegador",
+  "Your students, groups, grades, attendance, and payments live on this device. Hibi does not send them to any server.":
+    "Tus alumnos, grupos, calificaciones, asistencias y pagos viven en este dispositivo. Hibi no los envía a ningún servidor.",
+  "No account, no tracking": "Sin cuenta, sin rastreo",
+  "Hibi does not collect analytics or share your records with anyone.":
+    "Hibi no recopila analíticas ni comparte tus registros con nadie.",
+  "Clearing browser data erases everything": "Borrar los datos del navegador lo borra todo",
+  "Clearing site data, using private browsing, or switching browsers or devices leaves your records behind. A backup is the only way to recover them.":
+    "Si borras los datos del sitio, usas navegación privada o cambias de navegador o dispositivo, tus registros se quedan atrás. Un respaldo es la única forma de recuperarlos.",
+  "Shared computers": "Computadoras compartidas",
+  "Anyone who uses this browser profile can open Hibi and see your records. Use your own profile or device.":
+    "Cualquiera que use este perfil del navegador puede abrir Hibi y ver tus registros. Usa tu propio perfil o dispositivo.",
+  "Keep a private copy": "Guarda una copia privada",
+  "The backup is a readable file. Save it somewhere only you can access, and do not send it by email or chat.":
+    "El respaldo es un archivo legible. Guárdalo donde solo tú tengas acceso y no lo envíes por correo ni chat.",
   // Móvil
   "Your account · {email}": "Tu cuenta · {email}",
   Alerts: "Alertas",

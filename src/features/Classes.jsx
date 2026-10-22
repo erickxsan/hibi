@@ -281,17 +281,14 @@ function RosterRow({ student, entry, note, setEntry, assessmentOn, maximum, mont
     payment = <MonthlyPaymentCell charge={monthlyCharge} today={today} onToggle={onMonthly} busy={busy} />;
   } else if (attendance === "P") {
     payment = (
-      <>
-        <span className="cell-label">{t("Today's payment")}</span>
-        <PaymentChoice
-          value={entry.paymentState || ""}
-          name={student.fullName}
-          onChange={(paymentState) => {
-            setEntry(student.id, { paymentState, paymentTouched: true });
-            playHibiSound("payment");
-          }}
-        />
-      </>
+      <PaymentChoice
+        value={entry.paymentState || ""}
+        name={student.fullName}
+        onChange={(paymentState) => {
+          setEntry(student.id, { paymentState, paymentTouched: true });
+          playHibiSound("payment");
+        }}
+      />
     );
   } else if (attendance === "A") {
     payment = <span className="roster-muted">{t("— absent · not charged")}</span>;

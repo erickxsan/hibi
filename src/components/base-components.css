@@ -776,6 +776,62 @@
   height: 18px;
   color: var(--sumi-muted);
 }
+
+/* Multi-select: count + clear link, then removable pills under the trigger. */
+.select-menu-wrap.multi-select {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.multi-select-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 2px;
+  color: var(--sumi-muted);
+  font: 600 13px/18px var(--font-sans);
+}
+.multi-select-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.multi-select-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 32px;
+  padding: 0 8px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--washi);
+  color: var(--sumi);
+  font: 700 13px/18px var(--font-sans);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.multi-select-chip span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.multi-select-chip svg {
+  flex: none;
+  color: var(--sumi-subtle);
+}
+.multi-select-chip:hover {
+  border-color: var(--line-control);
+  background: var(--kraft);
+}
+.multi-select-chip:hover svg {
+  color: var(--sumi);
+}
+.multi-select-chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 .select-menu {
   position: absolute;
   top: calc(100% + 6px);
@@ -2087,6 +2143,10 @@
 .billing-adjustment > .select-menu-wrap {
   flex: 0 0 auto;
   width: auto;
+}
+.field-row-control > .select-menu-wrap.multi-select {
+  flex: 1 1 auto;
+  width: 100%;
 }
 
 .billing-adjustment .icon-button {

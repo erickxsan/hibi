@@ -1489,9 +1489,24 @@
   gap: 16px;
 }
 
+.history-marks {
+  min-width: 0;
+}
+
+.history-row-button .pa-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
 .history-row-button .pa-tags b {
-  width: 16px;
-  height: 16px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  font: 800 11px/1 var(--font-sans);
 }
 
 .history-title small {

@@ -113,6 +113,7 @@ function setCompact(matches) {
 afterEach(() => {
   localStorage.removeItem(LANGUAGE_STORAGE_KEY);
   setCompact(false);
+  vi.useRealTimers();
 });
 
 describe("Community students", () => {
@@ -233,6 +234,9 @@ describe("Community groups", () => {
   });
 
   it("charges a student who joins a monthly group mid-month only for the classes left", async () => {
+    // The app works on the real date, so the join date only matches AS_OF with a pinned clock.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(`${AS_OF}T12:00:00`));
     const user = userEvent.setup();
     const state = communityState();
     state.groups[0].billing = {

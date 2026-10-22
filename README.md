@@ -17,7 +17,7 @@
   <a href="#funciones">Conocer las funciones</a>
 </p>
 
-![Panel principal de Hibi con clases del día, indicadores académicos y resumen de pagos](docs/screenshots/hibi-dashboard.png)
+![Inicio de Hibi con la línea del día, la próxima clase con sus avisos y lo que hay por atender](docs/screenshots/hibi-dashboard.png)
 
 ## Menos administración. Más tiempo para enseñar.
 
@@ -33,7 +33,7 @@ Hibi es un compañero de trabajo sereno para quienes dan clases por su cuenta. R
 
 | Área                       | Qué puedes hacer                                                                                                                          | Beneficio                                                                         |
 | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| **Inicio**                 | Consultar clases del día, asistencia, promedio académico, valor generado, ingresos, proyección y alumnos destacados.                      | Empieza la jornada sabiendo qué ocurrió y qué requiere atención.                  |
+| **Inicio**                 | Ver la línea del día con «Ahora», la próxima clase con sus avisos, lo que hay por atender y métricas por día, semana, mes o año.          | Empieza la jornada sabiendo qué ocurrió y qué requiere atención.                  |
 | **Comunidad**              | Gestionar alumnos y grupos, múltiples inscripciones, horarios recurrentes y un directorio de contactos con copia o redacción por CCO.     | Mantén perfiles, organización y comunicación en un solo lugar.                    |
 | **Clases**                 | Crear sesiones únicas o recurrentes, grupales o individuales; registrar asistencia, tarea, calificaciones y pago por alumno.              | Convierte cada sesión en un registro académico y financiero completo.             |
 | **Calendario e historial** | Consultar próximas clases, calendario semanal y registros anteriores.                                                                     | Reduce la preparación repetitiva y encuentra cualquier sesión con rapidez.        |
@@ -45,34 +45,34 @@ Hibi es un compañero de trabajo sereno para quienes dan clases por su cuenta. R
 
 ### Tu comunidad, organizada
 
-Alumnos, grupos y datos de contacto están juntos, con un directorio listo para copiar correos o redactar por CCO.
+Cada grupo muestra su asistencia por clase, promedio, lo que falta por cobrar y un directorio listo para copiar correos. Los grupos pueden cobrarse por clase o por mensualidad.
 
-![Comunidad de Hibi con alumnos, grupos y directorio de contactos](docs/screenshots/hibi-community.png)
+![Comunidad de Hibi con la ficha de un grupo: asistencia por clase, métricas del mes y directorio](docs/screenshots/hibi-community.png)
 
 ### Una clase completa, en un solo flujo
 
-Registra asistencia, pago y calificación por alumno, mientras Hibi calcula el resumen antes de guardar.
+Elige la clase en tu agenda y registra asistencia, pago y calificación por alumno; Hibi te recuerda quién debe algo y resume la clase antes de guardar.
 
-![Clase en Hibi con asistencia, pagos, evaluación y resumen](docs/screenshots/hibi-classes.png)
+![Clases en Hibi con la agenda de la semana y el registro de asistencia y pagos de una clase](docs/screenshots/hibi-classes.png)
 
 ### Seguimiento que explica el avance
 
-Consulta resultados por periodo, grupo, alumno o tarea, con distribuciones, insights y exportación a Excel.
+Filtra por periodo y grupo, explora los indicadores y toca un punto de la gráfica para ver a qué alumnos corresponde. Exporta todo a Excel.
 
-![Seguimiento académico de Hibi con calificaciones, distribución e insights](docs/screenshots/hibi-tracking.png)
+![Seguimiento de Hibi con el promedio por tarea y los alumnos con pendientes primero](docs/screenshots/hibi-tracking.png)
 
 ### Cobros y proyecciones de un vistazo
 
-Consulta valor generado, cobros, saldos pendientes y la proyección del periodo desde el mismo centro de seguimiento.
+Consulta lo cobrado, lo pendiente, lo vencido, las mensualidades del mes y la proyección del periodo desde el mismo centro de seguimiento.
 
-![Panel de pagos de Hibi con indicadores, saldos y proyección de ingresos](docs/screenshots/hibi-payments.png)
+![Pagos en Hibi con indicadores, mensualidades del mes y lo que se debe por alumno](docs/screenshots/hibi-payments.png)
 
 ### Listo para el día a día
 
 La navegación se adapta a pantallas pequeñas para consultar la jornada y registrar información durante la clase.
 
 <p align="center">
-  <img src="docs/screenshots/hibi-mobile.png" width="360" alt="Panel de Hibi adaptado a una pantalla móvil" />
+  <img src="docs/screenshots/hibi-mobile.png" width="360" alt="Inicio de Hibi en un teléfono, con la línea del día y la siguiente clase" />
 </p>
 
 ## Cómo funciona

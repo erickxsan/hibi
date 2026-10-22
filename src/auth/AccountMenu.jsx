@@ -1,5 +1,5 @@
 import { useI18n } from "../i18n/index.jsx";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, Cloud, CloudOff, LogOut } from "lucide-react";
 import "./auth.css";
 
@@ -30,6 +30,7 @@ export function AccountMenu({
   const [open, setOpen] = useState(false);
   const [signOutError, setSignOutError] = useState("");
   const [localSigningOut, setLocalSigningOut] = useState(false);
+  const [panelPosition, setPanelPosition] = useState(null);
   const rootRef = useRef(null);
   const triggerRef = useRef(null);
   const panelId = useId();
@@ -56,6 +57,29 @@ export function AccountMenu({
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [open]);
+
+  // The sidebar scrolls (overflow: auto), so an absolutely positioned panel
+  // would be clipped. Upward panels are pinned to the viewport instead.
+  useLayoutEffect(() => {
+    if (!open || placement !== "up") {
+      setPanelPosition(null);
+      return undefined;
+    }
+
+    const place = () => {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setPanelPosition({ left: rect.left, bottom: window.innerHeight - rect.top + 8 });
+    };
+
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open, placement]);
 
   const handleSignOut = async () => {
     if (busy || !onSignOut) return;
@@ -86,7 +110,12 @@ export function AccountMenu({
       </button>
 
       {open ? (
-        <section id={panelId} className="account-menu-panel" aria-label={uiT("Account options")}>
+        <section
+          id={panelId}
+          className="account-menu-panel"
+          style={panelPosition ? { position: "fixed", ...panelPosition } : undefined}
+          aria-label={uiT("Account options")}
+        >
           <div className="account-menu-heading">
             <span>{uiT("Signed in as")}</span>
             <strong>{email || uiT("Your account")}</strong>

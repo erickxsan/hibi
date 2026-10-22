@@ -441,6 +441,7 @@ const EXPLICIT_TRANSLATIONS = Object.freeze({
   "Delete record?": "¿Eliminar registro?",
   "Delete group?": "¿Eliminar grupo?",
   "Delete student?": "¿Eliminar alumno?",
+  "Delete student": "Eliminar alumno",
   Archive: "Archivar",
   "Archive student": "Archivar alumno",
   "Permanently delete": "Eliminar permanentemente",
@@ -1714,7 +1715,7 @@ const DYNAMIC_TRANSLATIONS = [
     (match) =>
       `Buscar ${match[1].toLowerCase() === "students" ? "alumnos" : match[1].toLowerCase() === "groups" ? "grupos" : "preferencias"}`,
   ],
-  [/^(\d+) selected$/, (match) => `${match[1]} seleccionados`],
+  [/^(\d+) selected$/, (match) => `${match[1]} ${Number(match[1]) === 1 ? "seleccionado" : "seleccionados"}`],
   [
     /^(\d+) (result|results) · (\d+) selected$/,
     (match) => `${match[1]} ${Number(match[1]) === 1 ? "resultado" : "resultados"} · ${match[3]} seleccionados`,

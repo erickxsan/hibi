@@ -4,6 +4,7 @@ import {
   Download,
   FilePlus2,
   Globe2,
+  HardDrive,
   History,
   KeyRound,
   LockKeyhole,
@@ -11,6 +12,7 @@ import {
   ShieldCheck,
   Sparkles,
   Trash2,
+  TriangleAlert,
   Upload,
   UsersRound,
 } from "lucide-react";
@@ -1190,6 +1192,67 @@ export default function Settings({
           ? uiT("Cloud records and snapshots are end-to-end encrypted. Files you export remain under your control.")
           : uiT("Backups include student, parent, grade, attendance, and payment data. Store them privately.")}
       </p>
+      {persistenceMode !== "cloud" ? (
+        <>
+          <ul className="privacy-facts">
+            <li>
+              <HardDrive aria-hidden="true" size={18} />
+              <span>
+                <strong>{uiT("Stored only in this browser")}</strong>
+                <small>
+                  {uiT(
+                    "Your students, groups, grades, attendance, and payments live on this device. Hibi does not send them to any server.",
+                  )}
+                </small>
+              </span>
+            </li>
+            <li>
+              <ShieldCheck aria-hidden="true" size={18} />
+              <span>
+                <strong>{uiT("No account, no tracking")}</strong>
+                <small>{uiT("Hibi does not collect analytics or share your records with anyone.")}</small>
+              </span>
+            </li>
+            <li>
+              <TriangleAlert aria-hidden="true" size={18} />
+              <span>
+                <strong>{uiT("Clearing browser data erases everything")}</strong>
+                <small>
+                  {uiT(
+                    "Clearing site data, using private browsing, or switching browsers or devices leaves your records behind. A backup is the only way to recover them.",
+                  )}
+                </small>
+              </span>
+            </li>
+            <li>
+              <UsersRound aria-hidden="true" size={18} />
+              <span>
+                <strong>{uiT("Shared computers")}</strong>
+                <small>
+                  {uiT(
+                    "Anyone who uses this browser profile can open Hibi and see your records. Use your own profile or device.",
+                  )}
+                </small>
+              </span>
+            </li>
+          </ul>
+          <div className="settings-data-actions">
+            <div className="settings-data-action">
+              <span>
+                <strong>{uiT("Keep a private copy")}</strong>
+                <small>
+                  {uiT(
+                    "The backup is a readable file. Save it somewhere only you can access, and do not send it by email or chat.",
+                  )}
+                </small>
+              </span>
+              <Button variant="primary" icon={Download} onClick={actions.exportJson}>
+                {uiT("Download backup")}
+              </Button>
+            </div>
+          </div>
+        </>
+      ) : null}
       {persistenceMode === "cloud" ? (
         <div className="privacy-actions">
           <div className="danger-line secondary-danger">
