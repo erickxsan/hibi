@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ClassManagerApplication from "./ClassManagerApplication";
-import { createGroup, createStarterState, createStudent, serializeState, STORAGE_KEY } from "./domain";
+import { createGroup, createStarterState, createStudent, STORAGE_KEY } from "./domain";
 import { I18nProvider } from "./i18n";
 
 function seededState() {
@@ -29,7 +29,7 @@ function seededState() {
 beforeEach(() => {
   localStorage.clear();
   localStorage.setItem("hibi:language:v1", "en");
-  localStorage.setItem(STORAGE_KEY, serializeState(seededState()));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(seededState()));
   window.history.replaceState({}, "", "/");
 });
 
