@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
-import { translateToSpanish } from "./translations.js";
+import { SPANISH_TRANSLATIONS, translateToSpanish } from "./translations.js";
 import "./screenTranslations.js";
 
 const sourceRoot = fileURLToPath(new URL("../", import.meta.url));
@@ -31,7 +31,8 @@ const templateSamples = {
   "{p0} {p1} today": "2 classes today",
   "Average grade {p0}": "Average grade this week",
 };
-
+// Words that read the same in Spanish; anything else left in English means a partial translation.
+const neutralWords = new Set(["Hibi", "HIBI", "hibi"]);
 function visitSources(visit) {
   function walk(directory) {
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
@@ -55,6 +56,38 @@ function visitSources(visit) {
     }
   }
   walk(sourceRoot);
+}
+
+/** Literal keys of a t()/uiT() argument, including both branches of `t(count === 1 ? "a" : "b")`. */
+function literalKeys(node) {
+  if (!node) return [];
+  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return [node.text];
+  if (ts.isParenthesizedExpression(node)) return literalKeys(node.expression);
+  if (ts.isConditionalExpression(node)) return [...literalKeys(node.whenTrue), ...literalKeys(node.whenFalse)];
+  return [];
+}
+
+function visitTranslationKeys(visit) {
+  visitSources((node, source, filename) => {
+    if (!ts.isCallExpression(node) || !/^(uiT|t)$/.test(node.expression.getText(source))) return;
+    for (const raw of literalKeys(node.arguments[0])) {
+      const key = raw.trim();
+      if (/[A-Za-z]/.test(key) && !neutralCopy.has(key))
+        visit(key, path.relative(sourceRoot, filename).split(path.sep).join("/"));
+    }
+  });
+}
+
+/** English words of the key (placeholders and context markers aside) still present in its translation. */
+function untranslatedWords(key, translated) {
+  const words =
+    key
+      .replace(/\{\w+\}/g, " ")
+      .replace(/ \((?:plural|fee|count|class|debt|sum|short)\)\s*$/, "")
+      .match(/[A-Za-z]{3,}/g) || [];
+  return words.filter(
+    (word) => !neutralWords.has(word) && new RegExp(`(^|[^A-Za-z])${word}($|[^A-Za-z])`).test(translated),
+  );
 }
 
 describe("Spanish coverage of application sources", () => {
@@ -83,18 +116,38 @@ describe("Spanish coverage of application sources", () => {
   });
   it("covers every explicit literal UI translation, including accessible labels", () => {
     const missing = [];
-    visitSources((node, source, filename) => {
-      if (!ts.isCallExpression(node) || !/^(uiT|t)$/.test(node.expression.getText(source))) return;
-      const argument = node.arguments[0];
-      if (!argument || !ts.isStringLiteral(argument)) return;
-      const key = argument.text.trim();
-      if (!/[A-Za-z]/.test(key) || neutralCopy.has(key)) return;
+    visitTranslationKeys((key, file) => {
+      if (Object.hasOwn(SPANISH_TRANSLATIONS, key)) return;
       const sample = templateSamples[key] || key.replace(/\{\w+\}/g, "2");
-      if (translateToSpanish(key) === key && translateToSpanish(sample) === sample) {
-        missing.push(`${path.relative(sourceRoot, filename)}: ${key}`);
-      }
+      const translated = translateToSpanish(sample);
+      // A broad regex rule (e.g. «(.+) pending» → «… pendiente») used to count as coverage while it left
+      // the rest of the sentence in English: «octubre monthly fee pendiente».
+      if (translateToSpanish(key) === key && translated === sample) missing.push(`${file}: ${key}`);
+      else if (untranslatedWords(key, translated).length)
+        missing.push(`${file}: ${key} → ${translated} (partial translation)`);
     });
     expect(missing).toEqual([]);
+  });
+
+  it("gives every feature key with placeholders its own Spanish entry", () => {
+    // t() looks up the exact key first. Without an entry it falls back to regex rules over the English
+    // text with string values masked, which a numeric sample in the test above does not reproduce.
+    const missing = [];
+    visitTranslationKeys((key, file) => {
+      if (!file.startsWith("features/") || !/\{\w+\}/.test(key) || Object.hasOwn(SPANISH_TRANSLATIONS, key)) return;
+      missing.push(`${file}: ${key}`);
+    });
+    expect([...new Set(missing)]).toEqual([]);
+  });
+
+  it("translates the Classes notes that once leaked English", () => {
+    expect(translateToSpanish("{month} monthly fee pending").replace("{month}", "octubre")).toBe(
+      "Mensualidad de octubre pendiente",
+    );
+    expect(SPANISH_TRANSLATIONS["Owes {amount} from {count} classes since {date}"]).toBe(
+      "Debe {amount} de {count} clases desde el {date}",
+    );
+    expect(translateToSpanish("Yesterday")).toBe("Ayer");
   });
 
   it("covers application-owned diagnostic sentences that can reach notifications", () => {

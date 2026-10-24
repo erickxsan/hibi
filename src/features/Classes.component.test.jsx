@@ -4,7 +4,9 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import Classes from "./Classes";
+import { EditClassDrawer } from "./EditClassDrawer";
 import { buildClassWorkspaceSessions } from "./classesWorkspaceModel";
+import { formatShortDate } from "../utils/displayFormat";
 
 const AS_OF_DATE = "2026-07-15";
 
@@ -225,17 +227,22 @@ describe("Classes remote draft safety", () => {
 
   it("keeps a dirty draft when navigation is rejected and discards it only after confirmation", async () => {
     const user = userEvent.setup();
-    const confirm = vi.spyOn(globalThis, "confirm").mockReturnValueOnce(false).mockReturnValue(true);
+    const nativeConfirm = vi.spyOn(globalThis, "confirm");
     const view = renderClasses();
     await markAnaPresent(user);
 
     await user.click(screen.getByRole("tab", { name: "Calendar" }));
+    const question = screen.getByRole("alertdialog", { name: "Discard your unsaved class changes?" });
+    expect(within(question).getByRole("button", { name: "Discard changes" })).toHaveClass("button-danger");
+    await user.click(within(question).getByRole("button", { name: "Keep editing" }));
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Next class" })).toHaveAttribute("aria-selected", "true");
     expect(
       within(screen.getByRole("group", { name: "Attendance for Ana" })).getByRole("button", { name: "Present" }),
     ).toHaveAttribute("aria-pressed", "true");
 
     await user.click(screen.getByRole("tab", { name: "Calendar" }));
+    await user.click(screen.getByRole("button", { name: "Discard changes" }));
     expect(screen.getByRole("tab", { name: "Calendar" })).toHaveAttribute("aria-selected", "true");
 
     await user.click(screen.getByRole("button", { name: "Next month" }));
@@ -249,7 +256,8 @@ describe("Classes remote draft safety", () => {
       within(screen.getByRole("group", { name: "Attendance for Ana" })).getByRole("button", { name: "Present" }),
     ).toHaveAttribute("aria-pressed", "false");
     expect(view.navigationWarning()).toBe("");
-    confirm.mockRestore();
+    expect(nativeConfirm).not.toHaveBeenCalled();
+    nativeConfirm.mockRestore();
   }, 10_000);
 
   it("creates a class through the same workspace after draft-safe navigation", async () => {
@@ -305,5 +313,270 @@ describe("historical settlement", () => {
     await waitFor(() => expect(view.actions.saveProgress).toHaveBeenCalledOnce());
     const payload = view.actions.saveProgress.mock.calls[0][0];
     expect(payload.classRecords[0]).toMatchObject({ appliedCharge: 175.5, appliedHourlyRate: 100, amountPaid: 175.5 });
+  });
+});
+
+describe("recording a class without native dialogs", () => {
+  it("asks in-app before saving with unmarked students", async () => {
+    const user = userEvent.setup();
+    const nativeConfirm = vi.spyOn(globalThis, "confirm");
+    const view = renderClasses();
+
+    await user.click(screen.getByRole("button", { name: "Save class" }));
+    const question = screen.getByRole("alertdialog", { name: "1 student is still unmarked. Save anyway?" });
+    expect(within(question).getByRole("button", { name: "Save anyway" })).toHaveClass("button-primary");
+    await user.click(within(question).getByRole("button", { name: "Keep marking" }));
+    expect(view.actions.saveProgress).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Save class" }));
+    await user.click(screen.getByRole("button", { name: "Save anyway" }));
+    await waitFor(() => expect(view.actions.saveProgress).toHaveBeenCalledOnce());
+    expect(nativeConfirm).not.toHaveBeenCalled();
+    nativeConfirm.mockRestore();
+  });
+
+  it("keeps «Mark cancelled» away from Save and cancels only after a destructive confirmation", async () => {
+    const user = userEvent.setup();
+    const view = renderClasses();
+    const bar = document.querySelector(".sheet-bar-actions");
+    expect(within(bar).getByRole("button", { name: "Save class" })).toBeInTheDocument();
+    expect(within(bar).queryByRole("button", { name: "Mark cancelled" })).not.toBeInTheDocument();
+
+    const cancel = screen.getByRole("button", { name: "Mark cancelled" });
+    await user.click(cancel);
+    const question = screen.getByRole("alertdialog", { name: "Mark this class as cancelled?" });
+    expect(question).toHaveAccessibleDescription("Existing payments will be preserved.");
+    expect(within(question).getByRole("button", { name: "Keep class" })).toHaveFocus();
+    expect(within(question).getByRole("button", { name: "Mark cancelled" })).toHaveClass("button-danger");
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(cancel).toHaveFocus();
+    expect(view.actions.saveProgress).not.toHaveBeenCalled();
+
+    await user.click(cancel);
+    await user.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Mark cancelled" }));
+    await waitFor(() => expect(view.actions.saveProgress).toHaveBeenCalledOnce());
+    expect(view.actions.saveProgress.mock.calls[0][0].classRecords[0]).toMatchObject({ classStatus: "Cancelled" });
+  });
+
+  it("uses a one-row mobile dock with Save only and a quiet cancel action below the roster", async () => {
+    const user = userEvent.setup();
+    const originalMatchMedia = window.matchMedia;
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: vi.fn().mockImplementation((query) => ({
+        matches: true,
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    });
+    try {
+      renderClasses();
+      const dock = document.querySelector(".register-dock");
+      expect(
+        within(dock)
+          .getAllByRole("button")
+          .map((button) => button.textContent),
+      ).toEqual(["Save class"]);
+      expect(dock).toHaveTextContent("Nobody marked yet");
+      expect(screen.queryByRole("button", { name: "Cancelled" })).not.toBeInTheDocument();
+      const row = document.querySelector(".register-cancel-row");
+      expect(row).toHaveTextContent("Class didn't happen?");
+      await user.click(within(row).getByRole("button", { name: "Mark cancelled" }));
+      expect(screen.getByRole("alertdialog", { name: "Mark this class as cancelled?" })).toBeInTheDocument();
+    } finally {
+      Object.defineProperty(window, "matchMedia", { configurable: true, value: originalMatchMedia });
+    }
+  });
+});
+
+describe("class notes and the «Not recorded» list", () => {
+  it("dates every row that is still waiting to be recorded", () => {
+    const state = classState();
+    state.classSchedules.push({
+      id: "cs2",
+      recurrence: "weekly",
+      format: "group",
+      groupId: "g2",
+      startDate: "2026-07-01",
+      startTime: "17:00",
+      durationHours: 2,
+      intervalWeeks: 1,
+      daysOfWeek: [2, 6],
+    });
+    renderClasses(state);
+    const rail = screen.getByRole("complementary", { name: "Week schedule" });
+    const rows = within(rail)
+      .getAllByRole("button")
+      .filter((button) => button.classList.contains("agenda-item"));
+    const pending = rows.filter((row) => row.classList.contains("has-date"));
+    expect(pending.map((row) => row.querySelector("time").textContent)).toEqual([
+      `${formatShortDate("2026-07-04", "en-MX")}5:00 p.m.`,
+      `${formatShortDate("2026-07-07", "en-MX")}5:00 p.m.`,
+      `${formatShortDate("2026-07-11", "en-MX")}5:00 p.m.`,
+      "Yesterday5:00 p.m.",
+    ]);
+    expect(pending[3].querySelector(".agenda-date")).toHaveTextContent("Yesterday");
+    // Upcoming classes stay under their day headings, with only the time on the row.
+    expect(
+      rows.filter((row) => !row.classList.contains("has-date")).map((row) => row.querySelector("time").textContent),
+    ).toEqual(["10:00 a.m.", "5:00 p.m."]);
+  });
+
+  it("says how many classes a debt spans", () => {
+    const owed = (classDate, outstanding) => ({
+      studentId: "s1",
+      groupId: "g1",
+      classDate,
+      classStatus: "Completed",
+      attendance: "P",
+      outstanding,
+    });
+    const view = renderClasses(classState(), {
+      derived: { classLog: [owed("2026-07-01", 200), owed("2026-07-08", 150)] },
+    });
+    const since = formatShortDate("2026-07-01", "en-MX", { weekday: false });
+    expect(screen.getByText(`Owes $350 from 2 classes since ${since}`)).toBeInTheDocument();
+    view.unmount();
+
+    renderClasses(classState(), { derived: { classLog: [owed("2026-07-08", 150)] } });
+    const on = formatShortDate("2026-07-08", "en-MX", { weekday: false });
+    expect(screen.getByText(`Owes $150 from the class on ${on}`)).toBeInTheDocument();
+  });
+});
+
+describe("new recurring class for a group", () => {
+  it("shows the group's schedule, blocks a duplicate slot and points to the weekly schedule", async () => {
+    const user = userEvent.setup();
+    const openPage = vi.fn(() => true);
+    const view = renderClasses(classState(), { openPage });
+
+    await user.click(screen.getByRole("button", { name: "New class" }));
+    const drawer = screen.getByRole("dialog", { name: "New class" });
+    expect(within(drawer).getByText("Weekly schedule of Math")).toBeInTheDocument();
+    expect(within(drawer).getByRole("alert")).toHaveTextContent(
+      "This group already meets at this time (Wed 10:00 a.m.). Choose another day or time",
+    );
+    expect(within(drawer).getByRole("button", { name: "Create class" })).toBeDisabled();
+
+    // Another weekday is a new slot: allowed, with the pointer to the weekly schedule.
+    await user.click(within(drawer).getByRole("button", { name: "Thursday" }));
+    await user.click(within(drawer).getByRole("button", { name: "Wednesday" }));
+    expect(within(drawer).queryByRole("alert")).not.toBeInTheDocument();
+    expect(within(drawer).getByText(/recurring classes belong in its weekly schedule/)).toBeInTheDocument();
+    expect(within(drawer).getByRole("button", { name: "Create class" })).toBeEnabled();
+
+    await user.click(within(drawer).getByRole("button", { name: "Edit weekly schedule" }));
+    expect(openPage).toHaveBeenCalledWith("community", "groups");
+    expect(view.actions.upsertClassSchedule).not.toHaveBeenCalled();
+  });
+});
+
+describe("month calendar labels", () => {
+  it("shows the hour as a time, keeps full names in the tooltip and accessible name, and fits four classes", async () => {
+    const user = userEvent.setup();
+    const state = classState();
+    const extra = (id, startTime, daysOfWeek) => ({
+      id,
+      recurrence: "weekly",
+      format: "group",
+      groupId: "g2",
+      startDate: AS_OF_DATE,
+      startTime,
+      durationHours: 1,
+      intervalWeeks: 1,
+      daysOfWeek,
+    });
+    state.classSchedules.push(
+      extra("f1", "08:00", [5, 6]),
+      extra("f2", "12:00", [5, 6]),
+      extra("f3", "14:30", [5, 6]),
+      extra("f4", "16:00", [5, 6]),
+      extra("s5", "18:00", [6]),
+    );
+    renderClasses(state);
+    await user.click(screen.getByRole("tab", { name: "Calendar" }));
+
+    const today = screen.getByRole("button", { name: "July 15, 1 class: 10:00 a.m. Math" });
+    const chip = today.querySelector(".cal-chip");
+    expect(chip).toHaveAttribute("title", "10:00 a.m. Math · Next");
+    expect(chip.querySelector(".cal-chip-time")).toHaveTextContent("10a");
+    expect(chip.querySelector(".cal-chip-name")).toHaveTextContent("Math");
+
+    const friday = screen.getByRole("button", {
+      name: /^July 17, 4 classes: 8:00 a\.m\. Science, 12:00 p\.m\. Science/,
+    });
+    expect(friday.querySelectorAll(".cal-chip")).toHaveLength(4);
+    expect(friday.querySelector(".cal-more")).toBeNull();
+    expect([...friday.querySelectorAll(".cal-chip-time")].map((node) => node.textContent)).toEqual([
+      "8a",
+      "12p",
+      "2:30p",
+      "4p",
+    ]);
+
+    const saturday = screen.getByRole("button", { name: /^July 18, 5 classes: .*6:00 p\.m\. Science$/ });
+    expect(saturday.querySelectorAll(".cal-chip")).toHaveLength(3);
+    expect(saturday.querySelector(".cal-more")).toHaveTextContent("+2 more");
+  });
+});
+
+describe("edit class drawer confirmations", () => {
+  function renderEditor() {
+    const state = classState();
+    const session = buildClassWorkspaceSessions(state, AS_OF_DATE).find((item) => item.classDate === AS_OF_DATE);
+    const actions = {
+      editScheduledClass: vi.fn().mockResolvedValue(true),
+      removeScheduledClass: vi.fn().mockResolvedValue(true),
+    };
+    const onClose = vi.fn();
+    render(
+      <EditClassDrawer
+        open
+        session={session}
+        state={state}
+        actions={actions}
+        asOfDate={AS_OF_DATE}
+        futureSupported
+        onClose={onClose}
+      />,
+    );
+    return { actions, onClose };
+  }
+
+  it("deletes only after a destructive in-app confirmation; Escape closes the question, not the drawer", async () => {
+    const user = userEvent.setup();
+    const { actions } = renderEditor();
+    const drawer = screen.getByRole("dialog", { name: "Edit class" });
+
+    await user.click(within(drawer).getByRole("button", { name: "Delete class" }));
+    const question = screen.getByRole("alertdialog", { name: "Delete only this class?" });
+    expect(question).toHaveAccessibleDescription("Past classes and saved records will remain unchanged.");
+    expect(within(question).getByRole("button", { name: "Delete class" })).toHaveClass("button-danger");
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Edit class" })).toBeInTheDocument();
+    expect(actions.removeScheduledClass).not.toHaveBeenCalled();
+
+    await user.click(within(drawer).getByRole("button", { name: "Delete class" }));
+    await user.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Delete class" }));
+    await waitFor(() => expect(actions.removeScheduledClass).toHaveBeenCalledOnce());
+  });
+
+  it("asks before closing with unsaved schedule edits", async () => {
+    const user = userEvent.setup();
+    const { onClose } = renderEditor();
+    const drawer = screen.getByRole("dialog", { name: "Edit class" });
+
+    await user.click(within(drawer).getByRole("button", { name: "Longer" }));
+    await user.click(within(drawer).getByRole("button", { name: "Cancel" }));
+    const question = screen.getByRole("alertdialog", { name: "Discard the class schedule changes?" });
+    await user.click(within(question).getByRole("button", { name: "Keep editing" }));
+    expect(onClose).not.toHaveBeenCalled();
+
+    await user.click(within(drawer).getByRole("button", { name: "Cancel" }));
+    await user.click(screen.getByRole("button", { name: "Discard changes" }));
+    expect(onClose).toHaveBeenCalledOnce();
   });
 });

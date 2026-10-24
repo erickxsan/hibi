@@ -1,10 +1,11 @@
 import { useI18n } from "../i18n/index.jsx";
+import { useAppearance } from "../theme/appearance";
 
-/** Horizontal logo: the seal with ears beside the «hibi» wordmark. */
+/** Horizontal logo: the seal with ears beside the «hibi» wordmark. The dark theme uses the washi wordmark. */
 export function HibiLogo({ className = "", height = 40 }) {
-  return (
-    <img className={`hibi-logo ${className}`.trim()} src="/brand/hibi-logo-horizontal.svg" alt="hibi" height={height} />
-  );
+  const { resolvedTheme } = useAppearance();
+  const src = resolvedTheme === "dark" ? "/brand/hibi-logo-horizontal-dark.svg" : "/brand/hibi-logo-horizontal.svg";
+  return <img className={`hibi-logo ${className}`.trim()} src={src} alt="hibi" height={height} />;
 }
 
 /** The cat stamp mascot. Decorative unless a label is given. */

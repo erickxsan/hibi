@@ -1,19 +1,20 @@
 import { lazy, Suspense, useCallback, useState } from "react";
-import {
-  accountDeletionService,
-  cloudAuth,
-  LEGACY_DATA_CLAIM_KEY,
-  MIGRATION_MARKER_PREFIX,
-  purgeLocalAccountData,
-} from "./cloud";
+import { cloudAuth } from "./cloud/client.js";
+import { LEGACY_DATA_CLAIM_KEY, MIGRATION_MARKER_PREFIX } from "./cloud/workspaceStorageKeys.js";
 import { AccountDeletionPending, CloudError, CloudLoading, LocalDataMigration } from "./cloud/CloudStates";
 import { WorkspaceEncryptionGate } from "./cloud/WorkspaceEncryptionGate";
 import { useCloudWorkspace } from "./cloud/useCloudWorkspace";
 import { useEncryptedWorkspace } from "./cloud/useEncryptedWorkspace";
 import { useWorkspaceEncryption } from "./cloud/useWorkspaceEncryption";
-import { AccountDeletionRecovery } from "./cloud/AccountDeletionRecovery.jsx";
 import { safeLoadStateWithMigrations } from "./domain";
 const ClassManagerApplication = lazy(() => import("./ClassManagerApplication"));
+// Account deletion is rare: its module (and the resume screen) download only when they are needed.
+const AccountDeletionRecovery = lazy(() => import("./cloud/AccountDeletionRecovery.jsx"));
+// Offline, or after a deploy replaced the chunk, the failed download reads as a plain, translated message.
+const loadAccountDeletion = () =>
+  import("./cloud/accountDeletion.js").catch(() => {
+    throw new Error("Account deletion could not load. Check your connection and reload the page.");
+  });
 let inMemoryLegacyClaim = "";
 function hasRecords(state) {
   return [state?.groups, state?.students, state?.grades, state?.classLog].some(
@@ -54,6 +55,7 @@ function UnlockedCloudWorkspaceApplication({ session, encryption, onDeletionComp
       if (deletionBusy) return;
       setDeletionBusy(true);
       try {
+        const { accountDeletionService, purgeLocalAccountData } = await loadAccountDeletion();
         const receipt = await accountDeletionService.removeAccount({ confirmation });
         let localPurgeComplete = true;
         try {
@@ -209,6 +211,7 @@ function LegacyCloudWorkspaceApplication({ session, onDeletionCompleted }) {
       if (deletionBusy) return;
       setDeletionBusy(true);
       try {
+        const { accountDeletionService, purgeLocalAccountData } = await loadAccountDeletion();
         const receipt = await accountDeletionService.removeAccount({ confirmation });
         let localPurgeComplete = true;
         try {

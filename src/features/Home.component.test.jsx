@@ -80,10 +80,10 @@ function homeState() {
   };
 }
 
-function renderHome(overrides = {}) {
+function homeProps(overrides = {}) {
   const state = homeState();
   const derived = deriveAll(state, AS_OF);
-  const props = {
+  return {
     state,
     derived,
     openPage: vi.fn(),
@@ -98,6 +98,10 @@ function renderHome(overrides = {}) {
     },
     ...overrides,
   };
+}
+
+function renderHome(overrides = {}) {
+  const props = homeProps(overrides);
   render(
     <I18nProvider>
       <Home {...props} />
@@ -138,6 +142,26 @@ describe("Home", () => {
     expect(within(card).getByText("owes $200 from the class on 12 Oct.")).toBeInTheDocument();
     await user.click(within(card).getByRole("button", { name: "Record class" }));
     expect(props.openPage).toHaveBeenCalledWith("classes", { type: "open-class", sessionKey: "2026-10-21|g:g1|16:00" });
+  });
+
+  it("greets at night between midnight and 5 a.m. and keeps the line readable before 8 a.m.", () => {
+    vi.setSystemTime(new Date(2026, 9, 21, 0, 34));
+    const { unmount } = render(
+      <I18nProvider>
+        <Home {...homeProps()} />
+      </I18nProvider>,
+    );
+    expect(screen.getByRole("heading", { name: "Good evening, Teacher!" })).toBeInTheDocument();
+    unmount();
+    vi.setSystemTime(new Date(2026, 9, 21, 6, 40));
+    renderHome();
+    expect(screen.getByRole("heading", { name: "Good morning, Teacher!" })).toBeInTheDocument();
+    const line = screen.getByRole("region", { name: "Today's timeline" });
+    expect(within(line).getByText("8 a.m.")).toBeInTheDocument();
+    expect(within(line).getByText("4 p.m.")).toBeInTheDocument();
+    const block = within(line).getByRole("button", { name: /^Reading, 4:00 – 6:00 p\.m\./ });
+    expect(block.style.width).not.toBe("");
+    expect(line.firstElementChild.style.minWidth).toBe("864px");
   });
 
   it("turns «Para atender» into actions and explores a metric in place", async () => {

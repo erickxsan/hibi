@@ -5,6 +5,7 @@ import {
   buildMetric,
   buildTodayTimeline,
   collectionBuckets,
+  debtSummary,
   debtsThrough,
   defaultPointIndex,
   monthProjection,
@@ -176,6 +177,21 @@ describe("home metrics", () => {
     const scoped = buildMetric(state, derived, AS_OF, "collections", "weekly", "g1");
     expect(scoped.value).toBe(200);
   });
+
+  it("compares a month in progress with the same stretch of the previous month", () => {
+    const state = fixture();
+    state.classLog.push(
+      row("sep-early", "2026-09-14", "s1", "P", 200),
+      // Paid after 21 Sep: outside «1–21 sep», so it must not inflate the comparison.
+      row("sep-late", "2026-09-28", "s2", "P", 500, { appliedCharge: 500 }),
+    );
+    const { derived } = setup(state);
+    const metric = buildMetric(state, derived, AS_OF, "collections", "monthly");
+    expect(metric).toMatchObject({ previousStart: "2026-09-01", previousEnd: "2026-09-21" });
+    expect(metric.value).toBe(400);
+    expect(metric.previous).toBe(200);
+    expect(metric.delta).toBe(1);
+  });
 });
 
 describe("home agenda", () => {
@@ -188,6 +204,17 @@ describe("home agenda", () => {
     expect(timeline.items[0].notes.find((entry) => entry.student.id === "s1").note.kind).toBe("owes");
     expect(buildTodayTimeline(state, derived, AS_OF, "16:30").live?.key).toBe(timeline.items[0].key);
     expect(buildTodayTimeline(state, derived, AS_OF, "19:00").items[0].state).toBe("pending");
+  });
+
+  it("keeps the axis on whole hours at any time of day", () => {
+    const { state, derived } = setup();
+    for (const nowTime of ["00:15", "06:40", "07:59", "12:30", "20:30", "23:50"]) {
+      const timeline = buildTodayTimeline(state, derived, AS_OF, nowTime);
+      expect(timeline.dayStart % 60).toBe(0);
+      expect(timeline.dayEnd % 60).toBe(0);
+      expect(timeline.dayStart).toBe(8 * 60);
+      expect(timeline.dayEnd).toBe(20 * 60);
+    }
   });
 
   it("lists what to attend to with where each item leads", () => {
@@ -205,7 +232,16 @@ describe("home agenda", () => {
     expect(items[0].count).toBeGreaterThan(1);
     expect(items[1].students.map((student) => student.id)).toEqual(["s2"]);
     expect(items[2]).toMatchObject({ value: 5, assessment: "Quiz" });
-    expect(items[3]).toMatchObject({ amount: 200, names: ["Maya Torres"] });
+    // One «vencido» everywhere: class balances and monthly fees of active students.
+    expect(items[3]).toMatchObject({
+      amount: 1200,
+      owed: 1200,
+      overdueThisMonth: 1200,
+      overdueEarlier: 0,
+      names: ["Ava Kim", "Maya Torres"],
+      inactiveAmount: 0,
+      action: { type: "metric", metric: "collections", focus: "debts" },
+    });
     expect(items[4]).toMatchObject({ overdue: true, count: 1, amount: 1000 });
   });
 
@@ -225,6 +261,59 @@ describe("home money", () => {
       ["s3", 1000, 1000],
       ["s1", 200, 200],
     ]);
+  });
+
+  it("splits overdue money by month and keeps inactive students apart", () => {
+    const state = fixture();
+    state.students.push({ id: "s9", code: "S9", fullName: "Old Student", groupIds: ["g1"], status: "Inactive" });
+    // Maya: September overdue, 12 Oct overdue, 19 Oct not due yet (a class is overdue after seven days).
+    state.classLog = state.classLog.map((item) =>
+      item.id === "r3" ? { ...item, amountPaid: 0, paymentDate: null, paymentState: "Pending" } : item,
+    );
+    state.classLog.push(row("sep-maya", "2026-09-14", "s1", "P", 0), row("sep-old", "2026-09-14", "s9", "P", 0));
+    const { derived } = setup(state);
+    const maya = debtsThrough(state, derived.classLog, AS_OF).find((item) => item.studentId === "s1");
+    expect(maya).toMatchObject({
+      amount: 600,
+      overdue: 400,
+      overdueThisMonth: 200,
+      overdueEarlier: 200,
+      inactive: false,
+    });
+    const summary = debtSummary(state, derived.classLog, AS_OF);
+    expect(summary).toMatchObject({
+      period: "2026-10",
+      owed: 1600,
+      overdue: 1400,
+      overdueThisMonth: 1200,
+      overdueEarlier: 200,
+      notDue: 200,
+    });
+    expect(summary.debts.map((item) => item.studentId)).toEqual(["s3", "s1"]);
+    expect(summary.overdueStudents.map((item) => item.studentId)).toEqual(["s3", "s1"]);
+    expect(summary.inactive).toMatchObject({ owed: 200 });
+    expect(summary.inactive.debts.map((item) => item.studentId)).toEqual(["s9"]);
+    const alert = buildAttentionItems(state, derived, AS_OF).find((item) => item.kind === "overdue");
+    // The inactive student's debt is not in the headline nor in the names.
+    expect(alert).toMatchObject({
+      amount: 1400,
+      owed: 1600,
+      overdueThisMonth: 1200,
+      overdueEarlier: 200,
+      names: ["Ava Kim", "Maya Torres"],
+      inactiveAmount: 200,
+      inactiveNames: ["Old Student"],
+    });
+  });
+
+  it("still flags debt when only inactive students owe, without calling it overdue", () => {
+    const state = fixture();
+    state.students.push({ id: "s9", code: "S9", fullName: "Old Student", groupIds: ["g1"], status: "Inactive" });
+    state.groups[1].billing = undefined;
+    state.classLog = [...state.classLog.filter((item) => item.id !== "r1"), row("sep-old", "2026-09-14", "s9", "P", 0)];
+    const { derived } = setup(state);
+    const alert = buildAttentionItems(state, derived, AS_OF).find((item) => item.kind === "overdue");
+    expect(alert).toMatchObject({ tone: "pend", amount: 0, inactiveAmount: 200, inactiveNames: ["Old Student"] });
   });
 
   it("projects the month with unpaid fees and upcoming per-class charges", () => {

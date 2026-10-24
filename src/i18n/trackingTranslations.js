@@ -19,9 +19,6 @@ export const TRACKING_TRANSLATIONS = Object.freeze({
   "{count} group left out": "{count} grupo fuera",
   "{count} groups left out": "{count} grupos fuera",
   // Cifras
-  "{value} pp vs. the previous period": "{value} pp vs. el periodo anterior",
-  "{value} vs. the previous period": "{value} vs. el periodo anterior",
-  "Same as the previous period": "Igual que el periodo anterior",
   "Everything recorded": "Todo registrado",
   "of {count} records": "de {count} registros",
   Nobody: "Nadie",
@@ -30,7 +27,6 @@ export const TRACKING_TRANSLATIONS = Object.freeze({
   "Everything graded": "Todo calificado",
   "{count} grade": "{count} calificación",
   "{count} grades": "{count} calificaciones",
-  "{amount} overdue (sum)": "{amount} vencido",
   "Includes {count} monthly fee": "Incluye {count} mensualidad",
   "Includes {count} monthly fees": "Incluye {count} mensualidades",
   "With {amount} in pending monthly fees": "Con {amount} en mensualidades por cobrar",
@@ -117,4 +113,5 @@ export const TRACKING_TRANSLATIONS = Object.freeze({
     "Cada barra es un tramo con cobros. Tócala para ver quién pagó.",
   "Filter students": "Filtrar alumnos",
   "Tracking views": "Vistas de seguimiento",
+  "{present} of {total} records": "{present} de {total} registros",
 });

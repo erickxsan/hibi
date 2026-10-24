@@ -106,6 +106,15 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* The edge hours sit inside the line instead of being cut in half by the scroll box. */
+.home-page .tk.first b {
+  transform: none;
+}
+
+.home-page .tk.last b {
+  transform: translateX(-100%);
+}
+
 .home-page .rail {
   position: absolute;
   left: 0;
@@ -178,7 +187,7 @@
 
 .home-page .blk:hover {
   transform: translateY(-3px);
-  box-shadow: 0 8px 20px rgba(30, 28, 32, 0.1);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--shadow-ink) 10%, transparent);
 }
 
 .home-page .blk .bt {
@@ -256,8 +265,8 @@
   height: 18px;
   padding: 0 5px;
   border-radius: var(--radius-pill);
-  background: var(--bermellon);
-  color: #fff;
+  background: var(--accent-fill);
+  color: var(--on-accent);
   font: 800 11px/18px var(--font-sans);
   text-align: center;
 }
@@ -291,8 +300,8 @@
   transform: translateX(-50%);
   padding: 3px 10px;
   border-radius: var(--radius-pill);
-  background: var(--bermellon-strong);
-  color: #fff;
+  background: var(--accent-fill);
+  color: var(--on-accent);
   font: 800 12px/16px var(--font-sans);
   white-space: nowrap;
   animation: tl-in 0.5s 0.3s ease-out both;
@@ -366,10 +375,10 @@
 @keyframes tl-breathe {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(217, 71, 44, 0);
+    box-shadow: 0 0 0 0 transparent;
   }
   50% {
-    box-shadow: 0 0 0 7px rgba(217, 71, 44, 0.14);
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--bermellon) 14%, transparent);
   }
 }
 
@@ -1614,7 +1623,7 @@
 
 .metric-sheet .cb.on i {
   box-shadow:
-    0 0 0 2px var(--papel),
+    0 0 0 2px var(--surface-raised),
     0 0 0 4px var(--sumi);
 }
 

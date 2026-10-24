@@ -24,6 +24,7 @@
   flex-wrap: wrap;
   flex: 1;
   padding-top: 24px;
+  container: community-cols / inline-size;
 }
 
 .community-page .list {
@@ -281,6 +282,21 @@
   padding-left: 40px;
   border-left: 1px solid var(--line-soft);
   animation: community-in 0.3s ease-out both;
+  scroll-margin-top: 16px;
+}
+
+/* Side by side: the card follows the reader instead of ending up thousands of pixels above a long list.
+   It is as tall as the window at most and scrolls on its own. */
+@container community-cols (min-width: 840px) {
+  .community-page .detail {
+    align-self: flex-start;
+    position: sticky;
+    top: 16px;
+    max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
 }
 
 @keyframes community-in {
@@ -861,17 +877,41 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  container: schedule / inline-size;
 }
 
 .schedule-editor .block-head {
   margin-bottom: 0;
 }
 
+/* Day and time always get their own row; the duration and the remove button go below. The panel
+   (a 480 px drawer) is what matters here, not the viewport, so this is a container query. */
 .schedule-slot {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(104px, 1.2fr) minmax(96px, 1fr);
   gap: 10px;
   align-items: end;
+}
+
+.schedule-slot > :nth-child(3) {
+  grid-column: 1;
+  min-width: 0;
+}
+
+.schedule-slot > :nth-child(4) {
+  grid-column: 2;
+  justify-self: end;
+}
+
+@container schedule (min-width: 600px) {
+  .schedule-slot {
+    grid-template-columns: minmax(112px, 1.2fr) minmax(104px, 1fr) minmax(168px, 1fr) auto;
+  }
+
+  .schedule-slot > :nth-child(3),
+  .schedule-slot > :nth-child(4) {
+    grid-column: auto;
+  }
 }
 
 .drawer-footer .footer-start {
@@ -1147,10 +1187,6 @@
 
   .billing-fields .field-row {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .schedule-slot {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 }
 

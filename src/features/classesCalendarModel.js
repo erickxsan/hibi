@@ -56,3 +56,16 @@ export function minutesFromTime(value = "00:00") {
   const [hours = 0, minutes = 0] = String(value).split(":").map(Number);
   return (Number.isFinite(hours) ? hours : 0) * 60 + (Number.isFinite(minutes) ? minutes : 0);
 }
+
+/**
+ * Start time short enough to sit in front of a class name in the month grid: «4p», «10:30a», «12p».
+ * It is styled apart from the name (and the full time goes in the tooltip and accessible name), so it
+ * never reads like a count. Empty for a missing or malformed time.
+ */
+export function compactClock(value = "") {
+  const match = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(String(value));
+  if (!match) return "";
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  return `${hours % 12 || 12}${minutes ? `:${match[2]}` : ""}${hours >= 12 ? "p" : "a"}`;
+}

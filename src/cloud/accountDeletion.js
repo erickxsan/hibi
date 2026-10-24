@@ -4,12 +4,16 @@ import { requireCloudClient, supabase } from "./client.js";
 import { deviceRecoveryStore } from "./deviceRecoveryStore.js";
 import { createOperationId } from "./workspaceRepository.js";
 import { AccountDeletionError, createAccountDeletionReceiptStore } from "./accountDeletionReceiptStore.js";
+import {
+  LEGACY_DATA_CLAIM_KEY,
+  MIGRATION_MARKER_PREFIX,
+  RECOVERY_REMINDER_DISMISSED_PREFIX,
+  UI_STORAGE_PREFIX,
+} from "./workspaceStorageKeys.js";
 export { AccountDeletionError, PENDING_ACCOUNT_DELETION_KEY } from "./accountDeletionReceiptStore.js";
+export { LEGACY_DATA_CLAIM_KEY, MIGRATION_MARKER_PREFIX } from "./workspaceStorageKeys.js";
 
 export const ACCOUNT_DELETION_CONFIRMATION = "DELETE MY ACCOUNT";
-export const MIGRATION_MARKER_PREFIX = "minimal-class-manager:cloud-migration-dismissed:v1:";
-export const LEGACY_DATA_CLAIM_KEY = "minimal-class-manager:legacy-data-claimed:v1";
-const UI_STORAGE_PREFIX = "minimal-class-manager:ui:v1:";
 
 async function errorPayload(error) {
   try {
@@ -163,7 +167,11 @@ export async function purgeLocalAccountData(
     failures.push(error);
   }
   if (storage) {
-    const keys = [`${UI_STORAGE_PREFIX}${ownerId}`, `${MIGRATION_MARKER_PREFIX}${ownerId}`];
+    const keys = [
+      `${UI_STORAGE_PREFIX}${ownerId}`,
+      `${MIGRATION_MARKER_PREFIX}${ownerId}`,
+      `${RECOVERY_REMINDER_DISMISSED_PREFIX}${ownerId}`,
+    ];
     try {
       if (storage.getItem(LEGACY_DATA_CLAIM_KEY) === ownerId) {
         keys.push(STORAGE_KEY, REAL_ROSTER_BACKUP_KEY, REAL_ROSTER_MIGRATION_KEY, LEGACY_DATA_CLAIM_KEY);

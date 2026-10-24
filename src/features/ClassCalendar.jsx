@@ -14,6 +14,7 @@ import {
   weekdayShort,
 } from "../utils/displayFormat";
 import { buildClassWorkspaceSessionsForRange, rosterForClassSession } from "./classesWorkspaceModel";
+import { compactClock } from "./classesCalendarModel";
 import { calendarDays } from "../domain/pickerModels";
 import { sessionInsight, SessionDetailSheet } from "./ClassSessionDetail";
 
@@ -34,11 +35,8 @@ const TONE_LABEL = {
   cancelled: { label: "Cancelled", className: "st-prog", mobile: "Cancelled" },
 };
 
-function chipLabel(session) {
-  const [hour] = String(session.startTime || "").split(":");
-  const h = Number(hour) % 12 || 12;
-  return `${Number.isFinite(h) ? h : ""} · ${session.title}`;
-}
+// A day shows every class when they fit in four lines; past that, three and «+N más».
+const MAX_CHIPS = 4;
 
 export function ClassCalendar({ state, derived = undefined, currentDate, primaryKey, onOpen, onEdit }) {
   const { t, locale } = useI18n();
@@ -119,25 +117,47 @@ export function ClassCalendar({ state, derived = undefined, currentDate, primary
             {mondayDays.map((date) => {
               const items = byDate.get(date) || [];
               const outside = date.slice(0, 7) !== month.slice(0, 7);
+              const shown = items.length > MAX_CHIPS ? MAX_CHIPS - 1 : items.length;
+              // Labels are clipped to fit the grid, so the cell's accessible name carries every class in full.
+              const fullLabels = items.map((session) => `${formatTime(session.startTime, locale)} ${session.title}`);
               return (
                 <button
                   type="button"
                   key={date}
                   className={`month-cell ${outside ? "is-outside" : ""} ${date === currentDate ? "is-today" : ""} ${date === selectedDate ? "is-selected" : ""}`.trim()}
                   aria-pressed={date === selectedDate}
-                  aria-label={t("{date}, {count} classes", {
-                    date: formatDayMonth(date, locale),
-                    count: items.length,
-                  })}
+                  aria-label={
+                    items.length
+                      ? t(items.length === 1 ? "{date}, {count} class: {list}" : "{date}, {count} classes: {list}", {
+                          date: formatDayMonth(date, locale),
+                          count: items.length,
+                          list: fullLabels.join(", "),
+                        })
+                      : t("{date}, {count} classes", { date: formatDayMonth(date, locale), count: 0 })
+                  }
                   onClick={() => setSelectedDate(date)}
                 >
                   <b>{dayNumber(date)}</b>
-                  {items.slice(0, 3).map((session) => (
-                    <span key={session.key} className={`cal-chip tone-${calendarTone(session, primaryKey)}`}>
-                      <span>{chipLabel(session)}</span>
+                  {items.slice(0, shown).map((session, index) => {
+                    const tone = calendarTone(session, primaryKey);
+                    return (
+                      <span
+                        key={session.key}
+                        className={`cal-chip tone-${tone}`}
+                        title={`${fullLabels[index]} · ${t(TONE_LABEL[tone].label)}`}
+                      >
+                        <time className="cal-chip-time" dateTime={session.startTime || undefined}>
+                          {compactClock(session.startTime)}
+                        </time>
+                        <span className="cal-chip-name">{session.title}</span>
+                      </span>
+                    );
+                  })}
+                  {items.length > shown ? (
+                    <span className="cal-more" title={fullLabels.slice(shown).join("\n")}>
+                      {t("+{count} more", { count: items.length - shown })}
                     </span>
-                  ))}
-                  {items.length > 3 ? <span className="cal-more">+{items.length - 3}</span> : null}
+                  ) : null}
                   <span className="month-dots" aria-hidden="true">
                     {items.slice(0, 4).map((session) => (
                       <i key={session.key} className={`tone-${calendarTone(session, primaryKey)}`} />

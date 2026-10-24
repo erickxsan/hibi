@@ -245,6 +245,8 @@ export function studentClassNote(state, student, session, derivedRows = [], mont
       kind: "owes",
       tone: "pend",
       amount: sumMoney(owed, (row) => row.outstanding),
+      // How many classes the amount spans and the oldest of them («Debe $1,125 de 5 clases desde el 1 oct»).
+      count: owed.length,
       date: owed.at(-1).classDate,
     };
   const ungraded = (state.grades || [])

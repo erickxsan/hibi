@@ -161,6 +161,26 @@ export function scheduleIssue(slots) {
   return overlaps ? "Classes on the same day can’t overlap." : "";
 }
 
+// The group form's fields in screen order: submit focuses the first invalid one.
+export const GROUP_FORM_FIELDS = Object.freeze(["name", "subject", "schedule", "price"]);
+
+/** Errors of the tutorial's group form by field; an empty string means the field is valid. */
+export function groupDraftErrors(draft) {
+  const price = String((draft.billingMode === "monthly" ? draft.monthlyFee : draft.rate) ?? "").trim();
+  return {
+    name: String(draft.name || "").trim() ? "" : "Enter a group name.",
+    subject: String(draft.subject || "").trim() ? "" : "Enter a subject.",
+    schedule: scheduleIssue(draft.weeklySchedule),
+    price: price !== "" && Number(price) >= 0 ? "" : "Enter a price.",
+  };
+}
+
+/** Clears the errors of the fields that became valid; fields still invalid keep theirs until submit. */
+export function clearFixedErrors(errors, nextErrors) {
+  const fixed = Object.keys(errors).filter((key) => errors[key] && Object.hasOwn(nextErrors, key) && !nextErrors[key]);
+  return fixed.length ? { ...errors, ...Object.fromEntries(fixed.map((key) => [key, ""])) } : errors;
+}
+
 function isoDate(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");

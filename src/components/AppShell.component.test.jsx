@@ -3,6 +3,7 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import { I18nProvider } from "../i18n";
 import { AppShell } from "./AppShell";
 
 function testIcon(name) {
@@ -52,5 +53,38 @@ describe("AppShell mobile navigation", () => {
     ).toBeInTheDocument();
     expect(within(mobileNav).queryByRole("button")).not.toBeInTheDocument();
     expect(within(mobileNav).queryByText("Record")).not.toBeInTheDocument();
+  });
+
+  it("names the Spanish settings tab with the same word it shows", () => {
+    localStorage.setItem("hibi:language:v1", "es");
+    try {
+      render(
+        <I18nProvider>
+          <AppShell
+            navItems={[
+              { id: "home", label: "Home", href: "/", icon: testIcon("home") },
+              {
+                id: "settings",
+                label: "Settings",
+                mobileLabel: "Adjustments",
+                href: "/settings",
+                icon: testIcon("settings"),
+              },
+            ]}
+            activePage="home"
+            onNavigate={vi.fn()}
+          >
+            <p>Inicio</p>
+          </AppShell>
+        </I18nProvider>,
+      );
+      const mobileNav = screen.getByRole("navigation", { name: "Navegación móvil" });
+      const settings = within(mobileNav).getByRole("link", { name: "Ajustes" });
+      expect(settings).toHaveTextContent("Ajustes");
+      expect(settings).not.toHaveAttribute("aria-label");
+      expect(within(mobileNav).queryByRole("link", { name: "Configuración" })).not.toBeInTheDocument();
+    } finally {
+      localStorage.removeItem("hibi:language:v1");
+    }
   });
 });

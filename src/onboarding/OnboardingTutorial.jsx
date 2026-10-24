@@ -5,15 +5,18 @@ import { Button, DurationStepper, Field, Input, Segmented, Select } from "../com
 import { HibiStamp } from "../components/BrandMark";
 import { StudentAvatar } from "../components/StudentAvatar";
 import { STUDENT_AVATAR_IDS } from "../domain/constants";
-import { periodOf } from "../domain/monthlyBilling";
+import { firstBillingPeriod, normalizeGroupBilling, periodOf, suggestedMonthlyFee } from "../domain/monthlyBilling";
 import { todayDateOnly } from "../domain/dates";
-import { formatHours, formatMoney, formatTime } from "../utils/displayFormat";
+import { formatHours, formatMoney, formatTime, monthLong } from "../utils/displayFormat";
 import { getUiLocale, useI18n } from "../i18n";
 import ContextualTour from "./ContextualTour";
 import {
+  clearFixedErrors,
   dayLabel,
   dayShortLabel,
   formatOnboardingDate,
+  GROUP_FORM_FIELDS,
+  groupDraftErrors,
   nextClassForSchedule,
   ONBOARDING_DAYS,
   ONBOARDING_MAX_STUDENTS,
@@ -27,6 +30,9 @@ import "../i18n/screenTranslations.js";
 import "./onboarding.css";
 
 const SETUP_LABELS = ["Group", "Students", "Agenda"];
+// The tutorial's monthly fee falls due on day 5; the teacher can change it later in Community.
+const TUTORIAL_DUE = Object.freeze({ type: "dayOfMonth", day: 5 });
+const FOCUSABLE = "input, select, textarea, button, [tabindex]:not([tabindex='-1'])";
 
 function nextRowKey() {
   return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
@@ -153,7 +159,7 @@ function SchedulePreview({ slots, submittedIssue, locale }) {
   );
 }
 
-function ScheduleRows({ rows, setRows }) {
+function ScheduleRows({ rows, setRows, sectionRef = undefined }) {
   const { t: uiT } = useI18n();
   const addSlot = () => {
     const usedDays = new Set(rows.map((row) => Number(row.dayOfWeek)));
@@ -163,7 +169,7 @@ function ScheduleRows({ rows, setRows }) {
   };
 
   return (
-    <section className="onboarding-weekly-schedule" aria-labelledby="onboarding-schedule-title">
+    <section ref={sectionRef} className="onboarding-weekly-schedule" aria-labelledby="onboarding-schedule-title">
       <h2 id="onboarding-schedule-title">{uiT("Class days")}</h2>
       <div className="onboarding-schedule-rows">
         {rows.map((slot, index) => (
@@ -241,11 +247,13 @@ export default function OnboardingTutorial({
   const headingRef = useRef(null);
   const previousFocusRef = useRef(null);
   const studentInputsRef = useRef(new Map());
+  const groupFieldsRef = useRef(/** @type {Record<string, HTMLElement | null>} */ ({}));
   const [step, setStep] = useState(initialStep);
   const [groupDraft, setGroupDraft] = useState(() => initialGroupDraft(state));
   const [studentRows, setStudentRows] = useState(() => initialStudentRows(state));
   const [removedStudentIds, setRemovedStudentIds] = useState([]);
   const [focusStudentKey, setFocusStudentKey] = useState(null);
+  const [focusGroupField, setFocusGroupField] = useState("");
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState(/** @type {Record<string, string>} */ ({}));
   const [completed, setCompleted] = useState(false);
@@ -263,6 +271,22 @@ export default function OnboardingTutorial({
   const tourContext = useMemo(() => tourContextFor(state, groupId), [groupId, state]);
   const studentCount = studentRows.filter((student) => student.fullName?.trim()).length;
   const locale = getUiLocale();
+  const asOf = state.settings.asOfDate || todayDateOnly();
+  // A fee is never born overdue: once day 5 has passed, billing starts next month.
+  const billingStart = firstBillingPeriod({ mode: "monthly", due: TUTORIAL_DUE }, asOf);
+  // Same suggestion as the group's billing sheet: a full month of these classes at this price.
+  const suggestionFor = (draft) => {
+    const rate = String(draft.rate ?? "").trim();
+    return suggestedMonthlyFee(
+      state,
+      {
+        id: groupId || "onboarding-group",
+        weeklySchedule: draft.weeklySchedule,
+        hourlyRate: rate !== "" && Number(rate) >= 0 ? Number(rate) : null,
+      },
+      billingStart,
+    );
+  };
 
   useEffect(() => {
     if (!open || !showsDialog) return undefined;
@@ -289,6 +313,15 @@ export default function OnboardingTutorial({
     studentInputsRef.current.get(focusStudentKey)?.focus();
     setFocusStudentKey(null);
   }, [focusStudentKey, studentRows]);
+
+  // Runs after the errors render, so the focused control already reports them.
+  useEffect(() => {
+    if (!focusGroupField) return;
+    const target = groupFieldsRef.current[focusGroupField];
+    const control = target?.matches(FOCUSABLE) ? target : target?.querySelector(FOCUSABLE);
+    /** @type {HTMLElement | null | undefined} */ (control)?.focus();
+    setFocusGroupField("");
+  }, [focusGroupField]);
 
   useEffect(() => {
     if (!open || !showsDialog) return undefined;
@@ -380,21 +413,31 @@ export default function OnboardingTutorial({
   };
 
   const monthly = groupDraft.billingMode === "monthly";
+  // Each edit clears the errors of the fields it fixed; new errors wait for the next submit.
+  const editGroup = (patch) => {
+    const next = { ...groupDraft, ...patch };
+    setGroupDraft(next);
+    setErrors((current) => clearFixedErrors(current, groupDraftErrors(next)));
+  };
+  // Monthly starts from the suggested fee unless the teacher already typed one.
+  const changeBillingMode = (billingMode) => {
+    const fee = billingMode === "monthly" && !String(groupDraft.monthlyFee).trim() ? suggestionFor(groupDraft).fee : 0;
+    editGroup(fee > 0 ? { billingMode, monthlyFee: String(fee) } : { billingMode });
+  };
   const saveGroup = async (event) => {
     event.preventDefault();
     if (busy) return;
-    const nextErrors = {
-      name: groupDraft.name.trim() ? "" : "Enter a group name.",
-      subject: groupDraft.subject.trim() ? "" : "Enter a subject.",
-      schedule: scheduleIssue(groupDraft.weeklySchedule),
-      price:
-        Number(monthly ? groupDraft.monthlyFee : groupDraft.rate) >= 0 &&
-        String(monthly ? groupDraft.monthlyFee : groupDraft.rate).trim() !== ""
-          ? ""
-          : "Enter a price.",
-    };
-    if (nextErrors.name || nextErrors.subject || nextErrors.schedule || nextErrors.price) return setErrors(nextErrors);
+    const nextErrors = groupDraftErrors(groupDraft);
+    const firstInvalid = GROUP_FORM_FIELDS.find((field) => nextErrors[field]);
+    if (firstInvalid) {
+      setErrors(nextErrors);
+      setFocusGroupField(firstInvalid);
+      return;
+    }
     const rate = Number(groupDraft.rate);
+    // Re-saving a group from a resumed setup keeps the billing start it was created with.
+    const savedBilling = normalizeGroupBilling(state.groups.find((item) => item.id === groupDraft.id)?.billing);
+    const keptStart = savedBilling?.mode === "monthly" && savedBilling.effectiveFrom ? savedBilling : null;
     setBusy(true);
     try {
       const id = await actions.saveOnboardingGroup({
@@ -410,8 +453,9 @@ export default function OnboardingTutorial({
           ? {
               mode: "monthly",
               monthlyFee: Number(groupDraft.monthlyFee),
-              due: { type: "dayOfMonth", day: 5 },
-              effectiveFrom: periodOf(state.settings.asOfDate || todayDateOnly()),
+              due: { ...TUTORIAL_DUE },
+              effectiveFrom: keptStart?.effectiveFrom || billingStart,
+              ...(keptStart?.coveredFrom ? { coveredFrom: keptStart.coveredFrom } : {}),
             }
           : undefined,
       });
@@ -428,6 +472,7 @@ export default function OnboardingTutorial({
     if (busy) return;
     if (!studentRows.some((student) => student.fullName?.trim())) {
       setErrors({ students: "Add at least one student." });
+      if (studentRows[0]) setFocusStudentKey(studentRows[0].key);
       return;
     }
     setBusy(true);
@@ -451,8 +496,10 @@ export default function OnboardingTutorial({
       }),
     );
 
-  const updateStudent = (key, fullName) =>
+  const updateStudent = (key, fullName) => {
     setStudentRows((current) => current.map((row) => (row.key === key ? { ...row, fullName } : row)));
+    if (fullName.trim()) setErrors((current) => (current.students ? { ...current, students: "" } : current));
+  };
 
   const addStudentRow = (afterKey) => {
     if (studentRows.length >= ONBOARDING_MAX_STUDENTS) return;
@@ -536,6 +583,27 @@ export default function OnboardingTutorial({
   ]
     .filter(Boolean)
     .join(" · ");
+  const priceErrorId = `${titleId}-price-error`;
+  const priceHintId = `${titleId}-price-hint`;
+  const suggestion = monthly ? suggestionFor(groupDraft) : null;
+  const dueHint =
+    billingStart === periodOf(asOf)
+      ? uiT("Due on day 5 of each month; you can change it and adjust per student later.")
+      : uiT(
+          "Billing starts in {month} and is due on day 5 of each month. Classes before then are not charged; you can change it later.",
+          {
+            month: monthLong(`${billingStart}-01`, locale),
+          },
+        );
+  const priceHint = monthly
+    ? suggestion?.fee
+      ? `${uiT("Suggested {fee} ({classes} classes × {perClass})", {
+          fee: formatMoney(suggestion.fee, locale),
+          classes: suggestion.classes,
+          perClass: formatMoney(suggestion.perClass, locale),
+        })}. ${dueHint}`
+      : dueHint
+    : uiT("You can adjust it per student later or switch the group to a monthly fee.");
   const priceLine = monthly
     ? uiT("{amount} a month · monthly fee", { amount: formatMoney(Number(groupDraft.monthlyFee) || 0, locale) })
     : uiT("{amount} per hour · per-class billing", { amount: formatMoney(Number(groupDraft.rate) || 0, locale) });
@@ -621,24 +689,33 @@ export default function OnboardingTutorial({
                 <div className="onboarding-field-grid onboarding-group-fields">
                   <Field label={uiT("Group name")} error={errors.name} required>
                     <Input
+                      ref={(node) => {
+                        groupFieldsRef.current.name = node;
+                      }}
                       autoComplete="off"
                       placeholder={uiT("e.g. Advanced English")}
                       value={groupDraft.name}
-                      onChange={(event) => setGroupDraft({ ...groupDraft, name: event.target.value })}
+                      onChange={(event) => editGroup({ name: event.target.value })}
                     />
                   </Field>
-                  <Field label={uiT("Subject")} error={errors.subject}>
+                  <Field label={uiT("Subject")} error={errors.subject} required>
                     <Input
+                      ref={(node) => {
+                        groupFieldsRef.current.subject = node;
+                      }}
                       autoComplete="off"
                       placeholder={uiT("e.g. English")}
                       value={groupDraft.subject}
-                      onChange={(event) => setGroupDraft({ ...groupDraft, subject: event.target.value })}
+                      onChange={(event) => editGroup({ subject: event.target.value })}
                     />
                   </Field>
                 </div>
                 <ScheduleRows
                   rows={groupDraft.weeklySchedule}
-                  setRows={(weeklySchedule) => setGroupDraft({ ...groupDraft, weeklySchedule })}
+                  setRows={(weeklySchedule) => editGroup({ weeklySchedule })}
+                  sectionRef={(node) => {
+                    groupFieldsRef.current.schedule = node;
+                  }}
                 />
                 <div className="field onboarding-billing">
                   <span className="field-label">{uiT("Billing")}</span>
@@ -646,7 +723,7 @@ export default function OnboardingTutorial({
                     <Segmented
                       label={uiT("Billing mode")}
                       value={groupDraft.billingMode}
-                      onChange={(billingMode) => setGroupDraft({ ...groupDraft, billingMode })}
+                      onChange={changeBillingMode}
                       items={[
                         { value: "perClass", label: "Per class" },
                         { value: "monthly", label: "Monthly" },
@@ -655,28 +732,28 @@ export default function OnboardingTutorial({
                     <label className="onboarding-money">
                       <span aria-hidden="true">$</span>
                       <Input
+                        ref={(node) => {
+                          groupFieldsRef.current.price = node;
+                        }}
                         inputMode="decimal"
                         aria-label={monthly ? uiT("Monthly fee") : uiT("Price per hour")}
+                        aria-invalid={errors.price ? "true" : undefined}
+                        aria-describedby={errors.price ? priceErrorId : priceHintId}
                         value={monthly ? groupDraft.monthlyFee : groupDraft.rate}
                         onChange={(event) => {
                           const value = event.target.value.replace(/[^\d.]/g, "");
-                          setGroupDraft(
-                            monthly ? { ...groupDraft, monthlyFee: value } : { ...groupDraft, rate: value },
-                          );
+                          editGroup(monthly ? { monthlyFee: value } : { rate: value });
                         }}
                       />
                       <span>{monthly ? uiT("a month") : uiT("per hour")}</span>
                     </label>
-                    <small
-                      className={errors.price ? "field-error" : undefined}
-                      role={errors.price ? "alert" : undefined}
-                    >
-                      {errors.price
-                        ? uiT(errors.price)
-                        : monthly
-                          ? uiT("Due on day 5 of each month; you can change it and adjust per student later.")
-                          : uiT("You can adjust it per student later or switch the group to a monthly fee.")}
-                    </small>
+                    {errors.price ? (
+                      <span className="field-error" role="alert" id={priceErrorId}>
+                        {uiT(errors.price)}
+                      </span>
+                    ) : (
+                      <small id={priceHintId}>{priceHint}</small>
+                    )}
                   </div>
                 </div>
                 <SchedulePreview

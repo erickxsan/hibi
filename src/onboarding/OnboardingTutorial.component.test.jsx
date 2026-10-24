@@ -180,6 +180,81 @@ describe("OnboardingTutorial", () => {
     expect(actions.saveOnboardingGroup).not.toHaveBeenCalled();
   });
 
+  it("marks required fields, focuses the first invalid one and clears each error once it is fixed", async () => {
+    const user = userEvent.setup();
+    const { actions } = renderTutorial({ initialStep: 2 });
+    const name = screen.getByRole("textbox", { name: /Group name/ });
+    const subject = screen.getByRole("textbox", { name: /Subject/ });
+    const price = screen.getByRole("textbox", { name: "Price per hour" });
+    expect(subject).toHaveAttribute("aria-required", "true");
+    expect(subject.closest(".field").querySelector(".field-label .req")).toHaveTextContent("*");
+
+    await user.clear(price);
+    await user.click(screen.getByRole("button", { name: "Save and continue" }));
+    await waitFor(() => expect(name).toHaveFocus());
+    expect(actions.saveOnboardingGroup).not.toHaveBeenCalled();
+    expect(name).toHaveAttribute("aria-invalid", "true");
+    expect(subject).toHaveAttribute("aria-invalid", "true");
+    expect(price).toHaveAttribute("aria-invalid", "true");
+    const priceError = document.getElementById(price.getAttribute("aria-describedby"));
+    expect(priceError).toHaveTextContent("Enter a price.");
+    expect(priceError).toHaveClass("field-error");
+    expect(priceError).toHaveAttribute("role", "alert");
+
+    await user.type(name, "Advanced English");
+    expect(screen.queryByText("Enter a group name.")).not.toBeInTheDocument();
+    expect(name).not.toHaveAttribute("aria-invalid");
+    expect(screen.getByText("Enter a subject.")).toBeInTheDocument();
+    await user.type(subject, "English");
+    expect(screen.queryByText("Enter a subject.")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Save and continue" }));
+    await waitFor(() => expect(price).toHaveFocus());
+    await user.type(price, "200");
+    expect(screen.queryByText("Enter a price.")).not.toBeInTheDocument();
+    expect(price).not.toHaveAttribute("aria-invalid");
+    expect(document.getElementById(price.getAttribute("aria-describedby"))).toHaveTextContent(
+      "You can adjust it per student later",
+    );
+    await user.click(screen.getByRole("button", { name: "Save and continue" }));
+    await waitFor(() => expect(actions.saveOnboardingGroup).toHaveBeenCalledTimes(1));
+  });
+
+  it("suggests a monthly fee and starts billing next month once day 5 has passed", async () => {
+    const user = userEvent.setup();
+    const { actions } = renderTutorial({
+      initialStep: 2,
+      prepareState: (state) => {
+        state.settings.asOfDate = "2026-10-22";
+        state.settings.hourlyRate = 200;
+        state.settings.defaultClassHours = 1;
+      },
+    });
+    await user.type(screen.getByRole("textbox", { name: /Group name/ }), "Inglés A1");
+    await user.type(screen.getByRole("textbox", { name: /Subject/ }), "Inglés");
+    await user.click(screen.getByRole("button", { name: "Monthly" }));
+    // Mondays at $200 an hour: November 2026 has five of them.
+    const fee = screen.getByRole("textbox", { name: "Monthly fee" });
+    expect(fee).toHaveValue("1000");
+    const hint = document.getElementById(fee.getAttribute("aria-describedby"));
+    expect(hint).toHaveTextContent("Suggested $1,000 (5 classes × $200).");
+    expect(hint).toHaveTextContent("Billing starts in November and is due on day 5 of each month");
+
+    await user.clear(fee);
+    await user.type(fee, "900");
+    await user.click(screen.getByRole("button", { name: "Per class" }));
+    await user.click(screen.getByRole("button", { name: "Monthly" }));
+    expect(screen.getByRole("textbox", { name: "Monthly fee" })).toHaveValue("900");
+
+    await user.click(screen.getByRole("button", { name: "Save and continue" }));
+    await waitFor(() => expect(actions.saveOnboardingGroup).toHaveBeenCalledTimes(1));
+    expect(actions.saveOnboardingGroup).toHaveBeenCalledWith(
+      expect.objectContaining({
+        billing: { mode: "monthly", monthlyFee: 900, due: { type: "dayOfMonth", day: 5 }, effectiveFrom: "2026-11" },
+      }),
+    );
+  });
+
   it("builds the roster from a pasted list and Enter, and removes saved students", async () => {
     const user = userEvent.setup();
     const { actions } = renderTutorial({

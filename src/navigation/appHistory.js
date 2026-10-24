@@ -139,6 +139,15 @@ function ensureDispatcher() {
   setCurrentMetadata(metadataFromBrowser());
 }
 
+/**
+ * True when a Back/Forward move lands on another page. The page-level guard has already asked about
+ * unsaved changes for that move, and views and drawers of the page being left unmount with it, so
+ * they let it through instead of asking a second time.
+ */
+export function popLeavesPage({ previous, next }) {
+  return Boolean(previous?.page && next?.page && previous.page !== next.page);
+}
+
 export function subscribeToAppHistory(subscriber) {
   if (!browserAvailable()) return () => {};
   ensureDispatcher();

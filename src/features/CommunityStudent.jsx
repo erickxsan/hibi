@@ -11,6 +11,7 @@ import {
   monthLong,
   weekdayShort,
 } from "../utils/displayFormat";
+import { isGroupArchived } from "../domain/groupArchiving";
 import { studentGroupIdsOf } from "./groupLabels";
 
 /** «Debe $420 · vencido», «Asistencia 40% · faltó 3 de 5», «Debe $150 · jue 8 oct» or the student's groups. */
@@ -43,10 +44,14 @@ export function studentContext(month, groupNames, t, locale) {
   return { text: groupNames || t("Individual"), tone: "" };
 }
 
-export function groupNamesOf(student, groupsById, t) {
+/** «Inglés A1 · Individual». With markArchived, archived groups read «Inglés A1 (archivado)». */
+export function groupNamesOf(student, groupsById, t, { markArchived = false } = {}) {
   const names = studentGroupIdsOf(student)
-    .map((id) => groupsById.get(id)?.name)
-    .filter(Boolean);
+    .map((id) => groupsById.get(id))
+    .filter(Boolean)
+    .map((group) =>
+      markArchived && isGroupArchived(group) ? t("{name} (archived)", { name: group.name }) : group.name,
+    );
   if (student.isIndividual) names.push(t("Individual"));
   return names.join(" · ");
 }
@@ -129,7 +134,7 @@ export function StudentDetail({
           <h2 id="community-student-title">{student.fullName}</h2>
           <span className="detail-meta">
             <span className="tnum">{student.code}</span>
-            <span>{groupNamesOf(student, groupsById, t) || t("No group")}</span>
+            <span>{groupNamesOf(student, groupsById, t, { markArchived: true }) || t("No group")}</span>
             <span className={`st ${inactive ? "st-prog" : "st-ok"}`}>{t(inactive ? "Inactive" : "Active")}</span>
           </span>
         </div>
@@ -260,7 +265,7 @@ export function StudentSheet({ student, month, recent, groupsById, asOf, onEdit 
         <StudentAvatar avatarId={student.avatarId} name={student.fullName} size="large" />
         <div className="detail-title">
           <span className="detail-meta">
-            {[student.code, groupNamesOf(student, groupsById, t)].filter(Boolean).join(" · ")}
+            {[student.code, groupNamesOf(student, groupsById, t, { markArchived: true })].filter(Boolean).join(" · ")}
           </span>
         </div>
       </div>

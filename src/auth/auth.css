@@ -21,7 +21,7 @@
   background: var(--papel);
   border: 1px solid var(--line);
   border-radius: 20px;
-  box-shadow: 0 24px 60px rgba(30, 28, 32, 0.08);
+  box-shadow: 0 24px 60px color-mix(in srgb, var(--shadow-ink) 8%, transparent);
 }
 
 .auth-brand-panel {
@@ -320,14 +320,14 @@
   min-height: 48px;
   border: 0;
   border-radius: var(--radius-md);
-  background: var(--bermellon-strong);
-  color: #fff;
+  background: var(--accent-fill);
+  color: var(--on-accent);
   font: 700 15px/20px var(--font-sans);
   cursor: pointer;
 }
 
 .auth-submit-button:hover:not(:disabled) {
-  background: var(--bermellon-ink);
+  background: var(--accent-fill-hover);
 }
 
 .auth-submit-button:disabled {
@@ -338,8 +338,8 @@
 .auth-spinner {
   width: 16px;
   height: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.4);
-  border-top-color: #fff;
+  border: 2px solid color-mix(in srgb, var(--on-accent) 40%, transparent);
+  border-top-color: var(--on-accent);
   border-radius: 50%;
   animation: auth-spin 0.8s linear infinite;
 }
@@ -430,6 +430,20 @@
   .auth-password-rules {
     grid-template-columns: 1fr;
   }
+}
+
+/* Account menu panel: AccountMenu pins it to the viewport and sizes it; these are the fallbacks so it never
+   grows past the window (auth.css loads before design-system.css, hence the extra class). */
+.account-menu .account-menu-panel {
+  box-sizing: border-box;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.account-menu .account-menu-panel > * {
+  flex: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -2,7 +2,14 @@ import { sumMoney } from "../domain/money.js";
 import { addDays, addMonths, endOfMonth, startOfMonth, startOfWeek } from "../domain/dates";
 import { deriveMonthlyCharges, isMonthlyGroup, normalizeGroupBilling, periodOf } from "../domain/monthlyBilling";
 import { buildClassWorkspaceSessionsForRange } from "./classesWorkspaceModel";
-import { assignmentsIn, debtsThrough, matchesGroup, paymentsBetween, sessionAttendance } from "./homeDashboardModel";
+import {
+  assignmentsIn,
+  debtSummary,
+  debtsThrough,
+  matchesGroup,
+  paymentsBetween,
+  sessionAttendance,
+} from "./homeDashboardModel";
 import { studentGroupIdsOf } from "./groupLabels";
 
 /*
@@ -157,6 +164,8 @@ export function trackingStudents(state, derived, range, scope = "all") {
         payments: own,
         owed: debt?.amount || 0,
         overdue: debt?.overdue || 0,
+        overdueThisMonth: debt?.overdueThisMonth || 0,
+        overdueEarlier: debt?.overdueEarlier || 0,
         reasons: debt?.reasons || [],
         monthlyDue,
       };
@@ -283,6 +292,13 @@ export function trackingKpis(state, derived, range, scope, students) {
       paymentCount: payments.length,
       owed: sumMoney(students, (row) => row.owed),
       overdue: sumMoney(students, (row) => row.overdue),
+      // Same scope words as Inicio: overdue money of this month and of earlier months, inactive students apart.
+      period: periodOf(range.end),
+      overdueThisMonth: sumMoney(students, (row) => row.overdueThisMonth),
+      overdueEarlier: sumMoney(students, (row) => row.overdueEarlier),
+      inactiveOwed: range.end ? debtSummary(state, derivedRows, range.end, scope).inactive.owed : 0,
+      previousStart: range.previousStart,
+      previousEnd: range.previousEnd,
       overdueStudents: students.filter((row) => row.overdue > 0),
       pendingStudents: students.filter((row) => row.owed > 0 && !row.overdue),
       paidClasses: charged.filter((row) => !(Number(row.outstanding) > 0)).length,
@@ -323,7 +339,7 @@ export function monthlyBlocks(state, asOf, scope = "all") {
         group,
         billing: normalizeGroupBilling(group.billing),
         period,
-        dueDate: rows[0]?.charge.dueDate || "",
+        dueDate: rows[0]?.charge.groupDueDate || "",
         rows,
         paidCount: paid.length,
         total: counted.length,

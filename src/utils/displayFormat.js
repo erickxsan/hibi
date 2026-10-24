@@ -155,3 +155,24 @@ export function nowTimeFor(date, today) {
   const now = new Date();
   return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 }
+
+/**
+ * Axis ticks for a bar chart on a narrow screen: thins the labels to at most `maxVisible`, never repeats the
+ * label of the previous visible tick (two classes on the same day read «1 · 1») and keeps the last one.
+ * @param {Array<string | number>} rawLabels one label per bar
+ * @returns {string[]} the same length, with "" where no tick is drawn
+ */
+export function axisTickLabels(rawLabels, maxVisible = 10) {
+  const labels = rawLabels.map(String);
+  const step = Math.max(1, Math.ceil(labels.length / maxVisible));
+  const out = labels.map((label, index) => (index % step === 0 ? label : ""));
+  const last = labels.length - 1;
+  if (last > 0 && !out[last] && last % step >= Math.ceil(step / 2)) out[last] = labels[last];
+  let previous = null;
+  out.forEach((label, index) => {
+    if (!label) return;
+    if (label === previous) out[index] = "";
+    else previous = label;
+  });
+  return out;
+}

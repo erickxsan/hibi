@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { createGroup, createStarterState, generateScheduledOccurrences } from "./index.js";
+import {
+  createClassSchedule,
+  createGroup,
+  createStarterState,
+  generateScheduledOccurrences,
+  importState,
+  serializeState,
+} from "./index.js";
+import { startGroupSchedule } from "./groupArchiving.js";
 
 function scheduledState() {
   const state = createStarterState("2026-07-13");
@@ -97,5 +105,30 @@ describe("recurring class schedules", () => {
       ["2026-07-22", "17:30"],
       ["2026-07-29", "17:30"],
     ]);
+  });
+
+  it("starts a new group's schedule on its creation day without hiding classes added on purpose", () => {
+    const state = scheduledState();
+    // Created on Thursday 2026-07-16: Monday the 13th was before the group existed.
+    state.groups = [startGroupSchedule(state.groups[0], "2026-07-16")];
+    state.classSchedules = [
+      createClassSchedule({
+        id: "backdated",
+        groupId: "group_a",
+        startDate: "2026-07-14",
+        startTime: "12:00",
+        durationHours: 1,
+        daysOfWeek: [2],
+      }),
+    ];
+    const rows = generateScheduledOccurrences(state, "2026-07-13", "2026-07-20");
+    expect(rows.map((row) => [row.classDate, row.startTime, row.kind])).toEqual([
+      ["2026-07-14", "12:00", "added"],
+      ["2026-07-16", "18:00", "recurring"],
+      ["2026-07-20", "16:00", "recurring"],
+    ]);
+    expect(startGroupSchedule(state.groups[0], "2026-07-30").scheduleResumeDate).toBe("2026-07-16");
+    const restored = importState(serializeState(state));
+    expect(restored.groups[0].scheduleResumeDate).toBe("2026-07-16");
   });
 });

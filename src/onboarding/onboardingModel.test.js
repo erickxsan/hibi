@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { createStarterState } from "../domain";
 import {
+  clearFixedErrors,
   formatOnboardingDate,
+  groupDraftErrors,
   nextClassForSchedule,
   nextDateForDay,
   nextOnboardingStudentCodes,
@@ -123,5 +125,24 @@ describe("onboarding model", () => {
     ]);
     expect(result.classSchedules.map((item) => item.id)).toEqual(["group"]);
     expect(removeOnboardingStudents(state, "g1", [])).toBe(state);
+  });
+
+  it("validates the group form by field and clears only the errors that were fixed", () => {
+    const slot = { id: "s1", dayOfWeek: 1, startTime: "10:00", durationHours: 1 };
+    const draft = { name: " ", subject: "", billingMode: "perClass", rate: "", monthlyFee: "", weeklySchedule: [slot] };
+    expect(groupDraftErrors(draft)).toEqual({
+      name: "Enter a group name.",
+      subject: "Enter a subject.",
+      schedule: "",
+      price: "Enter a price.",
+    });
+    expect(groupDraftErrors({ ...draft, rate: "0" }).price).toBe("");
+    expect(groupDraftErrors({ ...draft, rate: "." }).price).toBe("Enter a price.");
+    expect(groupDraftErrors({ ...draft, rate: "200", billingMode: "monthly" }).price).toBe("Enter a price.");
+    const errors = groupDraftErrors(draft);
+    const fixed = clearFixedErrors(errors, groupDraftErrors({ ...draft, name: "Inglés A1" }));
+    expect(fixed).toEqual({ ...errors, name: "" });
+    expect(clearFixedErrors(fixed, groupDraftErrors({ ...draft, name: "Inglés A1" }))).toBe(fixed);
+    expect(clearFixedErrors({}, groupDraftErrors(draft))).toEqual({});
   });
 });

@@ -331,6 +331,80 @@
   display: grid;
 }
 
+/* «Datos y privacidad» (nube): cifrado y dispositivos → copias en este navegador → zona de peligro. */
+.settings-detail .settings-subhead {
+  margin: 0;
+  font: 800 18px/24px var(--font-sans);
+  color: var(--sumi);
+}
+
+.settings-detail .settings-block-lead {
+  margin: 4px 0 16px;
+}
+
+.settings-detail .settings-minor-head {
+  margin: 20px 0 8px;
+  font: 700 13px/18px var(--font-sans);
+  color: var(--sumi-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.settings-block > .settings-subhead + .privacy-actions {
+  margin-top: 8px;
+}
+
+.recovery-key-warning {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 8px;
+  padding: 14px 16px;
+  border-radius: var(--radius-lg);
+  background: var(--ocre-soft);
+  color: var(--ocre-ink);
+}
+
+.recovery-key-warning > svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.recovery-key-warning > span {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+}
+
+.recovery-key-warning small {
+  line-height: 1.45;
+}
+
+.recovery-key-warning .button {
+  margin-top: 8px;
+}
+
+.workspace-key-note {
+  max-width: 220px;
+  color: var(--sumi-muted);
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: right;
+}
+
+.settings-detail .settings-action-note {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+
+.settings-rotation-line {
+  margin-top: 12px;
+}
+
+.settings-danger-zone .settings-subhead {
+  color: var(--bermellon-ink);
+}
+
 .danger-line {
   display: flex;
   justify-content: space-between;
@@ -611,6 +685,17 @@
   display: none;
 }
 
+/* «Apariencia» in its mobile sheet: three equal, touch-sized options. */
+.settings-detail.is-sheet .settings-appearance {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+}
+
+.settings-detail.is-sheet .settings-appearance button {
+  min-height: 44px;
+}
+
 @media (max-width: 780px) {
   .settings-nav {
     max-width: none;
@@ -626,6 +711,17 @@
   .danger-line {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .workspace-key-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .workspace-key-note {
+    max-width: none;
+    text-align: left;
   }
 
   .record-import-summary {

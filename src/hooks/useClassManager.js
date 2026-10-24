@@ -37,13 +37,14 @@ import {
   removeOnboardingStudents,
 } from "../onboarding/onboardingModel";
 import { canonicalStringify } from "../crypto/canonical.js";
-import { setGroupArchived } from "../domain/groupArchiving.js";
+import { setGroupArchived, startGroupSchedule } from "../domain/groupArchiving.js";
 import { normalizeRepeatRule } from "../domain/classRecurrence.js";
 import {
   normalizeBillingByGroup,
   normalizeGroupBilling,
   normalizeMonthlyPayments,
   setMonthlyPayment,
+  startGroupBilling,
 } from "../domain/monthlyBilling.js";
 
 const UI_STORAGE_KEY = "minimal-class-manager:ui:v1";
@@ -107,6 +108,19 @@ export function canonicalGroup(draft) {
     scheduleResumeDate: draft.scheduleResumeDate ?? "",
     ...(normalizeGroupBilling(draft.billing) ? { billing: normalizeGroupBilling(draft.billing) } : {}),
   };
+}
+
+/**
+ * The workspace groups after saving one. A new group starts its weekly schedule and its monthly
+ * billing on `today`, so past weekdays and past due days are never owed. An edit keeps the stored
+ * schedule start unless the draft sets one.
+ */
+export function placeSavedGroup(groups, item, draft, today) {
+  const existing = groups.find((group) => group.id === item.id);
+  if (!existing) return [...groups, startGroupBilling(startGroupSchedule(item, today), today)];
+  const saved =
+    draft?.scheduleResumeDate === undefined ? { ...item, scheduleResumeDate: existing.scheduleResumeDate || "" } : item;
+  return groups.map((group) => (group.id === item.id ? saved : group));
 }
 
 export function canonicalStudent(draft) {
@@ -634,14 +648,12 @@ export function useClassManager({ persistence } = {}) {
       return commit(
         (current) => ({
           ...current,
-          groups: current.groups.some((group) => group.id === item.id)
-            ? current.groups.map((group) => (group.id === item.id ? item : group))
-            : [...current.groups, item],
+          groups: placeSavedGroup(current.groups, item, draft, operationalDate),
         }),
         draft.id ? "Group updated" : "Group added",
       );
     },
-    [commit, notify],
+    [commit, notify, operationalDate],
   );
 
   const setOnboardingStep = useCallback(
@@ -678,16 +690,14 @@ export function useClassManager({ persistence } = {}) {
       const saved = await commit(
         (current) => ({
           ...current,
-          groups: current.groups.some((group) => group.id === item.id)
-            ? current.groups.map((group) => (group.id === item.id ? item : group))
-            : [...current.groups, item],
+          groups: placeSavedGroup(current.groups, item, draft, operationalDate),
           settings: { ...current.settings, onboardingStep: 3, onboardingGroupId: item.id },
         }),
         "First group saved",
       );
       return saved ? item.id : false;
     },
-    [commit, notify],
+    [commit, notify, operationalDate],
   );
 
   const saveOnboardingStudents = useCallback(
@@ -1018,15 +1028,13 @@ export function useClassManager({ persistence } = {}) {
       return commit(
         (current) => ({
           ...current,
-          groups: current.groups.some((group) => group.id === item.id)
-            ? current.groups.map((group) => (group.id === item.id ? item : group))
-            : [...current.groups, item],
+          groups: placeSavedGroup(current.groups, item, draft, operationalDate),
           students: applyOverrides(current.students),
         }),
         draft.id ? "Group updated" : "Group added",
       );
     },
-    [commit, notify],
+    [commit, notify, operationalDate],
   );
 
   const upsertClassSchedule = useCallback(

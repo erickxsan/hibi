@@ -46,11 +46,17 @@ export function noteSentence(note, t, locale) {
   switch (note.kind) {
     case "absences":
       return t("missed {missed} of their last {total} classes.", { missed: note.missed, total: note.total });
-    case "owes":
-      return t("owes {amount} from the class on {date}.", {
+    case "owes": {
+      // The amount spans every unpaid class; name how many so it does not read as one class.
+      const parameters = {
         amount: formatMoney(note.amount, locale),
+        count: note.count,
         date: formatShortDate(note.date, locale, { weekday: false }),
-      });
+      };
+      return note.count > 1
+        ? t("owes {amount} from {count} classes since {date}.", parameters)
+        : t("owes {amount} from the class on {date}.", parameters);
+    }
     case "ungraded":
       return t("has no grade in {assessment}.", { assessment: note.assessment });
     case "monthlyPending":
@@ -77,15 +83,18 @@ export function TodayTimeline({ timeline, selectedKey, onSelect }) {
   const span = timeline.dayEnd - timeline.dayStart || 1;
   const pct = (minutes) => Math.max(0, Math.min(100, ((minutes - timeline.dayStart) / span) * 100));
   const hours = [];
-  for (let minute = timeline.dayStart; minute <= timeline.dayEnd; minute += 60) hours.push(minute);
+  const firstHour = Math.floor(timeline.dayStart / 60) * 60;
+  for (let minute = firstHour; minute <= timeline.dayEnd; minute += 60) hours.push(minute);
+  // Keep at least ~72 px per hour so a one-hour class never shrinks into an unreadable chip.
+  const minWidth = Math.max(860, (hours.length - 1) * 72);
   const showNow = timeline.now >= timeline.dayStart && timeline.now <= timeline.dayEnd;
   return (
     <div className="tlw" role="region" aria-label={t("Today's timeline")} tabIndex={0}>
-      <div className="tl">
-        {hours.map((minute) => (
+      <div className="tl" style={{ minWidth: `${minWidth}px` }}>
+        {hours.map((minute, index) => (
           <span
             key={minute}
-            className={`tk ${(minute / 60) % 2 === 0 ? "mj" : ""}`}
+            className={`tk ${(minute / 60) % 2 === 0 ? "mj" : ""} ${index === 0 ? "first" : index === hours.length - 1 ? "last" : ""}`.trim()}
             style={{ left: `${pct(minute)}%` }}
           >
             <b>{(minute / 60) % 2 === 0 ? formatTime(minute, locale).replace(":00", "") : ""}</b>
@@ -93,7 +102,8 @@ export function TodayTimeline({ timeline, selectedKey, onSelect }) {
         ))}
         <span className="rail" />
         {showNow ? <span className="rail-past" style={{ width: `${pct(timeline.now)}%` }} /> : null}
-        {timeline.freeMinutes > 0 && timeline.next ? (
+        {/* The free stretch starts now, so it only shows while now is on the line. */}
+        {showNow && timeline.freeMinutes > 0 && timeline.next ? (
           <span
             className="free"
             style={{ left: `${pct(timeline.now)}%`, width: `${pct(timeline.next.start) - pct(timeline.now)}%` }}

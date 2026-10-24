@@ -4,7 +4,12 @@ import { createPortal } from "react-dom";
 import { ChevronLeft, X } from "lucide-react";
 import { IconButton } from "./BaseButtons";
 import { OverlayDepthContext, useCompactViewport } from "./OverlayContext";
-import { closeOverlayHistory, pushOverlayHistory, subscribeToAppHistory } from "../navigation/appHistory";
+import {
+  closeOverlayHistory,
+  popLeavesPage,
+  pushOverlayHistory,
+  subscribeToAppHistory,
+} from "../navigation/appHistory";
 
 let openDrawerCount = 0;
 const dialogStack = [];
@@ -118,6 +123,12 @@ export function Drawer({
         const wasOpen = previous?.overlays?.includes(historyId);
         const remainsOpen = next?.overlays?.includes(historyId);
         if (!wasOpen || remainsOpen) return true;
+        if (popLeavesPage({ previous, next })) {
+          // The page guard already asked; this drawer closes with the page it belongs to.
+          ownsHistoryEntry.current = false;
+          closing.current = false;
+          return true;
+        }
         const accepted = onCloseRef.current?.() !== false;
         if (!accepted) {
           closing.current = false;

@@ -4,9 +4,13 @@ import { AccountMenu } from "./auth/AccountMenu";
 import { AppShell } from "./components/AppShell";
 import { ToastRegion } from "./components/ui";
 import { PendingOperations } from "./cloud/PendingOperations";
+import { RecoveryKeyReminder } from "./cloud/RecoveryKeyReminder";
+import { useIdlePrefetch } from "./navigation/idlePrefetch";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { useClassManager } from "./hooks/useClassManager";
 import { usePageNavigation } from "./hooks/useHistoryNavigation";
+import { createNavigationPass, discardChangesRequest, replayableHistoryMove } from "./hooks/useUnsavedChanges";
+import { useConfirmPrompt } from "./components/ConfirmPrompt";
 import { useI18n } from "./i18n";
 import { deriveAll } from "./domain";
 import { sumMoney } from "./domain/money";
@@ -32,11 +36,28 @@ const NAV_ITEMS = [
   { id: "settings", label: "Settings", mobileLabel: "Adjustments", href: "/settings", icon: SettingsIcon },
 ];
 
-const Home = lazy(() => import("./features/Home"));
-const Community = lazy(() => import("./features/Community"));
-const Classes = lazy(() => import("./features/Classes"));
-const Tracking = lazy(() => import("./features/Tracking"));
-const Settings = lazy(() => import("./features/Settings"));
+const loadHome = () => import("./features/Home");
+const loadCommunity = () => import("./features/Community");
+const loadClasses = () => import("./features/Classes");
+const loadTracking = () => import("./features/Tracking");
+const loadSettings = () => import("./features/Settings");
+// Warmed while the browser is idle so the first visit to a section does not stop on «Cargando…».
+const SECTION_LOADERS = [loadHome, loadCommunity, loadClasses, loadTracking, loadSettings];
+const HomeScreen = lazy(loadHome);
+const Community = lazy(loadCommunity);
+const Classes = lazy(loadClasses);
+const Tracking = lazy(loadTracking);
+const Settings = lazy(loadSettings);
+
+/** Inicio, led by the one-time recovery-key reminder when the encrypted workspace has no recovery key. */
+function Home(props) {
+  return (
+    <>
+      <RecoveryKeyReminder encryption={props.encryption} openPage={props.openPage} />
+      <HomeScreen {...props} />
+    </>
+  );
+}
 
 const PAYMENT_OVERVIEW_INTENT = Object.freeze({
   type: "open-tracking",
@@ -74,6 +95,7 @@ export default function ClassManagerApplication({
 }) {
   const { t: uiT } = useI18n();
   useI18n();
+  useIdlePrefetch(SECTION_LOADERS);
   const manager = useClassManager({ persistence });
   const archivedGroupIds = useMemo(
     () => new Set(manager.state.groups.filter(isGroupArchived).map((group) => group.id)),
@@ -131,52 +153,86 @@ export default function ClassManagerApplication({
     navigationBlockers.current.add(blocker);
     return () => navigationBlockers.current.delete(blocker);
   }, []);
+  // Unsaved-changes guard. The question is the in-app prompt, which answers asynchronously, while
+  // usePageNavigation needs a synchronous yes/no: the guard blocks first and, once the teacher accepts,
+  // replays the same navigation with a one-shot pass (the whole UI action for clicks, the same history
+  // move for browser Back/Forward). Refresh and tab close keep the native `beforeunload` dialog.
+  const { confirm: confirmLeave, prompt: leavePrompt } = useConfirmPrompt();
+  const navigationPass = useRef(createNavigationPass());
+  const navigationRetry = useRef(null);
+  const navigateRef = useRef(null);
   const allowNavigation = useCallback(
     (context) => {
       if (canNavigate?.(context) === false) return false;
+      if (navigationPass.current.consume(context.to)) return true;
       const messages = [...navigationBlockers.current].map((blocker) => blocker(context)).filter(Boolean);
       if (!messages.length) return true;
-      if (typeof globalThis.confirm !== "function") return false;
-      return globalThis.confirm([...new Set(messages)].join("\n\n"));
+      const retry = navigationRetry.current;
+      const replayHistory = context.reason === "popstate" ? replayableHistoryMove() : null;
+      confirmLeave(discardChangesRequest([...new Set(messages)].join(" "))).then((accepted) => {
+        if (!accepted) return;
+        navigationPass.current.grant(context.to);
+        if (replayHistory?.()) return;
+        if (retry) retry();
+        else navigateRef.current?.(context.to, { replace: context.reason === "replace" });
+        navigationPass.current.clear();
+      });
+      return false;
     },
-    [canNavigate],
+    [canNavigate, confirmLeave],
   );
   const { page, navigate, navigationReason } = usePageNavigation({
     canNavigate: allowNavigation,
     onPageChange: () => setIntent(null),
   });
+  navigateRef.current = navigate;
+  /** Runs a UI action that navigates, remembering it so an approved «discard changes?» can run it again. */
+  const runNavigation = useCallback((action) => {
+    const previous = navigationRetry.current;
+    navigationRetry.current = action;
+    try {
+      return action();
+    } finally {
+      navigationRetry.current = previous;
+    }
+  }, []);
   const openPage = useCallback(
-    (nextPage, nextIntent = null) => {
-      if (!navigate(nextPage)) return false;
-      setIntent(nextIntent);
-      return true;
-    },
-    [navigate],
+    (nextPage, nextIntent = null) =>
+      runNavigation(() => {
+        if (!navigate(nextPage)) return false;
+        setIntent(nextIntent);
+        return true;
+      }),
+    [navigate, runNavigation],
   );
   const clearIntent = useCallback(() => setIntent(null), []);
   // Settings can replay the tour alone or reopen the guided setup where it was left.
   const openOnboarding = useCallback(
-    (requestedMode) => {
-      if (!navigate("home")) return;
-      const mode = requestedMode === "setup" ? "setup" : "tour";
-      setIntent(null);
-      const step = mode === "setup" ? setupResumeStep(manager.state.settings) || 2 : ONBOARDING_TOUR_START_STEP;
-      setOnboarding((current) => ({ open: true, runId: current.runId + 1, mode, step }));
-    },
-    [manager.state.settings, navigate],
+    (requestedMode) =>
+      runNavigation(() => {
+        if (!navigate("home")) return;
+        const mode = requestedMode === "setup" ? "setup" : "tour";
+        setIntent(null);
+        const step = mode === "setup" ? setupResumeStep(manager.state.settings) || 2 : ONBOARDING_TOUR_START_STEP;
+        setOnboarding((current) => ({ open: true, runId: current.runId + 1, mode, step }));
+      }),
+    [manager.state.settings, navigate, runNavigation],
   );
   const closeOnboarding = useCallback(
     (nextPage) => {
       setOnboarding((current) => ({ ...current, open: false }));
-      if (nextPage && navigate(nextPage)) setIntent(null);
+      runNavigation(() => {
+        if (nextPage && navigate(nextPage)) setIntent(null);
+      });
     },
-    [navigate],
+    [navigate, runNavigation],
   );
   const navigateOnboarding = useCallback(
-    (nextPage) => {
-      if (navigate(nextPage, { replace: true })) setIntent(null);
-    },
-    [navigate],
+    (nextPage) =>
+      runNavigation(() => {
+        if (navigate(nextPage, { replace: true })) setIntent(null);
+      }),
+    [navigate, runNavigation],
   );
 
   useEffect(() => {
@@ -271,9 +327,11 @@ export default function ClassManagerApplication({
         guidedNavigation={onboarding.open}
         activePage={shellPage}
         navigationReason={navigationReason}
-        onNavigate={(nextPage) => {
-          if (navigate(nextPage)) setIntent(null);
-        }}
+        onNavigate={(nextPage) =>
+          runNavigation(() => {
+            if (navigate(nextPage)) setIntent(null);
+          })
+        }
         toolbar={
           user ? (
             <AccountMenu
@@ -321,6 +379,7 @@ export default function ClassManagerApplication({
           />
         </Suspense>
       ) : null}
+      {leavePrompt}
       <ToastRegion toasts={manager.toasts} onDismiss={manager.dismissToast} />
     </>
   );

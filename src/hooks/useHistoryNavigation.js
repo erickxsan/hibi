@@ -5,6 +5,7 @@ import {
   ensurePageHistory,
   pageFromPath,
   pathForPage,
+  popLeavesPage,
   pushPageHistory,
   pushViewHistory,
   replacePageHistory,
@@ -22,8 +23,8 @@ function allowedValue(value, allowedValues) {
  * URL-backed navigation for hibi's primary pages.
  *
  * `canNavigate` is intentionally synchronous so a feature-level dirty-form
- * guard can return false (or show window.confirm and return its result) before
- * either a click or browser Back changes the rendered page.
+ * guard can return false before either a click or browser Back changes the
+ * rendered page; the app shell then asks in its own prompt and replays the move.
  */
 export function usePageNavigation({
   routes = APP_ROUTES,
@@ -142,8 +143,9 @@ export function useHistoryBackedState({
     }
 
     return subscribeToAppHistory({
-      beforePop: ({ next }) => {
-        const nextValue = next?.views?.[key] ?? defaultValue;
+      beforePop: (context) => {
+        if (popLeavesPage(context)) return true;
+        const nextValue = context.next?.views?.[key] ?? defaultValue;
         if (!allowedValue(nextValue, allowedValuesRef.current) || nextValue === valueRef.current) return true;
         return canChangeRef.current?.({ from: valueRef.current, to: nextValue, reason: "popstate" }) !== false;
       },

@@ -254,16 +254,15 @@ export function generateScheduledOccurrences(state, startDate, endDate) {
     result.push(occurrence);
   }
 
+  // A group's schedule counts from its start (creation or reactivation day). A one-off class the
+  // teacher added on purpose for an earlier date stays visible so it can still be recorded.
+  const startsBy = (group, item) =>
+    !group?.scheduleResumeDate || item.kind === "added" || item.classDate >= group.scheduleResumeDate;
   return result
     .filter((item) => {
       const source = groups.find((group) => group.id === item.sourceGroupId);
       const target = groups.find((group) => group.id === item.groupId);
-      return (
-        !isGroupArchived(source) &&
-        !isGroupArchived(target) &&
-        (!source?.scheduleResumeDate || item.classDate >= source.scheduleResumeDate) &&
-        (!target?.scheduleResumeDate || item.classDate >= target.scheduleResumeDate)
-      );
+      return !isGroupArchived(source) && !isGroupArchived(target) && startsBy(source, item) && startsBy(target, item);
     })
     .filter((item, index, all) => all.findIndex((candidate) => candidate.id === item.id) === index)
     .sort(

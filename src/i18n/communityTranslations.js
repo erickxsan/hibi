@@ -17,6 +17,9 @@ export const COMMUNITY_TRANSLATIONS = Object.freeze({
   "They do not count in Home or Tracking. Their history is kept.":
     "No cuentan en Inicio ni en Seguimiento. Su historial se conserva.",
   "View group": "Ver grupo",
+  "View group {name}": "Ver grupo {name}",
+  "In archived groups": "En grupos archivados",
+  "{name} (archived)": "{name} (archivado)",
   "also in {groups}": "también en {groups}",
   "also individual": "también individual",
   "Individual and without a group": "Individuales y sin grupo",
@@ -169,4 +172,11 @@ export const COMMUNITY_TRANSLATIONS = Object.freeze({
   "{count} students × {amount}": "{count} alumnos × {amount}",
   "{count} student × {amount}": "{count} alumno × {amount}",
   "per student, no students yet": "por alumno, aún sin alumnos",
+  "Delete group": "Eliminar grupo",
+  "Delete {p0}?": "¿Eliminar {p0}?",
+  "Deactivate {p0}?": "¿Desactivar a {p0}?",
+  "Open {name}": "Abrir {name}",
+  "{p0} / hour inherited": "{p0} / hora · heredada",
+  "Billing starts in {month}. Classes before then are not charged.":
+    "El cobro empieza en {month}. Las clases de antes no se cobran.",
 });

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "../i18n";
@@ -45,17 +45,44 @@ describe("workspace encryption gate", () => {
     expect(screen.queryByLabelText("Encryption password")).not.toBeInTheDocument();
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     expect(screen.getByText(/Do not create a new password/)).toBeInTheDocument();
-    expect(screen.getByText(/Signing out also forgets this device/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sign out and forget this device" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Check again" }));
     expect(values.onRetry).toHaveBeenCalledOnce();
     expect(values.onActivate).not.toHaveBeenCalled();
   });
 
-  it("hides setup and disables retry while a fresh profile check is running", () => {
+  it("hides setup and shows only progress while a fresh profile check is running", () => {
     renderGate(props({ bootstrap: null, loading: true, error: new Error("Unavailable") }));
     expect(screen.getByRole("heading", { name: "Checking workspace protection…" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Check again" })).toBeDisabled();
+    expect(screen.getByText(/Opening your encrypted workspace/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Check again" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /sign out/iu })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Create encryption password")).not.toBeInTheDocument();
+  });
+
+  it("offers a retry and a quiet sign-out that forgets the device only after a slow check", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const values = props({ bootstrap: null, loading: true, slowCheckDelay: 8000 });
+      renderGate(values);
+      expect(screen.queryByRole("button", { name: /retry|sign out|check again/iu })).toBeNull();
+      act(() => vi.advanceTimersByTime(7999));
+      expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+      act(() => vi.advanceTimersByTime(1));
+      expect(screen.getByText("This is taking longer than usual.")).toBeInTheDocument();
+      const signOut = screen.getByRole("button", { name: "Sign out and forget this device" });
+      expect(signOut).not.toHaveClass("button-primary");
+      expect(screen.getByText("Next time you will need your encryption password.")).toBeInTheDocument();
+      act(() => screen.getByRole("button", { name: "Retry" }).click());
+      expect(values.onRetry).toHaveBeenCalledOnce();
+      // A new attempt starts quiet again.
+      expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+      act(() => vi.advanceTimersByTime(8000));
+      act(() => screen.getByRole("button", { name: "Sign out and forget this device" }).click());
+      expect(values.onSignOut).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it.each(["a", "passwordpassword", "12345678901234567890"])(

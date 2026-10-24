@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   buildClassWorkspaceSessions,
   buildClassWorkspaceSessionsForRange,
+  duplicateRecurringSlots,
   filterClassHistory,
+  groupRecurringSlots,
   paymentRecordState,
   rosterForClassSession,
   selectPrimaryClassSession,
@@ -101,5 +103,48 @@ describe("classes workspace model", () => {
       "2026-07-22",
       "2026-07-29",
     ]);
+  });
+});
+
+describe("recurring slots of a group", () => {
+  const groupState = {
+    groups: [
+      {
+        id: "g1",
+        name: "S SA 2 - 4",
+        weeklySchedule: [
+          { id: "sat", dayOfWeek: 6, startTime: "14:00", durationHours: 2 },
+          { id: "sun", dayOfWeek: 7, startTime: "08:00", durationHours: 2 },
+        ],
+      },
+    ],
+    scheduleChanges: [
+      { groupId: "g1", scheduleSlotId: "sun", effectiveFrom: "2026-10-01", startTime: "09:00" },
+      { groupId: "g1", scheduleSlotId: "sat", effectiveFrom: "2026-12-01", startTime: "15:00" },
+    ],
+    classSchedules: [
+      { id: "series", groupId: "g1", recurrence: "weekly", daysOfWeek: [4], startTime: "17:00", durationHours: 1 },
+      { id: "ended", groupId: "g1", recurrence: "weekly", daysOfWeek: [1], startTime: "17:00", endDate: "2026-09-30" },
+      { id: "once", groupId: "g1", recurrence: "once", daysOfWeek: [2], startTime: "17:00" },
+      { id: "other", groupId: "g2", recurrence: "weekly", daysOfWeek: [6], startTime: "14:00" },
+    ],
+  };
+
+  it("lists the weekly schedule (with changes in effect) and open recurring series", () => {
+    expect(groupRecurringSlots(groupState, "g1", "2026-10-23")).toEqual([
+      { source: "series", dayOfWeek: 4, startTime: "17:00", durationHours: 1 },
+      { source: "weekly", dayOfWeek: 6, startTime: "14:00", durationHours: 2 },
+      { source: "weekly", dayOfWeek: 7, startTime: "09:00", durationHours: 2 },
+    ]);
+    expect(groupRecurringSlots(groupState, "", "2026-10-23")).toEqual([]);
+  });
+
+  it("finds a new series that repeats a slot of the same group, weekday and time", () => {
+    const slots = groupRecurringSlots(groupState, "g1", "2026-10-23");
+    // Picker weekdays: 6 = Saturday, 0 = Sunday.
+    expect(duplicateRecurringSlots(slots, { days: [6], startTime: "14:00" })).toEqual([slots[1]]);
+    expect(duplicateRecurringSlots(slots, { days: [0], startTime: "09:00" })).toEqual([slots[2]]);
+    expect(duplicateRecurringSlots(slots, { days: [6], startTime: "16:00" })).toEqual([]);
+    expect(duplicateRecurringSlots(slots, { days: [5], startTime: "14:00" })).toEqual([]);
   });
 });

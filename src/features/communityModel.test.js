@@ -181,6 +181,26 @@ describe("monthly billing editor", () => {
     ]);
   });
 
+  it("keeps the covered start of a new group when its monthly fee is edited", () => {
+    const { state } = setup();
+    const group = {
+      ...state.groups[0],
+      billing: {
+        mode: "monthly",
+        monthlyFee: 1200,
+        due: { type: "dayOfMonth", day: 5 },
+        effectiveFrom: "2026-11",
+        coveredFrom: "2026-10-22",
+      },
+    };
+    const draft = { ...billingDraftFor(group, members(state)), monthlyFee: 1300 };
+    expect(billingChanges(group, members(state), draft, AS_OF).billing).toMatchObject({
+      monthlyFee: 1300,
+      effectiveFrom: "2026-11",
+      coveredFrom: "2026-10-22",
+    });
+  });
+
   it("stores per-student adjustments and keeps the join date of a mid-month student", () => {
     const { state } = setup();
     const group = {

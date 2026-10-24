@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CalendarDays, ChevronLeft, ChevronRight, Pencil, Plus, Save } from "lucide-react";
+import { CalendarDays, CalendarX2, ChevronLeft, ChevronRight, Pencil, Plus, Save } from "lucide-react";
 import { useI18n } from "../i18n/index.jsx";
 import {
   AttendanceChoice,
@@ -16,6 +16,7 @@ import {
 } from "../components/ui";
 import { StudentAvatar } from "../components/StudentAvatar";
 import { useCompactViewport } from "../components/OverlayContext";
+import { useConfirmPrompt } from "../components/ConfirmPrompt";
 import { addDays, startOfWeek, todayDateOnly } from "../domain/dates";
 import { scheduledClassSupportsFutureScope } from "../domain";
 import {
@@ -26,7 +27,14 @@ import {
   periodOf,
 } from "../domain/monthlyBilling";
 import { useHistoryBackedState } from "../hooks/useHistoryNavigation";
-import { confirmDiscard, draftChanged, draftSignature, useUnsavedChanges } from "../hooks/useUnsavedChanges";
+import {
+  createNavigationPass,
+  discardChangesRequest,
+  draftChanged,
+  draftSignature,
+  replayableHistoryMove,
+  useUnsavedChanges,
+} from "../hooks/useUnsavedChanges";
 import { playHibiSound } from "../utils/hibiSounds";
 import {
   dayNumber,
@@ -99,11 +107,17 @@ function noteText(note, t, locale) {
   switch (note.kind) {
     case "absences":
       return t("Missed {missed} of their last {total} classes", { missed: note.missed, total: note.total });
-    case "owes":
-      return t("Owes {amount} from the class on {date}", {
+    case "owes": {
+      // The amount spans every unpaid class; name how many so «Debe $1,125» does not read as one class.
+      const parameters = {
         amount: formatMoney(note.amount, locale),
+        count: note.count,
         date: formatShortDate(note.date, locale, { weekday: false }),
-      });
+      };
+      return note.count > 1
+        ? t("Owes {amount} from {count} classes since {date}", parameters)
+        : t("Owes {amount} from the class on {date}", parameters);
+    }
     case "ungraded":
       return t("Missing grade for {assessment}", { assessment: note.assessment });
     case "monthlyPending":
@@ -152,18 +166,27 @@ function WeekRail({
       ? `${t("Tomorrow")} · ${formatShortDate(date, locale, { weekday: true }).replace(/ \S+$/, "")}`
       : t(relative.key);
   };
-  const item = (session) => {
+  // «Sin registrar» mixes days: each row carries its own date («Ayer», «sáb 17 oct») so it never reads as
+  // one of the upcoming classes listed under the day headings below.
+  const rowDate = (date) => {
+    const relative = relativeDay(date, currentDate);
+    return relative ? t(relative.key) : formatShortDate(date, locale, { weekday: true });
+  };
+  const item = (session, { withDate = false } = {}) => {
     const look = STATUS_LOOK[session.statusLabel];
     const showStatus = session.statusLabel !== "Scheduled" || session.key === activeKey;
     return (
       <button
         type="button"
         key={session.key}
-        className={`agenda-item ${session.key === activeKey ? "is-selected" : ""}`}
+        className={`agenda-item ${session.key === activeKey ? "is-selected" : ""} ${withDate ? "has-date" : ""}`.trim()}
         aria-current={session.key === activeKey ? "true" : undefined}
         onClick={() => onSelect(session)}
       >
-        <time>{formatTime(session.startTime, locale)}</time>
+        <time dateTime={`${session.classDate}${session.startTime ? `T${session.startTime}` : ""}`}>
+          {withDate ? <span className="agenda-date">{rowDate(session.classDate)}</span> : null}
+          {formatTime(session.startTime, locale)}
+        </time>
         <span>
           <strong>{session.title}</strong>
           <small>{sessionSubline(state, session, t, locale)}</small>
@@ -209,13 +232,13 @@ function WeekRail({
         {pending.length ? (
           <>
             <h3>{t("Not recorded")}</h3>
-            {pending.map(item)}
+            {pending.map((session) => item(session, { withDate: true }))}
           </>
         ) : null}
         {[...byDate.entries()].map(([date, items]) => (
           <div key={date} className="agenda-day">
             <h3>{dayLabel(date)}</h3>
-            {items.map(item)}
+            {items.map((session) => item(session))}
           </div>
         ))}
         {!visible.length && !pending.length ? <p className="agenda-empty">{t("No classes left this week.")}</p> : null}
@@ -224,7 +247,7 @@ function WeekRail({
   );
 }
 
-function MonthlyPaymentCell({ charge, today, onToggle, busy }) {
+function MonthlyPaymentCell({ charge, today, classDate, onToggle, busy }) {
   const { t, locale } = useI18n();
   const month = capitalize(monthLong(`${charge.period}-01`, locale));
   if (charge.status === "paid") {
@@ -256,7 +279,7 @@ function MonthlyPaymentCell({ charge, today, onToggle, busy }) {
   }
   const due =
     charge.dueDate === today
-      ? t("Due today, in this class")
+      ? t(classDate === today ? "Due today, in this class" : "Due today")
       : charge.status === "overdue"
         ? t("Overdue since {date}", { date: formatShortDate(charge.dueDate, locale, { weekday: false }) })
         : t("Due {date}", { date: formatShortDate(charge.dueDate, locale) });
@@ -273,12 +296,26 @@ function MonthlyPaymentCell({ charge, today, onToggle, busy }) {
   );
 }
 
-function RosterRow({ student, entry, note, setEntry, assessmentOn, maximum, monthlyCharge, today, onMonthly, busy }) {
+function RosterRow({
+  student,
+  entry,
+  note,
+  setEntry,
+  assessmentOn,
+  maximum,
+  monthlyCharge,
+  today,
+  classDate,
+  onMonthly,
+  busy,
+}) {
   const { t, locale } = useI18n();
   const attendance = entry.attendance || "";
   let payment;
   if (monthlyCharge) {
-    payment = <MonthlyPaymentCell charge={monthlyCharge} today={today} onToggle={onMonthly} busy={busy} />;
+    payment = (
+      <MonthlyPaymentCell charge={monthlyCharge} today={today} classDate={classDate} onToggle={onMonthly} busy={busy} />
+    );
   } else if (attendance === "P") {
     payment = (
       <PaymentChoice
@@ -450,19 +487,36 @@ export default function Classes({
   );
 
   useUnsavedChanges(registerNavigationBlocker, dirty, "Discard your unsaved class changes?");
+  // In-app questions (no native confirm). Tab changes are guarded synchronously, so a dirty draft blocks
+  // the change, asks, and on «Descartar cambios» replays the same change through a one-shot pass.
+  const { confirm, prompt: confirmPrompt } = useConfirmPrompt();
+  const discardPass = useRef(createNavigationPass());
+  const askDiscard = useCallback(
+    () => confirm(discardChangesRequest(t("Discard your unsaved class changes?"))),
+    [confirm, t],
+  );
+  const changeTabRef = useRef(null);
   const changeTab = useHistoryBackedState({
     key: "classes-workspace-tab",
     value: tab,
     onChange: setTab,
     defaultValue: "next",
     allowedValues: ["next", "calendar", "history"],
-    canChange: () => {
-      if (!dirty) return true;
-      if (!confirmDiscard(true, "Discard your unsaved class changes?")) return false;
-      acceptRemoteDraft(latestRemoteRef.current);
-      return true;
+    canChange: ({ to, reason }) => {
+      if (!dirty || discardPass.current.consume(to)) return true;
+      const replayHistory = reason === "popstate" ? replayableHistoryMove() : null;
+      askDiscard().then((accepted) => {
+        if (!accepted) return;
+        acceptRemoteDraft(latestRemoteRef.current);
+        discardPass.current.grant(to);
+        if (replayHistory?.()) return;
+        changeTabRef.current?.(to, { replace: reason === "replace" });
+        discardPass.current.clear();
+      });
+      return false;
     },
   });
+  changeTabRef.current = changeTab;
 
   const focusSession = useCallback((session) => {
     setSelectedKey(session.key);
@@ -545,7 +599,19 @@ export default function Classes({
     if (
       classStatus === "Completed" &&
       unmarked &&
-      globalThis.confirm?.(t("{count} students are still unmarked. Save anyway?", { count: unmarked })) === false
+      !(await confirm({
+        kicker: activeSession.title,
+        title: t(
+          unmarked === 1
+            ? "{count} student is still unmarked. Save anyway?"
+            : "{count} students are still unmarked. Save anyway?",
+          { count: unmarked },
+        ),
+        description: t("You can mark them later."),
+        confirmLabel: t("Save anyway"),
+        cancelLabel: t("Keep marking"),
+        tone: "primary",
+      }))
     )
       return;
     const classRecords = buildClassRecords(state, activeSession, roster, entries, { classStatus, today: currentDate });
@@ -588,9 +654,17 @@ export default function Classes({
       setSaving(false);
     }
   };
-  const cancelSession = () => {
-    if (!globalThis.confirm?.(t("Mark this class as cancelled? Existing payments will be preserved."))) return;
-    saveSession("Cancelled");
+  const cancelSession = async () => {
+    if (!activeSession) return;
+    const accepted = await confirm({
+      kicker: activeSession.title,
+      title: t("Mark this class as cancelled?"),
+      description: t("Existing payments will be preserved."),
+      confirmLabel: t("Mark cancelled"),
+      cancelLabel: t("Keep class"),
+      tone: "danger",
+    });
+    if (accepted) await saveSession("Cancelled");
   };
   const toggleMonthly = async (charge, paid) => {
     if (!actions.setMonthlyPaid) return;
@@ -608,32 +682,44 @@ export default function Classes({
     }
   };
 
+  // Switching class with a dirty draft asks first; the draft is dropped only after «Descartar cambios».
   const selectSession = useCallback(
     (session) => {
       if (!session) return;
       setAgendaOpen(false);
       if (session.key === activeSession?.key) return;
-      if (dirty && !confirmDiscard(true, "Discard your unsaved class changes?")) return;
-      if (dirty) {
+      if (!dirty) {
+        focusSession(session);
+        return;
+      }
+      askDiscard().then((accepted) => {
+        if (!accepted) return;
         hydratedSessionKeyRef.current = "";
         hydratedSessionRef.current = null;
-      }
-      focusSession(session);
+        focusSession(session);
+      });
     },
-    [activeSession?.key, dirty, focusSession],
+    [activeSession?.key, askDiscard, dirty, focusSession],
   );
   const openFromOtherTab = useCallback(
     (session) => {
       if (!session) return;
-      if (dirty && !confirmDiscard(true, "Discard your unsaved class changes?")) return;
-      if (dirty) {
+      if (!dirty) {
+        focusSession(session);
+        changeTab("next");
+        return;
+      }
+      askDiscard().then((accepted) => {
+        if (!accepted) return;
         hydratedSessionKeyRef.current = "";
         hydratedSessionRef.current = null;
-      }
-      focusSession(session);
-      changeTab("next");
+        focusSession(session);
+        discardPass.current.grant("next");
+        changeTab("next");
+        discardPass.current.clear();
+      });
     },
-    [changeTab, dirty, focusSession],
+    [askDiscard, changeTab, dirty, focusSession],
   );
 
   const summary = activeSession
@@ -803,10 +889,26 @@ export default function Classes({
                   </span>
                   <h2 id="register-title">{activeSession.title}</h2>
                 </div>
-                {canEditActiveSession ? (
-                  <Button variant="ghost" icon={Pencil} onClick={() => setEditingSession(activeSession)}>
-                    {t("Edit class")}
-                  </Button>
+                {/* Class-level actions live up here, away from «Guardar clase», so a mis-tap cannot cancel a class. */}
+                {canEditActiveSession || activeSession.statusLabel !== "Cancelled" ? (
+                  <div className="register-head-actions">
+                    {canEditActiveSession ? (
+                      <Button variant="ghost" icon={Pencil} onClick={() => setEditingSession(activeSession)}>
+                        {t("Edit class")}
+                      </Button>
+                    ) : null}
+                    {!compact && activeSession.statusLabel !== "Cancelled" ? (
+                      <Button
+                        variant="ghost"
+                        className="muted-ghost"
+                        icon={CalendarX2}
+                        onClick={cancelSession}
+                        disabled={saving}
+                      >
+                        {t("Mark cancelled")}
+                      </Button>
+                    ) : null}
+                  </div>
                 ) : null}
               </div>
               <div className="task-row">
@@ -878,6 +980,7 @@ export default function Classes({
                         maximum={maximum}
                         monthlyCharge={chargeFor(student.id)}
                         today={currentDate}
+                        classDate={activeSession.classDate}
                         onMonthly={toggleMonthly}
                         busy={monthlyBusy}
                       />
@@ -914,11 +1017,6 @@ export default function Classes({
                       {t("Discard changes")}
                     </Button>
                   ) : null}
-                  {activeSession.statusLabel !== "Cancelled" ? (
-                    <Button variant="ghost" className="muted-ghost" onClick={cancelSession} disabled={saving}>
-                      {t("Mark cancelled")}
-                    </Button>
-                  ) : null}
                   <Button
                     variant="primary"
                     icon={Save}
@@ -929,37 +1027,40 @@ export default function Classes({
                   </Button>
                 </div>
               </div>
+              {compact && activeSession.statusLabel !== "Cancelled" ? (
+                <div className="register-cancel-row">
+                  <span>{t("Class didn't happen?")}</span>
+                  <button type="button" className="link-button" onClick={cancelSession} disabled={saving}>
+                    {t("Mark cancelled")}
+                  </button>
+                </div>
+              ) : null}
               {compact ? (
-                <div className="register-dock" aria-live="polite">
-                  <div className="register-dock-top">
-                    {marked
-                      ? t("{present} present · {absent} absent", { present: summary.present, absent: summary.absent })
-                      : t("Nobody marked yet")}
-                    <span>
+                // One compact row above the bottom navigation: the progress line, a two-line summary and the
+                // only action that belongs here, «Guardar clase».
+                <div className="register-dock">
+                  <div className="meter register-dock-meter" aria-hidden="true">
+                    <i style={{ width: `${roster.length ? Math.round((marked / roster.length) * 100) : 0}%` }} />
+                  </div>
+                  <span className="register-dock-summary" aria-live="polite">
+                    <b>
+                      {marked
+                        ? t("{present} present · {absent} absent", { present: summary.present, absent: summary.absent })
+                        : t("Nobody marked yet")}
+                    </b>
+                    <small>
                       {summary.unmarked
                         ? t("{count} left", { count: summary.unmarked })
                         : `${formatMoney(summary.collected, locale)} ${t("collected")}${summary.pending ? ` · ${formatMoney(summary.pending, locale)} ${t("pending")}` : ""}`}
-                    </span>
-                  </div>
-                  <div className="meter" aria-hidden="true">
-                    <i style={{ width: `${roster.length ? Math.round((marked / roster.length) * 100) : 0}%` }} />
-                  </div>
-                  <div className="register-dock-actions">
-                    {activeSession.statusLabel !== "Cancelled" ? (
-                      <Button onClick={cancelSession} disabled={saving}>
-                        {t("Cancelled")}
-                      </Button>
-                    ) : (
-                      <span />
-                    )}
-                    <Button
-                      variant="primary"
-                      onClick={() => saveSession("Completed")}
-                      disabled={!roster.length || saving || Boolean(remoteUpdate)}
-                    >
-                      {saving ? t("Saving…") : recorded ? t("Save changes") : t("Save class")}
-                    </Button>
-                  </div>
+                    </small>
+                  </span>
+                  <Button
+                    variant="primary"
+                    onClick={() => saveSession("Completed")}
+                    disabled={!roster.length || saving || Boolean(remoteUpdate)}
+                  >
+                    {saving ? t("Saving…") : recorded ? t("Save changes") : t("Save class")}
+                  </Button>
                 </div>
               ) : null}
             </section>
@@ -1014,6 +1115,15 @@ export default function Classes({
         state={state}
         asOfDate={currentDate}
         actions={actions}
+        onEditGroupSchedule={
+          openPage
+            ? () => {
+                setNewClassOpen(false);
+                // Community opens on its Groups view; the weekly schedule is edited from the group there.
+                openPage("community", "groups");
+              }
+            : undefined
+        }
       />
       <EditClassDrawer
         open={Boolean(editingSession)}
@@ -1024,6 +1134,7 @@ export default function Classes({
         futureSupported={Boolean(editingSession) && scheduledClassSupportsFutureScope(state, editingSession)}
         onClose={() => setEditingSession(null)}
       />
+      {confirmPrompt}
     </div>
   );
 }
