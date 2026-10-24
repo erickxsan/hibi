@@ -72,6 +72,17 @@
   --busy: #efb7aa;
   --focus: var(--indigo);
   --overlay: rgba(30, 28, 32, 0.45);
+  /* Role tokens. The palette names colours, so a few roles get their own token where a colour name would
+     invert wrongly in the dark theme (e.g. a solid bermellón button keeps white text, ocre keeps ink). */
+  --surface-raised: #ffffff;
+  --accent-fill: var(--bermellon-strong);
+  --accent-fill-hover: var(--bermellon-ink);
+  --danger-fill: var(--bermellon-ink);
+  --ok-fill: var(--jade-strong);
+  --on-accent: #ffffff;
+  --on-ocre: #1e1c20;
+  --spotlight-ring: #ffffff;
+  --shadow-ink: #1e1c20;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -88,6 +99,7 @@
   --radius-pill: 999px;
   --shadow-card: 0 1px 2px rgba(30, 28, 32, 0.05);
   --shadow-overlay: 0 16px 40px rgba(30, 28, 32, 0.16);
+  --shadow-control: 0 1px 2px rgba(30, 28, 32, 0.14);
   --control-height: 44px;
   --segment-height: 36px;
   --sidebar-width: 232px;
@@ -98,6 +110,94 @@
   --font-display: "Dela Gothic One", "Arial Black", system-ui, sans-serif;
   --font-sans: "Albert Sans", "Segoe UI", system-ui, sans-serif;
   color-scheme: light;
+}
+
+/*
+ * Dark «Sello sereno»: warm sumi-ink surfaces, washi-tinted text and the same bermellón seal. The page
+ * (washi) is the deepest ink, the sheet (papel) sits one step lighter and floating layers (surface-raised)
+ * one more, so cards, drawers and sheets separate without relying on shadows. Text tokens become light
+ * tints that keep WCAG AA on every surface (sumi 14.5:1, sumi-muted 8.4:1, bermellon-strong 6.3:1 on papel);
+ * line-control and focus keep ≥3:1. Applied for «Sistema» when the OS is dark and always for «Oscuro»;
+ * the two blocks must stay identical (src/theme/darkTheme.contract.test.js).
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bermellon: #e8573b;
+    --bermellon-strong: #f27a5f;
+    --bermellon-ink: #f7957d;
+    --bermellon-soft: #3d221e;
+    --sumi: #f1ebe1;
+    --sumi-muted: #bfb4a5;
+    --sumi-subtle: #857a6e;
+    --washi: #131114;
+    --papel: #1d1a1e;
+    --kraft: #2d282d;
+    --line: #3a343a;
+    --line-soft: #2b272c;
+    --line-control: #8c8174;
+    --indigo: #a7b4f0;
+    --indigo-soft: #252a44;
+    --jade: #45b09e;
+    --jade-strong: #72cbb9;
+    --jade-soft: #163430;
+    --ocre: #e0ab45;
+    --ocre-ink: #ecc677;
+    --ocre-soft: #382d16;
+    --busy: #7d4135;
+    --overlay: rgba(6, 5, 7, 0.68);
+    --surface-raised: #27232a;
+    --accent-fill: #c23b22;
+    --accent-fill-hover: #cc4128;
+    --danger-fill: #a8321c;
+    --ok-fill: #23705f;
+    --on-accent: #ffffff;
+    --on-ocre: #1e1c20;
+    --spotlight-ring: #8c8174;
+    --shadow-ink: #000000;
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.45);
+    --shadow-overlay: 0 18px 44px rgba(0, 0, 0, 0.55);
+    --shadow-control: 0 1px 2px rgba(0, 0, 0, 0.5);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bermellon: #e8573b;
+  --bermellon-strong: #f27a5f;
+  --bermellon-ink: #f7957d;
+  --bermellon-soft: #3d221e;
+  --sumi: #f1ebe1;
+  --sumi-muted: #bfb4a5;
+  --sumi-subtle: #857a6e;
+  --washi: #131114;
+  --papel: #1d1a1e;
+  --kraft: #2d282d;
+  --line: #3a343a;
+  --line-soft: #2b272c;
+  --line-control: #8c8174;
+  --indigo: #a7b4f0;
+  --indigo-soft: #252a44;
+  --jade: #45b09e;
+  --jade-strong: #72cbb9;
+  --jade-soft: #163430;
+  --ocre: #e0ab45;
+  --ocre-ink: #ecc677;
+  --ocre-soft: #382d16;
+  --busy: #7d4135;
+  --overlay: rgba(6, 5, 7, 0.68);
+  --surface-raised: #27232a;
+  --accent-fill: #c23b22;
+  --accent-fill-hover: #cc4128;
+  --danger-fill: #a8321c;
+  --ok-fill: #23705f;
+  --on-accent: #ffffff;
+  --on-ocre: #1e1c20;
+  --spotlight-ring: #8c8174;
+  --shadow-ink: #000000;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow-overlay: 0 18px 44px rgba(0, 0, 0, 0.55);
+  --shadow-control: 0 1px 2px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
 }
 
 *,
@@ -769,7 +869,9 @@ button.kpi[aria-pressed="true"] {
   -webkit-overflow-scrolling: touch;
 }
 
-/* Sticky action bar at the bottom of the sheet. */
+/* Sticky action bar at the bottom of the sheet. The actions never move: they keep their size at the
+   bottom-right corner, and the summary takes the remaining space and wraps inside itself. (A wrapping
+   bar used to push «Guardar clase» onto a second row, to the left, between two clicks.) */
 .sheet-bar {
   position: sticky;
   bottom: 0;
@@ -778,19 +880,28 @@ button.kpi[aria-pressed="true"] {
   padding: 16px var(--sheet-pad) 20px;
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
+  align-items: flex-end;
+  flex-wrap: nowrap;
   gap: 16px;
   background: var(--papel);
   border-top: 1px solid var(--line);
   border-radius: 0 0 var(--radius-xl) var(--radius-xl);
 }
 
+.sheet-bar > :not(.sheet-bar-actions) {
+  flex: 1 1 auto;
+  min-width: 0;
+  align-self: center;
+}
+
 .sheet-bar-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex: none;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
   gap: 8px;
   align-items: center;
+  margin-left: auto;
 }
 
 /* Tiny inline bars (attendance P/A history). */
@@ -1010,7 +1121,8 @@ button.kpi[aria-pressed="true"] {
     right: 0;
     bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom));
     margin: 0;
-    padding: 12px 16px;
+    padding: 8px 16px;
+    gap: 12px;
     border-radius: 0;
     z-index: 45;
   }
@@ -1042,7 +1154,7 @@ button.kpi[aria-pressed="true"] {
   gap: 12px;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  background: var(--papel);
+  background: var(--surface-raised);
   box-shadow: var(--shadow-overlay);
 }
 

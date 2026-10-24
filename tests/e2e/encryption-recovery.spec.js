@@ -19,7 +19,8 @@ for (const viewport of [
     await expect(page.getByRole("heading", { name: "Workspace temporarily unavailable" })).toBeVisible();
     await expect(page.getByLabel("Create encryption password")).toHaveCount(0);
     await expect(page.getByLabel("Encryption password", { exact: true })).toHaveCount(0);
-    await expect(page.getByText(/Signing out also forgets/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Sign out and forget this device" })).toBeVisible();
+    await expect(page.getByText("Next time you will need your encryption password.")).toBeVisible();
     await expect(page.locator("vite-error-overlay")).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath("safe-outage.png"), fullPage: true });
     await page.getByRole("button", { name: "Check again" }).click();

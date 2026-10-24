@@ -12,6 +12,8 @@ export const TUTORIAL_TRANSLATIONS = Object.freeze({
   "Enter a price.": "Escribe un precio.",
   "Due on day 5 of each month; you can change it and adjust per student later.":
     "Vence el día 5 de cada mes; después puedes cambiarlo y ajustarlo por alumno.",
+  "Billing starts in {month} and is due on day 5 of each month. Classes before then are not charged; you can change it later.":
+    "El cobro empieza en {month} y vence el día 5 de cada mes. Las clases de antes no se cobran; después puedes cambiarlo.",
   "You can adjust it per student later or switch the group to a monthly fee.":
     "Después puedes ajustarlo por alumno o pasar el grupo a mensualidad.",
   "Each student gets a little animal; tap it to change it. You can paste a list with one name per line.":

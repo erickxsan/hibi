@@ -13,6 +13,7 @@ import {
   timeToMinutes,
   WEEKDAY_ORDER,
 } from "../domain/pickerModels";
+import { formatTime } from "../utils/displayFormat";
 import { PickerPopover } from "./PickerPopover";
 
 function changed(onChange, value, name) {
@@ -220,10 +221,8 @@ export function TimePicker({
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("hours");
   const [draft, setDraft] = useState(timeToMinutes(value) ?? 600);
-  const format = (minutes) =>
-    new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "UTC" }).format(
-      new Date(Date.UTC(2000, 0, 1, 0, minutes)),
-    );
+  // Same «10:00 a. m.» spelling as the rest of the app (Intl would give «10:00 a.m.» in Spanish).
+  const format = (minutes) => formatTime(minutes, locale);
   const base = draft >= 720 ? 720 : 0;
   const hour = Math.floor(draft / 60);
   const minute = draft % 60;

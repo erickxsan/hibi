@@ -35,6 +35,7 @@ export const REDESIGN_TRANSLATIONS = Object.freeze({
   "{month} at no cost": "{month} sin costo",
   "Monthly fee starts next month": "La mensualidad empieza el próximo mes",
   "Due today, in this class": "Vence hoy, en esta clase",
+  "Due today": "Vence hoy",
   "Overdue since {date}": "Vencida desde el {date}",
   "Due {date}": "Vence {date}",
   "Today's payment": "Pago de hoy",
@@ -126,10 +127,31 @@ export const REDESIGN_TRANSLATIONS = Object.freeze({
   Next: "Próxima",
   "Filter by group": "Filtrar por grupo",
   "{date}, {count} classes": "{date}, {count} clases",
-  "Remove only this class? Past classes and saved records will not change.":
-    "¿Eliminar solo esta clase? Las clases pasadas y los registros guardados no cambiarán.",
-  "Remove this class and every future class in the series? Past classes and saved records will not change.":
-    "¿Eliminar esta clase y todas las futuras de la serie? Las clases pasadas y los registros guardados no cambiarán.",
-  "Mark this class as cancelled? Existing payments will be preserved.":
-    "¿Marcar esta clase como cancelada? Los pagos registrados se conservan.",
+  // In-app confirmations (they replace the browser's native confirm).
+  "Delete only this class?": "¿Eliminar solo esta clase?",
+  "Delete this class and every future class in the series?": "¿Eliminar esta clase y todas las siguientes de la serie?",
+  "Mark this class as cancelled?": "¿Marcar esta clase como cancelada?",
+  "Existing payments will be preserved.": "Los pagos registrados se conservan.",
+  "Keep class": "Mantener la clase",
+  "Class didn't happen?": "¿No hubo clase?",
+  "{count} student is still unmarked. Save anyway?": "Falta {count} alumno por marcar. ¿Guardar así?",
+  "You can mark them later.": "Puedes marcarlos después.",
+  "Save anyway": "Guardar así",
+  "Keep marking": "Seguir marcando",
+  "The changes you haven't saved will be lost.": "Se perderán los cambios que no guardaste.",
+  "Keep editing": "Seguir editando",
+  // Clases: notes, «Sin registrar», calendar and «Nueva clase».
+  "{month} monthly fee pending": "Mensualidad de {month} pendiente",
+  "Grade for {name}": "Calificación de {name}",
+  "Owes {amount} from {count} classes since {date}": "Debe {amount} de {count} clases desde el {date}",
+  Yesterday: "Ayer",
+  "{date}, {count} class: {list}": "{date}, {count} clase: {list}",
+  "{date}, {count} classes: {list}": "{date}, {count} clases: {list}",
+  "Weekly schedule of {name}": "Horario semanal de {name}",
+  "No weekly schedule yet": "Aún no tiene horario semanal",
+  "This group already meets at this time ({slots}). Choose another day or time, or change its weekly schedule.":
+    "Este grupo ya tiene clase a esa hora ({slots}). Elige otro día u hora, o cambia su horario semanal.",
+  "A group's recurring classes belong in its weekly schedule, so the group keeps a single schedule.":
+    "Las clases que se repiten de un grupo van en su horario semanal, así el grupo tiene un solo horario.",
+  "Edit weekly schedule": "Editar horario semanal",
 });

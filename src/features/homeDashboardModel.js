@@ -308,14 +308,35 @@ function collectionBars(state, derivedRows, asOf, period, groupFilter) {
   });
 }
 
-/** Money owed through today: unpaid class balances and monthly fees that are pending or overdue. */
+/**
+ * Money owed through today: unpaid class balances and monthly fees that are pending or overdue.
+ * `amount` is everything owed (what a student «debe» everywhere in the app); `overdue` is the part
+ * already overdue, split into charges of the current month and of earlier months. `inactive` marks
+ * students who left, so their debt can be shown apart from the headline figures.
+ */
 export function debtsThrough(state, derivedRows, asOf, groupFilter = "all") {
+  const month = periodOf(asOf);
+  const inactiveIds = new Set(
+    (state.students || []).filter((student) => student.status === "Inactive").map((student) => student.id),
+  );
   const byStudent = new Map();
-  const add = (studentId, amount, overdue, why) => {
-    const current = byStudent.get(studentId) || { studentId, amount: 0, overdue: 0, reasons: [] };
+  const add = (studentId, amount, overdue, period, why) => {
+    const current = byStudent.get(studentId) || {
+      studentId,
+      amount: 0,
+      overdue: 0,
+      overdueThisMonth: 0,
+      overdueEarlier: 0,
+      inactive: inactiveIds.has(studentId),
+      reasons: [],
+    };
     current.amount = roundMoney(current.amount + amount);
-    if (overdue) current.overdue = roundMoney(current.overdue + amount);
-    current.reasons.push(why);
+    if (overdue) {
+      current.overdue = roundMoney(current.overdue + amount);
+      if (period === month) current.overdueThisMonth = roundMoney(current.overdueThisMonth + amount);
+      else current.overdueEarlier = roundMoney(current.overdueEarlier + amount);
+    }
+    current.reasons.push({ ...why, overdue });
     byStudent.set(studentId, current);
   };
   derivedRows
@@ -327,7 +348,7 @@ export function debtsThrough(state, derivedRows, asOf, groupFilter = "all") {
         matchesGroup(groupFilter, row.groupId || ""),
     )
     .forEach((row) =>
-      add(row.studentId, row.outstanding, isOverdueClassDebt(row.classDate, asOf), {
+      add(row.studentId, row.outstanding, isOverdueClassDebt(row.classDate, asOf), periodOf(row.classDate), {
         kind: "class",
         date: row.classDate,
         amount: row.outstanding,
@@ -337,7 +358,7 @@ export function debtsThrough(state, derivedRows, asOf, groupFilter = "all") {
     .filter((charge) => ["pending", "overdue"].includes(charge.status) && charge.dueDate <= asOf)
     .filter((charge) => matchesGroup(groupFilter, charge.groupId))
     .forEach((charge) =>
-      add(charge.studentId, charge.amount, charge.status === "overdue", {
+      add(charge.studentId, charge.amount, charge.status === "overdue", charge.period, {
         kind: "monthly",
         period: charge.period,
         amount: charge.amount,
@@ -345,6 +366,31 @@ export function debtsThrough(state, derivedRows, asOf, groupFilter = "all") {
       }),
     );
   return [...byStudent.values()].sort((left, right) => right.amount - left.amount);
+}
+
+/**
+ * What is owed with its scope stated, shared by Inicio and Seguimiento so «vencido» means one thing:
+ * active students' overdue money of the current month and of earlier months, what is not due yet,
+ * and — apart, never in the headline — what inactive students still owe in classes (their monthly fees
+ * are not derived once they leave, since no leave date is kept).
+ */
+export function debtSummary(state, derivedRows, asOf, groupFilter = "all") {
+  const all = debtsThrough(state, derivedRows, asOf, groupFilter);
+  const debts = all.filter((item) => !item.inactive);
+  const inactive = all.filter((item) => item.inactive);
+  const owed = sumMoney(debts, (item) => item.amount);
+  const overdue = sumMoney(debts, (item) => item.overdue);
+  return {
+    period: periodOf(asOf),
+    debts,
+    owed,
+    overdue,
+    overdueThisMonth: sumMoney(debts, (item) => item.overdueThisMonth),
+    overdueEarlier: sumMoney(debts, (item) => item.overdueEarlier),
+    notDue: roundMoney(owed - overdue),
+    overdueStudents: debts.filter((item) => item.overdue > 0).sort((left, right) => right.overdue - left.overdue),
+    inactive: { debts: inactive, owed: sumMoney(inactive, (item) => item.amount) },
+  };
 }
 
 /** Collections expected for the rest of the month: monthly fees still unpaid plus upcoming per-class charges. */
@@ -391,6 +437,8 @@ export function buildMetric(state, derived, asOf, metric, period = "weekly", gro
       period,
       value: current.value,
       previous: previous.value,
+      previousStart: range.previousStart,
+      previousEnd: range.previousEnd,
       delta: finite(current.value) && finite(previous.value) ? current.value - previous.value : null,
       points,
       registered: points.filter((point) => point.kind === "reg").length,
@@ -408,6 +456,8 @@ export function buildMetric(state, derived, asOf, metric, period = "weekly", gro
       period,
       value: current,
       previous,
+      previousStart: range.previousStart,
+      previousEnd: range.previousEnd,
       delta: finite(current) && finite(previous) ? current - previous : null,
       points,
       graded: assignments.filter((item) => item.average !== null).length,
@@ -427,6 +477,10 @@ export function buildMetric(state, derived, asOf, metric, period = "weekly", gro
     period,
     value,
     previous,
+    // The comparison covers the same stretch of the previous period (1–22 sep on 22 Oct), and the
+    // label states it, so a month in progress is never measured against a whole month.
+    previousStart: range.previousStart,
+    previousEnd: range.previousEnd,
     delta: percentDelta(value, previous),
     points: bars,
     payments,
@@ -549,7 +603,9 @@ export function buildTodayTimeline(state, derived, asOf, nowTime) {
     };
   });
   const live = items.find((item) => item.state === "live");
-  const earliest = Math.min(DAY_START, ...items.map((item) => Math.floor(item.start / 60) * 60), nowMinutes);
+  // The axis always starts and ends on whole hours and never stretches to «now»: at 6:40 or 0:15 the line
+  // keeps its usual scale (the needle just waits off the line until the day starts).
+  const earliest = Math.min(DAY_START, ...items.map((item) => Math.floor(item.start / 60) * 60));
   const latest = Math.max(DAY_END, ...items.map((item) => Math.ceil(item.end / 60) * 60));
   const nextItem = items.find((item) => item.key === next?.key) || null;
   const selected = live || nextItem || items.find((item) => item.state === "pending") || items.at(-1) || null;
@@ -615,17 +671,22 @@ export function buildAttentionItems(state, derived, asOf) {
       date: recentLow.item.date,
       action: { type: "metric", metric: "grade" },
     });
-  const overdueClasses = derivedRows.filter(
-    (row) => isOverdueClassDebt(row.classDate, asOf) && finite(row.outstanding) && row.outstanding > 0,
-  );
-  if (overdueClasses.length) {
-    const ids = [...new Set(overdueClasses.map((row) => row.studentId))];
+  // The same figure the collections chart and Seguimiento show: active students' overdue money,
+  // split by month, with what inactive students owe kept apart.
+  const debts = debtSummary(state, derivedRows, asOf);
+  if (debts.overdue > 0 || debts.inactive.owed > 0) {
     items.push({
       kind: "overdue",
-      tone: "bad",
-      amount: sumMoney(overdueClasses, (row) => row.outstanding),
-      names: ids.map(nameOf).filter(Boolean),
-      action: { type: "metric", metric: "collections" },
+      tone: debts.overdue > 0 ? "bad" : "pend",
+      amount: debts.overdue,
+      owed: debts.owed,
+      overdueThisMonth: debts.overdueThisMonth,
+      overdueEarlier: debts.overdueEarlier,
+      period: debts.period,
+      names: debts.overdueStudents.map((item) => nameOf(item.studentId)).filter(Boolean),
+      inactiveAmount: debts.inactive.owed,
+      inactiveNames: debts.inactive.debts.map((item) => nameOf(item.studentId)).filter(Boolean),
+      action: { type: "metric", metric: "collections", focus: "debts" },
     });
   }
   const dueMonthly = deriveMonthlyCharges(state, asOf, { includeArchived: false }).filter(
@@ -635,14 +696,25 @@ export function buildAttentionItems(state, derived, asOf) {
   dueMonthly.forEach((charge) => byGroup.set(charge.groupId, [...(byGroup.get(charge.groupId) || []), charge]));
   for (const [groupId, charges] of byGroup) {
     const group = (state.groups || []).find((item) => item.id === groupId);
+    const overdue = charges.filter((charge) => charge.status === "overdue");
+    const dueToday = charges.filter((charge) => charge.status !== "overdue");
+    const main = overdue.length ? overdue : dueToday;
     items.push({
       kind: "monthlyDue",
-      tone: charges.some((charge) => charge.status === "overdue") ? "bad" : "pend",
+      tone: overdue.length ? "bad" : "pend",
       group,
-      overdue: charges.some((charge) => charge.status === "overdue"),
-      count: charges.length,
-      amount: sumMoney(charges, (charge) => charge.amount),
-      names: charges.map((charge) => nameOf(charge.studentId)).filter(Boolean),
+      overdue: overdue.length > 0,
+      count: main.length,
+      amount: sumMoney(main, (charge) => charge.amount),
+      names: main.map((charge) => nameOf(charge.studentId)).filter(Boolean),
+      // Fees due today are named apart, so «vencidas» never includes someone who still has today to pay.
+      dueToday:
+        overdue.length && dueToday.length
+          ? {
+              names: dueToday.map((charge) => nameOf(charge.studentId)).filter(Boolean),
+              amount: sumMoney(dueToday, (charge) => charge.amount),
+            }
+          : null,
       action: { type: "monthly" },
     });
   }

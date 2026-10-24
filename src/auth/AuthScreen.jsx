@@ -3,6 +3,7 @@ import { lazy, Suspense, useEffect, useId, useRef, useState } from "react";
 import { ArrowLeft, Check, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
 import { HibiLogo, HibiStamp } from "../components/BrandMark";
 import { LanguageToggle } from "../i18n";
+import { useAppearance } from "../theme/appearance";
 import "./auth.css";
 
 // The security check only renders when a site key is configured, so it loads on demand.
@@ -185,6 +186,7 @@ export function AuthScreen({
   onResetPassword = undefined,
 }) {
   const { t: uiT, language } = useI18n();
+  const { resolvedTheme } = useAppearance();
   const [internalMode, setInternalMode] = useState(initialMode);
   const [email, setEmail] = useState(defaultEmail);
   const [password, setPassword] = useState("");
@@ -429,6 +431,7 @@ export function AuthScreen({
                     ref={captchaRef}
                     sitekey={captchaSiteKey}
                     languageOverride={language}
+                    theme={resolvedTheme}
                     size="compact"
                     reCaptchaCompat={false}
                     onVerify={(token) => {

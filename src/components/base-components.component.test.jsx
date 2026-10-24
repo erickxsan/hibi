@@ -167,6 +167,22 @@ describe("Hibi base controls", () => {
     expect(change).toHaveBeenLastCalledWith(expect.objectContaining({ target: { value: "18:15" } }));
   });
 
+  it("writes picker times as «a. m.» / «p. m.» like the rest of the app in Spanish", async () => {
+    const user = userEvent.setup();
+    localStorage.setItem("hibi:language:v1", "es");
+    render(
+      <I18nProvider>
+        <TimePicker aria-label="Hora" value="10:00" onChange={vi.fn()} />
+      </I18nProvider>,
+    );
+    const trigger = screen.getByRole("combobox", { name: "Hora" });
+    expect(trigger).toHaveTextContent("10:00 a. m.");
+    expect(trigger).not.toHaveTextContent("a.m.");
+    await user.click(trigger);
+    expect(screen.getByRole("button", { name: "a. m." })).toBeInTheDocument();
+    localStorage.removeItem("hibi:language:v1");
+  });
+
   it("edits daily, weekly and monthly repetition and always previews four upcoming dates", async () => {
     const user = userEvent.setup();
     function Harness() {

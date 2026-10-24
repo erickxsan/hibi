@@ -148,6 +148,18 @@
   color: var(--sumi);
 }
 
+/* «Sin registrar» rows carry their date above the time («Ayer», «sáb 17 oct»). */
+.agenda-item.has-date time {
+  display: flex;
+  flex-direction: column;
+}
+
+.agenda-date {
+  font: 800 12px/16px var(--font-sans);
+  color: var(--ocre-ink);
+  white-space: nowrap;
+}
+
 .agenda-item strong {
   display: block;
   font: 700 15px/20px var(--font-sans);
@@ -214,6 +226,17 @@
 
 .register-head .button-ghost {
   color: var(--sumi);
+}
+
+.register-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.register-head .button-ghost.muted-ghost {
+  color: var(--sumi-muted);
 }
 
 .task-row {
@@ -321,6 +344,15 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* The summary wraps item by item inside its own box; the bar's actions never move. */
+.register-summary > span {
+  white-space: nowrap;
+}
+
+.register-cancel-row {
+  display: none;
+}
+
 .register-dock {
   display: none;
 }
@@ -402,7 +434,7 @@
 .calendar-layout {
   display: flex;
   flex-wrap: wrap;
-  gap: 28px;
+  gap: 20px;
   align-items: flex-start;
 }
 
@@ -432,10 +464,10 @@
   position: relative;
   min-height: 112px;
   min-width: 0;
-  padding: 8px 6px 8px;
+  padding: 6px 3px 8px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
   border: 0;
   border-right: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
@@ -450,7 +482,7 @@
 }
 
 .month-cell.is-outside {
-  background: #faf7f2;
+  background: color-mix(in srgb, var(--washi) 60%, var(--papel));
 }
 
 .month-cell.is-outside > b {
@@ -469,8 +501,8 @@
 }
 
 .month-cell.is-today > b {
-  background: var(--bermellon-strong);
-  color: var(--papel);
+  background: var(--accent-fill);
+  color: var(--on-accent);
 }
 
 .month-cell.is-selected {
@@ -481,39 +513,19 @@
   background: var(--washi);
 }
 
+/* One class in the month grid: the start time in its own muted, tabular style («4p»), then the name on up
+   to two lines. The status shows as the chip's tone (the legend's swatches); the old dot is gone, which
+   leaves its width to the name. */
 .cal-chip {
   display: flex;
-  align-items: center;
-  gap: 5px;
+  align-items: flex-start;
+  gap: 4px;
   min-width: 0;
-  height: 22px;
-  padding: 0 6px;
+  padding: 2px 4px;
   border-radius: 5px;
   font: 700 11px/14px var(--font-sans);
   color: var(--sumi);
   overflow: hidden;
-  white-space: nowrap;
-}
-
-.cal-chip::before {
-  content: "";
-  flex: none;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--sumi-subtle);
-}
-
-.cal-chip.tone-done::before {
-  background: var(--indigo);
-}
-
-.cal-chip.tone-pending::before {
-  background: var(--ocre);
-}
-
-.cal-chip.tone-next::before {
-  background: var(--bermellon);
 }
 
 .cal-chip.tone-cancelled {
@@ -521,15 +533,27 @@
   color: var(--sumi-muted);
 }
 
-.cal-chip span {
+.cal-chip-time {
+  flex: none;
+  font: 600 10px/14px var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  color: var(--sumi-muted);
+}
+
+.cal-chip-name {
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 .cal-more {
   font: 700 11px/14px var(--font-sans);
   color: var(--sumi-muted);
-  padding-left: 6px;
+  padding-left: 8px;
 }
 
 .month-dots {
@@ -537,8 +561,8 @@
 }
 
 .day-panel {
-  flex: 1 1 300px;
-  max-width: 320px;
+  flex: 1 1 260px;
+  max-width: 290px;
   min-width: 0;
   padding: 20px;
   border-radius: var(--radius-xl);
@@ -826,7 +850,7 @@
 }
 
 .week-preview-col.is-on {
-  background-color: #f1e9dc;
+  background-color: var(--kraft);
 }
 
 .week-preview-busy {
@@ -865,7 +889,7 @@
   white-space: nowrap;
   cursor: grab;
   touch-action: none;
-  box-shadow: 0 3px 10px rgba(30, 28, 32, 0.18);
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--shadow-ink) 18%, transparent);
 }
 
 .week-preview-new.is-bad {
@@ -959,6 +983,43 @@
   margin-top: -10px;
   font: 600 13px/18px var(--font-sans);
   color: var(--ocre-ink);
+}
+
+/* «Nueva clase» with a group and «Recurrente»: the group's weekly schedule, and a duplicate-slot block. */
+.group-series-note {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: var(--radius-lg);
+  background: var(--washi);
+  font: 500 13px/18px var(--font-sans);
+  color: var(--sumi-muted);
+}
+
+.group-series-note .group-series-label {
+  font: 800 12px/16px var(--font-sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.group-series-note strong {
+  font: 700 15px/20px var(--font-sans);
+  color: var(--sumi);
+}
+
+.group-series-note p {
+  margin: 0;
+}
+
+.group-series-note.is-bad {
+  box-shadow: inset 3px 0 0 var(--bermellon);
+}
+
+.group-series-note.is-bad p {
+  color: var(--bermellon-ink);
+  font-weight: 700;
 }
 
 .edit-scope-note {
@@ -1198,42 +1259,76 @@
     bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom));
     z-index: 45;
     display: flex;
-    flex-direction: column;
-    gap: 10px;
-    padding: 12px 16px 14px;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 16px;
     background: var(--papel);
     border-top: 1px solid var(--line);
   }
 
-  .register-dock-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 10px;
-    font: 700 13px/18px var(--font-sans);
-  }
-
-  .register-dock-top span {
-    color: var(--sumi-muted);
-    font-weight: 600;
+  /* One compact row: progress as a hairline on the top edge, a two-line summary, «Guardar clase». */
+  .register-dock-meter {
+    position: absolute;
+    top: -1px;
+    left: 0;
+    right: 0;
+    height: 3px;
+    border-radius: 0;
+    background: transparent;
   }
 
   .register-dock .meter > i {
+    border-radius: 0;
     transition: width 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
 
-  .register-dock-actions {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: 8px;
+  .register-dock-summary {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .register-dock-summary b,
+  .register-dock-summary small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .register-dock-summary b {
+    font: 700 13px/18px var(--font-sans);
+  }
+
+  .register-dock-summary small {
+    font: 600 12px/16px var(--font-sans);
+    color: var(--sumi-muted);
   }
 
   .register-dock .button-primary {
-    min-height: 48px;
+    flex: none;
+    min-height: 44px;
+  }
+
+  /* «¿No hubo clase? Marcar cancelada»: a quiet text action at the end of the list, far from the dock. */
+  .register-cancel-row {
+    display: flex;
+    justify-content: center;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 20px 0 4px;
+    font: 500 13px/18px var(--font-sans);
+    color: var(--sumi-muted);
+  }
+
+  .register-cancel-row .link-button {
+    color: var(--sumi-muted);
+    text-decoration: underline;
   }
 
   .classes-page.has-dock {
-    padding-bottom: 150px;
+    padding-bottom: 84px;
   }
 
   /* Calendar on mobile: dots instead of chips; the day list below. */

@@ -117,6 +117,22 @@ describe("Tracking on desktop", () => {
     expect(screen.getByRole("complementary", { name: "Students · lowest attendance first" })).toBeInTheDocument();
   });
 
+  it("lists the tabs as attendance, grades, payments", () => {
+    setup();
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Attendance", "Grades", "Payments"]);
+  });
+
+  it("does not paint «Below 80%» green when there is nothing to measure", () => {
+    const state = trackingState();
+    state.classLog = [];
+    setup(state);
+    const tile = screen.getByRole("button", { name: /Below 80%/ });
+    expect(tile).toHaveTextContent("No data");
+    expect(tile).toHaveTextContent("—");
+    expect(tile).not.toHaveTextContent("Nobody");
+    expect(tile.querySelector("b")).not.toHaveClass("text-ok");
+  });
+
   it("opens a student's history and leads to their profile", async () => {
     const user = userEvent.setup();
     const { openPage } = setup();
@@ -166,6 +182,29 @@ describe("Tracking on desktop", () => {
 });
 
 describe("Tracking on mobile", () => {
+  it("puts the title first, keeps the tab order and never repeats a day on the axis", async () => {
+    setCompact(true);
+    const state = trackingState();
+    // Two classes on the same day must not read «19 19» on the axis.
+    state.classLog.push({ ...row("r7", "2026-10-19", "s2", "P", 0), startTime: "18:00", scheduleSlotId: "" });
+    setup(state);
+    const head = document.querySelector(".tracking-head");
+    expect(head.firstElementChild.firstElementChild.tagName).toBe("H1");
+    expect(screen.queryByText("Report date")).not.toBeInTheDocument();
+    const switcher = screen.getByRole("group", { name: "Tracking views" });
+    expect(
+      within(switcher)
+        .getAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(["Attendance", "Grades", "Payments"]);
+    await waitFor(() => expect(document.querySelector(".tracking-bars .cx")).not.toBeNull());
+    expect(document.querySelectorAll(".tracking-bars .cb")).toHaveLength(4);
+    const ticks = [...document.querySelectorAll(".tracking-bars .cx span")]
+      .map((span) => span.textContent)
+      .filter(Boolean);
+    expect(ticks).toEqual(["5", "12", "19"]);
+  });
+
   it("shows the bars, the filter chips and the student sheet", async () => {
     setCompact(true);
     const user = userEvent.setup();

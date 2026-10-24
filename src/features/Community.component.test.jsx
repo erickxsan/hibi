@@ -307,3 +307,129 @@ describe("Community on a phone", () => {
     await waitFor(() => expect(saved().groups.find((g) => g.id === "g1").hourlyRate).toBe(80));
   });
 });
+
+describe("Community unsaved changes", () => {
+  it("asks in-app before closing a dirty drawer and keeps it open on «Keep editing»", async () => {
+    const user = userEvent.setup();
+    const confirm = vi.spyOn(globalThis, "confirm");
+    setup();
+    await user.click(screen.getByRole("button", { name: "Add student" }));
+    const drawer = await screen.findByRole("dialog", { name: "Add student" });
+    await user.click(within(drawer).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add student" })).not.toBeInTheDocument());
+
+    await user.click(screen.getByRole("button", { name: "Add student" }));
+    const again = await screen.findByRole("dialog", { name: "Add student" });
+    fireEvent.change(within(again).getByLabelText(/Full name/), { target: { value: "Nora León" } });
+    await user.click(within(again).getByRole("button", { name: "Cancel" }));
+    const question = await screen.findByRole("alertdialog", { name: "Discard your unsaved student changes?" });
+    await user.click(within(question).getByRole("button", { name: "Keep editing" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(screen.getByRole("dialog", { name: "Add student" })).toBeInTheDocument();
+
+    await user.click(
+      within(screen.getByRole("dialog", { name: "Add student" })).getByRole("button", { name: "Cancel" }),
+    );
+    const second = await screen.findByRole("alertdialog", { name: "Discard your unsaved student changes?" });
+    await user.click(within(second).getByRole("button", { name: "Discard changes" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add student" })).not.toBeInTheDocument());
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it("asks in-app before leaving an edited student card for another one", async () => {
+    const user = userEvent.setup();
+    const confirm = vi.spyOn(globalThis, "confirm");
+    setup();
+    await user.click(screen.getByRole("button", { name: "Open Diego Soto" }));
+    fireEvent.change(screen.getByLabelText("Short notes"), { target: { value: "Likes drawings" } });
+    await user.click(screen.getByRole("button", { name: "Open Luna López" }));
+    const question = await screen.findByRole("alertdialog", { name: "Discard your unsaved community changes?" });
+    await user.click(within(question).getByRole("button", { name: "Keep editing" }));
+    expect(screen.getByRole("region", { name: "Diego Soto" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Open Luna López" }));
+    const second = await screen.findByRole("alertdialog", { name: "Discard your unsaved community changes?" });
+    await user.click(within(second).getByRole("button", { name: "Discard changes" }));
+    expect(await screen.findByRole("region", { name: "Luna López" })).toBeInTheDocument();
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it("asks in-app before switching the view with edits pending", async () => {
+    const user = userEvent.setup();
+    setup();
+    await user.click(screen.getByRole("button", { name: "Open Diego Soto" }));
+    fireEvent.change(screen.getByLabelText("Short notes"), { target: { value: "Likes drawings" } });
+    await user.click(screen.getByRole("tab", { name: "Groups" }));
+    const question = await screen.findByRole("alertdialog", { name: "Discard your unsaved community changes?" });
+    expect(screen.getByRole("tab", { name: "Groups" })).toHaveAttribute("aria-selected", "false");
+    await user.click(within(question).getByRole("button", { name: "Discard changes" }));
+    await waitFor(() => expect(screen.getByRole("tab", { name: "Groups" })).toHaveAttribute("aria-selected", "true"));
+  });
+});
+
+describe("Community audit fixes", () => {
+  it("names each «Ver grupo» button after its group", () => {
+    setup();
+    const button = screen.getByRole("button", { name: "View group Primaria 5A" });
+    expect(button).toHaveTextContent("View group");
+    expect(
+      screen.getAllByRole("button", { name: /^View group / }).map((item) => item.getAttribute("aria-label")),
+    ).toEqual(["View group Primaria 5A"]);
+  });
+
+  it("shows students of an archived group under it and leaves them out of the active count", async () => {
+    const state = communityState();
+    state.students.push(
+      createStudent({ id: "s5", code: "ANA-5", fullName: "Ana Ruiz", groupIds: ["g-old"], avatarId: "fox" }),
+    );
+    setup(state);
+    // Luna, Diego and Camila are active; Ana only belongs to an archived group.
+    expect(screen.getByText(/3 active students in 1 group/)).toBeInTheDocument();
+    const list = screen.getByRole("navigation", { name: "Students" });
+    const archived = within(list).getByText("In archived groups").closest(".list-group");
+    expect(within(archived).getByRole("button", { name: "Open Ana Ruiz" })).toHaveTextContent("Inglés (archived)");
+    const loose = within(list).getByText("Individual and without a group").closest(".list-group");
+    expect(within(loose).queryByRole("button", { name: "Open Ana Ruiz" })).not.toBeInTheDocument();
+    expect(within(loose).getByRole("button", { name: "Open Camila Torres" })).toBeInTheDocument();
+  });
+
+  it("brings the student card into view when it is below the fold", async () => {
+    const user = userEvent.setup();
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    const rect = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      top: 2600,
+      bottom: 3400,
+      left: 0,
+      right: 600,
+      width: 600,
+      height: 800,
+      x: 0,
+      y: 2600,
+      toJSON: () => ({}),
+    });
+    try {
+      setup();
+      await user.click(screen.getByRole("button", { name: "Open Diego Soto" }));
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: "start" });
+      scrollIntoView.mockClear();
+      rect.mockReturnValue({
+        top: 16,
+        bottom: 700,
+        left: 0,
+        right: 600,
+        width: 600,
+        height: 684,
+        x: 0,
+        y: 16,
+        toJSON: () => ({}),
+      });
+      await user.click(screen.getByRole("button", { name: "Open Luna López" }));
+      expect(scrollIntoView).not.toHaveBeenCalled();
+    } finally {
+      rect.mockRestore();
+      delete Element.prototype.scrollIntoView;
+    }
+  });
+});

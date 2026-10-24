@@ -21,11 +21,11 @@
   height: 18px;
 }
 .button-primary {
-  background: var(--bermellon-strong);
-  color: #ffffff;
+  background: var(--accent-fill);
+  color: var(--on-accent);
 }
 .button-primary:hover {
-  background: var(--bermellon-ink);
+  background: var(--accent-fill-hover);
 }
 .button-secondary {
   background: var(--papel);
@@ -130,6 +130,12 @@
   font: 500 15px/22px var(--font-sans);
   background: transparent;
   color: var(--sumi);
+}
+/* The input drops its own outline, so the whole box shows the keyboard focus ring. */
+.search-control:focus-within {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-color: var(--sumi);
 }
 .select-trigger {
   display: inline-flex;
@@ -297,14 +303,14 @@
   color: var(--bermellon-ink);
 }
 .payment-choice button.is-paid {
-  background: var(--jade-strong);
-  border-color: var(--jade-strong);
-  color: #ffffff;
+  background: var(--ok-fill);
+  border-color: var(--ok-fill);
+  color: var(--on-accent);
 }
 .payment-choice button.is-pending {
   background: var(--ocre);
   border-color: var(--ocre);
-  color: var(--sumi);
+  color: var(--on-ocre);
 }
 .payment-choice button.is-unpaid {
   background: var(--bermellon-soft);
@@ -388,7 +394,7 @@
   gap: 16px;
   padding: 6px 20px 28px;
   border-radius: 20px 20px 0 0;
-  background: var(--papel);
+  background: var(--surface-raised);
   box-shadow: var(--shadow-overlay);
   animation: hibi-sheet 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
@@ -614,7 +620,7 @@
   height: 20px;
   border-radius: 50%;
   background: var(--papel);
-  box-shadow: 0 1px 2px rgba(30, 28, 32, 0.2);
+  box-shadow: var(--shadow-control);
   transition: transform 0.2s;
 }
 .switch.is-on {
@@ -734,7 +740,7 @@
   border-color: var(--sumi);
 }
 .select-trigger-hibi.is-open {
-  box-shadow: 0 0 0 3px rgba(30, 28, 32, 0.08);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sumi) 8%, transparent);
 }
 .select-trigger-hibi.is-two-line {
   height: 56px;
@@ -842,7 +848,7 @@
   padding: 6px;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  background: var(--papel);
+  background: var(--surface-raised);
   box-shadow: var(--shadow-overlay);
 }
 .select-menu.is-right {
@@ -1144,7 +1150,7 @@
 .time-clock-ampm button.on {
   background: var(--papel);
   color: var(--sumi);
-  box-shadow: 0 1px 2px rgba(30, 28, 32, 0.14);
+  box-shadow: var(--shadow-control);
 }
 .time-dial {
   position: relative;
@@ -1169,7 +1175,7 @@
 }
 .time-dial-busy {
   fill: none;
-  stroke: #efb7aa;
+  stroke: var(--busy);
   stroke-width: 12;
   stroke-linecap: butt;
 }
@@ -1216,7 +1222,7 @@
   z-index: 1;
 }
 .time-dial-num:hover {
-  background: rgba(30, 28, 32, 0.06);
+  background: color-mix(in srgb, var(--sumi) 6%, transparent);
 }
 .time-dial-num.is-selected {
   color: var(--papel);
@@ -1266,7 +1272,7 @@
   background: var(--sumi);
 }
 .time-clock-legend .k2 {
-  background: #efb7aa;
+  background: var(--busy);
 }
 .time-clock-note {
   margin: 8px 4px 0;
@@ -1417,7 +1423,7 @@
 .repeat-kinds button.on {
   background: var(--papel);
   color: var(--sumi);
-  box-shadow: 0 1px 2px rgba(30, 28, 32, 0.14);
+  box-shadow: var(--shadow-control);
 }
 
 /* Integration with the existing portal, dialog and focus lifecycle. */
@@ -1742,7 +1748,7 @@
   width: var(--drawer-width);
   max-width: 100%;
   height: 100%;
-  background: var(--papel);
+  background: var(--surface-raised);
   border-radius: var(--radius-xl) 0 0 var(--radius-xl);
   box-shadow: var(--shadow-overlay);
   display: flex;
@@ -1921,7 +1927,8 @@
   flex: 1;
 }
 .toast-error {
-  background: var(--bermellon-ink);
+  background: var(--danger-fill);
+  color: var(--on-accent);
 }
 .toast .icon-button {
   margin-left: auto;
@@ -1977,7 +1984,7 @@
 .segmented.is-soft button.active {
   background: var(--papel);
   color: var(--sumi);
-  box-shadow: 0 1px 2px rgba(30, 28, 32, 0.14);
+  box-shadow: var(--shadow-control);
 }
 .segmented.is-small button {
   min-height: 32px;

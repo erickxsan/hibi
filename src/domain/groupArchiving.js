@@ -5,6 +5,17 @@ export function isGroupArchived(group) {
   return group?.status === "Inactive";
 }
 
+/*
+ * `scheduleResumeDate` is the first day a group's weekly schedule counts: earlier weekdays never
+ * become scheduled (or unrecorded) classes. Creating a group sets it to that day and reactivating
+ * an archived group moves it to the reactivation day. Recorded classes are never hidden by it.
+ */
+
+/** A group being created starts its schedule on `date` (kept when the draft already has a start). */
+export function startGroupSchedule(group, date = todayDateOnly()) {
+  return group.scheduleResumeDate ? group : { ...group, scheduleResumeDate: date };
+}
+
 export function setGroupArchived(state, groupId, archived, date = todayDateOnly()) {
   return {
     ...state,

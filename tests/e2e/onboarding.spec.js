@@ -67,7 +67,7 @@ test("sets up, resumes, saves the schedule and students, and completes the guide
   await expect(page).toHaveTitle(/hibi/);
   await page.getByRole("button", { name: "Empezar", exact: true }).click();
   await page.getByLabel("Nombre del grupo").fill("Inglés B1");
-  await page.getByLabel("Materia", { exact: true }).fill("Inglés");
+  await page.getByRole("textbox", { name: "Materia", exact: true }).fill("Inglés");
   // Duration is free: −/+ in 15-minute steps, from the default 2 h down to 1 h.
   const duration = page.getByRole("group", { name: "Duración del día de clase 1" });
   for (let step = 0; step < 4; step += 1) await duration.getByRole("button", { name: "Menos tiempo" }).click();
@@ -100,6 +100,10 @@ test("sets up, resumes, saves the schedule and students, and completes the guide
   expect(saved.students).toHaveLength(2);
   expect(saved.settings.onboardingVersion).toBe(2);
   expect(saved.groups[0].weeklySchedule.map((slot) => slot.durationHours)).toEqual([1, 1]);
+  // The new group's schedule starts today, so earlier weekdays never show up as unrecorded classes.
+  const now = new Date();
+  const today = [now.getFullYear(), now.getMonth() + 1, now.getDate()].map((part) => String(part).padStart(2, "0"));
+  expect(saved.groups[0].scheduleResumeDate).toBe(today.join("-"));
   await page.reload();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.getByRole("button", { name: /^Tutorial de bienvenida/ }).click();
@@ -134,7 +138,7 @@ for (const viewport of [
       await page.goto("/");
       await page.getByRole("button", { name: "Empezar", exact: true }).click();
       await page.getByLabel("Nombre del grupo").fill("Grupo de prueba");
-      await page.getByLabel("Materia", { exact: true }).fill("Inglés");
+      await page.getByRole("textbox", { name: "Materia", exact: true }).fill("Inglés");
       await page.getByRole("heading", { name: "Crea tu primer grupo" }).click();
       const dialogWidths = await page.getByRole("dialog").evaluate((dialog) => ({
         content: dialog.scrollWidth,

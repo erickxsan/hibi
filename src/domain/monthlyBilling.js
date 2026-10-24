@@ -2,13 +2,16 @@ import { addDays, endOfMonth, isDateOnly } from "./dates.js";
 import { isGroupArchived } from "./groupArchiving.js";
 import { createStableId } from "./ids.js";
 import { roundMoney, sumMoney } from "./money.js";
-import { generateScheduledOccurrences, resolveHourlyRate } from "./schedule.js";
+import { dayOfWeekForDate, generateScheduledOccurrences, resolveHourlyRate } from "./schedule.js";
 
 /*
  * Optional monthly billing, stored only as optional fields on existing entities
  * (the cloud schema accepts a fixed set of collections, so no new collection):
  *
- *   group.billing = { mode: "perClass" | "monthly", monthlyFee, due, effectiveFrom: "YYYY-MM", creditFirstMonth }
+ *   group.billing = { mode: "perClass" | "monthly", monthlyFee, due, effectiveFrom: "YYYY-MM", creditFirstMonth,
+ *                     coveredFrom?: "YYYY-MM-DD" }
+ *   `coveredFrom` (new groups whose first fee falls next month): classes from that day until
+ *   `effectiveFrom` are part of the monthly arrangement, so they are not charged per class.
  *     due = { type: "dayOfMonth", day: 1–28 } | { type: "nthClass", nth: 1–4 | "last" }
  *   student.billingByGroup[groupId] = { mode: "group" | "customFee" | "perClass", fee, joinedOn, firstMonthAmount }
  *   student.monthlyPayments = [{ id, groupId, period: "YYYY-MM", amount, paidAt }]
@@ -55,7 +58,20 @@ function normalizeDue(value) {
   return { type: "dayOfMonth", day: Math.min(28, Math.max(1, Math.trunc(Number(value?.day)) || 5)) };
 }
 
-/** Canonical group billing, or null when the group follows the legacy per-class rule. */
+/**
+ * @typedef {object} GroupBilling
+ * @property {string} mode "perClass" | "monthly"; the other fields are set for monthly billing only.
+ * @property {number} [monthlyFee]
+ * @property {{ type: string, nth?: string | number, day?: number }} [due]
+ * @property {string} [effectiveFrom]
+ * @property {boolean} [creditFirstMonth]
+ * @property {string} [coveredFrom]
+ */
+
+/**
+ * Canonical group billing, or null when the group follows the legacy per-class rule.
+ * @returns {GroupBilling | null}
+ */
 export function normalizeGroupBilling(value) {
   if (!value || typeof value !== "object") return null;
   if (value.mode !== "monthly") return value.mode === "perClass" ? { mode: "perClass" } : null;
@@ -66,6 +82,7 @@ export function normalizeGroupBilling(value) {
     due: normalizeDue(value.due),
     effectiveFrom: isPeriod(value.effectiveFrom) ? value.effectiveFrom : "",
     creditFirstMonth: Boolean(value.creditFirstMonth),
+    ...(isDateOnly(value.coveredFrom) ? { coveredFrom: value.coveredFrom } : {}),
   };
 }
 
@@ -124,6 +141,8 @@ export function billingIssues(entity, kind) {
         issues.push(["billing.monthlyFee", "Monthly fee must be zero or more."]);
       if (billing.effectiveFrom && !isPeriod(billing.effectiveFrom))
         issues.push(["billing.effectiveFrom", "Billing start must use YYYY-MM."]);
+      if (billing.coveredFrom && !isDateOnly(billing.coveredFrom))
+        issues.push(["billing.coveredFrom", "Covered start must use YYYY-MM-DD."]);
     }
   }
   if (kind === "student") {
@@ -197,6 +216,54 @@ export function monthlyDueDate(state, group, period) {
   return nth === "last" ? dates.at(-1) : dates[Math.min(Number(nth), dates.length) - 1];
 }
 
+/**
+ * A student's due date in a period: the group's, but never before the day the student joined,
+ * so someone who joins after the due day is not overdue on arrival.
+ */
+export function studentMonthlyDueDate(state, student, group, period, groupDueDate = undefined) {
+  const dueDate = groupDueDate ?? monthlyDueDate(state, group, period);
+  const joinedOn = normalizeBillingByGroup(student?.billingByGroup)?.[group?.id]?.joinedOn || "";
+  return joinedOn > dueDate ? joinedOn : dueDate;
+}
+
+// True when the weekly schedule still has a class from `asOf` to the end of its month.
+function classLeftThisMonth(weeklySchedule, asOf) {
+  const days = new Set((Array.isArray(weeklySchedule) ? weeklySchedule : []).map((slot) => Number(slot?.dayOfWeek)));
+  for (let date = asOf; date <= endOfMonth(asOf); date = addDays(date, 1))
+    if (days.has(dayOfWeekForDate(date))) return true;
+  return false;
+}
+
+/**
+ * First month a new monthly group bills, so a fee is never born overdue: this month while its due
+ * day is today or still ahead, otherwise next month. A group due at its nth class bills this month
+ * only while its schedule (`weeklySchedule`, when given) still has a class left in it.
+ */
+export function firstBillingPeriod(billing, asOf, weeklySchedule = undefined) {
+  const period = periodOf(asOf);
+  const normalized = normalizeGroupBilling(billing);
+  if (!period || normalized?.mode !== "monthly") return period;
+  if (normalized.due.type !== "dayOfMonth")
+    return weeklySchedule && !classLeftThisMonth(weeklySchedule, asOf) ? nextPeriod(period) : period;
+  return addDays(periodStart(period), normalized.due.day - 1) < asOf ? nextPeriod(period) : period;
+}
+
+/**
+ * A group being created on `asOf` bills from its first billable month at the earliest. When that is
+ * next month, the classes left this month are part of the monthly arrangement (`coveredFrom`): they
+ * are not charged per class at the general rate the teacher never chose for this group.
+ */
+export function startGroupBilling(group, asOf) {
+  const billing = normalizeGroupBilling(group?.billing);
+  if (billing?.mode !== "monthly") return group;
+  const first = firstBillingPeriod(billing, asOf, group.weeklySchedule);
+  if (!first) return group;
+  const effectiveFrom = billing.effectiveFrom && billing.effectiveFrom >= first ? billing.effectiveFrom : first;
+  const next = { ...billing, effectiveFrom };
+  if (effectiveFrom > periodOf(asOf) && !billing.coveredFrom) next.coveredFrom = asOf;
+  return { ...group, billing: next };
+}
+
 /** How a student pays inside a group in a given month. */
 export function studentMonthlyPlan(state, student, group, period) {
   const billing = normalizeGroupBilling(group?.billing);
@@ -225,11 +292,22 @@ export function studentMonthlyPlan(state, student, group, period) {
   return { fee, amount, adjusted: Boolean(override && override.mode !== "group"), prorated };
 }
 
+// A class of a new monthly group between its creation and its first fee (see `coveredFrom`).
+function coveredBeforeFirstFee(student, group, date) {
+  const billing = normalizeGroupBilling(group?.billing);
+  if (billing?.mode !== "monthly" || !billing.coveredFrom || !billing.effectiveFrom) return false;
+  if (date < billing.coveredFrom || periodOf(date) >= billing.effectiveFrom) return false;
+  return normalizeBillingByGroup(student.billingByGroup)?.[group.id]?.mode !== "perClass";
+}
+
 /** True when a class row for this student and group is covered by a monthly fee (its own charge is $0). */
 export function coveredByMonthlyFee(state, studentId, groupId, date) {
   const group = (state.groups || []).find((item) => item.id === groupId);
   const student = (state.students || []).find((item) => item.id === studentId);
-  return Boolean(group && student && studentMonthlyPlan(state, student, group, periodOf(date)));
+  if (!group || !student) return false;
+  return Boolean(
+    studentMonthlyPlan(state, student, group, periodOf(date)) || coveredBeforeFirstFee(student, group, date),
+  );
 }
 
 /** First month amount for a student joining mid-month: full, proportional to remaining classes, or nothing. */
@@ -257,6 +335,7 @@ function firstPeriodFor(state, group, students) {
 
 /**
  * Monthly charges from each group's start through `through` (YYYY-MM), for active members.
+ * `dueDate` is the student's own (never before they joined); `groupDueDate` is the group's.
  * Status: "paid" with a payment record; otherwise "pending" until the due date and "overdue" after it.
  */
 export function deriveMonthlyCharges(state, asOfDate, { through = periodOf(asOfDate), includeArchived = true } = {}) {
@@ -271,13 +350,14 @@ export function deriveMonthlyCharges(state, asOfDate, { through = periodOf(asOfD
         : through;
     let period = firstPeriodFor(state, group, members);
     for (let guard = 0; period && period <= lastPeriod && guard < 240; guard += 1, period = nextPeriod(period)) {
-      const dueDate = monthlyDueDate(state, group, period);
+      const groupDueDate = monthlyDueDate(state, group, period);
       for (const student of members) {
         const plan = studentMonthlyPlan(state, student, group, period);
         if (!plan) continue;
         const payment = normalizeMonthlyPayments(student.monthlyPayments).find(
           (item) => item.groupId === group.id && item.period === period,
         );
+        const dueDate = studentMonthlyDueDate(state, student, group, period, groupDueDate);
         charges.push({
           id: `${student.id}|${group.id}|${period}`,
           studentId: student.id,
@@ -286,6 +366,7 @@ export function deriveMonthlyCharges(state, asOfDate, { through = periodOf(asOfD
           fee: plan.fee,
           amount: payment ? payment.amount : plan.amount,
           dueDate,
+          groupDueDate,
           status: payment ? "paid" : plan.amount <= 0 ? "waived" : asOfDate > dueDate ? "overdue" : "pending",
           paidAt: payment?.paidAt || "",
           paymentId: payment?.id || "",
@@ -316,9 +397,28 @@ export function monthlyPaymentsBetween(state, startDate, endDate, { groupIds = n
   );
 }
 
-/** Suggested fee: classes the group really has this month × the per-class charge. */
+// The classes a group's schedule gives in a whole month, even when the group started (or was
+// reactivated) partway through it or is not saved yet: a monthly fee is priced on a full month.
+function fullMonthClassDates(state, group, period) {
+  const preview = { ...group, status: "Active", scheduleResumeDate: "" };
+  const groups = Array.isArray(state?.groups) ? state.groups : [];
+  const previewState = {
+    ...state,
+    groups: groups.some((item) => item.id === group.id)
+      ? groups.map((item) => (item.id === group.id ? preview : item))
+      : [...groups, preview],
+  };
+  return groupClassDates(previewState, preview, period);
+}
+
+/**
+ * Suggested fee: the classes of a full month of the group's schedule × the per-class charge.
+ * Uses `period`, or the next month when this one has no classes.
+ */
 export function suggestedMonthlyFee(state, group, period) {
-  const classes = groupClassDates(state, group, period).length;
+  if (!group?.id || !isPeriod(period)) return { classes: 0, perClass: perClassCharge(state, group), fee: 0 };
+  const classes =
+    fullMonthClassDates(state, group, period).length || fullMonthClassDates(state, group, nextPeriod(period)).length;
   const perClass = perClassCharge(state, group);
   return { classes, perClass, fee: roundMoney(classes * perClass) };
 }

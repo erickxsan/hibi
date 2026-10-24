@@ -25,6 +25,7 @@ import {
   Input,
   ListRow,
   SectionHeading,
+  Segmented,
   Select,
   Switch,
 } from "../components/ui";
@@ -39,8 +40,15 @@ import {
   formatShortDate,
   monthLong,
 } from "../utils/displayFormat";
-import { shortNames } from "./homeDashboardModel";
-import { settingsEffects } from "./settingsModel";
+import {
+  encryptionAccess,
+  formatKeyDate,
+  hasLegacyBrowserCopy,
+  ownRateSentences,
+  revokeBlockedReason,
+  settingsEffects,
+  unlockMethodCopy,
+} from "./settingsModel";
 import "../i18n/screenTranslations.js";
 import "./settings.css";
 import { importState, MAX_BACKUP_BYTES } from "../domain";
@@ -49,6 +57,15 @@ import { LanguageToggle, useI18n } from "../i18n";
 import { NEW_PASSWORD_GUIDANCE, getNewPasswordWarning } from "../crypto/passwords.js";
 import { getHibiSoundsEnabled, playHibiSound, setHibiSoundsEnabled } from "../utils/hibiSounds";
 import { setupResumeStep } from "../onboarding/onboardingModel";
+import { useAppearance } from "../theme/appearance";
+
+// «Apariencia» is a per-device preference (localStorage), not part of the synced settings.
+const APPEARANCE_ITEMS = [
+  { value: "system", label: "System" },
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+];
+const APPEARANCE_SUMMARY = { system: "System theme", light: "Light theme", dark: "Dark theme" };
 
 function settingsDraft(settings) {
   return { ...settings, hourlyRateMxn: settings.hourlyRate };
@@ -124,6 +141,8 @@ export default function Settings({
   onOpenOnboarding,
   derived = undefined,
   account = undefined,
+  intent = undefined,
+  clearIntent = undefined,
 }) {
   const { t: uiT, locale, language } = useI18n();
   const { t } = useI18n();
@@ -147,6 +166,7 @@ export default function Settings({
   const [recoveryPoints, setRecoveryPoints] = useState([]);
   const [pendingRecovery, setPendingRecovery] = useState(null);
   const [soundsEnabled, setSoundsEnabled] = useState(getHibiSoundsEnabled);
+  const { preference: appearance, setPreference: setAppearance } = useAppearance();
   const cloudSecurityReadOnly = encryption?.writesEnabled === false;
   const [securityBusy, setSecurityBusy] = useState(false);
   const [securityError, setSecurityError] = useState("");
@@ -162,6 +182,11 @@ export default function Settings({
   const [backupSourceRecovery, setBackupSourceRecovery] = useState(null);
   const [backupSourceRecoveryKey, setBackupSourceRecoveryKey] = useState("");
   const [backupSourcePassword, setBackupSourcePassword] = useState("");
+  const [legacyCopy, setLegacyCopy] = useState(() => persistenceMode === "cloud" && hasLegacyBrowserCopy());
+  const { active: activeKeys, hasRecoveryKey } = encryptionAccess(encryption);
+  const recoveryKeyMissing = Boolean(encryption?.enabled) && !hasRecoveryKey;
+  const deviceRemembered = Boolean(encryption?.rememberedDevices?.length);
+  const createRecoveryRef = useRef(null);
   const fileRef = useRef(null);
   const recordsFileRef = useRef(null);
   const baselineRef = useRef(settingsDraft(state.settings));
@@ -314,6 +339,9 @@ export default function Settings({
   const compact = useCompactViewport();
   const asOf = state.settings.asOfDate || todayDateOnly();
   const effects = useMemo(() => settingsEffects(state, derived, draft, asOf), [asOf, derived, draft, state]);
+  const ownRatesText = ownRateSentences(effects, locale)
+    .map((sentence) => uiT(sentence.key, sentence.values))
+    .join(" ");
   const resumeStep = setupResumeStep(state.settings);
   const [section, setSection] = useState("classes");
   const [mobileSheet, setMobileSheet] = useState("");
@@ -330,6 +358,19 @@ export default function Settings({
   const saveSheet = async () => {
     if (await save()) setMobileSheet("");
   };
+  // «Create a recovery key» on Inicio lands here, on the encryption controls, with that action focused.
+  useEffect(() => {
+    if (intent?.type !== "create-recovery-key") return undefined;
+    if (compact) setMobileSheet("privacy");
+    else setSection("privacy");
+    const timer = globalThis.setTimeout(() => {
+      const target = createRecoveryRef.current?.querySelector("button");
+      target?.scrollIntoView?.({ block: "center" });
+      target?.focus({ preventScroll: true });
+      clearIntent?.();
+    }, 120);
+    return () => globalThis.clearTimeout(timer);
+  }, [clearIntent, compact, intent]);
 
   const dialogs = (
     <>
@@ -818,15 +859,18 @@ export default function Settings({
       />
       <ConfirmDialog
         open={Boolean(clearTarget)}
-        title={uiT("Remove the old local copy?")}
+        title={uiT("Delete the readable copy?")}
         description={uiT(
-          "This removes only the legacy browser copy on this device. Your signed-in cloud workspace and recovery history remain available.",
+          "This deletes only the unencrypted copy from before your account on this browser. Your cloud workspace and recovery history stay available.",
         )}
-        confirmLabel={uiT("Remove local copy")}
+        confirmLabel={uiT("Delete readable copy")}
         onClose={() => setClearTarget("")}
         onConfirm={async () => {
           const cleared = actions.clearLegacyLocalData();
-          if (cleared) setClearTarget("");
+          if (cleared) {
+            setClearTarget("");
+            setLegacyCopy(false);
+          }
         }}
       />
       <Drawer
@@ -911,7 +955,7 @@ export default function Settings({
         <div className="permanent-delete-confirmation">
           <p>
             {uiT(
-              "Hibi will purge cloud records and recovery history first, then hard-delete the Auth user and this account&apos;s encrypted data on this device.",
+              "Hibi will purge cloud records and recovery history first, then hard-delete the Auth user and this account’s encrypted data on this device.",
             )}
           </p>
           <Field label={uiT("Type DELETE MY ACCOUNT to confirm")} error={deleteError}>
@@ -936,22 +980,7 @@ export default function Settings({
           : uiT("Add records safely and export a backup regularly.")}
       </p>
       <div className="settings-data-actions">
-        <div className="settings-data-action safe-import-action">
-          <span>
-            <strong>{uiT("Import records")}</strong>
-            <small>
-              {uiT("Add records from another Hibi JSON backup. Existing records and settings are never removed.")}
-            </small>
-          </span>
-          <Button
-            variant="primary"
-            icon={FilePlus2}
-            disabled={recordImportBusy}
-            onClick={() => recordsFileRef.current?.click()}
-          >
-            {recordImportBusy ? uiT("Reading…") : uiT("Import records")}
-          </Button>
-        </div>
+        {/* Backing up is the one primary action here; importing is secondary. */}
         <div className="settings-data-action">
           <span>
             <strong>{uiT("Backup & recovery")}</strong>
@@ -964,10 +993,16 @@ export default function Settings({
               <Button variant="primary" icon={LockKeyhole} onClick={actions.exportEncryptedBackup}>
                 {uiT("Download encrypted .hibi")}
               </Button>
+            ) : (
+              <Button variant="primary" icon={Download} onClick={actions.exportJson}>
+                {uiT("Download backup")}
+              </Button>
+            )}
+            {encryption?.enabled ? (
+              <Button icon={Download} onClick={actions.exportJson}>
+                {uiT("Export readable JSON")}
+              </Button>
             ) : null}
-            <Button icon={Download} onClick={actions.exportJson}>
-              {encryption?.enabled ? uiT("Export readable JSON") : uiT("Download backup")}
-            </Button>
             <Button icon={Upload} onClick={() => fileRef.current?.click()}>
               {uiT("Restore full backup")}
             </Button>
@@ -977,6 +1012,17 @@ export default function Settings({
               </Button>
             ) : null}
           </div>
+        </div>
+        <div className="settings-data-action safe-import-action">
+          <span>
+            <strong>{uiT("Import records")}</strong>
+            <small>
+              {uiT("Add records from another Hibi JSON backup. Existing records and settings are never removed.")}
+            </small>
+          </span>
+          <Button icon={FilePlus2} disabled={recordImportBusy} onClick={() => recordsFileRef.current?.click()}>
+            {recordImportBusy ? uiT("Reading…") : uiT("Import records")}
+          </Button>
         </div>
       </div>
       <input ref={recordsFileRef} type="file" accept=".json,application/json" hidden onChange={previewRecordImport} />
@@ -997,79 +1043,116 @@ export default function Settings({
       ) : null}
     </>
   );
+  const runSecurityAction = async (action, fallbackError) => {
+    setSecurityBusy(true);
+    setSecurityError("");
+    try {
+      await action();
+    } catch (error) {
+      setSecurityError(error?.message || fallbackError);
+    } finally {
+      setSecurityBusy(false);
+    }
+  };
+  const createRecoveryKey = () =>
+    runSecurityAction(
+      async () => setRecoveryReveal(await encryption.createRecoveryKey()),
+      "A recovery key could not be created.",
+    );
+  const keyDates = (createdAt, lastUsedAt) => {
+    const date = formatKeyDate(createdAt, locale);
+    const lastUsed = formatKeyDate(lastUsedAt, locale);
+    if (date && lastUsed) return uiT("Created {date} · last used {lastUsed}", { date, lastUsed });
+    if (date) return uiT("Created {date} · not used yet", { date });
+    return lastUsed ? uiT("Last used {lastUsed}", { lastUsed }) : uiT("Not used yet");
+  };
+  const rememberedDevice = encryption?.rememberedDevices?.[0];
+  const rememberedSince = formatKeyDate(rememberedDevice?.createdAt, locale);
+  const rememberedLastUsed = formatKeyDate(rememberedDevice?.lastUsedAt, locale);
+  const deviceNote = !rememberedSince
+    ? uiT("Hibi opens here without your password.")
+    : rememberedLastUsed
+      ? uiT("Hibi opens here without your password. Since {date} · last used {lastUsed}.", {
+          date: rememberedSince,
+          lastUsed: rememberedLastUsed,
+        })
+      : uiT("Hibi opens here without your password. Since {date}.", { date: rememberedSince });
+  // Encryption & devices: how Hibi is unlocked, the keys that can unlock it, and this browser's access.
   const encryptionBlock = encryption?.enabled ? (
-    <div className="settings-block encryption-settings-card">
-      <h2>{uiT("Workspace encryption & access")}</h2>
-      <p>
-        {uiT("E2EE protocol v")}
-        {encryption.profile?.protocolVersion}
-        {uiT("; unlocked with ")}
-        {uiT(encryption.method || "a local key")}
-        {uiT(". Your password wraps the same stable master key, so changing it does not re-encrypt your records.")}
-      </p>
-      <div className="workspace-key-list" aria-label={uiT("Workspace key wrappers")}>
-        {encryption.wrappers
-          .filter((wrapper) => !wrapper.revokedAt)
-          .map((wrapper) => (
-            <div className="workspace-key-row" key={wrapper.wrapperId}>
-              <span>
-                <strong>{uiT(wrapper.label)}</strong>
-                <small>
-                  {wrapper.type === "password" ? uiT("Password-derived key") : uiT("Recovery key")} {uiT(" · added")}{" "}
-                  {new Date(wrapper.createdAt).toLocaleDateString(locale)}
-                  {wrapper.lastUsedAt
-                    ? uiT(" · last used {p0}", { p0: new Date(wrapper.lastUsedAt).toLocaleDateString(locale) })
-                    : uiT(" · not used yet")}
-                </small>
-              </span>
-              <Button
-                disabled={
-                  securityBusy ||
-                  cloudSecurityReadOnly ||
-                  wrapper.type === "password" ||
-                  encryption.wrappers.filter((item) => !item.revokedAt).length <= 1
-                }
-                onClick={async () => {
-                  setSecurityBusy(true);
-                  setSecurityError("");
-                  try {
-                    await encryption.revokeWrapper(wrapper.wrapperId);
-                  } catch (error) {
-                    setSecurityError(error?.message || "That workspace key could not be revoked.");
-                  } finally {
-                    setSecurityBusy(false);
-                  }
-                }}
-              >
-                {uiT("Revoke")}
-              </Button>
-            </div>
-          ))}
-      </div>
-      {encryption.rememberedDevices?.length ? (
-        <div className="workspace-key-list" aria-label={uiT("Remembered devices")}>
-          {encryption.rememberedDevices.map((device) => (
-            <div className="workspace-key-row" key={device.deviceId}>
-              <span>
-                <strong>{uiT("This remembered browser")}</strong>
-                <small>
-                  {uiT("Added ")}
-                  {new Date(device.createdAt).toLocaleDateString(locale)} {uiT(" · last used")}{" "}
-                  {new Date(device.lastUsedAt).toLocaleDateString(locale)}
-                </small>
-              </span>
-            </div>
-          ))}
+    <section className="settings-block encryption-settings-card" aria-labelledby="settings-encryption-title">
+      <h3 id="settings-encryption-title" className="settings-subhead">
+        {uiT("Encryption and devices")}
+      </h3>
+      <p className="settings-block-lead">{uiT(unlockMethodCopy(encryption.method))}</p>
+      {recoveryKeyMissing ? (
+        <div className="recovery-key-warning" ref={createRecoveryRef}>
+          <TriangleAlert aria-hidden="true" size={20} />
+          <span>
+            <strong>{uiT("You don't have a recovery key yet")}</strong>
+            <small>
+              {uiT(
+                "If you forget your encryption password, nobody can recover your data, not even Hibi. A recovery key is your other way in. Create one and keep it somewhere safe.",
+              )}
+            </small>
+            <Button
+              variant="primary"
+              icon={KeyRound}
+              disabled={securityBusy || cloudSecurityReadOnly}
+              onClick={createRecoveryKey}
+            >
+              {uiT("Create recovery key")}
+            </Button>
+          </span>
         </div>
       ) : null}
-      {cloudSecurityReadOnly ? (
-        <p role="status">{uiT("This preview is read-only. Security changes are disabled.")}</p>
+      {recoveryReveal ? (
+        <div className="recovery-key-reveal" role="status">
+          <strong>{uiT("Save this recovery key now. Hibi support cannot reconstruct it.")}</strong>
+          <code>{recoveryReveal}</code>
+          <Button
+            onClick={() =>
+              navigator.clipboard?.writeText(recoveryReveal).then(() => actions.notify("Recovery key copied"))
+            }
+          >
+            {uiT("Copy key")}
+          </Button>
+        </div>
       ) : null}
-      <p>
-        {uiT(
-          "Forget this device removes remembered access. Local backups remain encrypted in this browser. Use Clear local copies on a shared device after syncing pending changes.",
-        )}
-      </p>
+      <h4 className="settings-minor-head">{uiT("Ways to unlock")}</h4>
+      <div className="workspace-key-list" role="group" aria-label={uiT("Ways to unlock")}>
+        {activeKeys.map((wrapper) => {
+          const blockedReason = revokeBlockedReason(wrapper, activeKeys.length);
+          return (
+            <div className="workspace-key-row" key={wrapper.wrapperId}>
+              <span>
+                <strong>
+                  {wrapper.type === "password"
+                    ? uiT("Encryption password")
+                    : wrapper.type === "recovery"
+                      ? uiT("Recovery key")
+                      : uiT(wrapper.label || "Key")}
+                </strong>
+                <small>{keyDates(wrapper.createdAt, wrapper.lastUsedAt)}</small>
+              </span>
+              {blockedReason ? (
+                <small className="workspace-key-note">{uiT(blockedReason)}</small>
+              ) : (
+                <Button
+                  disabled={securityBusy || cloudSecurityReadOnly}
+                  onClick={() =>
+                    runSecurityAction(
+                      () => encryption.revokeWrapper(wrapper.wrapperId),
+                      "That workspace key could not be revoked.",
+                    )
+                  }
+                >
+                  {uiT("Revoke")}
+                </Button>
+              )}
+            </div>
+          );
+        })}
+      </div>
       <div className="button-cluster workspace-key-actions">
         <Button
           icon={KeyRound}
@@ -1084,76 +1167,69 @@ export default function Settings({
         >
           {uiT("Change encryption password")}
         </Button>
+        {recoveryKeyMissing ? null : (
+          <Button icon={KeyRound} disabled={securityBusy || cloudSecurityReadOnly} onClick={createRecoveryKey}>
+            {uiT("Create another recovery key")}
+          </Button>
+        )}
+      </div>
+      <h4 className="settings-minor-head">{uiT("This browser")}</h4>
+      <div className="workspace-key-list" role="group" aria-label={uiT("This browser")}>
+        <div className="workspace-key-row">
+          <span>
+            <strong>
+              {deviceRemembered
+                ? uiT("This browser remembers your key")
+                : uiT("This browser doesn't remember your key")}
+            </strong>
+            <small>
+              {deviceRemembered ? deviceNote : uiT("You need your encryption password each time you open Hibi here.")}
+            </small>
+          </span>
+          {deviceRemembered ? (
+            <Button
+              disabled={securityBusy}
+              onClick={() =>
+                runSecurityAction(async () => {
+                  await encryption.forgetDevice();
+                  actions.notify("Remembered-device access removed");
+                }, "Remembered-device access could not be removed.")
+              }
+            >
+              {uiT("Forget this device")}
+            </Button>
+          ) : (
+            <Button
+              disabled={securityBusy}
+              onClick={() =>
+                runSecurityAction(async () => {
+                  await encryption.rememberDevice();
+                  actions.notify("This device will remember the workspace key");
+                }, "This device could not be remembered.")
+              }
+            >
+              {uiT("Remember this device")}
+            </Button>
+          )}
+        </div>
+      </div>
+      {deviceRemembered ? (
+        <p className="settings-action-note">
+          {uiT(
+            "Forgetting removes only the key saved in this browser. Your records stay; next time you will need your encryption password.",
+          )}
+        </p>
+      ) : null}
+      <div className="danger-line settings-rotation-line">
+        <span>
+          <strong>{uiT("Lost a device?")}</strong>
+          <small>
+            {uiT(
+              "An emergency rotation renews your key so that device cannot read new changes. Your recovery keys stop working; create a new one afterwards.",
+            )}
+          </small>
+        </span>
         <Button
-          icon={KeyRound}
-          disabled={securityBusy || cloudSecurityReadOnly}
-          onClick={async () => {
-            setSecurityBusy(true);
-            setSecurityError("");
-            try {
-              setRecoveryReveal(await encryption.createRecoveryKey());
-            } catch (error) {
-              setSecurityError(error?.message || "A recovery key could not be created.");
-            } finally {
-              setSecurityBusy(false);
-            }
-          }}
-        >
-          {uiT("Create recovery key")}
-        </Button>
-        <Button
-          disabled={securityBusy}
-          onClick={async () => {
-            setSecurityBusy(true);
-            setSecurityError("");
-            try {
-              await encryption.rememberDevice();
-              actions.notify("This device will remember the workspace key");
-            } catch (error) {
-              setSecurityError(error?.message || "This device could not be remembered.");
-            } finally {
-              setSecurityBusy(false);
-            }
-          }}
-        >
-          {uiT("Remember this device")}
-        </Button>
-        <Button
-          disabled={securityBusy}
-          onClick={async () => {
-            setSecurityBusy(true);
-            setSecurityError("");
-            try {
-              await encryption.forgetDevice();
-              actions.notify("Remembered-device access removed");
-            } catch (error) {
-              setSecurityError(error?.message || "Remembered-device access could not be removed.");
-            } finally {
-              setSecurityBusy(false);
-            }
-          }}
-        >
-          {uiT("Forget this device")}
-        </Button>
-        <Button
-          disabled={securityBusy}
-          onClick={async () => {
-            setSecurityBusy(true);
-            setSecurityError("");
-            try {
-              await encryption.clearLocalCopies();
-              actions.notify("Local encrypted copies and remembered access cleared");
-            } catch (error) {
-              setSecurityError(error?.message || "Local copies could not be cleared.");
-            } finally {
-              setSecurityBusy(false);
-            }
-          }}
-        >
-          {uiT("Clear local copies")}
-        </Button>
-        <Button
-          variant="danger"
           icon={RotateCcw}
           disabled={securityBusy || cloudSecurityReadOnly}
           onClick={() => {
@@ -1164,26 +1240,63 @@ export default function Settings({
           {uiT("Emergency key rotation")}
         </Button>
       </div>
-      {recoveryReveal ? (
-        <div className="recovery-key-reveal" role="status">
-          <strong>{uiT("Save this recovery key now. Hibi support cannot reconstruct it.")}</strong>
-          <code>{recoveryReveal}</code>
-          <Button
-            onClick={() =>
-              navigator.clipboard?.writeText(recoveryReveal).then(() => actions.notify("Recovery key copied"))
-            }
-          >
-            {uiT("Copy key")}
-          </Button>
-        </div>
+      {cloudSecurityReadOnly ? (
+        <p role="status">{uiT("This preview is read-only. Security changes are disabled.")}</p>
       ) : null}
       {securityError ? (
         <p className="field-error" role="alert">
           {uiT(securityError)}
         </p>
       ) : null}
-    </div>
+    </section>
   ) : null;
+  // Copies kept in this browser, each named for exactly what it removes.
+  const localCopies =
+    encryption?.enabled || legacyCopy ? (
+      <section className="settings-block" aria-labelledby="settings-local-title">
+        <h3 id="settings-local-title" className="settings-subhead">
+          {uiT("Copies on this browser")}
+        </h3>
+        <div className="privacy-actions">
+          {encryption?.enabled ? (
+            <div className="danger-line">
+              <span>
+                <strong>{uiT("Encrypted copies on this browser")}</strong>
+                <small>
+                  {uiT(
+                    "Erases the offline copy, this device's copies in recovery history and the saved key, then locks Hibi until you enter your password. Your cloud records are not touched. It won't run while changes are waiting to sync.",
+                  )}
+                </small>
+              </span>
+              <Button
+                disabled={securityBusy}
+                onClick={() =>
+                  runSecurityAction(async () => {
+                    await encryption.clearLocalCopies();
+                    actions.notify("Local encrypted copies and remembered access cleared");
+                  }, "Local copies could not be cleared.")
+                }
+              >
+                {uiT("Erase copies on this browser")}
+              </Button>
+            </div>
+          ) : null}
+          {legacyCopy ? (
+            <div className="danger-line">
+              <span>
+                <strong>{uiT("Readable copy from before your account")}</strong>
+                <small>
+                  {uiT(
+                    "An unencrypted copy of your records left in this browser from before you signed in. Deleting it doesn't affect your cloud workspace or recovery history.",
+                  )}
+                </small>
+              </span>
+              <Button onClick={() => setClearTarget("local")}>{uiT("Delete readable copy")}</Button>
+            </div>
+          ) : null}
+        </div>
+      </section>
+    ) : null;
   const privacy = (
     <>
       <h2>{uiT("Data & privacy")}</h2>
@@ -1254,57 +1367,61 @@ export default function Settings({
         </>
       ) : null}
       {persistenceMode === "cloud" ? (
-        <div className="privacy-actions">
-          <div className="danger-line secondary-danger">
-            <span>
-              <strong>{uiT("Remove old browser copy")}</strong>
-              <small>{uiT("Your signed-in cloud workspace and recovery history are not affected.")}</small>
-            </span>
-            <Button onClick={() => setClearTarget("local")}>{uiT("Remove local copy")}</Button>
-          </div>
-          <div className="danger-line workspace-reset-line">
-            <span>
-              <strong>{uiT("Reset workspace")}</strong>
-              <small>
-                {uiT(
-                  "Clears active students, groups, grades, classes, schedules, and payments. Server snapshots and encrypted copies on this device have a 30-day recovery window. Expired device copies are purged the next time Hibi opens on that device. This is not permanent deletion.",
-                )}
-              </small>
-            </span>
-            <Button
-              icon={RotateCcw}
-              onClick={() => {
-                setResetConfirmation("");
-                setResetOpen(true);
-              }}
-            >
-              {uiT("Reset workspace")}
-            </Button>
-          </div>
-          <div className="danger-line permanent-delete-line">
-            <span>
-              <strong>{uiT("Delete account and data")}</strong>
-              <small>
-                {uiT(
-                  "Permanently erases active records, snapshots, imports, synchronization history, the Auth account, and this account&apos;s copies on the current device. There is no recovery.",
-                )}
-              </small>
-            </span>
-            <Button
-              variant="danger"
-              icon={Trash2}
-              onClick={() => {
-                setDeleteConfirmation("");
-                setDeleteError("");
-                setDeleteOpen(true);
-              }}
-            >
-              {uiT("Delete account and data")}
-            </Button>
-          </div>
-        </div>
-      ) : null}
-      {encryptionBlock}
+        <>
+          {encryptionBlock}
+          {localCopies}
+          {/* Last, and apart: actions that empty the workspace or delete the account. */}
+          <section className="settings-block settings-danger-zone" aria-labelledby="settings-danger-title">
+            <h3 id="settings-danger-title" className="settings-subhead">
+              {uiT("Danger zone")}
+            </h3>
+            <div className="privacy-actions">
+              <div className="danger-line workspace-reset-line">
+                <span>
+                  <strong>{uiT("Reset workspace")}</strong>
+                  <small>
+                    {uiT(
+                      "Clears active students, groups, grades, classes, schedules, and payments. Server snapshots and encrypted copies on this device have a 30-day recovery window. Expired device copies are purged the next time Hibi opens on that device. This is not permanent deletion.",
+                    )}
+                  </small>
+                </span>
+                <Button
+                  icon={RotateCcw}
+                  onClick={() => {
+                    setResetConfirmation("");
+                    setResetOpen(true);
+                  }}
+                >
+                  {uiT("Reset workspace")}
+                </Button>
+              </div>
+              <div className="danger-line permanent-delete-line">
+                <span>
+                  <strong>{uiT("Delete account and data")}</strong>
+                  <small>
+                    {uiT(
+                      "Permanently erases active records, snapshots, imports, synchronization history, the Auth account, and this account’s copies on the current device. There is no recovery.",
+                    )}
+                  </small>
+                </span>
+                <Button
+                  variant="danger"
+                  icon={Trash2}
+                  onClick={() => {
+                    setDeleteConfirmation("");
+                    setDeleteError("");
+                    setDeleteOpen(true);
+                  }}
+                >
+                  {uiT("Delete account and data")}
+                </Button>
+              </div>
+            </div>
+          </section>
+        </>
+      ) : (
+        encryptionBlock
+      )}
     </>
   );
 
@@ -1356,11 +1473,7 @@ export default function Settings({
                 amount: formatMoney(effects.classCost, locale),
               })}
             </b>
-            <small>
-              {effects.ownRates.length
-                ? uiT("{names} keep their own rate.", { names: shortNames(effects.ownRates, locale) })
-                : uiT("Every group uses this rate.")}
-            </small>
+            <small>{effects.ownRates.length ? ownRatesText : uiT("Every group uses this rate.")}</small>
           </span>
           <span className="v">{formatMoney(effects.classCost, locale)}</span>
         </div>
@@ -1466,16 +1579,32 @@ export default function Settings({
       label={soundsEnabled ? uiT("Turn sound effects off") : uiT("Turn sound effects on")}
     />
   );
+  const appearanceControl = (
+    <Segmented
+      className="settings-appearance"
+      label={uiT("Appearance")}
+      value={appearance}
+      onChange={setAppearance}
+      items={APPEARANCE_ITEMS}
+    />
+  );
   const interfaceSection = (
     <>
       <h2>{uiT("Interface")}</h2>
-      <p>{uiT("Choose the interface language and whether Hibi plays gentle feedback sounds.")}</p>
+      <p>{uiT("Choose the language, the appearance and whether Hibi plays gentle feedback sounds.")}</p>
       <div className="fx">
         <span>
           <b>{uiT("Language")}</b>
           <small>{uiT("Choose the interface language.")}</small>
         </span>
         <LanguageToggle className="settings-language" />
+      </div>
+      <div className="fx">
+        <span>
+          <b>{uiT("Appearance")}</b>
+          <small>{uiT("Follow the system theme or choose light or dark; saved on this device only.")}</small>
+        </span>
+        {appearanceControl}
       </div>
       <div className="fx">
         <span>
@@ -1515,7 +1644,7 @@ export default function Settings({
       id: "interface",
       icon: Globe2,
       title: uiT("Interface"),
-      summary: `${languageName} · ${soundsEnabled ? uiT("sounds on") : uiT("sounds off")}`,
+      summary: `${languageName} · ${uiT(APPEARANCE_SUMMARY[appearance])} · ${soundsEnabled ? uiT("sounds on") : uiT("sounds off")}`,
       content: interfaceSection,
     },
     {
@@ -1532,7 +1661,11 @@ export default function Settings({
       icon: LockKeyhole,
       title: uiT("Data & privacy"),
       summary: encryption?.enabled ? uiT("End-to-end encryption") : uiT("Your backups stay with you"),
-      status: encryption?.enabled ? { tone: "st-ok", text: uiT("Active") } : null,
+      status: recoveryKeyMissing
+        ? { tone: "st-pend", text: uiT("No recovery key") }
+        : encryption?.enabled
+          ? { tone: "st-ok", text: uiT("Active") }
+          : null,
       content: privacy,
     },
   ];
@@ -1581,6 +1714,11 @@ export default function Settings({
         <section className="settings-group" data-onboarding-tour="settings">
           <h2 className="overline">{uiT("App")}</h2>
           {valueRow("language", uiT("Language"), languageName)}
+          {valueRow(
+            "appearance",
+            uiT("Appearance"),
+            uiT(APPEARANCE_ITEMS.find((item) => item.value === appearance)?.label ?? "System"),
+          )}
           <div className="settings-row">
             <span>{uiT("Sound effects")}</span>
             {soundSwitch}
@@ -1597,8 +1735,8 @@ export default function Settings({
           />
           <ListRow
             name={encryption?.enabled ? uiT("End-to-end encryption") : uiT("Data & privacy")}
-            value={encryption?.enabled ? uiT("Active") : ""}
-            valueTone="ok"
+            value={recoveryKeyMissing ? uiT("No recovery key") : encryption?.enabled ? uiT("Active") : ""}
+            valueTone={recoveryKeyMissing ? "pend" : "ok"}
             onClick={() => openSheet("privacy")}
           />
           {account?.onSignOut ? (
@@ -1664,27 +1802,27 @@ export default function Settings({
                     { count: effects.lowAttendance.length },
                   )}
                 </li>
-                {effects.ownRates.length ? (
-                  <li className="is-muted">
-                    {uiT("{names} keep their own rate.", { names: shortNames(effects.ownRates, locale) })}
-                  </li>
-                ) : null}
+                {effects.ownRates.length ? <li className="is-muted">{ownRatesText}</li> : null}
               </ul>
             </div>
           ) : null}
         </BottomSheet>
         <BottomSheet
-          open={["language", "tutorial", "records", "privacy"].includes(mobileSheet)}
+          open={["language", "appearance", "tutorial", "records", "privacy"].includes(mobileSheet)}
           onClose={() => setMobileSheet("")}
           title={
             mobileSheet === "language"
               ? uiT("Language")
-              : (sections.find((item) => item.id === mobileSheet)?.title ?? "")
+              : mobileSheet === "appearance"
+                ? uiT("Appearance")
+                : (sections.find((item) => item.id === mobileSheet)?.title ?? "")
           }
         >
           <div className="settings-detail is-sheet">
             {mobileSheet === "language" ? (
               <LanguageToggle className="settings-language" />
+            ) : mobileSheet === "appearance" ? (
+              appearanceControl
             ) : (
               sections.find((item) => item.id === mobileSheet)?.content
             )}

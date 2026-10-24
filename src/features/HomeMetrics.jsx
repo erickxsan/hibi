@@ -3,8 +3,9 @@ import { ChevronRight, X } from "lucide-react";
 import { useI18n } from "../i18n/index.jsx";
 import { BottomSheet, Button, IconButton, Segmented } from "../components/ui";
 import { StudentAvatar } from "../components/StudentAvatar";
-import { addDays } from "../domain/dates";
+import { addDays, endOfMonth } from "../domain/dates";
 import {
+  axisTickLabels,
   dayNumber,
   formatMoney,
   formatScore,
@@ -16,7 +17,7 @@ import {
   weekdayShort,
 } from "../utils/displayFormat";
 import "../components/charts.css";
-import { debtsThrough, defaultPointIndex, monthProjection, studentPeriodRows } from "./homeDashboardModel";
+import { debtSummary, defaultPointIndex, monthProjection, studentPeriodRows } from "./homeDashboardModel";
 
 const RED = "var(--bermellon)";
 const OCRE = "var(--ocre)";
@@ -52,6 +53,78 @@ export function previousLabel(period, asOf, t, locale) {
   return String(Number(asOf.slice(0, 4)) - 1);
 }
 
+/**
+ * The dates a comparison covers: «1–22 sep», «24 ago–22 sep», «septiembre» for a whole month, and the
+ * year when it is not the current one («1 ene–22 oct 2025»). Money comparisons name it so a month in
+ * progress never reads as if it were measured against a whole month.
+ */
+export function comparisonSpan(start, end, asOf, locale) {
+  if (!start || !end) return "";
+  const otherYear = end.slice(0, 4) !== String(asOf || end).slice(0, 4);
+  const year = otherYear ? ` ${end.slice(0, 4)}` : "";
+  const date = (value) => formatShortDate(value, locale, { weekday: false });
+  if (start.slice(4) === "-01-01" && end.slice(4) === "-12-31" && start.slice(0, 4) === end.slice(0, 4))
+    return end.slice(0, 4);
+  if (start === end) return `${date(start)}${year}`;
+  if (start.slice(8) === "01" && end === endOfMonth(start)) return `${monthLong(start, locale)}${year}`;
+  if (start.slice(0, 7) === end.slice(0, 7))
+    return `${dayNumber(start)}–${dayNumber(end)} ${monthShort(end, locale)}${year}`;
+  return `${date(start)}–${date(end)}${year}`;
+}
+
+/** «↓ 49% vs. 1–22 sep»: the money comparison shared by Inicio and Seguimiento. */
+export function moneyDeltaText(delta, start, end, asOf, t, locale) {
+  if (typeof delta !== "number" || !Number.isFinite(delta)) return "";
+  const percent = Math.round(delta * 100);
+  return `${percent >= 0 ? "↑" : "↓"} ${t("{value}% vs. {previous}", {
+    value: Math.abs(percent),
+    previous: comparisonSpan(start, end, asOf, locale),
+  })}`;
+}
+
+/** «$3,200 de octubre · $9,700 de meses anteriores»: the months an overdue figure comes from. */
+export function overdueSplit(summary, t, locale) {
+  return [
+    summary.overdueThisMonth > 0
+      ? t("{amount} from {month}", {
+          amount: formatMoney(summary.overdueThisMonth, locale),
+          month: monthLong(`${summary.period}-01`, locale),
+        })
+      : "",
+    summary.overdueEarlier > 0
+      ? t("{amount} from earlier months", { amount: formatMoney(summary.overdueEarlier, locale) })
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** «$12,900 vencidos ($3,200 de octubre · $9,700 de meses anteriores)» or «Nada vencido». */
+export function overdueLine(summary, t, locale) {
+  if (!(summary.overdue > 0)) return t("Nothing overdue");
+  const split = overdueSplit(summary, t, locale);
+  const total = t("{amount} overdue", { amount: formatMoney(summary.overdue, locale) });
+  return split ? `${total} (${split})` : total;
+}
+
+/** «this week», «today»…: the period being measured, to say it has nothing in it. */
+function currentLabel(period, t) {
+  if (period === "today") return t("today");
+  if (period === "weekly") return t("this week");
+  if (period === "monthly") return t("this month");
+  return t("this year");
+}
+
+/**
+ * Comparison line when the current period has nothing to measure: says so and, when the previous period
+ * does have a value, still shows it («Sin calificaciones esta semana · La semana pasada fue 8.5»).
+ */
+function emptyPeriodDelta(noneKey, previousValue, previous, period, t) {
+  const none = t(noneKey, { current: currentLabel(period, t) });
+  if (previousValue === null || previousValue === undefined || previousValue === "") return none;
+  return `${none} · ${t("{previous} was {value}", { previous: capitalize(previous), value: previousValue })}`;
+}
+
 function pointLabel(point, period, locale) {
   if (point.month) return capitalize(monthShort(point.date, locale));
   if (period === "today") return formatTime(point.startTime, locale).replace(/\s.*$/, "");
@@ -78,7 +151,15 @@ export function bucketTitle(bucket, t, locale) {
 export function metricSummary(metric, context) {
   const { t, locale, period, asOf, names, threshold, rows } = context;
   const previous = previousLabel(period, asOf, t, locale);
-  const base = { delta: t("No previous period"), deltaTone: "", insight: "", insightColor: "var(--sumi-subtle)" };
+  // Comparisons name the dates they cover («vs. 1–22 sep»), like the money ones and Seguimiento.
+  const span = metric.previousStart ? comparisonSpan(metric.previousStart, metric.previousEnd, asOf, locale) : previous;
+  const hasCurrent = metric.value !== null && metric.value !== undefined;
+  const base = {
+    delta: hasCurrent ? t("No previous period") : t("No data"),
+    deltaTone: "",
+    insight: "",
+    insightColor: "var(--sumi-subtle)",
+  };
   if (metric.metric === "attendance") {
     const regs = metric.points.filter((point) => point.kind === "reg");
     let insight = t("No classes recorded yet");
@@ -131,12 +212,20 @@ export function metricSummary(metric, context) {
       insight,
       insightColor,
     };
+    if (!hasCurrent && Number.isFinite(metric.previous))
+      result.delta = emptyPeriodDelta(
+        "No classes recorded {current}",
+        `${percentText(metric.previous, locale)}%`,
+        previous,
+        period,
+        t,
+      );
     if (metric.delta !== null) {
       const points = Math.round(metric.delta * 100);
       result.delta =
         points === 0
-          ? t("Same as {previous}", { previous })
-          : `${points > 0 ? "↑" : "↓"} ${t("{value} pp vs. {previous}", { value: Math.abs(points), previous })}`;
+          ? t("Same as {previous}", { previous: span })
+          : `${points > 0 ? "↑" : "↓"} ${t("{value} pp vs. {previous}", { value: Math.abs(points), previous: span })}`;
       result.deltaTone = points >= 0 ? "text-ok" : "text-bad";
     }
     return result;
@@ -188,12 +277,20 @@ export function metricSummary(metric, context) {
       insight,
       insightColor,
     };
+    if (!hasCurrent && Number.isFinite(metric.previous))
+      result.delta = emptyPeriodDelta(
+        "No grades {current}",
+        `${formatScore(metric.previous, locale)} /10`,
+        previous,
+        period,
+        t,
+      );
     if (metric.delta !== null) {
       const delta = Math.round(metric.delta * 10) / 10;
       result.delta =
         delta === 0
-          ? t("Same as {previous}", { previous })
-          : `${delta > 0 ? "↑" : "↓"} ${t("{value} vs. {previous}", { value: formatScore(Math.abs(delta), locale), previous })}`;
+          ? t("Same as {previous}", { previous: span })
+          : `${delta > 0 ? "↑" : "↓"} ${t("{value} vs. {previous}", { value: formatScore(Math.abs(delta), locale), previous: span })}`;
       result.deltaTone = delta >= 0 ? "text-data" : "text-bad";
     }
     return result;
@@ -234,7 +331,11 @@ export function metricSummary(metric, context) {
   };
   if (metric.delta !== null) {
     const percent = Math.round(metric.delta * 100);
-    result.delta = `${percent >= 0 ? "↑" : "↓"} ${t("{value}% vs. {previous}", { value: Math.abs(percent), previous })}`;
+    // «vs. 1–22 sep», not «vs. septiembre»: the label states the same stretch the figure is compared with.
+    result.delta =
+      period === "today" || !metric.previousStart
+        ? `${percent >= 0 ? "↑" : "↓"} ${t("{value}% vs. {previous}", { value: Math.abs(percent), previous })}`
+        : moneyDeltaText(metric.delta, metric.previousStart, metric.previousEnd, asOf, t, locale);
     result.deltaTone = percent >= 0 ? "text-ok" : "text-bad";
   }
   return result;
@@ -727,6 +828,21 @@ function DetailAside({ detail, onAction }) {
           ) : null}
         </div>
       ) : null}
+      {detail.extra?.list.length ? (
+        <div>
+          <span className="overline det-list-title">{detail.extra.title}</span>
+          {detail.extra.list.map((item) => (
+            <div className="who" key={item.id}>
+              <i style={{ background: item.color }} />
+              <span className="wn">
+                {item.name}
+                {item.sub ? <small>{item.sub}</small> : null}
+              </span>
+              {item.value ? <em>{item.value}</em> : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
       {detail.action ? (
         <button type="button" className="link-button" onClick={() => onAction(detail.action)}>
           {detail.action.label}
@@ -904,12 +1020,14 @@ export function MetricExplorer({
   asOf,
   context,
   onAction,
+  initialAside = "point",
 }) {
   const { t, locale } = useI18n();
   const [group, setGroup] = useState("all");
   const [selected, setSelected] = useState(null);
   const [view, setView] = useState("rhythm");
-  const [aside, setAside] = useState("point");
+  // «Ver en la gráfica» from an overdue alert opens straight on the debts, the figure the alert quotes.
+  const [aside, setAside] = useState(initialAside);
   const scoped = useMemo(() => (group === "all" ? metrics : buildForGroup(group)), [buildForGroup, group, metrics]);
   const metric = scoped[open];
   const summary = group === "all" ? summaries[open] : metricSummary(metric, { ...context, period });
@@ -923,35 +1041,62 @@ export function MetricExplorer({
   }, [asOf, derived, group, period, state]);
   const derivedRows = useMemo(() => derived?.classLog || [], [derived]);
   const projection = useMemo(() => monthProjection(state, derivedRows, asOf), [asOf, derivedRows, state]);
-  const debts = useMemo(() => debtsThrough(state, derivedRows, asOf, group), [asOf, derivedRows, group, state]);
-  const owed = debts.reduce((sum, item) => sum + item.amount, 0);
-  const overdue = debts.reduce((sum, item) => sum + item.overdue, 0);
+  const debts = useMemo(() => debtSummary(state, derivedRows, asOf, group), [asOf, derivedRows, group, state]);
+  const { owed, overdue } = debts;
+  const reasonsText = (item) =>
+    item.reasons
+      .map((reason) =>
+        reason.kind === "monthly"
+          ? t("{month} monthly fee", { month: monthLong(`${reason.period}-01`, locale) })
+          : t("class on {date}", { date: formatShortDate(reason.date, locale, { weekday: false }) }),
+      )
+      .slice(0, 3)
+      .join(" · ");
   const pace = period === "monthly" && group === "all" ? projection.projected : 0;
   let detail = pointDetail(metric, index, context);
   if (open === "collections" && aside === "debts") {
+    // Everything active students owe, with the overdue part split by month; inactive students apart.
     detail = {
       title: t("To collect"),
       big: formatMoney(owed, locale),
-      sub: overdue ? t("{amount} already overdue", { amount: formatMoney(overdue, locale) }) : t("Nothing overdue"),
+      sub: overdue ? t("{amount} overdue", { amount: formatMoney(overdue, locale) }) : t("Nothing overdue"),
       tone: overdue ? "text-bad" : "text-ok",
-      rows: [],
+      rows: [
+        {
+          key: t("Overdue from {month}", { month: monthLong(`${debts.period}-01`, locale) }),
+          value: formatMoney(debts.overdueThisMonth, locale),
+        },
+        { key: t("Overdue from earlier months"), value: formatMoney(debts.overdueEarlier, locale) },
+        { key: t("Not due yet"), value: formatMoney(debts.notDue, locale) },
+      ],
       listTitle: t("Who owes"),
-      list: debts.map((item) => ({
+      list: debts.debts.map((item) => ({
         id: item.studentId,
         name: context.nameOf(item.studentId),
-        sub: item.reasons
-          .map((reason) =>
-            reason.kind === "monthly"
-              ? t("{month} monthly fee", { month: monthLong(`${reason.period}-01`, locale) })
-              : t("class on {date}", { date: formatShortDate(reason.date, locale, { weekday: false }) }),
-          )
-          .slice(0, 3)
+        // «$900 vencidos · …» next to «$1,125»: the total matches Clases and Seguimiento.
+        sub: [
+          item.overdue > 0 && item.overdue < item.amount
+            ? t("{amount} overdue", { amount: formatMoney(item.overdue, locale) })
+            : "",
+          reasonsText(item),
+        ]
+          .filter(Boolean)
           .join(" · "),
         value: formatMoney(item.amount, locale),
         color: item.overdue ? RED : OCRE,
       })),
-      emptyMessage: t("Nobody owes. Everything collected!"),
+      emptyMessage: t(debts.inactive.debts.length ? "No active student owes." : "Nobody owes. Everything collected!"),
       emptyTone: "text-ok",
+      extra: {
+        title: `${t("Classes owed by inactive students")} · ${formatMoney(debts.inactive.owed, locale)}`,
+        list: debts.inactive.debts.map((item) => ({
+          id: item.studentId,
+          name: context.nameOf(item.studentId),
+          sub: reasonsText(item),
+          value: formatMoney(item.amount, locale),
+          color: "var(--sumi-subtle)",
+        })),
+      },
     };
   } else if (open === "collections" && view === "cumulative") {
     const sums = cumulative(metric.points);
@@ -1025,7 +1170,7 @@ export function MetricExplorer({
             id: "debts",
             label: t("To collect"),
             value: formatMoney(owed, locale),
-            note: `${t(debts.length === 1 ? "{count} student" : "{count} students", { count: debts.length })}${
+            note: `${t(debts.debts.length === 1 ? "{count} student" : "{count} students", { count: debts.debts.length })}${
               overdue ? ` · ${t("{amount} overdue", { amount: formatMoney(overdue, locale) })}` : ""
             }`,
             noteTone: overdue ? "text-bad" : "",
@@ -1165,8 +1310,8 @@ export function MetricRows({ metrics, summaries, context, onOpenTracking, monthN
   const [selected, setSelected] = useState(null);
   const metric = open ? metrics[open] : null;
   const debts = useMemo(
-    () => (open === "collections" ? debtsThrough(context.state, context.derivedRows, context.asOf) : []),
-    [context.asOf, context.derivedRows, context.state, open],
+    () => debtSummary(context.state, context.derivedRows, context.asOf),
+    [context.asOf, context.derivedRows, context.state],
   );
   const sparkFor = (item) => {
     if (item.metric === "collections") {
@@ -1205,13 +1350,21 @@ export function MetricRows({ metrics, summaries, context, onOpenTracking, monthN
       };
     }
     if (id === "collections") {
-      const overdue = debtsThrough(context.state, context.derivedRows, context.asOf).reduce(
-        (sum, item) => sum + item.overdue,
-        0,
-      );
-      return overdue
-        ? { text: t("{amount} overdue", { amount: formatMoney(overdue, locale) }), tone: "text-bad" }
-        : { text: summaries.collections.delta, tone: summaries.collections.deltaTone };
+      // This row sits under the month's heading, so it names the month the overdue money belongs to.
+      if (debts.overdueThisMonth > 0)
+        return {
+          text: t("{amount} overdue from {month}", {
+            amount: formatMoney(debts.overdueThisMonth, locale),
+            month: monthLong(`${debts.period}-01`, locale),
+          }),
+          tone: "text-bad",
+        };
+      if (debts.overdueEarlier > 0)
+        return {
+          text: t("{amount} overdue from earlier months", { amount: formatMoney(debts.overdueEarlier, locale) }),
+          tone: "text-bad",
+        };
+      return { text: summaries.collections.delta, tone: summaries.collections.deltaTone };
     }
     return { text: summaries[id].delta.replace(/^([↑↓]) /, "$1 "), tone: summaries[id].deltaTone };
   };
@@ -1231,6 +1384,7 @@ export function MetricRows({ metrics, summaries, context, onOpenTracking, monthN
   const rows = open ? context.rows : [];
   let list = [];
   let listTitle = "";
+  let inactiveList = [];
   if (open === "attendance") {
     listTitle = t("Below {value}%", { value: percentText(context.threshold.attendance, locale) });
     list = rows
@@ -1256,11 +1410,22 @@ export function MetricRows({ metrics, summaries, context, onOpenTracking, monthN
       }));
   } else if (open === "collections") {
     listTitle = t("Who owes");
-    list = debts.map((item) => ({
+    list = debts.debts.map((item) => ({
       student: context.studentOf(item.studentId),
-      sub: item.overdue ? t("Overdue") : t("Pending"),
+      sub:
+        item.overdue > 0
+          ? item.overdue < item.amount
+            ? t("{amount} overdue", { amount: formatMoney(item.overdue, locale) })
+            : t("Overdue")
+          : t("Pending"),
       value: formatMoney(item.amount, locale),
       tone: item.overdue ? "text-bad" : "text-pend",
+    }));
+    inactiveList = debts.inactive.debts.map((item) => ({
+      student: context.studentOf(item.studentId),
+      sub: t("Inactive student"),
+      value: formatMoney(item.amount, locale),
+      tone: "muted",
     }));
   }
   const subtitle = metric
@@ -1383,12 +1548,15 @@ export function MetricRows({ metrics, summaries, context, onOpenTracking, monthN
                   })}
                 </div>
                 <div className="cx" aria-hidden="true">
-                  {sheetBars.map((point) => (
-                    <span key={point.key}>
-                      {point.month || point.kind === "month"
+                  {axisTickLabels(
+                    sheetBars.map((point) =>
+                      point.month || point.kind === "month"
                         ? monthShort(point.date || point.start, locale)
-                        : dayNumber(point.date || point.start)}
-                    </span>
+                        : dayNumber(point.date || point.start),
+                    ),
+                    8,
+                  ).map((text, index) => (
+                    <span key={sheetBars[index].key}>{text}</span>
                   ))}
                 </div>
               </div>
@@ -1403,10 +1571,38 @@ export function MetricRows({ metrics, summaries, context, onOpenTracking, monthN
                 </span>
               </div>
             ) : null}
+            {open === "collections" ? (
+              <div className="pick">
+                <b>{t("To collect {amount}", { amount: formatMoney(debts.owed, locale) })}</b>
+                <span className={debts.overdue > 0 ? "text-bad" : undefined}>{overdueLine(debts, t, locale)}</span>
+              </div>
+            ) : null}
             {list.length ? (
               <div>
                 <span className="overline">{listTitle}</span>
                 {list.map((item) => (
+                  <div className="lr" key={item.student?.id}>
+                    <StudentAvatar
+                      avatarId={item.student?.avatarId}
+                      name={item.student?.fullName}
+                      size="small"
+                      decorative
+                    />
+                    <span>
+                      <strong>{item.student?.fullName}</strong>
+                      <small>{item.sub}</small>
+                    </span>
+                    <b className={item.tone}>{item.value}</b>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {inactiveList.length ? (
+              <div>
+                <span className="overline">
+                  {`${t("Classes owed by inactive students")} · ${formatMoney(debts.inactive.owed, locale)}`}
+                </span>
+                {inactiveList.map((item) => (
                   <div className="lr" key={item.student?.id}>
                     <StudentAvatar
                       avatarId={item.student?.avatarId}

@@ -17,6 +17,35 @@ export function syncStatusDetails(syncStatus) {
   return STATUS_DETAILS[syncStatus] ?? STATUS_DETAILS.synced;
 }
 
+const PANEL_WIDTH = 280;
+const VIEWPORT_MARGIN = 12;
+const PANEL_GAP = 8;
+const MIN_PANEL_HEIGHT = 120;
+
+/**
+ * Fixed-position box for the account panel: next to the pill, never outside the viewport.
+ * @param {{ left: number, right: number, top: number, bottom: number }} rect the pill's client rect
+ * @param {string} placement "up" (sidebar) or "down" (top bar)
+ * @param {number} viewportWidth
+ * @param {number} viewportHeight
+ */
+export function accountPanelPosition(rect, placement, viewportWidth, viewportHeight) {
+  const width = Math.max(0, Math.min(PANEL_WIDTH, viewportWidth - VIEWPORT_MARGIN * 2));
+  const maxLeft = Math.max(VIEWPORT_MARGIN, viewportWidth - VIEWPORT_MARGIN - width);
+  const position = { position: "fixed", width, maxHeight: 0 };
+  if (placement === "up") {
+    position.left = Math.min(Math.max(rect.left, VIEWPORT_MARGIN), maxLeft);
+    position.bottom = Math.max(VIEWPORT_MARGIN, viewportHeight - rect.top + PANEL_GAP);
+    position.maxHeight = Math.max(MIN_PANEL_HEIGHT, viewportHeight - position.bottom - VIEWPORT_MARGIN);
+  } else {
+    // Aligned to the pill's right edge, as in the top bar.
+    position.left = Math.min(Math.max(rect.right - width, VIEWPORT_MARGIN), maxLeft);
+    position.top = Math.max(VIEWPORT_MARGIN, rect.bottom + PANEL_GAP);
+    position.maxHeight = Math.max(MIN_PANEL_HEIGHT, viewportHeight - position.top - VIEWPORT_MARGIN);
+  }
+  return position;
+}
+
 /** The sync pill doubles as the account menu: status, email and sign out. */
 export function AccountMenu({
   email,
@@ -58,10 +87,11 @@ export function AccountMenu({
     };
   }, [open]);
 
-  // The sidebar scrolls (overflow: auto), so an absolutely positioned panel
-  // would be clipped. Upward panels are pinned to the viewport instead.
+  // The sidebar scrolls (overflow: auto), so an absolutely positioned panel would be clipped there, and a
+  // 280 px panel does not fit every phone. The panel is pinned to the viewport, kept inside it with a margin and,
+  // only on very short windows, scrolls inside itself instead of being cut off.
   useLayoutEffect(() => {
-    if (!open || placement !== "up") {
+    if (!open) {
       setPanelPosition(null);
       return undefined;
     }
@@ -69,7 +99,7 @@ export function AccountMenu({
     const place = () => {
       const rect = triggerRef.current?.getBoundingClientRect();
       if (!rect) return;
-      setPanelPosition({ left: rect.left, bottom: window.innerHeight - rect.top + 8 });
+      setPanelPosition(accountPanelPosition(rect, placement, window.innerWidth, window.innerHeight));
     };
 
     place();
@@ -102,7 +132,8 @@ export function AccountMenu({
         className={`sync-pill ${status.tone}`.trim()}
         type="button"
         onClick={() => setOpen((current) => !current)}
-        aria-label={uiT("Account menu for {p0}", { p0: email || uiT("current account") })}
+        // The name starts with the visible status (WCAG 2.5.3) and leaves the email to the open panel.
+        aria-label={uiT("{status} · Account menu", { status: uiT(status.short) })}
         aria-expanded={open}
         aria-controls={panelId}
       >
@@ -113,7 +144,7 @@ export function AccountMenu({
         <section
           id={panelId}
           className="account-menu-panel"
-          style={panelPosition ? { position: "fixed", ...panelPosition } : undefined}
+          style={panelPosition || undefined}
           aria-label={uiT("Account options")}
         >
           <div className="account-menu-heading">

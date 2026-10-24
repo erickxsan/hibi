@@ -4,6 +4,7 @@ import {
   calendarMonthRange,
   calendarSessionTone,
   calendarWeekDays,
+  compactClock,
   filterCalendarSessions,
   groupCalendarSessionsByDate,
   minutesFromTime,
@@ -37,5 +38,17 @@ describe("classes calendar model", () => {
     expect(groupCalendarSessionsByDate(sessions).get("2026-07-31")).toEqual([sessions[0]]);
     expect(calendarSessionTone(sessions[0])).toBe(calendarSessionTone(sessions[0]));
     expect(minutesFromTime("11:30")).toBe(690);
+  });
+});
+
+describe("calendar chip time", () => {
+  it("reads as a time, not a count", () => {
+    expect(compactClock("16:00")).toBe("4p");
+    expect(compactClock("10:30")).toBe("10:30a");
+    expect(compactClock("12:00")).toBe("12p");
+    expect(compactClock("00:15")).toBe("12:15a");
+    expect(compactClock("8:00")).toBe("8a");
+    expect(compactClock("")).toBe("");
+    expect(compactClock("25:00")).toBe("");
   });
 });

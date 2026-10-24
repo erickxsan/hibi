@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import { createStarterState } from "../domain";
-import { canonicalGroup, canonicalStudent, operationalStateForDate, persistRecipe } from "./useClassManager";
+import {
+  canonicalGroup,
+  canonicalStudent,
+  operationalStateForDate,
+  persistRecipe,
+  placeSavedGroup,
+} from "./useClassManager";
 
 describe("class manager draft canonicalization", () => {
   it("uses the real operational date without mutating persisted legacy dates", () => {
@@ -107,5 +113,36 @@ describe("class manager cloud conflict handling", () => {
 
     expect(adapter.importRecords).toHaveBeenCalledTimes(1);
     expect(adapter.save).not.toHaveBeenCalled();
+  });
+});
+
+describe("saving groups", () => {
+  const monthly = { mode: "monthly", monthlyFee: 800, due: { type: "dayOfMonth", day: 5 }, effectiveFrom: "2026-10" };
+  const slot = { id: "mon", dayOfWeek: 1, startTime: "10:00", durationHours: 1 };
+
+  it("starts a new group's schedule and billing on the day it is created", () => {
+    const item = canonicalGroup({ id: "g1", name: "Inglés A1", weeklySchedule: [slot], billing: monthly });
+    const [created] = placeSavedGroup([], item, { name: "Inglés A1" }, "2026-10-22");
+    expect(created.scheduleResumeDate).toBe("2026-10-22");
+    expect(created.billing.effectiveFrom).toBe("2026-11");
+    const [early] = placeSavedGroup([], item, {}, "2026-10-03");
+    expect(early.billing.effectiveFrom).toBe("2026-10");
+  });
+
+  it("keeps the stored schedule start when an edit does not send one", () => {
+    const stored = {
+      ...canonicalGroup({ id: "g1", name: "Inglés A1", weeklySchedule: [slot] }),
+      scheduleResumeDate: "2026-10-22",
+    };
+    const edit = { id: "g1", name: "Inglés A2", weeklySchedule: [slot, { ...slot, id: "wed", dayOfWeek: 3 }] };
+    const [saved] = placeSavedGroup([stored], canonicalGroup(edit), edit, "2026-11-30");
+    expect(saved).toMatchObject({ name: "Inglés A2", scheduleResumeDate: "2026-10-22" });
+    expect(saved.weeklySchedule).toHaveLength(2);
+    const reopened = { ...stored, scheduleResumeDate: "2026-12-01" };
+    expect(placeSavedGroup([stored], canonicalGroup(reopened), reopened, "2026-11-30")[0].scheduleResumeDate).toBe(
+      "2026-12-01",
+    );
+    const legacy = canonicalGroup({ id: "g0", name: "Old", weeklySchedule: [slot] });
+    expect(placeSavedGroup([legacy], legacy, { id: "g0" }, "2026-11-30")[0].scheduleResumeDate).toBe("");
   });
 });

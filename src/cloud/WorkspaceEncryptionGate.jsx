@@ -1,11 +1,14 @@
 import { useI18n } from "../i18n/index.jsx";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { KeyRound, LockKeyhole, LogOut, RefreshCw, ShieldCheck } from "lucide-react";
 import { BrandMark } from "../components/BrandMark";
 import { Button, Field, Input } from "../components/ui";
 import { LanguageToggle } from "../i18n";
 import { NEW_PASSWORD_GUIDANCE, getNewPasswordWarning } from "../crypto/passwords.js";
 import "./cloud.css";
+
+/** How long the protection check may run before Hibi offers to retry or leave. */
+export const SLOW_PROTECTION_CHECK_MS = 8000;
 
 export function WorkspaceEncryptionGate({
   accountEmail,
@@ -19,8 +22,22 @@ export function WorkspaceEncryptionGate({
   onUnlockRecovery,
   onRetry,
   onSignOut,
+  slowCheckDelay = SLOW_PROTECTION_CHECK_MS,
 }) {
   const { t: uiT } = useI18n();
+  // While the check runs, only progress is shown: an early «Sign out» would forget this device for nothing.
+  const [checkAttempt, setCheckAttempt] = useState(0);
+  const [slowCheck, setSlowCheck] = useState(false);
+  useEffect(() => {
+    setSlowCheck(false);
+    if (!loading) return undefined;
+    const timer = globalThis.setTimeout(() => setSlowCheck(true), slowCheckDelay);
+    return () => globalThis.clearTimeout(timer);
+  }, [checkAttempt, loading, slowCheckDelay]);
+  const retryCheck = () => {
+    setCheckAttempt((attempt) => attempt + 1);
+    onRetry?.();
+  };
   const [rememberDevice, setRememberDevice] = useState(true);
   const [password, setPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
@@ -121,6 +138,18 @@ export function WorkspaceEncryptionGate({
             )}
           </p>
         ) : null}
+
+        {loading ? (
+          <div className="encryption-progress encryption-boot-progress" role="status" aria-live="polite">
+            <span className="cloud-state-spinner" aria-hidden="true" />
+            <span>
+              {slowCheck
+                ? uiT("This is taking longer than usual.")
+                : uiT("Opening your encrypted workspace. This usually takes a few seconds.")}
+            </span>
+          </div>
+        ) : null}
+        {loading && slowCheck ? <p>{uiT("Check your connection and try again. Your records are safe.")}</p> : null}
 
         {progress ? (
           <div className="encryption-progress" role="status" aria-live="polite">
@@ -239,19 +268,29 @@ export function WorkspaceEncryptionGate({
           </div>
         ) : null}
 
-        <div className="cloud-state-actions encryption-secondary-actions">
-          {error || formError || (!loading && !bootstrapKnown) ? (
-            <Button icon={RefreshCw} onClick={onRetry} disabled={busy || loading}>
+        {loading && slowCheck ? (
+          <div className="cloud-state-actions encryption-secondary-actions">
+            <Button variant="primary" icon={RefreshCw} onClick={retryCheck} disabled={busy}>
+              {uiT("Retry")}
+            </Button>
+          </div>
+        ) : !loading && (error || formError || !bootstrapKnown) ? (
+          <div className="cloud-state-actions encryption-secondary-actions">
+            <Button icon={RefreshCw} onClick={retryCheck} disabled={busy}>
               {uiT("Check again")}
             </Button>
-          ) : null}
-          <Button icon={LogOut} onClick={onSignOut} disabled={busy}>
-            {uiT("Sign out")}
-          </Button>
-        </div>
-        <p className="encryption-compatibility-note">
-          {uiT("Signing out also forgets this device. You will need your encryption password next time.")}
-        </p>
+          </div>
+        ) : null}
+        {!loading || slowCheck ? (
+          <div className="encryption-signout">
+            {/* Same action as before (it also forgets this device), now named for what it does and kept quiet. */}
+            <button type="button" className="encryption-signout-link" onClick={onSignOut} disabled={busy}>
+              <LogOut aria-hidden="true" size={16} />
+              {uiT("Sign out and forget this device")}
+            </button>
+            <p className="encryption-compatibility-note">{uiT("Next time you will need your encryption password.")}</p>
+          </div>
+        ) : null}
       </section>
     </main>
   );

@@ -17,17 +17,24 @@ import {
 } from "../components/ui";
 import { StudentAvatar } from "../components/StudentAvatar";
 import { useCompactViewport } from "../components/OverlayContext";
-import { confirmDiscard, draftChanged, useUnsavedChanges } from "../hooks/useUnsavedChanges";
+import {
+  createNavigationPass,
+  discardChangesRequest,
+  draftChanged,
+  replayableHistoryMove,
+  useUnsavedChanges,
+} from "../hooks/useUnsavedChanges";
+import { useConfirmPrompt } from "../components/ConfirmPrompt";
 import { useHistoryBackedState } from "../hooks/useHistoryNavigation";
 import { isGroupArchived } from "../domain/groupArchiving";
 import { gradeGroupId } from "../domain/semanticIdentity";
-import { normalizeGroupBilling } from "../domain/monthlyBilling";
+import { normalizeGroupBilling, periodOf, startGroupBilling } from "../domain/monthlyBilling";
 import { todayDateOnly } from "../domain/dates";
-import { formatPercent, formatShortDate } from "../utils/displayFormat";
+import { formatPercent, formatShortDate, monthLong } from "../utils/displayFormat";
 import { normalizeSearchText } from "../utils/searchText";
 import { buildClassWorkspaceSessionsForRange } from "./classesWorkspaceModel";
 import { addDays } from "../domain/dates";
-import { groupScheduleShort, studentGroupIdsOf } from "./groupLabels";
+import { archivedOnlyGroups, groupScheduleShort, studentGroupIdsOf } from "./groupLabels";
 import {
   archivedGroupHistory,
   billingChanges,
@@ -180,12 +187,19 @@ export default function Community({
   const [joinTarget, setJoinTarget] = useState(null);
   const [saving, setSaving] = useState(false);
   const [pendingCode, setPendingCode] = useState("");
+  const colsRef = useRef(/** @type {HTMLDivElement | null} */ (null));
+  const revealDetail = useRef(false);
   const baselines = useRef({ student: null, group: null, billing: null, studentEditor: null, groupEditor: null });
 
   const groupsById = useMemo(() => new Map(state.groups.map((group) => [group.id, group])), [state.groups]);
   const activeStudents = useMemo(
     () => state.students.filter((student) => student.status !== "Inactive"),
     [state.students],
+  );
+  // Students whose only groups are archived stay listed (under their group) but are not "active" for the header.
+  const currentStudentCount = useMemo(
+    () => activeStudents.filter((student) => !archivedOnlyGroups(student, groupsById).length).length,
+    [activeStudents, groupsById],
   );
   const months = useMemo(
     () => studentMonths(state, derived, asOf, activeStudents),
@@ -333,14 +347,43 @@ export default function Community({
   const dirty = studentDirty || groupDirty || editorDirty;
   useUnsavedChanges(registerNavigationBlocker, dirty, DISCARD);
 
+  // In-app «discard?» questions (no native confirm). Guards that must answer synchronously block, ask, and
+  // on «Descartar cambios» run the same action again; view changes replay through a one-shot pass.
+  const { confirm, prompt: confirmPrompt } = useConfirmPrompt();
+  const askDiscard = useCallback((message) => confirm(discardChangesRequest(t(message))), [confirm, t]);
+  /** Runs `proceed` now when nothing is unsaved; otherwise asks first and returns false. */
+  const proceedOrAsk = (isDirty, message, proceed) => {
+    if (!isDirty) {
+      proceed();
+      return true;
+    }
+    askDiscard(message).then((accepted) => {
+      if (accepted) proceed();
+    });
+    return false;
+  };
+  const viewPass = useRef(createNavigationPass());
+  const changeViewRef = useRef(null);
   const changeView = useHistoryBackedState({
     key: "community-view",
     value: view,
     onChange: setView,
     defaultValue: initialCommunityView(initialView),
     allowedValues: COMMUNITY_VIEWS,
-    canChange: () => confirmDiscard(studentDirty || groupDirty, DISCARD),
+    canChange: ({ to, reason }) => {
+      if (!(studentDirty || groupDirty) || viewPass.current.consume(to)) return true;
+      const replayHistory = reason === "popstate" ? replayableHistoryMove() : null;
+      askDiscard(DISCARD).then((accepted) => {
+        if (!accepted) return;
+        viewPass.current.grant(to);
+        if (replayHistory?.()) return;
+        changeViewRef.current?.(to, { replace: reason === "replace" });
+        viewPass.current.clear();
+      });
+      return false;
+    },
   });
+  changeViewRef.current = changeView;
 
   const select = (type, id) => {
     if (compact) {
@@ -348,43 +391,49 @@ export default function Community({
       return;
     }
     if (selected.type === type && selected.id === id) return;
-    if (!confirmDiscard(studentDirty || groupDirty, DISCARD)) return;
-    setSelected({ type, id });
+    proceedOrAsk(studentDirty || groupDirty, DISCARD, () => {
+      revealDetail.current = true;
+      setSelected({ type, id });
+    });
   };
+
+  // After the reader picks someone, make sure the card is on screen. Side by side it is sticky, so this
+  // only acts when the layout is stacked and the card sits below the fold.
+  useEffect(() => {
+    if (!revealDetail.current) return;
+    revealDetail.current = false;
+    const card = colsRef.current?.querySelector(":scope > .detail");
+    if (!card || typeof card.scrollIntoView !== "function") return;
+    const { top, bottom } = card.getBoundingClientRect();
+    const height = window.innerHeight || document.documentElement.clientHeight;
+    if (top < 0 || top > height - 120 || bottom < 80) card.scrollIntoView({ block: "start" });
+  }, [selected]);
 
   const openStudentEditor = (student = EMPTY_STUDENT) => {
     const next = cloneStudent(student);
     baselines.current.studentEditor = next;
     setStudentEditor(next);
   };
-  const closeStudentEditor = () => {
-    if (
-      !confirmDiscard(
-        Boolean(studentEditor) && draftChanged(studentEditor, baselines.current.studentEditor),
-        "Discard your unsaved student changes?",
-      )
-    )
-      return false;
-    setStudentEditor(null);
-    return true;
-  };
+  // The drawer asks synchronously whether it may close: with unsaved edits it stays open, asks in-app, and
+  // closes through state after «Descartar cambios».
+  const closeStudentEditor = () =>
+    proceedOrAsk(
+      Boolean(studentEditor) && draftChanged(studentEditor, baselines.current.studentEditor),
+      "Discard your unsaved student changes?",
+      () => setStudentEditor(null),
+    );
   const openGroupEditor = (group = EMPTY_GROUP) => {
     const next = cloneGroup(group);
     baselines.current.groupEditor = next;
     setNewGroupBilling(NEW_GROUP_BILLING);
     setGroupEditor(next);
   };
-  const closeGroupEditor = () => {
-    if (
-      !confirmDiscard(
-        Boolean(groupEditor) && draftChanged(groupEditor, baselines.current.groupEditor),
-        "Discard your unsaved group changes?",
-      )
-    )
-      return false;
-    setGroupEditor(null);
-    return true;
-  };
+  const closeGroupEditor = () =>
+    proceedOrAsk(
+      Boolean(groupEditor) && draftChanged(groupEditor, baselines.current.groupEditor),
+      "Discard your unsaved group changes?",
+      () => setGroupEditor(null),
+    );
 
   useEffect(() => {
     if (intent?.type === "open-group-archives") {
@@ -440,7 +489,15 @@ export default function Community({
       else {
         const { billing } = billingChanges(groupEditor, [], newGroupBilling, asOf);
         const draft = { ...groupEditor, hourlyRate: newGroupBilling.hourlyRate ?? groupEditor.hourlyRate, billing };
+        // Saving moves the first fee to next month when the due day (or the last class) already passed: say so.
+        const billingStart = startGroupBilling(draft, asOf).billing?.effectiveFrom;
         saved = actions.saveGroupBilling ? await actions.saveGroupBilling(draft, {}) : await actions.upsertGroup(draft);
+        if (saved && billingStart > periodOf(asOf))
+          actions.notify?.(
+            t("Billing starts in {month}. Classes before then are not charged.", {
+              month: monthLong(`${billingStart}-01`, locale),
+            }),
+          );
       }
       if (saved) {
         setGroupEditor(null);
@@ -510,7 +567,7 @@ export default function Community({
   const contextFor = (student) =>
     student.status === "Inactive"
       ? { text: `${student.code} · ${t("Inactive")}`, tone: "" }
-      : studentContext(months.get(student.id), groupNamesOf(student, groupsById, t), t, locale);
+      : studentContext(months.get(student.id), groupNamesOf(student, groupsById, t, { markArchived: true }), t, locale);
 
   const groupCount = activeGroups.length;
   const individualCount = activeStudents.filter((student) => student.isIndividual).length;
@@ -526,8 +583,8 @@ export default function Community({
           },
         )
       : t("{students} in {groups}. Choose someone to see their progress and details.", {
-          students: t(activeStudents.length === 1 ? "{count} active student" : "{count} active students", {
-            count: activeStudents.length,
+          students: t(currentStudentCount === 1 ? "{count} active student" : "{count} active students", {
+            count: currentStudentCount,
           }),
           groups: t(groupCount === 1 ? "{count} group" : "{count} groups", { count: groupCount }),
         });
@@ -660,6 +717,13 @@ export default function Community({
     </>
   );
 
+  const inActiveGroup = (student) =>
+    studentGroupIdsOf(student).some((id) => groupsById.get(id) && !isGroupArchived(groupsById.get(id)));
+  const inArchivedGroups = visibleActive.filter((student) => archivedOnlyGroups(student, groupsById).length);
+  const withoutGroup = visibleActive.filter(
+    (student) => !inActiveGroup(student) && !archivedOnlyGroups(student, groupsById).length,
+  );
+
   const allList = (
     <>
       {visibleGroups.map((group) => {
@@ -675,7 +739,12 @@ export default function Community({
                   · {members.length} · {formatPercent(summary.attendance, locale)}
                 </span>
               </span>
-              <button type="button" className="link-button" onClick={() => select("group", group.id)}>
+              <button
+                type="button"
+                className="link-button"
+                aria-label={t("View group {name}", { name: group.name })}
+                onClick={() => select("group", group.id)}
+              >
                 {t("View group")}
               </button>
             </div>
@@ -704,29 +773,44 @@ export default function Community({
           </div>
         );
       })}
-      {visibleActive.some(
-        (student) =>
-          !studentGroupIdsOf(student).some((id) => groupsById.get(id) && !isGroupArchived(groupsById.get(id))),
-      ) ? (
+      {withoutGroup.length ? (
         <div className="list-group">
           <div className="gh">
             <strong>{t("Individual and without a group")}</strong>
           </div>
-          {visibleActive
-            .filter(
-              (student) =>
-                !studentGroupIdsOf(student).some((id) => groupsById.get(id) && !isGroupArchived(groupsById.get(id))),
-            )
-            .map((student) => (
-              <StudentRow
-                key={student.id}
-                student={student}
-                context={{ text: student.code, tone: "" }}
-                dot={months.get(student.id).flag.tone}
-                selected={selected.type === "student" && selected.id === student.id}
-                onSelect={(id) => select("student", id)}
-              />
-            ))}
+          {withoutGroup.map((student) => (
+            <StudentRow
+              key={student.id}
+              student={student}
+              context={{ text: student.code, tone: "" }}
+              dot={months.get(student.id).flag.tone}
+              selected={selected.type === "student" && selected.id === student.id}
+              onSelect={(id) => select("student", id)}
+            />
+          ))}
+        </div>
+      ) : null}
+      {inArchivedGroups.length ? (
+        <div className="list-group">
+          <div className="gh">
+            <strong>{t("In archived groups")}</strong>
+            <span className="muted">{inArchivedGroups.length}</span>
+          </div>
+          {inArchivedGroups.map((student) => (
+            <StudentRow
+              key={student.id}
+              student={student}
+              context={{
+                text: [student.code, groupNamesOf(student, groupsById, t, { markArchived: true })]
+                  .filter(Boolean)
+                  .join(" · "),
+                tone: "",
+              }}
+              dot={months.get(student.id).flag.tone}
+              selected={selected.type === "student" && selected.id === student.id}
+              onSelect={(id) => select("student", id)}
+            />
+          ))}
         </div>
       ) : null}
     </>
@@ -856,6 +940,7 @@ export default function Community({
 
   const overlays = (
     <>
+      {confirmPrompt}
       <Drawer
         open={Boolean(studentEditor)}
         onClose={closeStudentEditor}
@@ -992,7 +1077,7 @@ export default function Community({
         <div className="community-head">
           <div>
             <span className="overline">
-              {`${t(activeStudents.length === 1 ? "{count} student" : "{count} students", { count: activeStudents.length })} · ${t(groupCount === 1 ? "{count} group" : "{count} groups", { count: groupCount })}`}
+              {`${t(currentStudentCount === 1 ? "{count} student" : "{count} students", { count: currentStudentCount })} · ${t(groupCount === 1 ? "{count} group" : "{count} groups", { count: groupCount })}`}
             </span>
             <h1>{t("Community")}</h1>
           </div>
@@ -1247,7 +1332,7 @@ export default function Community({
           />
         </label>
       </div>
-      <div className="cols" role="tabpanel">
+      <div className="cols" role="tabpanel" ref={colsRef}>
         <nav
           data-onboarding-tour="community"
           className={`list ${view === "groups" ? "is-groups" : ""}`}

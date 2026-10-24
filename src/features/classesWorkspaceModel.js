@@ -188,3 +188,55 @@ export function filterClassHistory(sessions = [], filters = {}) {
         right.classDate.localeCompare(left.classDate) || (right.startTime || "").localeCompare(left.startTime || ""),
     );
 }
+
+/**
+ * Weekly slots a group already repeats on from `fromDate`: its weekly schedule (with any schedule change
+ * already in effect) plus the recurring class series created for it from «Nueva clase». Weekdays use the
+ * stored numbering, 1 = Monday … 7 = Sunday.
+ * @returns {{ source: "weekly" | "series", dayOfWeek: number, startTime: string, durationHours: number }[]}
+ */
+export function groupRecurringSlots(state = {}, groupId = "", fromDate = todayDateOnly()) {
+  if (!groupId) return [];
+  const group = (Array.isArray(state.groups) ? state.groups : []).find((item) => item.id === groupId);
+  const changes = Array.isArray(state.scheduleChanges) ? state.scheduleChanges : [];
+  /** @type {{ source: "weekly" | "series", dayOfWeek: number, startTime: string, durationHours: number }[]} */
+  const slots = [];
+  for (const slot of group?.weeklySchedule || []) {
+    const change = changes
+      .filter((item) => item.groupId === groupId && item.scheduleSlotId === slot.id && item.effectiveFrom <= fromDate)
+      .sort((left, right) => String(left.effectiveFrom).localeCompare(String(right.effectiveFrom)))
+      .at(-1);
+    const resolved = change ? { ...slot, ...change } : slot;
+    if (resolved.status === "Cancelled") continue;
+    slots.push({
+      source: "weekly",
+      dayOfWeek: Number(resolved.dayOfWeek),
+      startTime: resolved.startTime,
+      durationHours: Number(resolved.durationHours) || 0,
+    });
+  }
+  for (const schedule of Array.isArray(state.classSchedules) ? state.classSchedules : []) {
+    if (schedule.groupId !== groupId || schedule.format === "individual" || schedule.recurrence === "once") continue;
+    if (schedule.status === "Cancelled" || (schedule.endDate && schedule.endDate < fromDate)) continue;
+    // Monthly series do not hold a weekly slot.
+    if (schedule.repeatRule?.kind === "monthly") continue;
+    for (const day of schedule.daysOfWeek || []) {
+      slots.push({
+        source: "series",
+        dayOfWeek: Number(day),
+        startTime: schedule.startTime,
+        durationHours: Number(schedule.durationHours) || 0,
+      });
+    }
+  }
+  return slots.sort((left, right) => left.dayOfWeek - right.dayOfWeek || left.startTime.localeCompare(right.startTime));
+}
+
+/**
+ * Existing slots that a new recurring class of the same group would repeat: same weekday and same start time.
+ * `days` uses the picker numbering (0 = Sunday … 6 = Saturday).
+ */
+export function duplicateRecurringSlots(slots = [], { days = [], startTime = "" } = {}) {
+  const isoDays = new Set(days.map((day) => (Number(day) === 0 ? 7 : Number(day))));
+  return slots.filter((slot) => isoDays.has(slot.dayOfWeek) && slot.startTime === startTime);
+}

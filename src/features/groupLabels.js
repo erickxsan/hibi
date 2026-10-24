@@ -1,4 +1,5 @@
 import { addDays } from "../domain/dates";
+import { isGroupArchived } from "../domain/groupArchiving";
 import { formatTime, formatTimeRange, weekdayLong, weekdayShort } from "../utils/displayFormat";
 
 // 2024-01-01 is a Monday; stored weekdays use 1 = Monday … 7 = Sunday.
@@ -71,4 +72,19 @@ export function activeGroupMembers(state, groupId) {
 
 export function studentGroupIdsOf(student) {
   return Array.isArray(student?.groupIds) ? student.groupIds : student?.groupId ? [student.groupId] : [];
+}
+
+/**
+ * Archived groups a student belongs to when none of their groups is active and they are not an
+ * individual student: they are still enrolled, just in a group that is archived. Empty otherwise.
+ * @param {any} student
+ * @param {Map<string, any>} groupsById
+ * @returns {any[]}
+ */
+export function archivedOnlyGroups(student, groupsById) {
+  if (!student || student.isIndividual) return [];
+  const groups = studentGroupIdsOf(student)
+    .map((id) => groupsById.get(id))
+    .filter(Boolean);
+  return groups.length && groups.every(isGroupArchived) ? groups : [];
 }

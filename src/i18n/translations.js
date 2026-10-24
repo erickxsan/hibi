@@ -269,8 +269,6 @@ const EXPLICIT_TRANSLATIONS = Object.freeze({
   "Encryption settings could not be checked.": "No se pudo consultar la configuración de cifrado.",
   "Hibi could not check your encryption settings. Retry when the connection recovers. Do not create a new password or clear this browser's data; your remembered device key may still be available.":
     "Hibi no pudo consultar tu configuración de cifrado. Reintenta cuando se recupere la conexión. No crees otra contraseña ni borres los datos del navegador; la clave de este dispositivo puede seguir guardada.",
-  "Signing out also forgets this device. You will need your encryption password next time.":
-    "Cerrar sesión también olvida este dispositivo. Necesitarás tu contraseña de cifrado la próxima vez.",
   "Signing out…": "Cerrando sesión…",
   "Forgot password?": "¿Olvidaste tu contraseña?",
   "Back to sign in": "Volver a iniciar sesión",

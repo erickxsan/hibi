@@ -29,7 +29,7 @@ import {
 } from "./homeDashboardModel";
 import { rosterForClassSession } from "./classesWorkspaceModel";
 import { ClassCard, TodayAgenda, TodayTimeline } from "./HomeToday";
-import { metricSummary, MetricCard, MetricExplorer, MetricRows, thresholds } from "./HomeMetrics";
+import { metricSummary, MetricCard, MetricExplorer, MetricRows, overdueSplit, thresholds } from "./HomeMetrics";
 import "../i18n/screenTranslations.js";
 import "./home.css";
 
@@ -44,7 +44,9 @@ function capitalize(text) {
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
 }
 
-function greetingKey(now) {
+/** Late night and early morning (0:00–4:59) get the evening greeting, «¡Buenas noches, profe!». */
+export function greetingKey(now) {
+  if (now < 5 * 60) return "Good evening, Teacher!";
   if (now < 12 * 60) return "Good morning, Teacher!";
   if (now < 19 * 60) return "Good afternoon, Teacher!";
   return "Good evening, Teacher!";
@@ -124,28 +126,65 @@ function attentionText(item, t, locale, compact) {
             }),
         link: t("View in the chart"),
       };
-    case "overdue":
+    case "overdue": {
+      // Only inactive students owe: shown apart, never as the overdue headline.
+      if (!(item.amount > 0))
+        return {
+          lead: t("Inactive students owe {amount}", { amount: formatMoney(item.inactiveAmount, locale) }),
+          rest: compact ? names(item.inactiveNames) : `${names(item.inactiveNames)}.`,
+          link: t("View in the chart"),
+        };
+      // «$900 vencidos · $1,125 en total»: the total is what Clases and Seguimiento show as «Debe».
+      const lead = [
+        t("{amount} overdue", { amount: formatMoney(item.amount, locale) }),
+        item.owed > item.amount ? t("{amount} in total", { amount: formatMoney(item.owed, locale) }) : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      const inactive = item.inactiveAmount > 0 ? formatMoney(item.inactiveAmount, locale) : "";
+      if (compact)
+        return {
+          lead,
+          rest: [
+            t("from {names}", { names: names(item.names) }),
+            inactive ? t("{amount} in classes owed by inactive students", { amount: inactive }) : "",
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        };
+      const split = overdueSplit(item, t, locale);
       return {
-        lead: t("{amount} overdue", { amount: formatMoney(item.amount, locale) }),
-        rest: compact
-          ? t("from {names}", { names: names(item.names) })
-          : t("from {names}.", { names: names(item.names) }),
+        lead,
+        rest: [
+          t("from {names}.", { names: names(item.names) }),
+          split ? t("Overdue: {split}.", { split }) : "",
+          inactive ? t("Aside, {amount} in classes owed by inactive students.", { amount: inactive }) : "",
+        ]
+          .filter(Boolean)
+          .join(" "),
         link: t("View in the chart"),
       };
+    }
     case "monthlyDue": {
       const lead = t(item.count === 1 ? "{count} monthly fee of {group}" : "{count} monthly fees of {group}", {
         count: item.count,
         group: item.group?.name || "",
       });
       const who = names([...new Set(item.names)]);
+      const alsoToday = item.dueToday
+        ? ` ${t("Due today: {names} ({amount}).", {
+            names: names([...new Set(item.dueToday.names)]),
+            amount: formatMoney(item.dueToday.amount, locale),
+          })}`
+        : "";
       return {
         lead,
         rest: compact
           ? t(item.overdue ? "overdue" : "due today")
-          : t(item.overdue ? "are overdue: {names} ({amount})." : "due today: {names} ({amount}).", {
+          : `${t(item.overdue ? "are overdue: {names} ({amount})." : "due today: {names} ({amount}).", {
               names: who,
               amount: formatMoney(item.amount, locale),
-            }),
+            })}${alsoToday}`,
         link: t("View monthly fees"),
       };
     }
@@ -178,6 +217,12 @@ export default function Home({
   }, [asOf]);
   const [period, setPeriod] = useState("weekly");
   const [explorer, setExplorer] = useState(null);
+  // What the explorer opens on: an overdue alert lands on the debts, the figure it quotes.
+  const [explorerFocus, setExplorerFocus] = useState({ aside: "point", request: 0 });
+  const openExplorer = (metric, aside = "point") => {
+    setExplorerFocus((current) => ({ aside, request: current.request + 1 }));
+    setExplorer(metric);
+  };
   const shownPeriod = compact ? "monthly" : period;
   const timeline = useMemo(
     () => buildTodayTimeline(today, todayDerived, asOf, nowTime),
@@ -243,8 +288,10 @@ export default function Home({
 
   useEffect(() => {
     if (!intent) return;
-    if (intent?.type === "open-home-metric" && ["attendance", "grade", "collections"].includes(intent.metric))
+    if (intent?.type === "open-home-metric" && ["attendance", "grade", "collections"].includes(intent.metric)) {
+      setExplorerFocus((current) => ({ aside: "point", request: current.request + 1 }));
       setExplorer(intent.metric);
+    }
     clearIntent?.();
   }, [clearIntent, intent]);
 
@@ -260,7 +307,7 @@ export default function Home({
     if (item.action.type === "monthly") return openPage?.("grades", { type: "open-tracking", tab: "payments" });
     if (compact) return openTracking(item.action.metric);
     if (period !== "monthly" && item.kind === "lowAttendance") setPeriod("monthly");
-    setExplorer(item.action.metric);
+    openExplorer(item.action.metric, item.action.focus);
     globalThis.document?.getElementById("home-period")?.scrollIntoView?.({ behavior: "smooth", block: "start" });
   };
   const runDetailAction = (action) => {
@@ -453,7 +500,8 @@ export default function Home({
         {scope}
         {explorer ? (
           <MetricExplorer
-            key={`${period}-${archiveScope?.included ? "all" : "active"}`}
+            key={`${period}-${archiveScope?.included ? "all" : "active"}-${explorerFocus.request}`}
+            initialAside={explorerFocus.aside}
             open={explorer}
             onChange={setExplorer}
             onClose={() => setExplorer(null)}
@@ -476,7 +524,7 @@ export default function Home({
                 metric={metrics[id]}
                 summary={summaries[id]}
                 context={context}
-                onOpen={() => setExplorer(id)}
+                onOpen={() => openExplorer(id)}
               />
             ))}
           </div>

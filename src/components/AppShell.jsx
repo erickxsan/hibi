@@ -89,6 +89,8 @@ export function AppShell({
       >
         {navItems.map((item) => {
           const Icon = item.icon;
+          // The visible tab text is the accessible name, so «Ajustes» is also what screen readers announce.
+          const label = uiT(item.mobileLabel && language === "es" ? item.mobileLabel : item.label);
           return (
             <a
               key={item.id}
@@ -96,12 +98,9 @@ export function AppShell({
               onClick={(event) => go(event, item.id)}
               className={activePage === item.id ? "mobile-link active" : "mobile-link"}
               aria-current={activePage === item.id ? "page" : undefined}
-              aria-label={uiT(item.label)}
             >
-              <Icon size={22} strokeWidth={1.8} />
-              <span aria-hidden="true">
-                {uiT(item.mobileLabel && language === "es" ? item.mobileLabel : item.label)}
-              </span>
+              <Icon size={22} strokeWidth={1.8} aria-hidden="true" />
+              <span>{label}</span>
             </a>
           );
         })}

@@ -20,6 +20,7 @@ import { useCompactViewport } from "../components/OverlayContext";
 import { useHistoryBackedState } from "../hooks/useHistoryNavigation";
 import { todayDateOnly } from "../domain/dates";
 import {
+  axisTickLabels,
   dayNumber,
   formatDayMonth,
   formatMoney,
@@ -30,7 +31,15 @@ import {
   monthShort,
 } from "../utils/displayFormat";
 import { defaultPointIndex, monthProjection, shortNames } from "./homeDashboardModel";
-import { bucketTitle, collectionsMax, compactMoney, Plot } from "./HomeMetrics";
+import {
+  bucketTitle,
+  collectionsMax,
+  compactMoney,
+  comparisonSpan,
+  moneyDeltaText,
+  overdueLine,
+  Plot,
+} from "./HomeMetrics";
 import { groupNamesOf } from "./CommunityStudent";
 import {
   monthlyBlocks,
@@ -44,9 +53,10 @@ import "../i18n/screenTranslations.js";
 import "../components/charts.css";
 import "./tracking.css";
 
+// One order for desktop tabs and the phone switch (attendance is also the default view).
 const TAB_ITEMS = [
-  { value: "grades", label: "Grades" },
   { value: "attendance", label: "Attendance" },
+  { value: "grades", label: "Grades" },
   { value: "payments", label: "Payments" },
 ];
 const MODE_ITEMS = [
@@ -599,6 +609,29 @@ export default function Tracking({
     actions?.notify?.("Excel export downloaded");
   };
 
+  // Every comparison uses Inicio's wording, naming the dates it covers: «↑ 4 pp vs. 1–22 sep».
+  const comparison = comparisonSpan(kpis.payments.previousStart, kpis.payments.previousEnd, asOf, locale);
+  // Money figures use Inicio's wording: «↓ 49% vs. 1–22 sep» and «$12,900 vencidos ($3,200 de octubre · …)».
+  const paymentsDelta = moneyDeltaText(
+    kpis.payments.delta,
+    kpis.payments.previousStart,
+    kpis.payments.previousEnd,
+    asOf,
+    t,
+    locale,
+  );
+  const paymentsDeltaTone = paymentsDelta ? (kpis.payments.delta >= 0 ? "text-ok" : "text-bad") : "";
+  const owedNote = [
+    overdueLine(kpis.payments, t, locale),
+    kpis.payments.inactiveOwed > 0
+      ? t("Aside, {amount} in classes owed by inactive students.", {
+          amount: formatMoney(kpis.payments.inactiveOwed, locale),
+        })
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   const kpiStrip =
     tab === "attendance"
       ? [
@@ -607,7 +640,7 @@ export default function Tracking({
             value: percentText(kpis.attendance.value, locale),
             note:
               kpis.attendance.delta !== null
-                ? `${kpis.attendance.delta >= 0 ? "↑" : "↓"} ${t("{value} pp vs. the previous period", { value: Math.abs(Math.round(kpis.attendance.delta * 100)) })}`
+                ? `${kpis.attendance.delta >= 0 ? "↑" : "↓"} ${t("{value} pp vs. {previous}", { value: Math.abs(Math.round(kpis.attendance.delta * 100)), previous: comparison })}`
                 : t("{present} of {total} records", {
                     present: kpis.attendance.present,
                     total: kpis.attendance.records,
@@ -630,14 +663,17 @@ export default function Tracking({
           {
             id: "low",
             label: t("Below {value}%", { value: Math.round(kpis.threshold * 100) }),
-            value: String(kpis.attendance.low.length),
-            valueTone: kpis.attendance.low.length ? "text-bad" : "text-ok",
-            note: kpis.attendance.low.length
-              ? shortNames(
-                  kpis.attendance.low.map((row) => row.student.fullName),
-                  locale,
-                )
-              : t("Nobody"),
+            // With nothing measured there is no «all good» to celebrate: neutral value and «Sin datos».
+            value: kpis.attendance.records ? String(kpis.attendance.low.length) : "—",
+            valueTone: !kpis.attendance.records ? "" : kpis.attendance.low.length ? "text-bad" : "text-ok",
+            note: !kpis.attendance.records
+              ? t("No data")
+              : kpis.attendance.low.length
+                ? shortNames(
+                    kpis.attendance.low.map((row) => row.student.fullName),
+                    locale,
+                  )
+                : t("Nobody"),
           },
         ]
       : tab === "grades"
@@ -648,8 +684,8 @@ export default function Tracking({
               note:
                 kpis.grades.delta !== null
                   ? Math.round(kpis.grades.delta * 10) === 0
-                    ? t("Same as the previous period")
-                    : `${kpis.grades.delta >= 0 ? "↑" : "↓"} ${t("{value} vs. the previous period", { value: formatScore(Math.abs(kpis.grades.delta), locale) })}`
+                    ? t("Same as {previous}", { previous: comparison })
+                    : `${kpis.grades.delta >= 0 ? "↑" : "↓"} ${t("{value} vs. {previous}", { value: formatScore(Math.abs(kpis.grades.delta), locale), previous: comparison })}`
                   : t(kpis.grades.count === 1 ? "{count} grade" : "{count} grades", { count: kpis.grades.count }),
               noteTone: "text-data",
             },
@@ -661,14 +697,16 @@ export default function Tracking({
             {
               id: "low",
               label: t("Low grades"),
-              value: String(kpis.grades.low.length),
-              valueTone: kpis.grades.low.length ? "text-bad" : "text-ok",
-              note: kpis.grades.low.length
-                ? shortNames(
-                    kpis.grades.low.map((row) => row.student.fullName),
-                    locale,
-                  )
-                : t("Nobody below {value}", { value: formatScore(kpis.gradeThreshold, locale) }),
+              value: kpis.grades.count ? String(kpis.grades.low.length) : "—",
+              valueTone: !kpis.grades.count ? "" : kpis.grades.low.length ? "text-bad" : "text-ok",
+              note: !kpis.grades.count
+                ? t("No data")
+                : kpis.grades.low.length
+                  ? shortNames(
+                      kpis.grades.low.map((row) => row.student.fullName),
+                      locale,
+                    )
+                  : t("Nobody below {value}", { value: formatScore(kpis.gradeThreshold, locale) }),
             },
             {
               id: "ungraded",
@@ -687,25 +725,31 @@ export default function Tracking({
             {
               label: t("Collected"),
               value: formatMoney(kpis.payments.collected, locale),
-              note: kpis.payments.monthlyCount
-                ? t(
-                    kpis.payments.monthlyCount === 1 ? "Includes {count} monthly fee" : "Includes {count} monthly fees",
-                    {
-                      count: kpis.payments.monthlyCount,
-                    },
-                  )
-                : t(kpis.payments.paymentCount === 1 ? "{count} payment" : "{count} payments", {
-                    count: kpis.payments.paymentCount,
-                  }),
+              note: [
+                paymentsDelta,
+                kpis.payments.monthlyCount
+                  ? t(
+                      kpis.payments.monthlyCount === 1
+                        ? "Includes {count} monthly fee"
+                        : "Includes {count} monthly fees",
+                      {
+                        count: kpis.payments.monthlyCount,
+                      },
+                    )
+                  : t(kpis.payments.paymentCount === 1 ? "{count} payment" : "{count} payments", {
+                      count: kpis.payments.paymentCount,
+                    }),
+              ]
+                .filter(Boolean)
+                .join(" · "),
+              noteTone: paymentsDeltaTone,
             },
             {
               id: "owed",
               label: t("To collect"),
               value: formatMoney(kpis.payments.owed, locale),
               valueTone: kpis.payments.owed ? "text-bad" : "text-ok",
-              note: kpis.payments.overdue
-                ? t("{amount} overdue (sum)", { amount: formatMoney(kpis.payments.overdue, locale) })
-                : t("Nothing overdue"),
+              note: owedNote,
               noteTone: kpis.payments.overdue ? "text-bad" : "",
             },
             {
@@ -827,13 +871,9 @@ export default function Tracking({
             }
           : {
               value: formatMoney(kpis.payments.collected, locale),
-              delta: kpiStrip[0].note,
-              deltaTone: "",
-              line: `${t("To collect {amount}", { amount: formatMoney(kpis.payments.owed, locale) })}${
-                kpis.payments.overdue
-                  ? ` · ${t("{amount} overdue (sum)", { amount: formatMoney(kpis.payments.overdue, locale) })}`
-                  : ""
-              }`,
+              delta: paymentsDelta || kpiStrip[0].note,
+              deltaTone: paymentsDeltaTone,
+              line: `${t("To collect {amount}", { amount: formatMoney(kpis.payments.owed, locale) })} · ${owedNote}`,
             };
     const sheetPoint = sheet?.type === "point" ? metric.points[sheet.index] : null;
     const sheetStudent = sheet?.type === "student" ? students.find((row) => row.student.id === sheet.id) : null;
@@ -841,8 +881,12 @@ export default function Tracking({
       <div className="page tracking-page is-compact" data-onboarding-tour="tracking">
         <div className="tracking-head">
           <div>
-            <span className="overline">{t("Report date")}</span>
             <h1>{t("Tracking")}</h1>
+            {reportDate ? (
+              <span className="overline">
+                {t("Report date: {date}", { date: formatShortDate(reportDate, locale) })}
+              </span>
+            ) : null}
           </div>
           <Select
             small
@@ -866,11 +910,7 @@ export default function Tracking({
           value={tab}
           label={t("Tracking views")}
           onChange={(value) => changeTab(value)}
-          items={[
-            { value: "attendance", label: "Attendance" },
-            { value: "grades", label: "Grades" },
-            { value: "payments", label: "Payments" },
-          ]}
+          items={TAB_ITEMS}
         />
         {scopeNode}
         <div className="tracking-hero">
@@ -928,16 +968,17 @@ export default function Tracking({
               })}
             </div>
             <div className="cx" aria-hidden="true">
-              {bars.map((item, index) => (
-                <span key={item.key}>
-                  {dense && index % 2 && index !== bars.length - 1
-                    ? ""
-                    : tab === "payments"
-                      ? item.kind === "month"
-                        ? monthShort(item.start, locale)
-                        : dayNumber(item.start)
-                      : dayNumber(item.date)}
-                </span>
+              {axisTickLabels(
+                bars.map((item) =>
+                  tab === "payments"
+                    ? item.kind === "month"
+                      ? monthShort(item.start, locale)
+                      : dayNumber(item.start)
+                    : dayNumber(item.date),
+                ),
+                dense ? 8 : 12,
+              ).map((text, index) => (
+                <span key={bars[index].key}>{text}</span>
               ))}
             </div>
             <p className="muted">

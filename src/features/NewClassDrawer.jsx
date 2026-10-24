@@ -20,7 +20,11 @@ import { scheduleFieldsForRule } from "../domain/classRecurrence";
 import { nextRecurrenceDates, normalizeRecurrence, timeToMinutes, minutesToTime } from "../domain/pickerModels";
 import { roundMoney } from "../domain/money";
 import { formatMoney, formatTime, weekdayLong, weekdayShort, dayNumber } from "../utils/displayFormat";
-import { buildClassWorkspaceSessionsForRange } from "./classesWorkspaceModel";
+import {
+  buildClassWorkspaceSessionsForRange,
+  duplicateRecurringSlots,
+  groupRecurringSlots,
+} from "./classesWorkspaceModel";
 import { activeGroupMembers, groupMark, groupScheduleShort } from "./groupLabels";
 
 const VIEW_START = 8 * 60;
@@ -59,7 +63,26 @@ function overlaps(block, start, end) {
   return start < block.end && end > block.start;
 }
 
-export function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
+/** Weekdays (0 = Sunday … 6 = Saturday) a recurring draft lands on every week; monthly rules hold none. */
+function weeklyDaysOf(rule) {
+  if (rule.kind === "weekly") return rule.days;
+  if (rule.kind === "daily") return rule.dailyMode === "weekdays" ? [1, 2, 3, 4, 5] : [0, 1, 2, 3, 4, 5, 6];
+  return [];
+}
+
+/** «lun 4:00 p. m. · jue 4:00 p. m.» for stored slots (1 = Monday … 7 = Sunday). */
+function slotsText(slots, locale) {
+  const seen = new Set();
+  return slots
+    .map(
+      (slot) =>
+        `${weekdayShort(addDays("2024-01-01", slot.dayOfWeek - 1), locale)} ${formatTime(slot.startTime, locale)}`,
+    )
+    .filter((label) => !seen.has(label) && seen.add(label))
+    .join(" · ");
+}
+
+export function NewClassDrawer({ open, onClose, state, asOfDate, actions, onEditGroupSchedule = undefined }) {
   const { t, locale } = useI18n();
   const [draft, setDraft] = useState(() => initialDraft(asOfDate, state));
   const [saving, setSaving] = useState(false);
@@ -112,6 +135,16 @@ export function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
       .map((block) => ({ ...block, date })),
   );
   const conflictDays = [...new Set(clashes.map((block) => new Date(`${block.date}T00:00:00Z`).getUTCDay()))];
+  // A group repeats through its weekly schedule. A recurring class here would be a second series for the
+  // same group, so the drawer shows that schedule, points to it, and refuses an exact duplicate slot.
+  const groupSlots = useMemo(
+    () => (open && isGroup && group ? groupRecurringSlots(state, group.id, draft.startDate || asOfDate) : []),
+    [asOfDate, draft.startDate, group, isGroup, open, state],
+  );
+  const duplicateSlots =
+    recurring && isGroup
+      ? duplicateRecurringSlots(groupSlots, { days: weeklyDaysOf(rule), startTime: draft.startTime })
+      : [];
   const suggestions = useMemo(() => {
     if (!clashes.length) return [];
     const options = [];
@@ -145,7 +178,8 @@ export function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
     draft.startTime &&
     draft.minutes > 0 &&
     rate >= 0 &&
-    (!recurring || rule.kind !== "weekly" || rule.days.length > 0);
+    (!recurring || rule.kind !== "weekly" || rule.days.length > 0) &&
+    !duplicateSlots.length;
 
   const moveTo = (date, minute) => {
     const weekday = new Date(`${date}T00:00:00Z`).getUTCDay();
@@ -385,6 +419,31 @@ export function NewClassDrawer({ open, onClose, state, asOfDate, actions }) {
               })}
             </div>
           </Field>
+        ) : null}
+        {recurring && isGroup && group ? (
+          <div className={`group-series-note ${duplicateSlots.length ? "is-bad" : ""}`.trim()}>
+            <span className="group-series-label">{t("Weekly schedule of {name}", { name: group.name })}</span>
+            <strong>{groupSlots.length ? slotsText(groupSlots, locale) : t("No weekly schedule yet")}</strong>
+            {duplicateSlots.length ? (
+              <p role="alert">
+                {t(
+                  "This group already meets at this time ({slots}). Choose another day or time, or change its weekly schedule.",
+                  {
+                    slots: slotsText(duplicateSlots, locale),
+                  },
+                )}
+              </p>
+            ) : (
+              <p>
+                {t("A group's recurring classes belong in its weekly schedule, so the group keeps a single schedule.")}
+              </p>
+            )}
+            {onEditGroupSchedule ? (
+              <button type="button" className="link-button" onClick={() => onEditGroupSchedule(group)}>
+                {t("Edit weekly schedule")}
+              </button>
+            ) : null}
+          </div>
         ) : null}
         <div className="week-preview" aria-label={t("Week preview")} role="group">
           <span />

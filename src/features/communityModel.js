@@ -9,9 +9,9 @@ import {
   nextPeriod,
   normalizeBillingByGroup,
   normalizeGroupBilling,
-  perClassCharge,
   periodOf,
   studentMonthlyPlan,
+  suggestedMonthlyFee,
 } from "../domain/monthlyBilling";
 import { buildClassWorkspaceSessionsForRange } from "./classesWorkspaceModel";
 import { debtsThrough, isOverdueClassDebt } from "./homeDashboardModel";
@@ -320,6 +320,7 @@ export function billingChanges(group, members, draft, asOf, applyFrom = "next") 
       due: draft.due,
       effectiveFrom,
       creditFirstMonth: switching ? applyFrom === "current" && Boolean(group?.id) : Boolean(before.creditFirstMonth),
+      ...(!switching && before.coveredFrom ? { coveredFrom: before.coveredFrom } : {}),
     };
   }
   const overrides = {};
@@ -436,11 +437,7 @@ export function joinGroup(student, group, asOf, choice = null) {
   return { ...student, groupIds, billingByGroup };
 }
 
-/** Suggested monthly fee for the «Usar» link. */
+/** Suggested monthly fee for the «Usar» link (a full month of classes, shared with the tutorial). */
 export function feeSuggestion(state, group, asOf) {
-  const period = periodOf(asOf);
-  const classes =
-    groupClassDates(state, group, period).length || groupClassDates(state, group, nextPeriod(period)).length;
-  const perClass = perClassCharge(state, group);
-  return { classes, perClass, fee: roundMoney(classes * perClass) };
+  return suggestedMonthlyFee(state, group, periodOf(asOf));
 }
