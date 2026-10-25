@@ -55,6 +55,7 @@ import {
 } from "../utils/displayFormat";
 import {
   buildClassWorkspaceSessions,
+  classMomentStatus,
   rosterForClassSession,
   selectPrimaryClassSession,
   STATUS_LOOK,
@@ -138,6 +139,7 @@ function WeekRail({
   state,
   sessions,
   currentDate,
+  currentTime,
   weekStart,
   setWeekStart,
   selectedDay,
@@ -174,10 +176,11 @@ function WeekRail({
     return relative ? t(relative.key) : formatShortDate(date, locale, { weekday: true });
   };
   const item = (session, { withDate = false } = {}) => {
-    const look = STATUS_LOOK[session.statusLabel];
+    const status = classMomentStatus(session, currentDate, currentTime);
+    const look = STATUS_LOOK[status];
     // Only what stands out among its neighbours: rows under «Sin registrar» (withDate) already say so, and
     // «Programada» or «Completada» is what a class on its day is expected to be.
-    const showStatus = !withDate && !["Scheduled", "Registered"].includes(session.statusLabel);
+    const showStatus = !withDate && !["Scheduled", "Registered"].includes(status);
     return (
       <button
         type="button"
@@ -771,7 +774,8 @@ export default function Classes({
     minutesOf(activeSession.startTime) > minutesOf(currentTime)
       ? t("in {span}", { span: formatSpan(minutesOf(activeSession.startTime) - minutesOf(currentTime)) })
       : "";
-  const look = activeSession ? STATUS_LOOK[activeSession.statusLabel] : null;
+  const activeStatus = activeSession ? classMomentStatus(activeSession, currentDate, currentTime) : "";
+  const look = activeSession ? STATUS_LOOK[activeStatus] : null;
   const recorded = Boolean((activeSession?.rows || []).length);
   const marked = summary ? summary.present + summary.absent : 0;
 
@@ -780,6 +784,7 @@ export default function Classes({
       state={state}
       sessions={sessions}
       currentDate={currentDate}
+      currentTime={currentTime}
       weekStart={weekStart}
       setWeekStart={(date) => {
         setWeekStart(date);
@@ -816,13 +821,6 @@ export default function Classes({
       <SectionHeading
         kicker={compact ? formatLongDate(currentDate, locale) : undefined}
         title={t("Classes")}
-        description={t(
-          tab === "calendar"
-            ? "Your month at a glance. Tap a day to see its classes."
-            : tab === "history"
-              ? "Everything that already happened, class by class. Tap one to see each student."
-              : "Choose a class from your schedule and record it right here.",
-        )}
         actions={
           <Button icon={Plus} onClick={() => setNewClassOpen(true)}>
             {t(compact ? "New (class)" : "New class")}
@@ -869,9 +867,7 @@ export default function Classes({
                 <span className="current-kicker">
                   <span>
                     {relative ? t(relative.key) : formatShortDate(activeSession.classDate, locale)}
-                    {activeSession.statusLabel === "Scheduled" && activeSession.key === primary?.key
-                      ? ` · ${t("next")}`
-                      : ""}
+                    {activeStatus === "Scheduled" && activeSession.key === primary?.key ? ` · ${t("next")}` : ""}
                   </span>
                   <span>{startsIn || (look ? t(look.label) : "")}</span>
                 </span>
@@ -887,7 +883,7 @@ export default function Classes({
                   <span className="register-meta">
                     {metaDate} · {formatTimeRange(activeSession.startTime, activeSession.durationHours, locale)} ·{" "}
                     {t(activeSession.format === "group" ? "Group" : "Individual")}
-                    {activeSession.statusLabel !== "Scheduled" ? (
+                    {activeStatus !== "Scheduled" ? (
                       <span className={`st ${look.className}`}>{t(look.label)}</span>
                     ) : null}
                     {monthlyBadge ? <span className="monthly-badge">{monthlyBadge}</span> : null}
@@ -1089,6 +1085,7 @@ export default function Classes({
           state={state}
           derived={derived}
           currentDate={currentDate}
+          currentTime={currentTime}
           primaryKey={primary?.key}
           onOpen={openFromOtherTab}
           onEdit={(session) => setEditingSession(session)}

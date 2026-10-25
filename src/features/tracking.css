@@ -960,3 +960,11 @@ button.tkpi:first-child {
 .tracking-chart .leg[hidden] {
   display: none;
 }
+
+.tracking-scope .scope-menu {
+  margin-left: auto;
+}
+
+.tracking-page .tracking-switch + .scope-menu {
+  align-self: flex-start;
+}

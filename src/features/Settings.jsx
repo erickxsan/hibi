@@ -1312,18 +1312,12 @@ export default function Settings({
               <HardDrive aria-hidden="true" size={18} />
               <span>
                 <strong>{uiT("Stored only in this browser")}</strong>
-                <small>
-                  {uiT(
-                    "Your students, groups, grades, attendance, and payments live on this device. Hibi does not send them to any server.",
-                  )}
-                </small>
               </span>
             </li>
             <li>
               <ShieldCheck aria-hidden="true" size={18} />
               <span>
                 <strong>{uiT("No account, no tracking")}</strong>
-                <small>{uiT("Hibi does not collect analytics or share your records with anyone.")}</small>
               </span>
             </li>
             <li>
@@ -1349,21 +1343,7 @@ export default function Settings({
               </span>
             </li>
           </ul>
-          <div className="settings-data-actions">
-            <div className="settings-data-action">
-              <span>
-                <strong>{uiT("Keep a private copy")}</strong>
-                <small>
-                  {uiT(
-                    "The backup is a readable file. Save it somewhere only you can access, and do not send it by email or chat.",
-                  )}
-                </small>
-              </span>
-              <Button variant="primary" icon={Download} onClick={actions.exportJson}>
-                {uiT("Download backup")}
-              </Button>
-            </div>
-          </div>
+          {/* «Descargar respaldo» lives in Registros y respaldos; the paragraph above says how to keep it. */}
         </>
       ) : null}
       {persistenceMode === "cloud" ? (
@@ -1475,7 +1455,6 @@ export default function Settings({
             </b>
             <small>{effects.ownRates.length ? ownRatesText : uiT("Every group uses this rate.")}</small>
           </span>
-          <span className="v">{formatMoney(effects.classCost, locale)}</span>
         </div>
         <div className="fx">
           <span>
@@ -1496,14 +1475,14 @@ export default function Settings({
                 },
               )}
             </b>
-            <small>
-              {effects.lowAttendance.length
-                ? effects.lowAttendance
-                    .slice(0, 3)
-                    .map((row) => `${row.student.fullName} ${formatPercent(row.attendance, locale)}`)
-                    .join(" · ")
-                : uiT("Nobody this month.")}
-            </small>
+            {effects.lowAttendance.length ? (
+              <small>
+                {effects.lowAttendance
+                  .slice(0, 3)
+                  .map((row) => `${row.student.fullName} ${formatPercent(row.attendance, locale)}`)
+                  .join(" · ")}
+              </small>
+            ) : null}
           </span>
           <span className="settings-avatars" aria-hidden="true">
             {effects.lowAttendance.slice(0, 3).map((row) => (
@@ -1527,21 +1506,21 @@ export default function Settings({
                 },
               )}
             </b>
-            <small>
-              {effects.lowGrades.length
-                ? effects.lowGrades
-                    .slice(0, 2)
-                    .map((item) =>
-                      uiT("{name} got {grade} in {assessment} ({date}).", {
-                        name: item.name,
-                        grade: formatScore(item.value, locale),
-                        assessment: item.assessment,
-                        date: formatShortDate(item.date, locale),
-                      }),
-                    )
-                    .join(" ")
-                : uiT("Nobody this month.")}
-            </small>
+            {effects.lowGrades.length ? (
+              <small>
+                {effects.lowGrades
+                  .slice(0, 2)
+                  .map((item) =>
+                    uiT("{name} got {grade} in {assessment} ({date}).", {
+                      name: item.name,
+                      grade: formatScore(item.value, locale),
+                      assessment: item.assessment,
+                      date: formatShortDate(item.date, locale),
+                    }),
+                  )
+                  .join(" ")}
+              </small>
+            ) : null}
           </span>
           {effects.lowGrades.length ? <span className="st st-venc">{uiT("Review")}</span> : <span />}
         </div>
@@ -1595,21 +1574,18 @@ export default function Settings({
       <div className="fx">
         <span>
           <b>{uiT("Language")}</b>
-          <small>{uiT("Choose the interface language.")}</small>
         </span>
         <LanguageToggle className="settings-language" />
       </div>
       <div className="fx">
         <span>
           <b>{uiT("Appearance")}</b>
-          <small>{uiT("Follow the system theme or choose light or dark; saved on this device only.")}</small>
         </span>
         {appearanceControl}
       </div>
       <div className="fx">
         <span>
           <b>{uiT("Sound effects")}</b>
-          <small>{uiT("A few gentle cues for saves, attendance, payments, and avatars.")}</small>
         </span>
         {soundSwitch}
       </div>
@@ -1835,10 +1811,7 @@ export default function Settings({
 
   return (
     <div className="page settings-page">
-      <SectionHeading
-        title={uiT("Settings")}
-        description={uiT("Class values, language, sounds, backups and privacy.")}
-      />
+      <SectionHeading title={uiT("Settings")} />
       <div className="settings-cols">
         <nav className="settings-nav" aria-label={uiT("Settings sections")} data-onboarding-tour="settings">
           {sections.map((item) => {
@@ -1854,7 +1827,8 @@ export default function Settings({
                 <Icon aria-hidden="true" size={20} />
                 <span>
                   <strong>{item.title}</strong>
-                  <small>{item.summary}</small>
+                  {/* The open section shows its values beside the menu; its summary would only repeat them. */}
+                  {current.id === item.id ? null : <small>{item.summary}</small>}
                   {item.status ? <span className={`st ${item.status.tone}`}>{item.status.text}</span> : null}
                 </span>
               </button>

@@ -163,9 +163,13 @@ describe("appearance preference", () => {
     expect(within(group).getByRole("button", { name: "Dark" })).toHaveAttribute("aria-pressed", "true");
     expect(html().getAttribute("data-theme")).toBe("dark");
     expect(localStorage.getItem(APPEARANCE_STORAGE_KEY)).toBe("dark");
+    // The open section hides its menu summary; it shows again once another section is open.
+    expect(screen.getByRole("button", { name: /^Interface/ })).not.toHaveTextContent("Dark theme");
+    fireEvent.click(screen.getByRole("button", { name: /^Class values/ }));
     expect(screen.getByRole("button", { name: /^Interface/ })).toHaveTextContent("Dark theme");
 
-    fireEvent.click(within(group).getByRole("button", { name: "System" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Interface/ }));
+    fireEvent.click(within(screen.getByRole("group", { name: "Appearance" })).getByRole("button", { name: "System" }));
     expect(html().hasAttribute("data-theme")).toBe(false);
   });
 

@@ -1,6 +1,5 @@
 // Spanish copy for Configuración (docs/rediseno-v2).
 export const SETTINGS_TRANSLATIONS = Object.freeze({
-  "Class values, language, sounds, backups and privacy.": "Valores de clase, idioma, sonidos, respaldos y privacidad.",
   "Settings sections": "Secciones de configuración",
   "Settings (short)": "Ajustes",
   "Class values": "Valores de clase",

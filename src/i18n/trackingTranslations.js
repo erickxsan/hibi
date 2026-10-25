@@ -1,7 +1,5 @@
 // Spanish copy for Seguimiento (docs/rediseno-v2).
 export const TRACKING_TRANSLATIONS = Object.freeze({
-  "Grades, attendance and payments of your students and groups.":
-    "Calificaciones, asistencia y pagos de tus alumnos y grupos.",
   "Report period": "Periodo de consulta",
   "Report date: {date}": "Fecha de consulta: {date}",
   "This month · {month}": "Este mes · {month}",
@@ -17,6 +15,8 @@ export const TRACKING_TRANSLATIONS = Object.freeze({
   "This session only": "Solo en esta sesión",
   "Balance {amount} left out": "Saldo {amount} fuera",
   "{count} group left out": "{count} grupo fuera",
+  "{count} archived group left out": "{count} grupo archivado fuera",
+  "{count} archived groups left out": "{count} grupos archivados fuera",
   "{count} groups left out": "{count} grupos fuera",
   // Cifras
   "Everything recorded": "Todo registrado",

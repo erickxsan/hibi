@@ -1589,7 +1589,7 @@
   color: var(--sumi);
 }
 
-.home-page .scope + .mt {
+.home-page .scope-menu + .mt {
   border-top: 0;
 }
 
@@ -1787,4 +1787,16 @@
   .home-page .blk:hover {
     transform: none;
   }
+}
+
+.home-page .sh-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.home-page.is-compact .scope-menu {
+  margin-bottom: 8px;
 }

@@ -221,7 +221,6 @@ export function GroupDetail({
       <div className="blk">
         <div className="blk-head">
           <h3 className="overline">{t("Attendance by class")}</h3>
-          <span className="muted blk-hint">{t("Tap a student to highlight them")}</span>
         </div>
         <AttendanceGrid grid={grid} asOf={asOf} highlight={highlight} onHighlight={setHighlight} />
       </div>

@@ -1,15 +1,12 @@
 // Spanish copy for Comunidad: lists, student and group details, billing and archiving (docs/rediseno-v2).
 export const COMMUNITY_TRANSLATIONS = Object.freeze({
-  "{students} in {groups}. Choose someone to see their progress and details.":
-    "{students} en {groups}. Elige a alguien para ver su avance y sus datos.",
+  "{students} in {groups}": "{students} en {groups}",
   "{count} active student": "{count} alumno activo",
   "{count} active students": "{count} alumnos activos",
   "{count} group": "{count} grupo",
   "{count} groups": "{count} grupos",
-  "{groups} and {count} individual class. Choose a group to see how it is going and whom to contact.":
-    "{groups} y {count} clase individual. Elige un grupo para ver cómo va y a quién contactar.",
-  "{groups} and {count} individual classes. Choose a group to see how it is going and whom to contact.":
-    "{groups} y {count} clases individuales. Elige un grupo para ver cómo va y a quién contactar.",
+  "{groups} and {count} individual class": "{groups} y {count} clase individual",
+  "{groups} and {count} individual classes": "{groups} y {count} clases individuales",
   "Search student or group": "Buscar alumno o grupo",
   Add: "Agregar",
   "Inactive students · {count}": "Alumnos inactivos · {count}",
@@ -171,7 +168,6 @@ export const COMMUNITY_TRANSLATIONS = Object.freeze({
   "{count} per class": "{count} por clase",
   "{count} students × {amount}": "{count} alumnos × {amount}",
   "{count} student × {amount}": "{count} alumno × {amount}",
-  "per student, no students yet": "por alumno, aún sin alumnos",
   "Delete group": "Eliminar grupo",
   "Delete {p0}?": "¿Eliminar {p0}?",
   "Deactivate {p0}?": "¿Desactivar a {p0}?",

@@ -447,25 +447,26 @@ describe("class notes and the «Not recorded» list", () => {
 });
 
 describe("new recurring class for a group", () => {
-  it("shows the group's schedule, blocks a duplicate slot and points to the weekly schedule", async () => {
+  it("opens on a free time, blocks a duplicate slot and points to the weekly schedule", async () => {
     const user = userEvent.setup();
     const openPage = vi.fn(() => true);
-    const view = renderClasses(classState(), { openPage });
+    const state = classState();
+    // Math meets Wed 10:00 (today) and Thu 16:00.
+    state.classSchedules.push({ ...state.classSchedules[0], id: "cs2", startTime: "16:00", daysOfWeek: [4] });
+    const view = renderClasses(state, { openPage });
 
     await user.click(screen.getByRole("button", { name: "New class" }));
     const drawer = screen.getByRole("dialog", { name: "New class" });
-    expect(within(drawer).getByText("Weekly schedule of Math")).toBeInTheDocument();
-    expect(within(drawer).getByRole("alert")).toHaveTextContent(
-      "This group already meets at this time (Wed 10:00 a.m.). Choose another day or time",
-    );
-    expect(within(drawer).getByRole("button", { name: "Create class" })).toBeDisabled();
-
-    // Another weekday is a new slot: allowed, with the pointer to the weekly schedule.
-    await user.click(within(drawer).getByRole("button", { name: "Thursday" }));
-    await user.click(within(drawer).getByRole("button", { name: "Wednesday" }));
+    // Today's 10:00 is taken, so the draft starts at the next usual free time and says nothing about the schedule.
     expect(within(drawer).queryByRole("alert")).not.toBeInTheDocument();
-    expect(within(drawer).getByText(/recurring classes belong in its weekly schedule/)).toBeInTheDocument();
+    expect(within(drawer).queryByText("Weekly schedule of Math")).not.toBeInTheDocument();
     expect(within(drawer).getByRole("button", { name: "Create class" })).toBeEnabled();
+
+    // Adding Thursday repeats the Thu 4:00 p.m. slot: the schedule note appears with the warning.
+    await user.click(within(drawer).getByRole("button", { name: "Thursday" }));
+    expect(within(drawer).getByText("Weekly schedule of Math")).toBeInTheDocument();
+    expect(within(drawer).getByRole("alert")).toHaveTextContent(/This group already meets at this time \(Thu 4:00/);
+    expect(within(drawer).getByRole("button", { name: "Create class" })).toBeDisabled();
 
     await user.click(within(drawer).getByRole("button", { name: "Edit weekly schedule" }));
     expect(openPage).toHaveBeenCalledWith("community", "groups");
@@ -500,7 +501,9 @@ describe("month calendar labels", () => {
 
     const today = screen.getByRole("button", { name: "July 15, 1 class: 10:00 a.m. Math" });
     const chip = today.querySelector(".cal-chip");
-    expect(chip).toHaveAttribute("title", "10:00 a.m. Math · Next");
+    // The fixed date is in the past, so «now» is 23:59 and today's 10:00 class already ended unrecorded,
+    // the same «Sin registrar» Inicio shows (it used to read «Siguiente» here).
+    expect(chip).toHaveAttribute("title", "10:00 a.m. Math · Not recorded");
     expect(chip.querySelector(".cal-chip-time")).toHaveTextContent("10a");
     expect(chip.querySelector(".cal-chip-name")).toHaveTextContent("Math");
 

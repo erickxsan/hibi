@@ -63,11 +63,6 @@ export const REDESIGN_TRANSLATIONS = Object.freeze({
   "Your week": "Tu semana",
   "last class": "última clase",
   "class {nth}": "{nth}.ª clase",
-  "Everything that already happened, class by class. Tap one to see each student.":
-    "Todo lo que ya pasó, clase por clase. Toca una para ver a cada alumno.",
-  "Choose a class from your schedule and record it right here.":
-    "Elige una clase de tu agenda y regístrala aquí mismo.",
-  "Your month at a glance. Tap a day to see its classes.": "Tu mes de un vistazo. Toca un día para ver sus clases.",
   "Payment · monthly fee or class": "Pago · mensualidad o clase",
   "Payment for this class": "Pago de esta clase",
   present: "presente",
@@ -87,6 +82,7 @@ export const REDESIGN_TRANSLATIONS = Object.freeze({
   "attendance {value}": "asistencia {value}",
   "average {value}": "promedio {value}",
   "No assignment": "Sin tarea",
+  "Not recorded in {month}": "Sin registrar en {month}",
   individual: "individual",
   "This class has no record yet.": "Esta clase aún no tiene registro.",
   "View in Tracking": "Ver en Seguimiento",

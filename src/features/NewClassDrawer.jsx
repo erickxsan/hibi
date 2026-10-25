@@ -30,18 +30,36 @@ import { activeGroupMembers, groupMark, groupScheduleShort } from "./groupLabels
 const VIEW_START = 8 * 60;
 const VIEW_END = 21 * 60;
 
+// Usual class times, tried in order for the draft's first suggestion.
+const STARTING_TIMES = [600, 960, 1020, 1080, 780, 540, 1140];
+
+/** First usual time of `date` that overlaps no class, so the drawer never opens on a conflict warning. */
+function freeStartTime(state, date, minutes) {
+  const busy = buildClassWorkspaceSessionsForRange(state, date, date, date)
+    .filter((session) => session.statusLabel !== "Cancelled" && timeToMinutes(session.startTime) !== null)
+    .map((session) => {
+      const from = timeToMinutes(session.startTime);
+      return { from, to: from + Math.round(Number(session.durationHours || 1) * 60) };
+    });
+  const free = STARTING_TIMES.find((minute) =>
+    busy.every((block) => minute + minutes <= block.from || minute >= block.to),
+  );
+  return minutesToTime(free ?? STARTING_TIMES[0]);
+}
+
 function initialDraft(asOfDate, state) {
   const group = (state.groups || []).find((item) => item.status !== "Inactive");
   const student = (state.students || []).find((item) => item.status !== "Inactive");
   const weekday = new Date(`${asOfDate}T00:00:00Z`).getUTCDay();
+  const minutes = Math.round((Number(state.settings?.defaultClassHours) || 2) * 60);
   return {
     frequency: "recurring",
     format: group ? "group" : "individual",
     groupId: group?.id || "",
     studentId: student?.id || "",
     startDate: asOfDate,
-    startTime: "10:00",
-    minutes: Math.round((Number(state.settings?.defaultClassHours) || 2) * 60),
+    startTime: freeStartTime(state, asOfDate, minutes),
+    minutes,
     rule: { kind: "weekly", interval: 1, days: [weekday], dailyMode: "all", monthlyMode: "dayOfMonth" },
     rate: "",
   };
@@ -420,24 +438,20 @@ export function NewClassDrawer({ open, onClose, state, asOfDate, actions, onEdit
             </div>
           </Field>
         ) : null}
-        {recurring && isGroup && group ? (
-          <div className={`group-series-note ${duplicateSlots.length ? "is-bad" : ""}`.trim()}>
+        {/* The group's schedule already shows in its picker and in the week below; this note only speaks up
+            when the new series would repeat one of its slots. */}
+        {recurring && isGroup && group && duplicateSlots.length ? (
+          <div className="group-series-note is-bad">
             <span className="group-series-label">{t("Weekly schedule of {name}", { name: group.name })}</span>
             <strong>{groupSlots.length ? slotsText(groupSlots, locale) : t("No weekly schedule yet")}</strong>
-            {duplicateSlots.length ? (
-              <p role="alert">
-                {t(
-                  "This group already meets at this time ({slots}). Choose another day or time, or change its weekly schedule.",
-                  {
-                    slots: slotsText(duplicateSlots, locale),
-                  },
-                )}
-              </p>
-            ) : (
-              <p>
-                {t("A group's recurring classes belong in its weekly schedule, so the group keeps a single schedule.")}
-              </p>
-            )}
+            <p role="alert">
+              {t(
+                "This group already meets at this time ({slots}). Choose another day or time, or change its weekly schedule.",
+                {
+                  slots: slotsText(duplicateSlots, locale),
+                },
+              )}
+            </p>
             {onEditGroupSchedule ? (
               <button type="button" className="link-button" onClick={() => onEditGroupSchedule(group)}>
                 {t("Edit weekly schedule")}

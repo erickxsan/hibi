@@ -573,16 +573,11 @@ export default function Community({
   const individualCount = activeStudents.filter((student) => student.isIndividual).length;
   const description =
     view === "groups"
-      ? t(
-          individualCount === 1
-            ? "{groups} and {count} individual class. Choose a group to see how it is going and whom to contact."
-            : "{groups} and {count} individual classes. Choose a group to see how it is going and whom to contact.",
-          {
-            groups: t(groupCount === 1 ? "{count} group" : "{count} groups", { count: groupCount }),
-            count: individualCount,
-          },
-        )
-      : t("{students} in {groups}. Choose someone to see their progress and details.", {
+      ? t(individualCount === 1 ? "{groups} and {count} individual class" : "{groups} and {count} individual classes", {
+          groups: t(groupCount === 1 ? "{count} group" : "{count} groups", { count: groupCount }),
+          count: individualCount,
+        })
+      : t("{students} in {groups}", {
           students: t(currentStudentCount === 1 ? "{count} active student" : "{count} active students", {
             count: currentStudentCount,
           }),
@@ -977,7 +972,7 @@ export default function Community({
         open={Boolean(groupEditor)}
         onClose={closeGroupEditor}
         title={groupEditor?.id ? t("Edit group") : t("Create group")}
-        kicker={groupEditor?.id ? t("Schedule and details") : t("New group")}
+        kicker={groupEditor?.id ? t("Schedule and details") : undefined}
         footer={
           <>
             {groupEditor?.id ? (

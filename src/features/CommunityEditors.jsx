@@ -222,7 +222,8 @@ export function GroupEditor({ draft, setDraft, defaultHours, defaultRate, childr
             <IconButton label={t("Remove meeting time")} icon={Trash2} onClick={() => removeSchedule(slot.id)} />
           </div>
         ))}
-        {!draft.weeklySchedule.length ? (
+        {/* A new group has no manual classes, so the reassurance only applies when editing one. */}
+        {!draft.weeklySchedule.length && draft.id ? (
           <p className="muted">{t("No recurring times yet. Existing manual classes remain unchanged.")}</p>
         ) : null}
       </section>
@@ -557,29 +558,30 @@ export function BillingFields({
           ) : null}
         </>
       )}
-      <FieldRow label={t(monthly ? "Per month" : "Per class")}>
-        {monthly ? (
-          <>
-            <span className="billing-total">{formatMoney(totals.total, locale)}</span>
-            <span className="field-row-hint">
-              {t(totals.monthly === 1 ? "{count} monthly fee" : "{count} monthly fees", { count: totals.monthly })}
-              {totals.perClass ? ` + ${t("{count} per class", { count: totals.perClass })}` : ""}
-            </span>
-          </>
-        ) : (
-          <>
-            <span className="billing-total">{formatMoney(perClass * Math.max(members.length, 1), locale)}</span>
-            <span className="field-row-hint">
-              {members.length
-                ? t(members.length === 1 ? "{count} student × {amount}" : "{count} students × {amount}", {
-                    count: members.length,
-                    amount: formatMoney(perClass, locale),
-                  })
-                : t("per student, no students yet")}
-            </span>
-          </>
-        )}
-      </FieldRow>
+      {/* With no students yet the per-class total is the rate's own hint («Clase de 2 h = $250 por alumno»). */}
+      {!monthly && !members.length ? null : (
+        <FieldRow label={t(monthly ? "Per month" : "Per class")}>
+          {monthly ? (
+            <>
+              <span className="billing-total">{formatMoney(totals.total, locale)}</span>
+              <span className="field-row-hint">
+                {t(totals.monthly === 1 ? "{count} monthly fee" : "{count} monthly fees", { count: totals.monthly })}
+                {totals.perClass ? ` + ${t("{count} per class", { count: totals.perClass })}` : ""}
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="billing-total">{formatMoney(perClass * members.length, locale)}</span>
+              <span className="field-row-hint">
+                {t(members.length === 1 ? "{count} student × {amount}" : "{count} students × {amount}", {
+                  count: members.length,
+                  amount: formatMoney(perClass, locale),
+                })}
+              </span>
+            </>
+          )}
+        </FieldRow>
+      )}
     </div>
   );
 }

@@ -65,24 +65,26 @@ describe("routed group archive flow", () => {
     const user = userEvent.setup();
     const view = mount();
     await screen.findByRole("heading", { name: "Comunidad", exact: true });
+    // Inicio leaves archived groups out without a word; the choice lives in Seguimiento's filter chip.
     await go(user, "Inicio");
-    const toggle = await screen.findByRole("switch", { name: "Incluir grupos archivados" });
-    expect(toggle).toHaveAttribute("aria-checked", "false");
-    expect(screen.getByText("2 grupos archivados quedan fuera de estas cifras")).toBeInTheDocument();
-    await user.click(toggle);
-    expect(screen.getByText(/^incluye los grupos archivados .+ solo durante esta sesión$/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /grupos archivados/ })).not.toBeInTheDocument();
     await go(user, "Seguimiento");
-    expect(await screen.findByRole("switch", { name: "Incluir grupos archivados" })).toHaveAttribute(
-      "aria-checked",
-      "true",
-    );
+    await user.click(await screen.findByRole("button", { name: "2 grupos archivados fuera" }));
+    const toggle = screen.getByRole("switch", { name: "Incluir grupos archivados" });
+    expect(toggle).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByText("2 grupos archivados quedan fuera de estas cifras.")).toBeInTheDocument();
+    await user.click(toggle);
+    expect(screen.getByText(/^Incluye los grupos archivados .+ solo durante esta sesión\.$/)).toBeInTheDocument();
+    // Once included, Inicio shows the chip so its figures never mix archived groups in silently.
+    await go(user, "Inicio");
+    await user.click(await screen.findByRole("button", { name: "Incluye grupos archivados" }));
+    expect(screen.getByRole("switch", { name: "Incluir grupos archivados" })).toHaveAttribute("aria-checked", "true");
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
     expect(saved.groups.filter((group) => group.status === "Inactive")).toHaveLength(2);
     view.unmount();
     mount();
-    expect(await screen.findByRole("switch", { name: "Incluir grupos archivados" })).toHaveAttribute(
-      "aria-checked",
-      "false",
-    );
+    await go(user, "Seguimiento");
+    await user.click(await screen.findByRole("button", { name: "2 grupos archivados fuera" }));
+    expect(screen.getByRole("switch", { name: "Incluir grupos archivados" })).toHaveAttribute("aria-checked", "false");
   }, 30000);
 });

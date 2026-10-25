@@ -1158,10 +1158,10 @@ export function MetricExplorer({
   }
   const caption =
     open === "collections"
-      ? t(view === "cumulative" ? "Accumulated collections · tap a point" : "Collections by payment date · tap a bar")
+      ? t(view === "cumulative" ? "Accumulated collections" : "Collections by payment date")
       : open === "attendance"
-        ? t(period === "yearly" ? "Attendance by month · tap a point" : "Attendance by class · tap a point")
-        : t(period === "yearly" ? "Average by month · tap a point" : "Average by assignment · tap a point");
+        ? t(period === "yearly" ? "Attendance by month" : "Attendance by class")
+        : t(period === "yearly" ? "Average by month" : "Average by assignment");
   const kpis =
     open === "collections"
       ? [

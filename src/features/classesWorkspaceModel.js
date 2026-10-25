@@ -15,7 +15,28 @@ export const STATUS_LOOK = {
   Cancelled: { label: "Cancelled", className: "st-prog" },
   Rescheduled: { label: "Rescheduled", className: "st-prog" },
   Scheduled: { label: "Scheduled", className: "st-prog" },
+  Live: { label: "In progress", className: "st-next" },
 };
+
+/**
+ * A class's status at this moment, the same word Inicio's timeline uses: a class of today that already
+ * ended without a record is «Sin registrar» and one under way is «En curso», instead of «Programada»
+ * until midnight. Only for display; `statusLabel` keeps the day-based status the rest of the app reads.
+ */
+export function classMomentStatus(session, asOfDate, nowTime) {
+  const status = session?.statusLabel;
+  if (
+    !["Scheduled", "Rescheduled"].includes(status) ||
+    session.classDate !== asOfDate ||
+    !session.startTime ||
+    !nowTime
+  )
+    return status;
+  const start = minutesFromTime(session.startTime);
+  const now = minutesFromTime(nowTime);
+  if (start + Math.round((Number(session.durationHours) || 0) * 60) <= now) return "Pending";
+  return start <= now ? "Live" : status;
+}
 
 export function classWorkspaceSessionKey(item = {}) {
   return classSessionIdentity(item);

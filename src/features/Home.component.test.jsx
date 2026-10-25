@@ -199,12 +199,24 @@ describe("Home", () => {
     await user.click(screen.getByRole("button", { name: /To collect/ }));
     expect(screen.getByText("Who owes")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Month projection/ }));
-    expect(screen.getByText("Accumulated collections · tap a point")).toBeInTheDocument();
+    expect(screen.getByText("Accumulated collections", { selector: ".xp-caption" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Reading" }));
     await user.click(screen.getByRole("button", { name: "Close detail and return to the three charts" }));
     expect(screen.queryByRole("tablist", { name: "Charts" })).not.toBeInTheDocument();
     await user.click(within(attention).getByRole("button", { name: /still not recorded/ }));
     expect(props.openPage).toHaveBeenCalledWith("classes", expect.objectContaining({ type: "open-class" }));
+  });
+
+  it("folds the included archived groups into a chip that turns them off again", async () => {
+    const user = userEvent.setup();
+    const base = homeProps().archiveScope;
+    const props = renderHome({ archiveScope: { ...base, included: true } });
+    await user.click(screen.getByRole("button", { name: "Includes archived groups" }));
+    const toggle = screen.getByRole("switch", { name: "Include archived groups" });
+    expect(toggle).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByText("Includes Old group (archived) only during this session.")).toBeInTheDocument();
+    await user.click(toggle);
+    expect(props.archiveScope.onChange).toHaveBeenCalledWith(false);
   });
 
   it("marks a «Para atender» item as seen until something new brings it back", async () => {
@@ -225,20 +237,17 @@ describe("Home", () => {
     expect(setNotesDismissed).toHaveBeenLastCalledWith(["attention:grade:s1:2026-10-19:Quiz"], false);
   });
 
-  it("changes the period, picks points and switches the archived scope", async () => {
+  it("changes the period and picks points", async () => {
     const user = userEvent.setup();
-    const props = renderHome();
+    renderHome();
     expect(screen.getByRole("heading", { name: "Your week · 19 to 25 Oct" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Monthly" }));
     expect(screen.getByRole("heading", { name: "Your month · October" })).toBeInTheDocument();
     const attendance = screen.getByRole("article", { name: /^Attendance:/ });
     await user.click(within(attendance).getByRole("button", { name: /Mon 12 Oct · Reading: 100%/ }));
     expect(within(attendance).getByText("Nobody missed. Perfect attendance!")).toBeInTheDocument();
-    await user.click(screen.getByRole("switch", { name: "Include archived groups" }));
-    expect(props.archiveScope.onChange).toHaveBeenCalledWith(true);
-    expect(screen.getByText("1 archived group is left out of these figures")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Balance in archived groups: $150" }));
-    expect(props.archiveScope.onOpen).toHaveBeenCalled();
+    // Archived groups stay out of Inicio without a notice; the chip only appears once they are included.
+    expect(screen.queryByRole("button", { name: /archived group/ })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Yearly" }));
     expect(screen.getByRole("heading", { name: "Your year · 2026" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Today" }));

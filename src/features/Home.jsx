@@ -87,7 +87,8 @@ function attentionText(item, t, locale, compact) {
         lead,
         rest:
           item.count > 1
-            ? t("is still not recorded (and {count} more).", { count: item.count - 1 })
+            ? // The count covers the last 30 days; saying so keeps it from clashing with October's figure.
+              t("is still not recorded (and {count} more in the last 30 days).", { count: item.count - 1 })
             : t("is still not recorded."),
         link: t("Record"),
       };
@@ -348,7 +349,9 @@ export default function Home({
       : classCount
         ? t("You finished today's classes.")
         : t("No classes today. A good moment to catch up.");
-  const scope = archiveScope?.count ? <ArchivedGroupsScope scope={archiveScope} compact={compact} /> : null;
+  // Archived groups stay out of Inicio's figures by default; the chip only appears to say they were let in
+  // (from Seguimiento) and to take them out again.
+  const scope = archiveScope?.count && archiveScope.included ? <ArchivedGroupsScope scope={archiveScope} /> : null;
 
   if (compact) {
     return (
@@ -526,9 +529,11 @@ export default function Home({
       <section aria-labelledby="home-period-title" id="home-period">
         <div className="sh">
           <h2 id="home-period-title">{periodTitle(period, asOf, t, locale)}</h2>
-          <Segmented value={period} onChange={setPeriod} label={t("Period")} items={PERIOD_ITEMS} />
+          <div className="sh-tools">
+            {scope}
+            <Segmented value={period} onChange={setPeriod} label={t("Period")} items={PERIOD_ITEMS} />
+          </div>
         </div>
-        {scope}
         {explorer ? (
           <MetricExplorer
             key={`${period}-${archiveScope?.included ? "all" : "active"}-${explorerFocus.request}`}

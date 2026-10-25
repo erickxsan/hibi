@@ -782,12 +782,6 @@ export default function Tracking({
       : tab === "grades"
         ? t("Average by assignment")
         : t("Collections by payment date");
-  const chartCaption =
-    tab === "attendance"
-      ? t("Each point is a recorded class · tap one to filter the list")
-      : tab === "grades"
-        ? t("Each point is an assignment · tap one to filter the list")
-        : t("Tap a bar to see who paid in that stretch");
   const ticks =
     tab === "attendance"
       ? ["0%", "50%", "100%"]
@@ -811,9 +805,7 @@ export default function Tracking({
     setFocus(true);
     setKpiFilter("");
   };
-  const scopeNode = archiveScope?.count ? (
-    <ArchivedGroupsScope scope={archiveScope} variant={compact ? "card" : "pill"} compact={compact} />
-  ) : null;
+  const scopeNode = archiveScope?.count ? <ArchivedGroupsScope scope={archiveScope} /> : null;
 
   if (compact) {
     const mobileChips =
@@ -986,15 +978,6 @@ export default function Tracking({
                 <span key={bars[index].key}>{text}</span>
               ))}
             </div>
-            <p className="muted">
-              {t(
-                tab === "attendance"
-                  ? "Each bar is a class. Tap it to see who missed."
-                  : tab === "grades"
-                    ? "Each bar is an assignment. Tap it to see the grades."
-                    : "Each bar is a stretch with collections. Tap it to see who paid.",
-              )}
-            </p>
           </div>
         ) : (
           <p className="muted">{t("No data in this period.")}</p>
@@ -1204,7 +1187,6 @@ export default function Tracking({
     <div className="page tracking-page">
       <SectionHeading
         title={t("Tracking")}
-        description={t("Grades, attendance and payments of your students and groups.")}
         actions={
           <>
             <Select
@@ -1253,7 +1235,6 @@ export default function Tracking({
       </div>
       <div className="tracking-scope">
         <div className="chip-row" role="group" aria-label={t("Scope")}>
-          <span className="overline">{t("Scope")}</span>
           {groupChips.map((item) => (
             <button
               type="button"
@@ -1316,7 +1297,6 @@ export default function Tracking({
             <div className="chead">
               <div>
                 <h2 id="tracking-chart-title">{chartTitle}</h2>
-                <p>{chartCaption}</p>
               </div>
               {tab === "payments" ? (
                 <Segmented
@@ -1392,10 +1372,7 @@ export default function Tracking({
                     <i className="leg-dot is-unreg" />
                     {t("Not recorded")}
                   </span>
-                  <span>
-                    <i className="leg-line" />
-                    {t("Threshold {value}%", { value: Math.round(kpis.threshold * 100) })}
-                  </span>
+                  {/* The threshold line carries its own label in the chart («Asistencia baja · 80%»). */}
                 </>
               ) : tab === "grades" ? (
                 <>
@@ -1451,7 +1428,6 @@ export default function Tracking({
               <h2 id="tracking-list-title" className="overline">
                 {listTitle}
               </h2>
-              <span>{t("Tap to see their history")}</span>
             </div>
             {list.map((row) => {
               const look = rowView(row);

@@ -13,16 +13,18 @@ import {
   weekdayLong,
   weekdayShort,
 } from "../utils/displayFormat";
-import { buildClassWorkspaceSessionsForRange, rosterForClassSession } from "./classesWorkspaceModel";
+import { buildClassWorkspaceSessionsForRange, classMomentStatus, rosterForClassSession } from "./classesWorkspaceModel";
 import { compactClock } from "./classesCalendarModel";
 import { calendarDays } from "../domain/pickerModels";
 import { sessionInsight, SessionDetailSheet } from "./ClassSessionDetail";
 
-/** Calendar look for a session: done, pending (not recorded), next, scheduled or cancelled. */
-export function calendarTone(session, primaryKey) {
-  if (session.statusLabel === "Registered") return "done";
-  if (session.statusLabel === "Pending") return "pending";
-  if (session.statusLabel === "Cancelled") return "cancelled";
+/** Calendar look for a session: done, pending (not recorded), live, next, scheduled or cancelled. */
+export function calendarTone(session, primaryKey, currentDate = "", currentTime = "") {
+  const status = classMomentStatus(session, currentDate, currentTime);
+  if (status === "Registered") return "done";
+  if (status === "Pending") return "pending";
+  if (status === "Cancelled") return "cancelled";
+  if (status === "Live") return "live";
   if (session.key === primaryKey) return "next";
   return "scheduled";
 }
@@ -30,6 +32,7 @@ export function calendarTone(session, primaryKey) {
 const TONE_LABEL = {
   done: { label: "Completed", className: "st-done", mobile: "Recorded" },
   pending: { label: "Not recorded", className: "st-pend", mobile: "Not recorded" },
+  live: { label: "In progress", className: "st-next", mobile: "In progress" },
   next: { label: "Next", className: "st-next", mobile: "Next" },
   scheduled: { label: "Scheduled", className: "st-prog", mobile: "Scheduled" },
   cancelled: { label: "Cancelled", className: "st-prog", mobile: "Cancelled" },
@@ -38,7 +41,15 @@ const TONE_LABEL = {
 // A day shows every class when they fit in four lines; past that, three and «+N más».
 const MAX_CHIPS = 4;
 
-export function ClassCalendar({ state, derived = undefined, currentDate, primaryKey, onOpen, onEdit }) {
+export function ClassCalendar({
+  state,
+  derived = undefined,
+  currentDate,
+  currentTime = "",
+  primaryKey,
+  onOpen,
+  onEdit,
+}) {
   const { t, locale } = useI18n();
   const compact = useCompactViewport();
   const [month, setMonth] = useState(startOfMonth(currentDate));
@@ -139,7 +150,7 @@ export function ClassCalendar({ state, derived = undefined, currentDate, primary
                 >
                   <b>{dayNumber(date)}</b>
                   {items.slice(0, shown).map((session, index) => {
-                    const tone = calendarTone(session, primaryKey);
+                    const tone = calendarTone(session, primaryKey, currentDate, currentTime);
                     return (
                       <span
                         key={session.key}
@@ -160,7 +171,10 @@ export function ClassCalendar({ state, derived = undefined, currentDate, primary
                   ) : null}
                   <span className="month-dots" aria-hidden="true">
                     {items.slice(0, 4).map((session) => (
-                      <i key={session.key} className={`tone-${calendarTone(session, primaryKey)}`} />
+                      <i
+                        key={session.key}
+                        className={`tone-${calendarTone(session, primaryKey, currentDate, currentTime)}`}
+                      />
                     ))}
                   </span>
                 </button>
@@ -211,7 +225,7 @@ export function ClassCalendar({ state, derived = undefined, currentDate, primary
           {compact ? (
             <div className="list-rows">
               {selected.map((session) => {
-                const tone = calendarTone(session, primaryKey);
+                const tone = calendarTone(session, primaryKey, currentDate, currentTime);
                 return (
                   <ListRow
                     key={session.key}
@@ -233,7 +247,7 @@ export function ClassCalendar({ state, derived = undefined, currentDate, primary
             </div>
           ) : (
             selected.map((session) => {
-              const tone = calendarTone(session, primaryKey);
+              const tone = calendarTone(session, primaryKey, currentDate, currentTime);
               const action = cardAction(session, tone);
               const insight = sessionInsight(state, session, derivedRows, t, locale);
               return (

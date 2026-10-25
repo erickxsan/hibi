@@ -13,6 +13,7 @@ import {
   formatScore,
   formatShortDate,
   formatTime,
+  monthLong,
   weekdayShort,
 } from "../utils/displayFormat";
 import {
@@ -98,21 +99,22 @@ export function ClassHistory({
     derivedRows.some((row) => session.rows.some((item) => item.id === row.id) && Number(row.outstanding) > 0),
   ).length;
   const kpis = [
-    { label: compact ? "Recorded" : "Classes completed", value: String(recorded.length) },
+    { label: t(compact ? "Recorded" : "Classes completed"), value: String(recorded.length) },
     {
-      label: "Not recorded",
+      // Named with its month: Inicio counts the last 30 days, so a bare «Sin registrar» read as a contradiction.
+      label: t("Not recorded in {month}", { month: monthLong(`${month}-01`, locale) }),
       value: String(monthSessions.filter((session) => session.statusLabel === "Pending").length),
       tone: "pend",
     },
-    { label: "Attendance", value: formatPercent(attendanceRatio(recorded), locale) },
+    { label: t("Attendance"), value: formatPercent(attendanceRatio(recorded), locale) },
     ...(compact
       ? []
       : [
           {
-            label: "Assignment average",
+            label: t("Assignment average"),
             value: averages.length ? formatScore(averages.reduce((a, b) => a + b, 0) / averages.length, locale) : "—",
           },
-          { label: "Unpaid classes", value: String(unpaid), tone: unpaid ? "bad" : "" },
+          { label: t("Unpaid classes"), value: String(unpaid), tone: unpaid ? "bad" : "" },
         ]),
   ];
   const byWeek = new Map();
@@ -177,7 +179,7 @@ export function ClassHistory({
       <div className="kpi-strip">
         {kpis.map((kpi) => (
           <div className="kpi" key={kpi.label}>
-            <span>{t(kpi.label)}</span>
+            <span>{kpi.label}</span>
             <strong className={kpi.tone ? `text-${kpi.tone}` : undefined}>{kpi.value}</strong>
           </div>
         ))}
