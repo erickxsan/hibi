@@ -123,6 +123,21 @@ test("sets up, resumes, saves the schedule and students, and completes the guide
   expect(errors).toEqual([]);
 });
 
+test("a tutorial that cannot load keeps the app usable and offers a reload", async ({ page }) => {
+  // A tab left open across a deploy asks for a chunk that no longer exists; Pages answers with index.html.
+  await page.route(/OnboardingTutorial/, (route) =>
+    route.fulfill({ status: 200, contentType: "text/html", body: "<!doctype html><html></html>" }),
+  );
+  await page.goto("/");
+  const prompt = page.getByRole("alertdialog", { name: "No se pudo abrir el tutorial" });
+  await expect(prompt).toBeVisible();
+  await expect(page.locator(".hibi-shell")).toBeVisible();
+  await prompt.getByRole("button", { name: "Ahora no" }).click();
+  await expect(prompt).toHaveCount(0);
+  await page.getByRole("link", { name: "Configuración" }).first().click();
+  await expect(page).toHaveURL(/\/settings$/);
+});
+
 for (const viewport of [
   { width: 320, height: 740 },
   { width: 390, height: 844 },

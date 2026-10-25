@@ -71,6 +71,10 @@ const EXPLICIT_TRANSLATIONS = Object.freeze({
     "Tus registros guardados siguen disponibles. Intenta abrir la vista de nuevo.",
   "Reload application": "Recargar aplicación",
   "Resolve or export pending changes before reloading.": "Resuelve o exporta los cambios pendientes antes de recargar.",
+  "The tutorial could not be opened": "No se pudo abrir el tutorial",
+  "Reload Hibi to try again.": "Recarga Hibi para intentarlo de nuevo.",
+  "The tutorial could not be opened. Reload Hibi once your changes are saved.":
+    "No se pudo abrir el tutorial. Recarga Hibi cuando se guarden tus cambios.",
   "This preview is read-only. Security changes are disabled.":
     "Esta vista previa es de solo lectura. Los cambios de seguridad están deshabilitados.",
   "Forget this device removes remembered access. Local backups remain encrypted in this browser. Use Clear local copies on a shared device after syncing pending changes.":
