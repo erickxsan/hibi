@@ -159,6 +159,9 @@ export function metricSummary(metric, context) {
     deltaTone: "",
     insight: "",
     insightColor: "var(--sumi-subtle)",
+    // The one sentence a card shows when its period has nothing to measure, instead of its number,
+    // count, chart, detail and insight each saying so in their own words.
+    empty: "",
   };
   if (metric.metric === "attendance") {
     const regs = metric.points.filter((point) => point.kind === "reg");
@@ -212,14 +215,16 @@ export function metricSummary(metric, context) {
       insight,
       insightColor,
     };
-    if (!hasCurrent && Number.isFinite(metric.previous))
-      result.delta = emptyPeriodDelta(
+    if (!hasCurrent) {
+      result.empty = emptyPeriodDelta(
         "No classes recorded {current}",
-        `${percentText(metric.previous, locale)}%`,
+        Number.isFinite(metric.previous) ? `${percentText(metric.previous, locale)}%` : null,
         previous,
         period,
         t,
       );
+      if (Number.isFinite(metric.previous)) result.delta = result.empty;
+    }
     if (metric.delta !== null) {
       const points = Math.round(metric.delta * 100);
       result.delta =
@@ -277,14 +282,16 @@ export function metricSummary(metric, context) {
       insight,
       insightColor,
     };
-    if (!hasCurrent && Number.isFinite(metric.previous))
-      result.delta = emptyPeriodDelta(
+    if (!hasCurrent) {
+      result.empty = emptyPeriodDelta(
         "No grades {current}",
-        `${formatScore(metric.previous, locale)} /10`,
+        Number.isFinite(metric.previous) ? `${formatScore(metric.previous, locale)} /10` : null,
         previous,
         period,
         t,
       );
+      if (Number.isFinite(metric.previous)) result.delta = result.empty;
+    }
     if (metric.delta !== null) {
       const delta = Math.round(metric.delta * 10) / 10;
       result.delta =
@@ -328,6 +335,7 @@ export function metricSummary(metric, context) {
           }),
     insight,
     insightColor: metric.paymentDays || period === "yearly" ? JADE : "var(--sumi-subtle)",
+    empty: metric.payments.length ? "" : t("No payments {current}", { current: currentLabel(period, t) }),
   };
   if (metric.delta !== null) {
     const percent = Math.round(metric.delta * 100);
@@ -714,12 +722,8 @@ function plotCaptions(metric, locale) {
 }
 
 export function MetricCard({ metric, summary, context, onOpen }) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const [selected, setSelected] = useState(null);
-  const index = selected === null || selected >= metric.points.length ? defaultPointIndex(metric) : selected;
-  const detail = pointDetail(metric, index, context);
-  const [left, right] = plotCaptions(metric, locale);
-  const chips = detail.list.slice(0, 3);
   return (
     <article
       className={`mini hibi-chart k-${metric.metric}`}
@@ -742,12 +746,39 @@ export function MetricCard({ metric, summary, context, onOpen }) {
           {summary.value}
           <small>{summary.unit}</small>
         </span>
-        <span className={`dl ${summary.deltaTone}`}>{summary.delta}</span>
+        {/* An empty card keeps a real comparison («↓ 100% vs. 12–14 oct») but not «Sin datos». */}
+        {summary.empty && metric.delta === null ? null : (
+          <span className={`dl ${summary.deltaTone}`}>{summary.delta}</span>
+        )}
       </div>
+      {summary.empty ? (
+        <p className="mempty">{summary.empty}</p>
+      ) : (
+        <MetricCardBody
+          metric={metric}
+          summary={summary}
+          context={context}
+          onOpen={onOpen}
+          selected={selected}
+          onSelect={setSelected}
+        />
+      )}
+    </article>
+  );
+}
+
+function MetricCardBody({ metric, summary, context, onOpen, selected, onSelect }) {
+  const { t, locale } = useI18n();
+  const index = selected === null || selected >= metric.points.length ? defaultPointIndex(metric) : selected;
+  const detail = pointDetail(metric, index, context);
+  const [left, right] = plotCaptions(metric, locale);
+  const chips = detail.list.slice(0, 3);
+  return (
+    <>
       <span className="cnt">{summary.count}</span>
       <div className="mplot">
         {metric.points.length ? (
-          <Plot metric={metric} selected={index} onSelect={setSelected} threshold={context.threshold} size="mini" />
+          <Plot metric={metric} selected={index} onSelect={onSelect} threshold={context.threshold} size="mini" />
         ) : null}
       </div>
       <div className="mcap">
@@ -785,7 +816,7 @@ export function MetricCard({ metric, summary, context, onOpen }) {
         <i style={{ background: summary.insightColor }} />
         <span>{summary.insight}</span>
       </div>
-    </article>
+    </>
   );
 }
 

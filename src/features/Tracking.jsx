@@ -543,7 +543,7 @@ export default function Tracking({
       result.tone = row.owed ? (row.overdue ? "text-bad" : "text-pend") : "";
       result.status = row.owed
         ? { tone: row.overdue ? "st-venc" : "st-pend", text: t(row.overdue ? "Overdue" : "Pending") }
-        : { tone: "st-ok", text: t("Up to date") };
+        : null;
       const monthly = row.monthlyDue[0];
       if (point) {
         const amount = point.payments
@@ -632,6 +632,11 @@ export default function Tracking({
     .filter(Boolean)
     .join(" · ");
 
+  // With no grade and nothing waiting for one, four «—» indicators would each say so: one line says it once.
+  const kpisEmpty =
+    tab === "grades" && !kpis.grades.count && !kpis.grades.ungraded.length
+      ? t("No graded assignments in this period")
+      : "";
   const kpiStrip =
     tab === "attendance"
       ? [
@@ -1276,7 +1281,8 @@ export default function Tracking({
         </p>
       ) : null}
       <div className="tracking-kpis" data-onboarding-tour="tracking">
-        {kpiStrip.map((kpi) =>
+        {kpisEmpty ? <p className="tracking-kpis-empty">{kpisEmpty}</p> : null}
+        {(kpisEmpty ? [] : kpiStrip).map((kpi) =>
           kpi.id ? (
             <button
               type="button"
@@ -1375,7 +1381,7 @@ export default function Tracking({
                 </div>
               ) : null}
             </div>
-            <div className="leg">
+            <div className="leg" hidden={!metric.points.length}>
               {tab === "attendance" ? (
                 <>
                   <span>

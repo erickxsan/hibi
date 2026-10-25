@@ -126,6 +126,8 @@ export function StudentDetail({
 }) {
   const { t, locale } = useI18n();
   const inactive = student.status === "Inactive";
+  // A student whose recent classes are all in one group gets no Group column: it repeated one name per row.
+  const oneGroup = new Set(recent.map((item) => item.groupName || "")).size <= 1;
   return (
     <section className="detail" aria-labelledby="community-student-title">
       <div className="detail-head">
@@ -135,7 +137,7 @@ export function StudentDetail({
           <span className="detail-meta">
             <span className="tnum">{student.code}</span>
             <span>{groupNamesOf(student, groupsById, t, { markArchived: true }) || t("No group")}</span>
-            <span className={`st ${inactive ? "st-prog" : "st-ok"}`}>{t(inactive ? "Inactive" : "Active")}</span>
+            {inactive ? <span className="st st-prog">{t("Inactive")}</span> : null}
           </span>
         </div>
         <button type="button" className="link-button" onClick={onEdit}>
@@ -159,7 +161,7 @@ export function StudentDetail({
               <thead>
                 <tr>
                   <th scope="col">{t("Date")}</th>
-                  <th scope="col">{t("Group")}</th>
+                  {oneGroup ? null : <th scope="col">{t("Group")}</th>}
                   <th scope="col">{t("Attendance")}</th>
                   <th scope="col">{t("Payment")}</th>
                   <th scope="col">{t("Grade")}</th>
@@ -172,7 +174,7 @@ export function StudentDetail({
                   return (
                     <tr key={row.id}>
                       <td className="tnum">{formatShortDate(row.classDate, locale)}</td>
-                      <td>{groupName || t("Individual")}</td>
+                      {oneGroup ? null : <td>{groupName || t("Individual")}</td>}
                       <td>
                         <span className={`st ${attendance.tone}`}>{attendance.text}</span>
                       </td>

@@ -105,6 +105,7 @@ export const HOME_TRANSLATIONS = Object.freeze({
   "No previous period": "Sin periodo anterior",
   "No grades {current}": "Sin calificaciones {current}",
   "No classes recorded {current}": "Sin clases registradas {current}",
+  "No payments {current}": "Sin pagos {current}",
   "{previous} was {value}": "{previous} fue {value}",
   "this week": "esta semana",
   "this month": "este mes",

@@ -59,3 +59,18 @@ describe("metricSummary comparisons", () => {
     expect(summary.delta).toBe("↑ 5 pp vs. 1–21 Sep");
   });
 });
+
+describe("metricSummary empty sentence", () => {
+  it("gives an empty card one sentence, with last period's value when there is one", () => {
+    expect(metricSummary({ ...emptyGrades, previous: null }, context).empty).toBe("No grades this week");
+    expect(metricSummary({ ...emptyGrades, previous: 8.5 }, context).empty).toBe(
+      "No grades this week · Last week was 8.5 /10",
+    );
+  });
+
+  it("says a week without payments once and leaves cards with data alone", () => {
+    const collections = { metric: "collections", value: 0, previous: 0, delta: null, points: [], payments: [] };
+    expect(metricSummary(collections, context).empty).toBe("No payments this week");
+    expect(metricSummary({ ...emptyGrades, value: 8, previous: null, assignments: [] }, context).empty).toBe("");
+  });
+});

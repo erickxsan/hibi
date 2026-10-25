@@ -678,7 +678,7 @@
 
 .history-row-button {
   display: grid;
-  grid-template-columns: 112px minmax(180px, 1.6fr) minmax(90px, 0.9fr) minmax(150px, 1.2fr) 120px 20px;
+  grid-template-columns: 112px minmax(180px, 1.6fr) minmax(90px, 0.9fr) minmax(150px, 1.2fr) 20px;
   gap: 12px;
   align-items: center;
   width: 100%;
@@ -1476,7 +1476,7 @@
     grid-template-columns: minmax(0, 1fr) auto 18px;
     grid-template-areas:
       "title status chev"
-      "date note chev";
+      "date status chev";
     gap: 2px 10px;
   }
 
@@ -1490,11 +1490,6 @@
 
   .history-row-button .history-marks {
     display: none;
-  }
-
-  .history-row-button .history-note {
-    grid-area: note;
-    justify-self: end;
   }
 
   .history-row-button .history-status {

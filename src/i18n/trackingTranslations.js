@@ -25,6 +25,7 @@ export const TRACKING_TRANSLATIONS = Object.freeze({
   "Low grades": "Calificaciones bajas",
   "Nobody below {value}": "Nadie bajo {value}",
   "Everything graded": "Todo calificado",
+  "No graded assignments in this period": "Sin tareas calificadas en este periodo",
   "{count} grade": "{count} calificación",
   "{count} grades": "{count} calificaciones",
   "Includes {count} monthly fee": "Incluye {count} mensualidad",

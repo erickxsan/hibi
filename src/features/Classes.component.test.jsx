@@ -580,3 +580,39 @@ describe("edit class drawer confirmations", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 });
+
+describe("class history rows", () => {
+  it("shows one status per row and none for a class that went fine", async () => {
+    const user = userEvent.setup();
+    const state = classState();
+    state.classSchedules[0].startDate = "2026-07-08";
+    state.classLog = [
+      {
+        id: "done",
+        classDate: AS_OF_DATE,
+        studentId: "s1",
+        groupId: "g1",
+        startTime: "10:00",
+        classStatus: "Completed",
+        attendance: "P",
+        hours: 2,
+        appliedHourlyRate: 100,
+        appliedCharge: 200,
+        amountPaid: 200,
+        paymentDate: AS_OF_DATE,
+        paymentState: "Paid",
+      },
+    ];
+    const { container } = renderClasses(state);
+    await user.click(screen.getByRole("tab", { name: "History" }));
+    const rows = [...container.querySelectorAll(".history-row-button")];
+    expect(rows).toHaveLength(2);
+    const [done, pending] = rows;
+    // «Sin registrar» once, not under the title, in an action column and again as the status.
+    expect(pending.textContent.match(/Not recorded/g)).toHaveLength(1);
+    expect(pending).not.toHaveTextContent("Record attendance and payment");
+    // A recorded, paid class with no assignment flags nothing: no «Sin tarea», «Todo en orden» or badge.
+    expect(done).not.toHaveTextContent(/No assignment|All in order/);
+    expect(done.querySelector(".st")).toBeNull();
+  });
+});

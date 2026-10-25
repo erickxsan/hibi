@@ -125,7 +125,8 @@ function noteText(note, t, locale) {
     case "customFee":
       return t("Own fee {amount}", { amount: formatMoney(note.fee, locale) });
     default:
-      return t("Up to date");
+      // Nothing to flag: an «Al día» under every name only repeated the normal case.
+      return "";
   }
 }
 
@@ -174,7 +175,9 @@ function WeekRail({
   };
   const item = (session, { withDate = false } = {}) => {
     const look = STATUS_LOOK[session.statusLabel];
-    const showStatus = session.statusLabel !== "Scheduled" || session.key === activeKey;
+    // Only what stands out among its neighbours: rows under «Sin registrar» (withDate) already say so, and
+    // «Programada» or «Completada» is what a class on its day is expected to be.
+    const showStatus = !withDate && !["Scheduled", "Registered"].includes(session.statusLabel);
     return (
       <button
         type="button"
@@ -355,7 +358,9 @@ function RosterRow({
         <StudentAvatar avatarId={student.avatarId} name={student.fullName} size="small" decorative />
         <span>
           <strong>{student.fullName}</strong>
-          <small className={note.tone ? `text-${note.tone}` : "muted"}>{noteText(note, t, locale)}</small>
+          {noteText(note, t, locale) ? (
+            <small className={note.tone ? `text-${note.tone}` : "muted"}>{noteText(note, t, locale)}</small>
+          ) : null}
         </span>
       </span>
       <span role="cell" data-cell="attendance">

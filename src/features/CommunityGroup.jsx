@@ -184,7 +184,6 @@ export function GroupDetail({
           <span className="detail-meta">
             {groupScheduleLong(group, locale) ? <span>{groupScheduleLong(group, locale)}</span> : null}
             <span>{t(members.length === 1 ? "{count} student" : "{count} students", { count: members.length })}</span>
-            <span className="st st-ok">{t("Active")}</span>
           </span>
         </div>
         {next ? (
@@ -259,7 +258,7 @@ export function GroupDetail({
                   tone: month.overdue ? "st-venc" : "st-pend",
                   text: `${t("Owes {amount}", { amount: formatMoney(month.owed, locale) })}${month.oldestDebt ? ` · ${formatShortDate(month.oldestDebt, locale, { weekday: false })}` : ""}`,
                 }
-              : { tone: "st-ok", text: t("Up to date") };
+              : null;
             const low =
               month?.attendance !== null && month?.attendance < (state.settings?.lowAttendanceThreshold ?? 0.8);
             return (
@@ -275,30 +274,26 @@ export function GroupDetail({
                   <StudentAvatar avatarId={student.avatarId} name={student.fullName} size="small" decorative />
                   <span>
                     <strong>{student.fullName}</strong>
-                    <small>
-                      {otherNames.length
-                        ? t("Also in {groups}", { groups: otherNames.join(", ") })
-                        : student.isIndividual
-                          ? t("Also individual")
-                          : t("This group only")}
-                    </small>
+                    {/* Only what differs from the rest of the group: «Solo este grupo» was every row's default. */}
+                    {otherNames.length || student.isIndividual ? (
+                      <small>
+                        {otherNames.length
+                          ? t("Also in {groups}", { groups: otherNames.join(", ") })
+                          : t("Also individual")}
+                      </small>
+                    ) : null}
                   </span>
                 </span>
                 <span className="ct" role="cell">
-                  {email || <span className="muted">{t("No email")}</span>}
-                  {phone ? (
-                    <>
-                      <br />
-                      {t("Tutor · {phone}", { phone })}
-                    </>
-                  ) : null}
+                  {email}
+                  {email && phone ? <br /> : null}
+                  {phone ? t("Tutor · {phone}", { phone }) : null}
+                  {!email && !phone ? <span className="muted">—</span> : null}
                 </span>
                 <span role="cell" className={`dr-pct ${low ? "text-bad" : ""}`}>
                   {formatPercent(month?.attendance ?? null, locale)}
                 </span>
-                <span role="cell">
-                  <span className={`st ${pay.tone}`}>{pay.text}</span>
-                </span>
+                <span role="cell">{pay ? <span className={`st ${pay.tone}`}>{pay.text}</span> : null}</span>
               </button>
             );
           })}

@@ -23,7 +23,7 @@ function firstName(name) {
   return String(name || "").split(" ")[0];
 }
 
-/** Short status under each student of a class card. */
+/** Short status under each student of a class card, or null when there is nothing to flag. */
 export function noteChip(note, t, locale) {
   switch (note.kind) {
     case "absences":
@@ -37,7 +37,7 @@ export function noteChip(note, t, locale) {
     case "customFee":
       return { tone: "st-ok", text: t("Own fee") };
     default:
-      return { tone: "st-ok", text: t("Up to date") };
+      return null;
   }
 }
 

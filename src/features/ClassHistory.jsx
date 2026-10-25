@@ -27,6 +27,19 @@ import { STATUS_LOOK } from "./classesWorkspaceModel";
 
 const WEEKS_PER_PAGE = 4;
 
+/**
+ * The one status a row shows: «Sin registrar», «Cancelada» or what went wrong in a recorded class
+ * («Emilio faltó», «1 pago pendiente»). A recorded class with nothing to fix shows none.
+ */
+function rowStatus(session, insight, t) {
+  if (session.statusLabel === "Registered")
+    return insight.tone === "ok" || !insight.text
+      ? null
+      : { className: insight.tone === "pend" ? "st-pend" : "st-venc", text: insight.text };
+  const look = STATUS_LOOK[session.statusLabel] || STATUS_LOOK.Scheduled;
+  return { className: look.className, text: t(look.label) };
+}
+
 function attendanceRatio(sessions) {
   const rows = sessions.flatMap((session) =>
     (session.rows || []).filter((row) => ["P", "L", "A"].includes(row.attendance)),
@@ -201,12 +214,11 @@ export function ClassHistory({
               const open = openKey === session.key;
               const insight = sessionInsight(state, session, derivedRows, t, locale);
               const assessment = sessionAssessment(state, session);
-              const look = STATUS_LOOK[session.statusLabel];
-              const subtitle = (session.rows || []).length
-                ? assessment.name
-                  ? `${assessment.name}${assessment.average !== null ? ` · ${t("average {value}", { value: formatScore(assessment.average, locale) })}` : ""}`
-                  : t("No assignment")
-                : t("Not recorded");
+              const status = rowStatus(session, insight, t);
+              // Only an assignment earns a subtitle: «Sin tarea» and «Sin registrar» repeated the status.
+              const subtitle = assessment.name
+                ? `${assessment.name}${assessment.average !== null ? ` · ${t("average {value}", { value: formatScore(assessment.average, locale) })}` : ""}`
+                : "";
               return (
                 <div className={`history-row ${open ? "is-open" : ""}`} key={session.key}>
                   <button
@@ -240,12 +252,9 @@ export function ClassHistory({
                       </small>
                     </span>
                     <span className="history-marks">{marks(session)}</span>
-                    <span
-                      className={`history-note st ${insight.tone === "ok" ? "st-ok" : insight.tone === "pend" ? "st-pend" : insight.tone === "bad" ? "st-venc" : "st-prog"}`}
-                    >
-                      {insight.text}
+                    <span className={`history-status ${status ? `st ${status.className}` : ""}`}>
+                      {status ? status.text : <span className="sr-only">{t("Completed")}</span>}
                     </span>
-                    <span className={`history-status st ${look.className}`}>{t(look.label)}</span>
                     {open ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
                   </button>
                   {open && !compact ? (

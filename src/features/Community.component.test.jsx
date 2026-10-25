@@ -130,7 +130,9 @@ describe("Community students", () => {
     await user.click(screen.getByRole("button", { name: "Open Luna López" }));
     const detail = screen.getByRole("region", { name: "Luna López" });
     expect(within(detail).getByText("Missed 2 of 3")).toBeInTheDocument();
-    expect(within(detail).getByRole("table")).toHaveTextContent("Primaria 5A");
+    // Every recent class is in Primaria 5A: the header names the group once and the table drops the column.
+    expect(within(detail).getByRole("table")).not.toHaveTextContent("Primaria 5A");
+    expect(within(detail).queryByRole("columnheader", { name: "Group" })).not.toBeInTheDocument();
   });
 
   it("saves contact details, deactivates and reactivates from the archive", async () => {

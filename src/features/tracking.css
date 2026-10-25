@@ -948,3 +948,15 @@ button.tkpi:first-child {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.tracking-kpis-empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 16px 0;
+  font: 600 14px/20px var(--font-sans);
+  color: var(--sumi-muted);
+}
+
+.tracking-chart .leg[hidden] {
+  display: none;
+}
