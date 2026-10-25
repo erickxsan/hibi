@@ -39,6 +39,7 @@ import {
 import { canonicalStringify } from "../crypto/canonical.js";
 import { setGroupArchived, startGroupSchedule } from "../domain/groupArchiving.js";
 import { normalizeRepeatRule } from "../domain/classRecurrence.js";
+import { updateDismissedNotes } from "../domain/noteDismissals.js";
 import {
   normalizeBillingByGroup,
   normalizeGroupBilling,
@@ -663,6 +664,19 @@ export function useClassManager({ persistence } = {}) {
         settings: { ...current.settings, onboardingStep: Number(step) },
       })),
     [commit],
+  );
+
+  /** Marks «Antes de empezar» notes as seen, or shows them again (`dismissed: false`). */
+  const setNotesDismissed = useCallback(
+    (keys, dismissed = true) =>
+      commit((current) => ({
+        ...current,
+        settings: {
+          ...current.settings,
+          dismissedNotes: updateDismissedNotes(current.settings.dismissedNotes, keys, dismissed, operationalDate),
+        },
+      })),
+    [commit, operationalDate],
   );
 
   const dismissOnboarding = useCallback(
@@ -1353,6 +1367,7 @@ export function useClassManager({ persistence } = {}) {
       updatePreferences,
       updateSettings,
       setOnboardingStep,
+      setNotesDismissed,
       dismissOnboarding,
       saveOnboardingGroup,
       saveOnboardingStudents,
@@ -1423,6 +1438,7 @@ export function useClassManager({ persistence } = {}) {
       saveOnboardingGroup,
       saveOnboardingStudents,
       saveProgress,
+      setNotesDismissed,
       setOnboardingStep,
       updatePreferences,
       updateSettings,

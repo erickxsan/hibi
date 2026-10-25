@@ -13,6 +13,7 @@ import {
 } from "./constants.js";
 import { isDateOnly, startOfMonth } from "./dates.js";
 import { normalizeRepeatRule } from "./classRecurrence.js";
+import { normalizeDismissedNotes } from "./noteDismissals.js";
 import {
   billingIssues,
   normalizeBillingByGroup,
@@ -358,6 +359,11 @@ function optionalStudentBilling(student) {
   };
 }
 
+function optionalDismissedNotes(value) {
+  const dismissedNotes = normalizeDismissedNotes(value);
+  return Object.keys(dismissedNotes).length ? { dismissedNotes } : {};
+}
+
 export function normalizeState(input) {
   const source = isRecord(input) ? input : {};
   const sourceSettings = isRecord(source.settings) ? source.settings : {};
@@ -406,6 +412,7 @@ export function normalizeState(input) {
       onboardingVersion: normalizeNumber(sourceSettings.onboardingVersion, DEFAULT_SETTINGS.onboardingVersion),
       onboardingStep: normalizeNumber(sourceSettings.onboardingStep, DEFAULT_SETTINGS.onboardingStep),
       onboardingGroupId: normalizeText(sourceSettings.onboardingGroupId ?? DEFAULT_SETTINGS.onboardingGroupId),
+      ...optionalDismissedNotes(sourceSettings.dismissedNotes),
     },
     groups: (Array.isArray(source.groups) ? source.groups : []).map((group) => ({
       id: normalizeText(group?.id),

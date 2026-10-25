@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { ChevronRight } from "lucide-react";
+import { Check, ChevronRight } from "lucide-react";
 import { useI18n } from "../i18n/index.jsx";
-import { BottomSheet, Button, ListRow } from "../components/ui";
+import { BottomSheet, Button, IconButton, ListRow } from "../components/ui";
 import { StudentAvatar } from "../components/StudentAvatar";
 import {
   formatMoney,
@@ -68,6 +68,48 @@ export function noteSentence(note, t, locale) {
 
 function noteDot(note) {
   return note.tone === "bad" ? "var(--bermellon)" : "var(--ocre)";
+}
+
+/** Notes still worth showing: with text and not marked as seen. */
+function openNotes(item, t, locale) {
+  return item.notes.filter((entry) => !entry.dismissed && noteSentence(entry.note, t, locale));
+}
+
+/** «Marcar como visto»: hides a note until something new happens (another unpaid class, absence, month…). */
+function SeenButton({ entry, onDismiss }) {
+  const { t } = useI18n();
+  if (!entry.key || !onDismiss) return null;
+  return (
+    <IconButton
+      className="note-seen"
+      icon={Check}
+      label={t("Mark as seen: {name}", { name: firstName(entry.student.fullName) })}
+      onClick={() => onDismiss([entry.key], true)}
+    />
+  );
+}
+
+/** Seen notes of a class and the way to show them again. */
+function HiddenNotes({ item, onDismiss }) {
+  const { t } = useI18n();
+  const hidden = item.notes.filter((entry) => entry.dismissed);
+  if (!hidden.length || !onDismiss) return null;
+  return (
+    <button
+      type="button"
+      className="link-button note-hidden"
+      onClick={() =>
+        onDismiss(
+          hidden.map((entry) => entry.key),
+          false,
+        )
+      }
+    >
+      {t(hidden.length === 1 ? "{count} seen notice · Show again" : "{count} seen notices · Show again", {
+        count: hidden.length,
+      })}
+    </button>
+  );
 }
 
 function stateLabel(item, now, t) {
@@ -164,12 +206,13 @@ function recordedChip(row, t) {
   return { tone: "st-ok", text: t("Present") };
 }
 
-export function ClassCard({ item, now, derived, onRecord, onOpenRecord }) {
+export function ClassCard({ item, now, derived, onRecord, onOpenRecord, onDismissNotes = undefined }) {
   const { t, locale } = useI18n();
   const session = item.session;
   const done = item.state === "done";
   const individual = session.format === "individual";
-  const notes = item.notes.filter((entry) => noteSentence(entry.note, t, locale));
+  const notes = openNotes(item, t, locale);
+  const seenKeys = notes.map((entry) => entry.key).filter(Boolean);
   const rowsByStudent = new Map((session.rows || []).map((row) => [row.studentId, row]));
   const range = formatTimeRange(session.startTime, session.durationHours, locale);
   let kicker;
@@ -203,18 +246,18 @@ export function ClassCard({ item, now, derived, onRecord, onOpenRecord }) {
         <span className="dsub">{summary}</span>
         <div className="roster">
           {item.roster.map((person) => {
+            const entry = item.notes.find((note) => note.student.id === person.id);
+            // A note marked as seen leaves no chip: it is neither news nor «al día».
             const chip = done
               ? recordedChip(rowsByStudent.get(person.id), t)
-              : noteChip(
-                  item.notes.find((entry) => entry.student.id === person.id)?.note || { kind: "upToDate" },
-                  t,
-                  locale,
-                );
+              : entry?.dismissed
+                ? null
+                : noteChip(entry?.note || { kind: "upToDate" }, t, locale);
             return (
               <div className="rs" key={person.id}>
                 <StudentAvatar avatarId={person.avatarId} name={person.fullName} decorative />
                 <b>{individual ? person.fullName : firstName(person.fullName)}</b>
-                <span className={`st ${chip.tone}`}>{chip.text}</span>
+                {chip ? <span className={`st ${chip.tone}`}>{chip.text}</span> : null}
               </div>
             );
           })}
@@ -238,22 +281,33 @@ export function ClassCard({ item, now, derived, onRecord, onOpenRecord }) {
         </div>
       </div>
       <div className="dside">
-        <span className="overline">{t(done ? "Left pending" : "Before you start")}</span>
+        <div className="dside-head">
+          <span className="overline">{t(done ? "Left pending" : "Before you start")}</span>
+          {onDismissNotes && seenKeys.length > 1 ? (
+            <button type="button" className="link-button" onClick={() => onDismissNotes(seenKeys, true)}>
+              {t("Mark all as seen")}
+            </button>
+          ) : null}
+        </div>
         {notes.length ? (
-          notes.slice(0, 4).map(({ student: person, note }) => (
-            <p className="dnote" key={person.id}>
-              <i style={{ background: noteDot(note) }} />
+          notes.slice(0, 4).map((entry) => (
+            <p className="dnote" key={entry.student.id}>
+              <i style={{ background: noteDot(entry.note) }} />
               <span>
-                <strong>{firstName(person.fullName)}</strong> {noteSentence(note, t, locale)}
+                <strong>{firstName(entry.student.fullName)}</strong> {noteSentence(entry.note, t, locale)}
               </span>
+              <SeenButton entry={entry} onDismiss={onDismissNotes} />
             </p>
           ))
         ) : (
           <p className="dnote">
             <i style={{ background: "var(--jade)" }} />
-            <span>{t("Everyone is up to date.")}</span>
+            <span>
+              {t(item.notes.some((entry) => entry.dismissed) ? "No new notices." : "Everyone is up to date.")}
+            </span>
           </p>
         )}
+        <HiddenNotes item={item} onDismiss={onDismissNotes} />
         {done ? (
           <Button onClick={() => onOpenRecord(session)}>{t("View record")}</Button>
         ) : (
@@ -279,7 +333,7 @@ function agendaLine(item, t, locale) {
       : base;
   }
   if (item.state === "pending") return t("Not recorded");
-  const flag = item.notes.find((entry) => entry.note.kind === "owes");
+  const flag = item.notes.find((entry) => !entry.dismissed && entry.note.kind === "owes");
   const when = item.state === "live" ? t("In progress") : t("Later");
   if (session.format === "individual" && flag)
     return `${when} · ${t("owes {amount}", { amount: formatMoney(flag.note.amount, locale) })}`;
@@ -287,7 +341,7 @@ function agendaLine(item, t, locale) {
 }
 
 /** Mobile: a vertical agenda with «ahora» and the next class opened as the main card. */
-export function TodayAgenda({ timeline, onRecord, onOpen }) {
+export function TodayAgenda({ timeline, onRecord, onOpen, onDismissNotes = undefined }) {
   const { t, locale } = useI18n();
   const [rosterItem, setRosterItem] = useState(null);
   const focus = timeline.live || timeline.next;
@@ -311,7 +365,7 @@ export function TodayAgenda({ timeline, onRecord, onOpen }) {
         </div>,
       );
     if (item === focus) {
-      const notes = item.notes.filter((entry) => noteSentence(entry.note, t, locale));
+      const notes = openNotes(item, t, locale);
       rows.push(
         <article className="nx" key={item.key} aria-labelledby={`nx-${index}`}>
           <div className="k">
@@ -337,14 +391,18 @@ export function TodayAgenda({ timeline, onRecord, onOpen }) {
           </button>
           {notes.length ? (
             <div className="flags">
-              {notes.slice(0, 2).map(({ student, note }) => (
-                <span className="flag" key={student.id}>
-                  <i style={{ background: noteDot(note) }} />
-                  {firstName(student.fullName)} {noteSentence(note, t, locale).replace(/\.$/, "")}
+              {notes.slice(0, 2).map((entry) => (
+                <span className="flag" key={entry.student.id}>
+                  <i style={{ background: noteDot(entry.note) }} />
+                  <span>
+                    {firstName(entry.student.fullName)} {noteSentence(entry.note, t, locale).replace(/\.$/, "")}
+                  </span>
+                  <SeenButton entry={entry} onDismiss={onDismissNotes} />
                 </span>
               ))}
             </div>
           ) : null}
+          <HiddenNotes item={item} onDismiss={onDismissNotes} />
           <Button variant="primary" onClick={() => onRecord(item.session)}>
             {t("Record class")}
           </Button>
@@ -389,14 +447,14 @@ export function TodayAgenda({ timeline, onRecord, onOpen }) {
         kicker={t("Students")}
       >
         <div className="list-rows">
-          {(rosterItem?.notes || []).map(({ student, note }) => {
-            const chip = noteChip(note, t, locale);
+          {(rosterItem?.notes || []).map(({ student, note, dismissed }) => {
+            const chip = dismissed ? null : noteChip(note, t, locale);
             return (
               <ListRow
                 key={student.id}
                 avatar={<StudentAvatar avatarId={student.avatarId} name={student.fullName} size="small" decorative />}
                 name={student.fullName}
-                context={<span className={`st ${chip.tone}`}>{chip.text}</span>}
+                context={chip ? <span className={`st ${chip.tone}`}>{chip.text}</span> : null}
               />
             );
           })}

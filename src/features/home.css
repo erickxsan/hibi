@@ -503,6 +503,50 @@
   margin-top: 6px;
 }
 
+.home-page .dside-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.home-page .dnote > span,
+.home-page .flag > span {
+  flex: 1;
+  min-width: 0;
+}
+
+/* «Marcar como visto»: quiet until hovered so the notes still read first. */
+.home-page .note-seen {
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  margin: -4px -6px -4px 0;
+  flex: none;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--sumi-muted);
+}
+
+.home-page .note-seen svg {
+  width: 16px;
+  height: 16px;
+}
+
+.home-page .note-seen:hover,
+.home-page .note-seen:focus-visible {
+  background: var(--washi);
+  color: var(--sumi);
+}
+
+.home-page .note-hidden {
+  align-self: flex-start;
+  color: var(--sumi-muted);
+  font-weight: 600;
+}
+
 .home-page .dside .button {
   margin-top: auto;
   align-self: flex-start;
@@ -1445,6 +1489,13 @@
   margin-top: 6px;
   border-radius: 50%;
   flex: none;
+}
+
+.home-page .flag .note-seen {
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  margin: -9px -8px -9px 0;
 }
 
 .home-page .nx .button {

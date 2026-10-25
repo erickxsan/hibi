@@ -30,6 +30,8 @@ const PREFERENCE_SETTINGS = new Set([
 
 // Unordered ID lists. Additions and removals from both sides can be combined.
 const SET_FIELDS = new Set(["groupIds", "participantIds", "daysOfWeek"]);
+// Keyed maps where each device adds or removes its own keys (the «Antes de empezar» notes marked as seen).
+const MAP_FIELDS = new Set(["dismissedNotes"]);
 
 function canonical(value) {
   try {
@@ -182,6 +184,8 @@ function mergeFields(base, local, remote, { prefer, preferences = null }) {
     else if (localChanged) {
       if (SET_FIELDS.has(field) && [baseValue ?? [], localValue ?? [], remoteValue ?? []].every(Array.isArray)) {
         value = mergeSet(baseValue, localValue, remoteValue);
+      } else if (MAP_FIELDS.has(field) && [baseValue, localValue, remoteValue].every(isPlainMap)) {
+        value = mergeMap(baseValue, localValue, remoteValue);
       } else if (preferences?.has(field)) {
         value = localValue;
       } else {
@@ -192,6 +196,21 @@ function mergeFields(base, local, remote, { prefer, preferences = null }) {
     if (value !== undefined) output[field] = value;
   }
   return { value: output, conflicts };
+}
+
+function isPlainMap(value) {
+  return value === undefined || value === null || (typeof value === "object" && !Array.isArray(value));
+}
+
+/** Applies the keys local added, changed or removed since base onto the remote map. */
+function mergeMap(base, local, remote) {
+  const output = { ...(remote || {}) };
+  for (const key of new Set([...Object.keys(base || {}), ...Object.keys(local || {})])) {
+    if (sameValue(base?.[key], local?.[key])) continue;
+    if (local?.[key] === undefined) delete output[key];
+    else output[key] = local[key];
+  }
+  return output;
 }
 
 function conflict(collection, entityId, kind, fields = []) {

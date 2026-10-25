@@ -22,6 +22,7 @@ describe("student note before class", () => {
       amount: 675,
       count: 3,
       date: "2026-10-01",
+      latest: "2026-10-15",
     });
     expect(studentClassNote(state, student, session, [row("2026-08-15", 300)])).toMatchObject({
       kind: "owes",

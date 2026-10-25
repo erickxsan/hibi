@@ -30,6 +30,19 @@ describe("field-level workspace merge", () => {
     ]);
   });
 
+  it("keeps the notes each device marked as seen without a conflict", () => {
+    const base = {
+      ...createStarterState(),
+      settings: { ...createStarterState().settings, dismissedNotes: { old: "2026-10-01", gone: "2026-10-01" } },
+    };
+    const withSeen = (dismissedNotes) => ({ ...base, settings: { ...base.settings, dismissedNotes } });
+    const local = withSeen({ old: "2026-10-01", tablet: "2026-10-24" });
+    const remote = withSeen({ old: "2026-10-01", gone: "2026-10-01", laptop: "2026-10-23" });
+    const { state, conflicts } = mergeWorkspaceStates({ base, local, remote });
+    expect(conflicts).toEqual([]);
+    expect(state.settings.dismissedNotes).toEqual({ old: "2026-10-01", laptop: "2026-10-23", tablet: "2026-10-24" });
+  });
+
   it("treats an identical value on both sides as satisfied", () => {
     const base = withStudents(student("a"));
     const next = edit(base, "a", { notes: "Same" });

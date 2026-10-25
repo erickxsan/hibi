@@ -238,7 +238,15 @@ export function studentClassNote(state, student, session, derivedRows = [], mont
     .sort((left, right) => right.classDate.localeCompare(left.classDate));
   const recent = rows.filter((row) => ["P", "L", "A"].includes(row.attendance)).slice(0, 5);
   const missed = recent.filter((row) => row.attendance === "A").length;
-  if (recent.length >= 3 && missed >= 2) return { kind: "absences", tone: "bad", missed, total: recent.length };
+  if (recent.length >= 3 && missed >= 2)
+    return {
+      kind: "absences",
+      tone: "bad",
+      missed,
+      total: recent.length,
+      // The newest absence: a dismissed note comes back only after another one.
+      lastAbsence: recent.find((row) => row.attendance === "A").classDate,
+    };
   const owed = rows.filter((row) => Number(row.outstanding) > 0);
   if (owed.length)
     return {
@@ -248,10 +256,12 @@ export function studentClassNote(state, student, session, derivedRows = [], mont
       // How many classes the amount spans and the oldest of them («Debe $1,125 de 5 clases desde el 1 oct»).
       count: owed.length,
       date: owed.at(-1).classDate,
+      // The newest unpaid class: a dismissed note comes back only when another one adds to the debt.
+      latest: owed[0].classDate,
     };
   const ungraded = (state.grades || [])
     .filter((grade) => grade.studentId === student.id && grade.score == null && grade.workStatus !== "Excused")
     .sort((left, right) => String(right.date).localeCompare(String(left.date)))[0];
-  if (ungraded) return { kind: "ungraded", tone: "pend", assessment: ungraded.assessment };
+  if (ungraded) return { kind: "ungraded", tone: "pend", assessment: ungraded.assessment, gradeId: ungraded.id || "" };
   return { kind: "upToDate", tone: "" };
 }

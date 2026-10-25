@@ -201,6 +201,7 @@ export default function Home({
   openPage = undefined,
   intent = undefined,
   clearIntent = undefined,
+  actions = undefined,
 }) {
   const { t, locale } = useI18n();
   const compact = useCompactViewport();
@@ -368,6 +369,7 @@ export default function Home({
               timeline={timeline}
               onRecord={openClass}
               onOpen={(session) => (session.statusLabel === "Registered" ? openHistory(session) : openClass(session))}
+              onDismissNotes={actions?.setNotesDismissed}
             />
           ) : (
             <p className="muted home-empty-day">{t("No classes today. A good moment to catch up.")}</p>
@@ -456,6 +458,7 @@ export default function Home({
                 derived={todayDerived}
                 onRecord={openClass}
                 onOpenRecord={openHistory}
+                onDismissNotes={actions?.setNotesDismissed}
               />
             ) : null}
           </>

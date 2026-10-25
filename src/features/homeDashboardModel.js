@@ -2,6 +2,7 @@ import { roundMoney, sumMoney } from "../domain/money.js";
 import { addDays, addMonths, endOfMonth, startOfMonth, startOfWeek } from "../domain/dates";
 import { generateScheduledOccurrences, resolveHourlyRate } from "../domain/schedule";
 import { coveredByMonthlyFee, deriveMonthlyCharges, monthlyPaymentsBetween, periodOf } from "../domain/monthlyBilling";
+import { noteKey } from "../domain/noteDismissals";
 import { buildClassWorkspaceSessionsForRange, rosterForClassSession } from "./classesWorkspaceModel";
 import { studentClassNote } from "./classesDraftModel";
 
@@ -583,12 +584,17 @@ export function buildTodayTimeline(state, derived, asOf, nowTime) {
   const nowMinutes = minutes(nowTime) ?? 0;
   const sessions = sessionsIn(state, asOf, asOf, asOf).filter((session) => session.statusLabel !== "Cancelled");
   const derivedRows = derived?.classLog || [];
+  const dismissedNotes = state.settings?.dismissedNotes || {};
   const next = sessions.find(
     (session) => session.statusLabel !== "Registered" && (minutes(session.startTime) ?? 0) > nowMinutes,
   );
   const items = sessions.map((session) => {
     const roster = rosterForClassSession(state, session);
-    const notes = roster.map((student) => ({ student, note: studentClassNote(state, student, session, derivedRows) }));
+    const notes = roster.map((student) => {
+      const note = studentClassNote(state, student, session, derivedRows);
+      const key = noteKey(student.id, note);
+      return { student, note, key, dismissed: Boolean(key && Object.hasOwn(dismissedNotes, key)) };
+    });
     const start = minutes(session.startTime) ?? 0;
     return {
       session,
@@ -598,7 +604,8 @@ export function buildTodayTimeline(state, derived, asOf, nowTime) {
       state: timelineState(session, nowMinutes, next?.key),
       roster,
       notes,
-      alerts: notes.filter((item) => item.note.kind !== "upToDate" && item.note.kind !== "customFee").length,
+      alerts: notes.filter((item) => !item.dismissed && item.note.kind !== "upToDate" && item.note.kind !== "customFee")
+        .length,
       attendance: sessionAttendance(session),
     };
   });

@@ -144,6 +144,29 @@ describe("Home", () => {
     expect(props.openPage).toHaveBeenCalledWith("classes", { type: "open-class", sessionKey: "2026-10-21|g:g1|16:00" });
   });
 
+  it("marks a note as seen and shows it again", async () => {
+    const user = userEvent.setup();
+    const setNotesDismissed = vi.fn();
+    renderHome({ actions: { setNotesDismissed } });
+    const card = screen.getByRole("article", { name: "Reading" });
+    await user.click(within(card).getByRole("button", { name: "Mark as seen: Maya" }));
+    expect(setNotesDismissed).toHaveBeenCalledWith(["owes:s1:2026-10-12"], true);
+  });
+
+  it("hides seen notes, their chips and the badge until they are shown again", async () => {
+    const user = userEvent.setup();
+    const setNotesDismissed = vi.fn();
+    const state = homeState();
+    state.settings.dismissedNotes = { "owes:s1:2026-10-12": "2026-10-20" };
+    renderHome({ state, derived: deriveAll(state, AS_OF), actions: { setNotesDismissed } });
+    const card = screen.getByRole("article", { name: "Reading" });
+    expect(within(card).queryByText("owes $200 from the class on 12 Oct.")).not.toBeInTheDocument();
+    expect(within(card).queryByText("Owes $200")).not.toBeInTheDocument();
+    expect(within(card).getByText("No new notices.")).toBeInTheDocument();
+    await user.click(within(card).getByRole("button", { name: "1 seen notice · Show again" }));
+    expect(setNotesDismissed).toHaveBeenCalledWith(["owes:s1:2026-10-12"], false);
+  });
+
   it("greets at night between midnight and 5 a.m. and keeps the line readable before 8 a.m.", () => {
     vi.setSystemTime(new Date(2026, 9, 21, 0, 34));
     const { unmount } = render(
