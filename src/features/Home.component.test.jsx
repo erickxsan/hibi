@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { deriveAll } from "../domain";
@@ -205,6 +205,24 @@ describe("Home", () => {
     expect(screen.queryByRole("tablist", { name: "Charts" })).not.toBeInTheDocument();
     await user.click(within(attention).getByRole("button", { name: /still not recorded/ }));
     expect(props.openPage).toHaveBeenCalledWith("classes", expect.objectContaining({ type: "open-class" }));
+  });
+
+  it("marks a «Para atender» item as seen until something new brings it back", async () => {
+    const user = userEvent.setup();
+    const setNotesDismissed = vi.fn();
+    renderHome({ actions: { setNotesDismissed } });
+    let attention = screen.getByRole("heading", { name: /^To attend to · / }).closest("section");
+    await user.click(within(attention).getByRole("button", { name: "Mark as seen: Maya got 5.0" }));
+    expect(setNotesDismissed).toHaveBeenCalledWith(["attention:grade:s1:2026-10-19:Quiz"], true);
+
+    cleanup();
+    const state = homeState();
+    state.settings.dismissedNotes = { "attention:grade:s1:2026-10-19:Quiz": "2026-10-21" };
+    renderHome({ state, derived: deriveAll(state, AS_OF), actions: { setNotesDismissed } });
+    attention = screen.getByRole("heading", { name: /^To attend to · / }).closest("section");
+    expect(within(attention).queryByRole("button", { name: /got 5\.0/ })).not.toBeInTheDocument();
+    await user.click(within(attention).getByRole("button", { name: "1 seen notice · Show again" }));
+    expect(setNotesDismissed).toHaveBeenLastCalledWith(["attention:grade:s1:2026-10-19:Quiz"], false);
   });
 
   it("changes the period, picks points and switches the archived scope", async () => {

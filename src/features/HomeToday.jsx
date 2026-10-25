@@ -75,41 +75,38 @@ function openNotes(item, t, locale) {
   return item.notes.filter((entry) => !entry.dismissed && noteSentence(entry.note, t, locale));
 }
 
-/** «Marcar como visto»: hides a note until something new happens (another unpaid class, absence, month…). */
-function SeenButton({ entry, onDismiss }) {
+/** «Marcar como visto»: hides a notice until something new causes it (another unpaid class, absence, month…). */
+export function SeenButton({ keys, label, onDismiss }) {
+  if (!keys?.length || !onDismiss) return null;
+  return <IconButton className="note-seen" icon={Check} label={label} onClick={() => onDismiss(keys, true)} />;
+}
+
+function NoteSeenButton({ entry, onDismiss }) {
   const { t } = useI18n();
-  if (!entry.key || !onDismiss) return null;
   return (
-    <IconButton
-      className="note-seen"
-      icon={Check}
+    <SeenButton
+      keys={entry.key ? [entry.key] : []}
       label={t("Mark as seen: {name}", { name: firstName(entry.student.fullName) })}
-      onClick={() => onDismiss([entry.key], true)}
+      onDismiss={onDismiss}
     />
+  );
+}
+
+/** «N avisos vistos · Volver a mostrar» for the given seen keys. */
+export function ShowSeenButton({ count, keys, onDismiss }) {
+  const { t } = useI18n();
+  if (!count || !onDismiss) return null;
+  return (
+    <button type="button" className="link-button note-hidden" onClick={() => onDismiss(keys, false)}>
+      {t(count === 1 ? "{count} seen notice · Show again" : "{count} seen notices · Show again", { count })}
+    </button>
   );
 }
 
 /** Seen notes of a class and the way to show them again. */
 function HiddenNotes({ item, onDismiss }) {
-  const { t } = useI18n();
   const hidden = item.notes.filter((entry) => entry.dismissed);
-  if (!hidden.length || !onDismiss) return null;
-  return (
-    <button
-      type="button"
-      className="link-button note-hidden"
-      onClick={() =>
-        onDismiss(
-          hidden.map((entry) => entry.key),
-          false,
-        )
-      }
-    >
-      {t(hidden.length === 1 ? "{count} seen notice · Show again" : "{count} seen notices · Show again", {
-        count: hidden.length,
-      })}
-    </button>
-  );
+  return <ShowSeenButton count={hidden.length} keys={hidden.map((entry) => entry.key)} onDismiss={onDismiss} />;
 }
 
 function stateLabel(item, now, t) {
@@ -296,7 +293,7 @@ export function ClassCard({ item, now, derived, onRecord, onOpenRecord, onDismis
               <span>
                 <strong>{firstName(entry.student.fullName)}</strong> {noteSentence(entry.note, t, locale)}
               </span>
-              <SeenButton entry={entry} onDismiss={onDismissNotes} />
+              <NoteSeenButton entry={entry} onDismiss={onDismissNotes} />
             </p>
           ))
         ) : (
@@ -397,7 +394,7 @@ export function TodayAgenda({ timeline, onRecord, onOpen, onDismissNotes = undef
                   <span>
                     {firstName(entry.student.fullName)} {noteSentence(entry.note, t, locale).replace(/\.$/, "")}
                   </span>
-                  <SeenButton entry={entry} onDismiss={onDismissNotes} />
+                  <NoteSeenButton entry={entry} onDismiss={onDismissNotes} />
                 </span>
               ))}
             </div>

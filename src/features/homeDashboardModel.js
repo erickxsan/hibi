@@ -2,7 +2,7 @@ import { roundMoney, sumMoney } from "../domain/money.js";
 import { addDays, addMonths, endOfMonth, startOfMonth, startOfWeek } from "../domain/dates";
 import { generateScheduledOccurrences, resolveHourlyRate } from "../domain/schedule";
 import { coveredByMonthlyFee, deriveMonthlyCharges, monthlyPaymentsBetween, periodOf } from "../domain/monthlyBilling";
-import { noteKey } from "../domain/noteDismissals";
+import { allSeen, noteKey } from "../domain/noteDismissals";
 import { buildClassWorkspaceSessionsForRange, rosterForClassSession } from "./classesWorkspaceModel";
 import { studentClassNote } from "./classesDraftModel";
 
@@ -633,7 +633,29 @@ export function buildTodayTimeline(state, derived, asOf, nowTime) {
  * «Para atender»: unrecorded classes, low attendance this month, a recent low grade, overdue
  * balances and monthly fees due today or overdue. Each item says where it leads.
  */
+/** Seen key of one student's debt: its newest class and monthly debt, so paying keeps it hidden and a new debt does not. */
+function debtSeenKey(debt, counts) {
+  const reasons = debt.reasons.filter(counts);
+  const newest = (kind, field) =>
+    reasons
+      .filter((reason) => reason.kind === kind)
+      .map((reason) => reason[field])
+      .sort()
+      .at(-1) || "";
+  return `attention:debt:${debt.studentId}:${newest("class", "date")}:${newest("monthly", "period")}`;
+}
+
+/**
+ * «Para atender»: what needs the teacher's attention. Each item carries `seenKeys` (one per thing that
+ * caused it) and `dismissed` once all of them were marked as seen, so a new cause brings it back.
+ */
 export function buildAttentionItems(state, derived, asOf) {
+  const items = attentionItems(state, derived, asOf);
+  const dismissedNotes = state.settings?.dismissedNotes || {};
+  return items.map((item) => ({ ...item, dismissed: allSeen(dismissedNotes, item.seenKeys) }));
+}
+
+function attentionItems(state, derived, asOf) {
   const derivedRows = derived?.classLog || [];
   const items = [];
   const studentsById = new Map((state.students || []).map((student) => [student.id, student]));
@@ -649,6 +671,7 @@ export function buildAttentionItems(state, derived, asOf) {
       session: latest,
       count: pending.length,
       action: { type: "record", session: latest },
+      seenKeys: pending.map((session) => `attention:unrecorded:${session.key}`),
     });
   }
   const threshold = finite(state.settings?.lowAttendanceThreshold) ? state.settings.lowAttendanceThreshold : 0.8;
@@ -663,6 +686,7 @@ export function buildAttentionItems(state, derived, asOf) {
       students: lowAttendance.map((row) => row.student),
       threshold,
       action: { type: "metric", metric: "attendance" },
+      seenKeys: lowAttendance.map((row) => `attention:attendance:${periodOf(asOf)}:${row.student.id}`),
     });
   const gradeThreshold = (finite(state.settings?.lowGradeThreshold) ? state.settings.lowGradeThreshold : 0.7) * 10;
   const recentLow = assignmentsIn(state, addDays(asOf, -14), asOf)
@@ -677,6 +701,7 @@ export function buildAttentionItems(state, derived, asOf) {
       assessment: recentLow.item.assessment,
       date: recentLow.item.date,
       action: { type: "metric", metric: "grade" },
+      seenKeys: [`attention:grade:${recentLow.studentId}:${recentLow.item.date}:${recentLow.item.assessment}`],
     });
   // The same figure the collections chart and Seguimiento show: active students' overdue money,
   // split by month, with what inactive students owe kept apart.
@@ -694,6 +719,10 @@ export function buildAttentionItems(state, derived, asOf) {
       inactiveAmount: debts.inactive.owed,
       inactiveNames: debts.inactive.debts.map((item) => nameOf(item.studentId)).filter(Boolean),
       action: { type: "metric", metric: "collections", focus: "debts" },
+      seenKeys: [
+        ...debts.overdueStudents.map((debt) => debtSeenKey(debt, (reason) => reason.overdue)),
+        ...debts.inactive.debts.map((debt) => debtSeenKey(debt, () => true)),
+      ],
     });
   }
   const dueMonthly = deriveMonthlyCharges(state, asOf, { includeArchived: false }).filter(
@@ -723,6 +752,9 @@ export function buildAttentionItems(state, derived, asOf) {
             }
           : null,
       action: { type: "monthly" },
+      seenKeys: charges.map(
+        (charge) => `attention:fee:${charge.studentId}:${charge.groupId}:${charge.period}:${charge.status}`,
+      ),
     });
   }
   return items;

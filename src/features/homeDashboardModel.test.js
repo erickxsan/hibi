@@ -245,6 +245,28 @@ describe("home agenda", () => {
     expect(items[4]).toMatchObject({ overdue: true, count: 1, amount: 1000 });
   });
 
+  it("keeps an item marked as seen hidden until something new causes it", () => {
+    const { state, derived } = setup();
+    const items = buildAttentionItems(state, derived, AS_OF);
+    expect(items.every((item) => item.seenKeys.length && !item.dismissed)).toBe(true);
+    const seen = (keys) => ({
+      ...state,
+      settings: { ...state.settings, dismissedNotes: Object.fromEntries(keys.map((key) => [key, AS_OF])) },
+    });
+    const allKeys = items.flatMap((item) => item.seenKeys);
+    expect(buildAttentionItems(seen(allKeys), derived, AS_OF).every((item) => item.dismissed)).toBe(true);
+    // A student who newly owes an overdue class brings the debt alert back.
+    const next = seen(allKeys);
+    // Lucas paid r2 (12 Oct); leaving it unpaid makes it a new overdue debt.
+    const paid = next.classLog.find((item) => item.id === "r2");
+    next.classLog = next.classLog.map((item) =>
+      item === paid ? { ...item, amountPaid: 0, paymentState: "Pending", paymentDate: null, paymentMethod: "" } : item,
+    );
+    const again = buildAttentionItems(next, deriveAll(next, AS_OF), AS_OF);
+    expect(again.find((item) => item.kind === "overdue").dismissed).toBe(false);
+    expect(again.find((item) => item.kind === "lowGrade").dismissed).toBe(true);
+  });
+
   it("needs at least two classes before flagging low attendance", () => {
     const state = fixture();
     state.classLog = state.classLog.filter((item) => item.id !== "r2");

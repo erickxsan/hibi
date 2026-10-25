@@ -1,9 +1,10 @@
-// «Antes de empezar» notes the teacher marked as seen. Each note gets a key built from what caused it
-// (the newest unpaid class, the newest absence, the grade, the month), so a seen note stays hidden until
-// something new happens and then comes back on its own. Stored in settings so it syncs across devices.
+// Home notices the teacher marked as seen («Antes de empezar» and «Para atender»). Each notice gets keys
+// built from what caused it (the newest unpaid class, the newest absence, the grade, the month, each
+// unrecorded class), so a seen notice stays hidden until something new happens and then comes back on
+// its own. Stored in settings so it syncs across devices.
 
 const KEEP_DAYS = 180;
-const MAX_ENTRIES = 400;
+const MAX_ENTRIES = 1000;
 
 /** Stable key of a student's note, or "" for notes that cannot be dismissed. */
 export function noteKey(studentId, note) {
@@ -20,6 +21,11 @@ export function noteKey(studentId, note) {
     default:
       return "";
   }
+}
+
+/** A notice is seen when it has keys and every one of them was marked as seen. */
+export function allSeen(dismissedNotes, keys) {
+  return Boolean(keys.length && dismissedNotes && keys.every((key) => Object.hasOwn(dismissedNotes, key)));
 }
 
 function daysBefore(date, days) {

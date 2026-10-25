@@ -28,7 +28,7 @@ import {
   studentPeriodRows,
 } from "./homeDashboardModel";
 import { rosterForClassSession } from "./classesWorkspaceModel";
-import { ClassCard, TodayAgenda, TodayTimeline } from "./HomeToday";
+import { ClassCard, SeenButton, ShowSeenButton, TodayAgenda, TodayTimeline } from "./HomeToday";
 import { metricSummary, MetricCard, MetricExplorer, MetricRows, overdueSplit, thresholds } from "./HomeMetrics";
 import "../i18n/screenTranslations.js";
 import "./home.css";
@@ -234,7 +234,17 @@ export default function Home({
     timeline.items.find((item) => item.key === selectedKey) ||
     timeline.items.find((item) => item.key === timeline.selectedKey) ||
     null;
-  const attention = useMemo(() => buildAttentionItems(today, todayDerived, asOf), [asOf, today, todayDerived]);
+  const attentionAll = useMemo(() => buildAttentionItems(today, todayDerived, asOf), [asOf, today, todayDerived]);
+  // Items marked as seen stay out of the list and the counts until something new brings them back.
+  const attention = attentionAll.filter((item) => !item.dismissed);
+  const seenAttention = attentionAll.filter((item) => item.dismissed);
+  const showSeenAttention = (
+    <ShowSeenButton
+      count={seenAttention.length}
+      keys={seenAttention.flatMap((item) => item.seenKeys)}
+      onDismiss={actions?.setNotesDismissed}
+    />
+  );
   const metrics = useMemo(
     () => buildPeriodMetrics(state, derived, asOf, shownPeriod),
     [asOf, derived, shownPeriod, state],
@@ -375,7 +385,7 @@ export default function Home({
             <p className="muted home-empty-day">{t("No classes today. A good moment to catch up.")}</p>
           )}
         </section>
-        {attention.length ? (
+        {attentionAll.length ? (
           <section aria-labelledby="home-attention-title">
             <div className="sh">
               <h2 id="home-attention-title">{t("To attend to")}</h2>
@@ -385,16 +395,24 @@ export default function Home({
               {attention.map((item, index) => {
                 const text = attentionText(item, t, locale, true);
                 return (
-                  <button type="button" className="ai" key={`${item.kind}-${index}`} onClick={() => runAttention(item)}>
-                    <i className={`dot-${item.tone}`} />
-                    <span>
-                      <b>{text.lead}</b> {text.rest}
-                    </span>
-                    <ChevronRight className="chev" aria-hidden="true" />
-                  </button>
+                  <div className="ai-item" key={`${item.kind}-${index}`}>
+                    <button type="button" className="ai" onClick={() => runAttention(item)}>
+                      <i className={`dot-${item.tone}`} />
+                      <span>
+                        <b>{text.lead}</b> {text.rest}
+                      </span>
+                      <ChevronRight className="chev" aria-hidden="true" />
+                    </button>
+                    <SeenButton
+                      keys={item.seenKeys}
+                      label={t("Mark as seen: {name}", { name: text.lead })}
+                      onDismiss={actions?.setNotesDismissed}
+                    />
+                  </div>
                 );
               })}
             </div>
+            {showSeenAttention}
           </section>
         ) : null}
         <section aria-labelledby="home-month-title">
@@ -471,27 +489,37 @@ export default function Home({
         )}
       </section>
 
-      {attention.length ? (
+      {attentionAll.length ? (
         <section aria-labelledby="home-attention-title">
           <div className="sh is-tight">
             <h2 id="home-attention-title" className="overline home-attention-title">
               {t("To attend to · {count}", { count: attention.length })}
             </h2>
+            {showSeenAttention}
           </div>
-          <div className="alerts">
-            {attention.map((item, index) => {
-              const text = attentionText(item, t, locale, false);
-              return (
-                <button type="button" className="al" key={`${item.kind}-${index}`} onClick={() => runAttention(item)}>
-                  <i className={`dot-${item.tone}`} />
-                  <span>
-                    <b>{text.lead}</b> {text.rest}
-                    {text.link ? <small>{text.link}</small> : null}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          {attention.length ? (
+            <div className="alerts">
+              {attention.map((item, index) => {
+                const text = attentionText(item, t, locale, false);
+                return (
+                  <div className="al-item" key={`${item.kind}-${index}`}>
+                    <button type="button" className="al" onClick={() => runAttention(item)}>
+                      <i className={`dot-${item.tone}`} />
+                      <span>
+                        <b>{text.lead}</b> {text.rest}
+                        {text.link ? <small>{text.link}</small> : null}
+                      </span>
+                    </button>
+                    <SeenButton
+                      keys={item.seenKeys}
+                      label={t("Mark as seen: {name}", { name: text.lead })}
+                      onDismiss={actions?.setNotesDismissed}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
         </section>
       ) : null}
 
