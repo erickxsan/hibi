@@ -46,6 +46,9 @@ for (const width of [390, 1440]) {
       await expect(page.getByRole("button", { name: "Abrir Álgebra · Grupo A", exact: true })).toBeVisible();
       await page.locator('a[href="/progress"]:visible').click();
       await page.getByRole(compact ? "button" : "tab", { name: "Pagos", exact: true }).click();
+      // The choice lives in a filter chip («2 grupos archivados fuera») that opens the switch.
+      const chip = page.getByRole("button", { name: /grupos? archivados? fuera$/ });
+      await chip.click();
       const scope = page.getByRole("switch", { name: "Incluir grupos archivados", exact: true });
       await expect(scope).toHaveAttribute("aria-checked", "false");
       await expect(page.getByText("$350", { exact: true }).first()).toBeVisible();
@@ -55,6 +58,7 @@ for (const width of [390, 1440]) {
       await expect(page.getByText("$600", { exact: true }).first()).toBeVisible();
       await page.screenshot({ path: testInfo.outputPath("included-statistics.png"), fullPage: true });
       await page.reload();
+      await page.getByRole("button", { name: /grupos? archivados? fuera$/ }).click();
       await expect(page.getByRole("switch", { name: "Incluir grupos archivados", exact: true })).toHaveAttribute(
         "aria-checked",
         "false",
