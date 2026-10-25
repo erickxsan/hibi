@@ -129,21 +129,6 @@
   color: var(--ocre-ink);
 }
 
-.community-page .sr-dot {
-  width: 8px;
-  height: 8px;
-  flex: none;
-  border-radius: 50%;
-}
-
-.community-page .dot-bad {
-  background: var(--bermellon);
-}
-
-.community-page .dot-pend {
-  background: var(--ocre);
-}
-
 .community-page .sr-value {
   font: 800 15px/20px var(--font-sans);
 }

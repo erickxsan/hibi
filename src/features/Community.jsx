@@ -129,8 +129,8 @@ function initialCommunityView(explicitView) {
 
 const DISCARD = "Discard your unsaved community changes?";
 
-/** A student in the desktop lists: avatar, name, context and a status dot. */
-function StudentRow({ student, context, selected, onSelect, extra = null, dot = "" }) {
+/** A student in the desktop lists: avatar, name and context. */
+function StudentRow({ student, context, selected, onSelect, extra = null }) {
   const { t } = useI18n();
   return (
     <div className={`sr ${selected ? "sel" : ""}`}>
@@ -146,7 +146,6 @@ function StudentRow({ student, context, selected, onSelect, extra = null, dot = 
           <strong>{student.fullName}</strong>
           <small className={context.tone ? `text-${context.tone}` : undefined}>{context.text}</small>
         </span>
-        {dot ? <span className={`sr-dot dot-${dot}`} aria-hidden="true" /> : null}
         {context.value ? <b className="sr-value text-bad">{context.value}</b> : null}
       </button>
       {extra}
@@ -744,7 +743,6 @@ export default function Community({
               </button>
             </div>
             {members.map((student) => {
-              const month = months.get(student.id);
               const others = studentGroupIdsOf(student)
                 .filter((id) => id !== group.id)
                 .map((id) => groupsById.get(id)?.name)
@@ -759,7 +757,6 @@ export default function Community({
                   key={`${group.id}-${student.id}`}
                   student={student}
                   context={{ text: [student.code, extra].filter(Boolean).join(" · "), tone: "" }}
-                  dot={month.flag.tone}
                   selected={selected.type === "student" && selected.id === student.id}
                   onSelect={(id) => select("student", id)}
                 />
@@ -778,7 +775,6 @@ export default function Community({
               key={student.id}
               student={student}
               context={{ text: student.code, tone: "" }}
-              dot={months.get(student.id).flag.tone}
               selected={selected.type === "student" && selected.id === student.id}
               onSelect={(id) => select("student", id)}
             />
@@ -801,7 +797,6 @@ export default function Community({
                   .join(" · "),
                 tone: "",
               }}
-              dot={months.get(student.id).flag.tone}
               selected={selected.type === "student" && selected.id === student.id}
               onSelect={(id) => select("student", id)}
             />
