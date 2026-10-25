@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useI18n } from "../i18n/index.jsx";
-import { Button, EmptyState, SearchInput } from "../components/ui";
+import { Button, EmptyState, SearchInput, Select } from "../components/ui";
 import { useCompactViewport } from "../components/OverlayContext";
 import { startOfWeek } from "../domain/dates";
 import { normalizeSearchText } from "../utils/searchText";
@@ -139,37 +139,22 @@ export function ClassHistory({
   return (
     <div className="class-history" role="tabpanel" data-onboarding-tour="classes">
       <div className="history-toolbar">
-        <div className="chip-row" role="group" aria-label={t("Filter by group")}>
-          <button
-            type="button"
-            className={`chip ${owner === "" ? "is-active" : ""}`}
-            aria-pressed={owner === ""}
-            onClick={() => setOwner("")}
-          >
-            {t("All")}
-          </button>
+        <Select
+          className="history-owner-select"
+          aria-label={t("Filter by group")}
+          value={owner}
+          onChange={(event) => setOwner(event.target.value)}
+        >
+          <option value="">{t("All groups")}</option>
           {owners.map((item) => (
-            <button
-              type="button"
-              key={item.id}
-              className={`chip ${owner === item.id ? "is-active" : ""}`}
-              aria-pressed={owner === item.id}
-              onClick={() => setOwner(item.id)}
-            >
+            <option value={item.id} key={item.id}>
               {item.name}
-            </button>
+            </option>
           ))}
           {history.some((session) => !session.groupId) ? (
-            <button
-              type="button"
-              className={`chip ${owner === "individual" ? "is-active" : ""}`}
-              aria-pressed={owner === "individual"}
-              onClick={() => setOwner("individual")}
-            >
-              {t("Individual classes")}
-            </button>
+            <option value="individual">{t("Individual classes")}</option>
           ) : null}
-        </div>
+        </Select>
         <SearchInput
           value={search}
           onChange={(event) => setSearch(event.target.value)}

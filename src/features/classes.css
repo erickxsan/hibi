@@ -641,7 +641,8 @@
   padding: 24px 0 20px;
 }
 
-.history-toolbar .search-control {
+.history-toolbar .search-control,
+.history-toolbar .history-owner-select {
   width: 280px;
   max-width: 100%;
 }
@@ -1459,17 +1460,9 @@
     padding: 12px 0;
   }
 
-  .history-toolbar .search-control {
+  .history-toolbar .search-control,
+  .history-toolbar .history-owner-select {
     width: 100%;
-  }
-
-  .history-toolbar .chip-row {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
-    margin: 0 -16px;
-    padding: 0 16px;
-    width: calc(100% + 32px);
   }
 
   .history-row-button {
