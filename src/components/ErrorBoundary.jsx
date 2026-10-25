@@ -27,12 +27,12 @@ export class ErrorBoundary extends Component {
   // Deliberately do not log exception messages/stacks: they may contain student data.
   componentDidCatch() {
     console.error("hibi_render_failure");
+    this.props.onError?.();
   }
   render() {
-    return this.state.failed ? (
-      <Recovery canReload={this.props.canReload !== false} onRetry={() => this.setState({ failed: false })} />
-    ) : (
-      this.props.children
-    );
+    if (!this.state.failed) return this.props.children;
+    // A caller that handles the failure itself (`onError`) can replace the recovery screen.
+    if (this.props.fallback !== undefined) return this.props.fallback;
+    return <Recovery canReload={this.props.canReload !== false} onRetry={() => this.setState({ failed: false })} />;
   }
 }

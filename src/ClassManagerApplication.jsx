@@ -22,7 +22,6 @@ import {
   shouldAutoStartOnboarding,
 } from "./onboarding/onboardingModel";
 import "./i18n/screenTranslations.js";
-const OnboardingTutorial = lazy(() => import("./onboarding/OnboardingTutorial"));
 const NAV_ITEMS = [
   { id: "home", label: "Home", href: "/", icon: HomeIcon },
   { id: "community", label: "Community", href: "/community", icon: UsersRound },
@@ -41,13 +40,17 @@ const loadCommunity = () => import("./features/Community");
 const loadClasses = () => import("./features/Classes");
 const loadTracking = () => import("./features/Tracking");
 const loadSettings = () => import("./features/Settings");
+const loadOnboarding = () => import("./onboarding/OnboardingTutorial");
 // Warmed while the browser is idle so the first visit to a section does not stop on «Cargando…».
-const SECTION_LOADERS = [loadHome, loadCommunity, loadClasses, loadTracking, loadSettings];
+// The tutorial is warmed too: a phone tab can stay open across a deploy, and by then its old chunk
+// no longer exists, so «Iniciar recorrido» could not load it.
+const SECTION_LOADERS = [loadHome, loadCommunity, loadClasses, loadTracking, loadSettings, loadOnboarding];
 const HomeScreen = lazy(loadHome);
 const Community = lazy(loadCommunity);
 const Classes = lazy(loadClasses);
 const Tracking = lazy(loadTracking);
 const Settings = lazy(loadSettings);
+const OnboardingTutorial = lazy(loadOnboarding);
 
 /** Inicio, led by the one-time recovery-key reminder when the encrypted workspace has no recovery key. */
 function Home(props) {
@@ -234,6 +237,27 @@ export default function ClassManagerApplication({
       }),
     [navigate, runNavigation],
   );
+  const canReload =
+    manager.syncStatus !== "saving" && manager.syncStatus !== "pending" && manager.syncStatus !== "conflict";
+  // The browser remembers a failed import() until the page reloads, so trying again cannot help: close the
+  // tutorial and offer the reload instead of replacing the whole app with the recovery screen.
+  const { notify } = manager.actions;
+  const handleOnboardingLoadFailure = useCallback(() => {
+    setOnboarding((current) => ({ ...current, open: false }));
+    if (!canReload) {
+      notify("The tutorial could not be opened. Reload Hibi once your changes are saved.", "error");
+      return;
+    }
+    confirmLeave({
+      title: uiT("The tutorial could not be opened"),
+      description: uiT("Reload Hibi to try again."),
+      confirmLabel: uiT("Reload application"),
+      cancelLabel: uiT("Not now"),
+      tone: "primary",
+    }).then((accepted) => {
+      if (accepted) window.location.reload();
+    });
+  }, [canReload, confirmLeave, notify, uiT]);
 
   useEffect(() => {
     if (page !== "payments") return;
@@ -353,31 +377,27 @@ export default function ClassManagerApplication({
         }
       >
         <PendingOperations persistence={persistence} />
-        <ErrorBoundary
-          key={page}
-          resetKey={page}
-          canReload={
-            manager.syncStatus !== "saving" && manager.syncStatus !== "pending" && manager.syncStatus !== "conflict"
-          }
-        >
+        <ErrorBoundary key={page} resetKey={page} canReload={canReload}>
           <Suspense fallback={<PageFallback />}>{pageContent}</Suspense>
         </ErrorBoundary>
       </AppShell>
       {onboarding.open ? (
-        <Suspense fallback={<PageFallback />}>
-          <OnboardingTutorial
-            key={onboarding.runId}
-            open={onboarding.open}
-            state={manager.state}
-            actions={manager.actions}
-            initialStep={onboarding.step}
-            mode={onboarding.mode === "tour" ? "tour" : "full"}
-            onStepChange={(step) => setOnboarding((current) => ({ ...current, step }))}
-            onNavigate={navigateOnboarding}
-            onDismiss={() => closeOnboarding()}
-            onComplete={closeOnboarding}
-          />
-        </Suspense>
+        <ErrorBoundary key={onboarding.runId} fallback={null} onError={handleOnboardingLoadFailure}>
+          <Suspense fallback={<PageFallback />}>
+            <OnboardingTutorial
+              key={onboarding.runId}
+              open={onboarding.open}
+              state={manager.state}
+              actions={manager.actions}
+              initialStep={onboarding.step}
+              mode={onboarding.mode === "tour" ? "tour" : "full"}
+              onStepChange={(step) => setOnboarding((current) => ({ ...current, step }))}
+              onNavigate={navigateOnboarding}
+              onDismiss={() => closeOnboarding()}
+              onComplete={closeOnboarding}
+            />
+          </Suspense>
+        </ErrorBoundary>
       ) : null}
       {leavePrompt}
       <ToastRegion toasts={manager.toasts} onDismiss={manager.dismissToast} />
