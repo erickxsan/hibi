@@ -109,7 +109,7 @@ export function ClassCalendar({
           {t("Today")}
         </button>
         <div className="calendar-legend" aria-hidden="true">
-          {["done", "pending", "next", "scheduled"].map((tone) => (
+          {["done", "pending", "live", "next", "scheduled"].map((tone) => (
             <span key={tone}>
               <i className={`tone-${tone}`} />
               {t(TONE_LABEL[tone].label)}
