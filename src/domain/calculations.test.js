@@ -29,7 +29,8 @@ describe("minimal class-manager calculations", () => {
     expect(dashboard.missingAssignments).toBe(1);
     expect(dashboard.collectedThisWeek).toBe(770);
     expect(dashboard.collectedSelectedMonth).toBe(920);
-    expect(dashboard.outstandingThroughToday).toBe(150);
+    // Ava's absence on Jul 2 is not charged: only Lucas's partial payment is still owed.
+    expect(dashboard.outstandingThroughToday).toBe(50);
     expect(dashboard.paidForFutureClasses).toBe(200);
     expect(dashboard.idealRevenue).toBe(2400);
     expect(dashboard.recentCollections).toBe(920);
@@ -70,7 +71,7 @@ describe("minimal class-manager calculations", () => {
     expect(geometry.activeStudents).toBe(1);
     expect(geometry.idealRevenue).toBe(800);
     expect(geometry.collectedSelectedMonth).toBe(150);
-    expect(geometry.outstanding).toBe(100);
+    expect(geometry.outstanding).toBe(0);
   });
 
   it("excludes a blank score while preserving an explicit zero", () => {
@@ -202,7 +203,7 @@ describe("minimal class-manager calculations", () => {
     });
     state.groups = [group];
     state.students = [groupRateStudent, customRateStudent];
-    const base = { classDate: AS_OF, groupId: group.id, classStatus: "Completed", hours: 2 };
+    const base = { classDate: AS_OF, groupId: group.id, classStatus: "Completed", attendance: "P", hours: 2 };
     expect(calculateCharge(state, { ...base, studentId: groupRateStudent.id })).toBe(160);
     expect(calculateCharge(state, { ...base, studentId: customRateStudent.id })).toBe(240);
     expect(
@@ -378,7 +379,8 @@ describe("minimal class-manager calculations", () => {
       attendance: 0,
       missingAssignments: 1,
       collectedSelectedMonth: 0,
-      outstanding: 100,
+      // The only Science class was an absence: nothing is owed for it.
+      outstanding: 0,
     });
     expect(dashboard.groupSummaries.find((group) => group.id === math.id).attendance).toBe(1);
     expect(deriveClassLogRow(state, state.classLog[2], "2026-07-25")).toMatchObject({

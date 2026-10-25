@@ -1,4 +1,5 @@
 import { useI18n } from "../i18n/index.jsx";
+import { isBillableAttendance } from "../domain/attendanceBilling.js";
 import { BottomSheet, Button, ListRow } from "../components/ui";
 import { StudentAvatar } from "../components/StudentAvatar";
 import { formatLongDate, formatMoney, formatScore, formatTime } from "../utils/displayFormat";
@@ -99,7 +100,7 @@ export function attendanceWord(row) {
 }
 
 export function paymentWord(row, derivedRow, locale, t) {
-  if (!row || Number(row.appliedCharge) === 0 || row.attendance === "A") return { text: "—", tone: "" };
+  if (!row || Number(row.appliedCharge) === 0 || !isBillableAttendance(row)) return { text: "—", tone: "" };
   const outstanding = Number(derivedRow?.outstanding || 0);
   if (outstanding > 0) {
     // ✓ – ×: «–» is pending, «×» (not paid) reads as overdue.

@@ -72,6 +72,13 @@ export const HOME_TRANSLATIONS = Object.freeze({
   "is still not recorded.": "sigue sin registrar.",
   "is still not recorded (and {count} more in the last 30 days).":
     "sigue sin registrar (y {count} más en los últimos 30 días).",
+  "{names} is still unmarked: not charged until you take attendance.":
+    "{names} sigue sin marcar: no se le cobra hasta que pases lista.",
+  "{names} are still unmarked: not charged until you take attendance.":
+    "{names} siguen sin marcar: no se les cobra hasta que pases lista.",
+  "{count} student unmarked": "{count} alumno sin marcar",
+  "{count} students unmarked": "{count} alumnos sin marcar",
+  "Take attendance": "Pasar lista",
   "is below {value}% attendance this month.": "está bajo el {value}% de asistencia este mes.",
   "are below {value}% attendance this month.": "están bajo el {value}% de asistencia este mes.",
   "below {value}% attendance": "bajo {value}% de asistencia",

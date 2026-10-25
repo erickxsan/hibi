@@ -1,4 +1,5 @@
 import { roundMoney } from "./money.js";
+import { isBillableAttendance } from "./attendanceBilling.js";
 import {
   ATTENDANCE_CODES,
   CLASS_STATUSES,
@@ -546,7 +547,8 @@ export function normalizeState(input) {
     }
     if (row.appliedCharge === null && Number.isFinite(row.appliedHourlyRate)) {
       const hours = row.hours === null ? normalized.settings.defaultClassHours : row.hours;
-      row.appliedCharge = row.classStatus === "Cancelled" ? 0 : roundMoney(hours * row.appliedHourlyRate);
+      row.appliedCharge =
+        row.classStatus === "Cancelled" || !isBillableAttendance(row) ? 0 : roundMoney(hours * row.appliedHourlyRate);
     }
   });
   return normalized;

@@ -11,6 +11,7 @@ import {
   monthLong,
   weekdayShort,
 } from "../utils/displayFormat";
+import { attendanceBilling, isBillableAttendance } from "../domain/attendanceBilling.js";
 import { isGroupArchived } from "../domain/groupArchiving";
 import { studentGroupIdsOf } from "./groupLabels";
 
@@ -60,11 +61,12 @@ function attendanceWord(row, t) {
   if (row.classStatus === "Cancelled") return { tone: "st-prog", text: t("Cancelled") };
   if (row.attendance === "A") return { tone: "st-venc", text: t("Absent") };
   if (row.attendance === "E") return { tone: "st-prog", text: t("Excused") };
+  if (attendanceBilling(row) === "unmarked") return { tone: "st-prog", text: t("Unmarked") };
   return { tone: "st-ok", text: t("Present") };
 }
 
 function paymentWord(row, t) {
-  if (row.attendance === "A" || row.classStatus === "Cancelled") return null;
+  if (row.classStatus === "Cancelled" || !isBillableAttendance(row)) return null;
   if (Number(row.outstanding) > 0) return { tone: "st-pend", text: t("Pending") };
   if (Number(row.amountPaid) > 0) return { tone: "st-ok", text: t("Paid") };
   if (Number(row.charge) === 0) return { tone: "st-prog", text: t("Monthly fee") };

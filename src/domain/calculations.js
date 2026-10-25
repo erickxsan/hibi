@@ -1,4 +1,5 @@
 import { roundMoney, sumMoney, moneyDifference } from "./money.js";
+import { attendanceBilling } from "./attendanceBilling.js";
 import { DEFAULT_SETTINGS, PAYMENT_STATUSES } from "./constants.js";
 import {
   addDays,
@@ -140,6 +141,8 @@ function rateForContext(context, student, group) {
 function chargeForContext(context, row, student, group) {
   if (!row?.classDate || !row?.studentId || !row?.classStatus) return null;
   if (row.classStatus === "Cancelled") return 0;
+  // Absent and unmarked students are not charged, whatever price the record kept.
+  if (attendanceBilling(row) !== "billable") return 0;
   if (finiteNumber(row.appliedCharge)) return roundMoney(row.appliedCharge);
   const hours = finiteNumber(row.hours) ? row.hours : context.config.defaultClassHours;
   const rate = finiteNumber(row.appliedHourlyRate) ? row.appliedHourlyRate : rateForContext(context, student, group);
@@ -162,6 +165,7 @@ function paymentStatusForContext(context, row, student, group) {
   const paid = validPaymentAmount(row);
   const hasPaymentDate = isDateOnly(row.paymentDate);
   if (row.classStatus === "Cancelled") return paid > 0 ? PAYMENT_STATUSES.REVIEW_CANCELLED : PAYMENT_STATUSES.CANCELLED;
+  if (attendanceBilling(row) === "unmarked") return PAYMENT_STATUSES.ATTENDANCE_NEEDED;
   if (charge === 0) return paid > 0 ? PAYMENT_STATUSES.REVIEW_NO_CHARGE : PAYMENT_STATUSES.NO_CHARGE;
   if (paid > 0 && !hasPaymentDate) return PAYMENT_STATUSES.DATE_NEEDED;
   if (hasPaymentDate && paid === 0) return PAYMENT_STATUSES.AMOUNT_NEEDED;
@@ -209,6 +213,8 @@ export function calculateCharge(state, row) {
   const config = settings(state);
   if (!row?.classDate || !row?.studentId || !row?.classStatus) return null;
   if (row.classStatus === "Cancelled") return 0;
+  // Absent and unmarked students are not charged, whatever price the record kept.
+  if (attendanceBilling(row) !== "billable") return 0;
   if (finiteNumber(row.appliedCharge)) return roundMoney(row.appliedCharge);
 
   // Blank hours use the default; an explicit 0 waives the charge.
@@ -235,6 +241,7 @@ export function calculatePaymentStatus(state, row, asOfDate) {
   if (row.classStatus === "Cancelled") {
     return paid > 0 ? PAYMENT_STATUSES.REVIEW_CANCELLED : PAYMENT_STATUSES.CANCELLED;
   }
+  if (attendanceBilling(row) === "unmarked") return PAYMENT_STATUSES.ATTENDANCE_NEEDED;
   if (charge === 0) {
     return paid > 0 ? PAYMENT_STATUSES.REVIEW_NO_CHARGE : PAYMENT_STATUSES.NO_CHARGE;
   }

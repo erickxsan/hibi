@@ -130,6 +130,7 @@ describe("audit integrity regressions", () => {
       createClassLogRow({
         classDate: "2026-10-01",
         studentId: "s1",
+        attendance: "P",
         hours: 3,
         amountPaid: charge,
         paymentDate: "2026-10-01",

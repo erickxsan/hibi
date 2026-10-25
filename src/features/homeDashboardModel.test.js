@@ -267,6 +267,23 @@ describe("home agenda", () => {
     expect(again.find((item) => item.kind === "lowGrade").dismissed).toBe(true);
   });
 
+  it("asks to take attendance for students saved unmarked instead of counting them as debt", () => {
+    const state = fixture();
+    // Maya was saved without attendance on 12 Oct, with the old «pending» payment.
+    state.classLog = state.classLog.map((item) => (item.id === "r1" ? { ...item, attendance: "" } : item));
+    const { derived } = setup(state);
+    const items = buildAttentionItems(state, derived, AS_OF);
+    const unmarked = items.find((item) => item.kind === "unmarked");
+    expect(unmarked).toMatchObject({
+      names: ["Maya Torres"],
+      count: 1,
+      action: { type: "record" },
+      seenKeys: ["attention:unmarked:2026-10-12|g:g1|16:00:s1"],
+    });
+    expect(unmarked.session.classDate).toBe("2026-10-12");
+    expect(items.find((item) => item.kind === "overdue")).toMatchObject({ amount: 1000, names: ["Ava Kim"] });
+  });
+
   it("needs at least two classes before flagging low attendance", () => {
     const state = fixture();
     state.classLog = state.classLog.filter((item) => item.id !== "r2");

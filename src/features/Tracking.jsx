@@ -18,6 +18,7 @@ import { StudentAvatar } from "../components/StudentAvatar";
 import { ArchivedGroupsScope } from "../components/ArchivedGroupsScope";
 import { useCompactViewport } from "../components/OverlayContext";
 import { useHistoryBackedState } from "../hooks/useHistoryNavigation";
+import { attendanceBilling } from "../domain/attendanceBilling.js";
 import { todayDateOnly } from "../domain/dates";
 import {
   axisTickLabels,
@@ -99,6 +100,7 @@ function attendanceWord(row, t) {
   if (row.classStatus === "Cancelled") return { tone: "st-prog", text: t("Cancelled") };
   if (row.attendance === "A") return { tone: "st-venc", text: t("Absent") };
   if (row.attendance === "E") return { tone: "st-prog", text: t("Excused") };
+  if (attendanceBilling(row) === "unmarked") return { tone: "st-prog", text: t("Unmarked") };
   return { tone: "st-ok", text: t("Present") };
 }
 

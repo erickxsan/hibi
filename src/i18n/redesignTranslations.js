@@ -131,7 +131,8 @@ export const REDESIGN_TRANSLATIONS = Object.freeze({
   "Keep class": "Mantener la clase",
   "Class didn't happen?": "¿No hubo clase?",
   "{count} student is still unmarked. Save anyway?": "Falta {count} alumno por marcar. ¿Guardar así?",
-  "You can mark them later.": "Puedes marcarlos después.",
+  "They are not charged until you mark them. You can do it later.":
+    "No se les cobra hasta que los marques. Puedes hacerlo después.",
   "Save anyway": "Guardar así",
   "Keep marking": "Seguir marcando",
   "The changes you haven't saved will be lost.": "Se perderán los cambios que no guardaste.",

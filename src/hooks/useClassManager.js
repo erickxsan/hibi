@@ -37,6 +37,7 @@ import {
   removeOnboardingStudents,
 } from "../onboarding/onboardingModel";
 import { canonicalStringify } from "../crypto/canonical.js";
+import { isBillableAttendance } from "../domain/attendanceBilling.js";
 import { setGroupArchived, startGroupSchedule } from "../domain/groupArchiving.js";
 import { normalizeRepeatRule } from "../domain/classRecurrence.js";
 import { updateDismissedNotes } from "../domain/noteDismissals.js";
@@ -177,7 +178,7 @@ function canonicalClassLog(draft, state) {
   const effectiveHours = hours === null ? state.settings.defaultClassHours : hours;
   const appliedCharge = Number.isFinite(draft.appliedCharge)
     ? roundMoney(draft.appliedCharge)
-    : draft.classStatus === "Cancelled"
+    : draft.classStatus === "Cancelled" || !isBillableAttendance(draft)
       ? 0
       : roundMoney(effectiveHours * appliedHourlyRate);
   return {

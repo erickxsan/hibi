@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Check, ChevronRight } from "lucide-react";
 import { useI18n } from "../i18n/index.jsx";
+import { attendanceBilling } from "../domain/attendanceBilling.js";
 import { BottomSheet, Button, IconButton, ListRow } from "../components/ui";
 import { StudentAvatar } from "../components/StudentAvatar";
 import {
@@ -197,7 +198,9 @@ export function TodayTimeline({ timeline, selectedKey, onSelect }) {
 }
 
 function recordedChip(row, t) {
-  if (row?.attendance === "A") return { tone: "st-venc", text: t("Absent") };
+  const billing = attendanceBilling(row);
+  if (billing === "absent") return { tone: "st-venc", text: t("Absent") };
+  if (billing === "unmarked") return { tone: "st-prog", text: t("Unmarked") };
   if (row?.paymentState === "Pending" || row?.paymentState === "Unpaid")
     return { tone: "st-pend", text: t("Did not pay today") };
   return { tone: "st-ok", text: t("Present") };

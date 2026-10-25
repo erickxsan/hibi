@@ -1,4 +1,5 @@
 import { sumMoney } from "../domain/money.js";
+import { isBillableAttendance } from "../domain/attendanceBilling.js";
 import { addDays, addMonths, endOfMonth, startOfMonth, startOfWeek } from "../domain/dates";
 import { deriveMonthlyCharges, isMonthlyGroup, normalizeGroupBilling, periodOf } from "../domain/monthlyBilling";
 import { buildClassWorkspaceSessionsForRange } from "./classesWorkspaceModel";
@@ -391,7 +392,7 @@ export function trackingRecords(state, derived, range, scope = "all", studentId 
         grade: value,
         ungraded: Boolean(grade) && value === null,
         payment:
-          row.classStatus === "Cancelled" || row.attendance === "A"
+          row.classStatus === "Cancelled" || !isBillableAttendance(row)
             ? "none"
             : Number(row.outstanding) > 0
               ? "pending"

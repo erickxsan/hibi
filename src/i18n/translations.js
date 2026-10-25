@@ -746,6 +746,7 @@ const EXPLICIT_TRANSLATIONS = Object.freeze({
   "Unknown student": "Alumno desconocido",
   "Review cancelled payment": "Revisar pago de clase cancelada",
   "Review no-charge payment": "Revisar pago sin cargo",
+  "Attendance needed": "Falta marcar asistencia",
   "No charge": "Sin cargo",
   "Date needed": "Falta fecha",
   "Amount needed": "Falta monto",

@@ -32,6 +32,7 @@ export const PAYMENT_STATUSES = Object.freeze({
   UNKNOWN_STUDENT: "Unknown student",
   REVIEW_CANCELLED: "Review cancelled payment",
   CANCELLED: "Cancelled",
+  ATTENDANCE_NEEDED: "Attendance needed",
   REVIEW_NO_CHARGE: "Review no-charge payment",
   NO_CHARGE: "No charge",
   DATE_NEEDED: "Date needed",

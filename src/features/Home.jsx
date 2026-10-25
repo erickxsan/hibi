@@ -93,6 +93,27 @@ function attentionText(item, t, locale, compact) {
         link: t("Record"),
       };
     }
+    case "unmarked": {
+      const session = item.session;
+      const date = formatShortDate(session.classDate, locale);
+      const lead =
+        session.format === "individual"
+          ? t("Individual class of {name} on {date}", { name: session.title.split(" ")[0], date })
+          : t("{title} on {date}", { title: session.title, date });
+      const count = item.names.length;
+      return {
+        lead,
+        rest: compact
+          ? t(count === 1 ? "{count} student unmarked" : "{count} students unmarked", { count })
+          : t(
+              count === 1
+                ? "{names} is still unmarked: not charged until you take attendance."
+                : "{names} are still unmarked: not charged until you take attendance.",
+              { names: names(item.names) },
+            ),
+        link: t("Take attendance"),
+      };
+    }
     case "lowAttendance":
       return compact
         ? {

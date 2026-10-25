@@ -111,16 +111,23 @@ export function rebaseClassDraft(local = EMPTY_CLASS_DRAFT, baseline = EMPTY_CLA
   };
 }
 
-/** Charge of one student's class before payments: hours × the resolved rate (or a historical charge). */
+/**
+ * Charge of one student's class before payments: hours × the rate (or a historical charge). A saved
+ * record keeps the rate of its day, so marking an absent student present later charges that price.
+ */
 export function classChargeFor(state, session, studentId, existing = null) {
   if (Number(existing?.appliedCharge) > 0) return roundMoney(Number(existing.appliedCharge));
   const hours = existing?.hours ?? session?.durationHours ?? state.settings?.defaultClassHours ?? 2;
-  return roundMoney(Number(hours) * (resolveHourlyRate(state, studentId, session?.groupId || "") || 0));
+  const rate = Number.isFinite(existing?.appliedHourlyRate)
+    ? existing.appliedHourlyRate
+    : resolveHourlyRate(state, studentId, session?.groupId || "");
+  return roundMoney(Number(hours) * (rate || 0));
 }
 
 /**
- * Class records ready for saveProgress. Absent students and students covered by a monthly fee carry a $0
- * charge; present (or unmarked) students keep the per-class charge and the payment chosen, if any.
+ * Class records ready for saveProgress. Only present students carry the per-class charge and the payment
+ * chosen. Absent students and students covered by a monthly fee carry a $0 charge; unmarked students too,
+ * since they owe nothing until attendance is taken, but a payment already recorded for them is kept.
  */
 export function buildClassRecords(state, session, roster, entries, { classStatus = "Completed", today }) {
   return roster.map((student) => {
@@ -132,8 +139,9 @@ export function buildClassRecords(state, session, roster, entries, { classStatus
     const attendance = classStatus === "Completed" ? entry.attendance || "" : "";
     const monthly = coveredByMonthlyFee(state, student.id, session.groupId || "", session.classDate);
     const free = classStatus === "Cancelled" || attendance === "A" || monthly;
-    const charge = free ? 0 : classChargeFor(state, session, student.id, existing);
-    const payment = free ? "" : entry.paymentTouched ? entry.paymentState : existing?.paymentState || "";
+    const unmarked = classStatus === "Completed" && !attendance;
+    const charge = free || unmarked ? 0 : classChargeFor(state, session, student.id, existing);
+    const payment = free || unmarked ? "" : entry.paymentTouched ? entry.paymentState : existing?.paymentState || "";
     const amountPaid =
       payment === "Paid"
         ? charge
@@ -173,7 +181,7 @@ export function buildClassRecords(state, session, roster, entries, { classStatus
             : free
               ? ""
               : existing?.paymentMethod || "",
-      paymentState: payment || (free ? "" : "Pending"),
+      paymentState: payment || (free || unmarked ? "" : "Pending"),
     };
   });
 }

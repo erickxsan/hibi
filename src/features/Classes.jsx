@@ -615,7 +615,7 @@ export default function Classes({
             : "{count} students are still unmarked. Save anyway?",
           { count: unmarked },
         ),
-        description: t("You can mark them later."),
+        description: t("They are not charged until you mark them. You can do it later."),
         confirmLabel: t("Save anyway"),
         cancelLabel: t("Keep marking"),
         tone: "primary",

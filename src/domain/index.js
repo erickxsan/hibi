@@ -15,6 +15,8 @@ export {
   WORK_STATUSES,
 } from "./constants.js";
 
+export { attendanceBilling, isBillableAttendance } from "./attendanceBilling.js";
+
 export {
   addDays,
   addMonths,

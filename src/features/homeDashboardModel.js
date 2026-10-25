@@ -1,4 +1,5 @@
 import { roundMoney, sumMoney } from "../domain/money.js";
+import { attendanceBilling } from "../domain/attendanceBilling.js";
 import { addDays, addMonths, endOfMonth, startOfMonth, startOfWeek } from "../domain/dates";
 import { generateScheduledOccurrences, resolveHourlyRate } from "../domain/schedule";
 import { coveredByMonthlyFee, deriveMonthlyCharges, monthlyPaymentsBetween, periodOf } from "../domain/monthlyBilling";
@@ -630,7 +631,7 @@ export function buildTodayTimeline(state, derived, asOf, nowTime) {
 }
 
 /**
- * «Para atender»: unrecorded classes, low attendance this month, a recent low grade, overdue
+ * «Para atender»: unrecorded classes, saved classes with unmarked students, low attendance this month, a recent low grade, overdue
  * balances and monthly fees due today or overdue. Each item says where it leads.
  */
 /** Seen key of one student's debt: its newest class and monthly debt, so paying keeps it hidden and a new debt does not. */
@@ -672,6 +673,29 @@ function attentionItems(state, derived, asOf) {
       count: pending.length,
       action: { type: "record", session: latest },
       seenKeys: pending.map((session) => `attention:unrecorded:${session.key}`),
+    });
+  }
+  // A saved class with students left unmarked: they are not charged until attendance is taken.
+  const unmarked = buildClassWorkspaceSessionsForRange(state, addDays(asOf, -30), asOf, asOf)
+    .map((session) => ({
+      session,
+      studentIds: (session.rows || [])
+        .filter((row) => attendanceBilling(row) === "unmarked" && studentsById.has(row.studentId))
+        .map((row) => row.studentId),
+    }))
+    .filter((entry) => entry.studentIds.length);
+  if (unmarked.length) {
+    const latest = unmarked.at(-1);
+    items.push({
+      kind: "unmarked",
+      tone: "pend",
+      session: latest.session,
+      names: latest.studentIds.map(nameOf).filter(Boolean),
+      count: unmarked.length,
+      action: { type: "record", session: latest.session },
+      seenKeys: unmarked.map(
+        (entry) => `attention:unmarked:${entry.session.key}:${[...entry.studentIds].sort().join(",")}`,
+      ),
     });
   }
   const threshold = finite(state.settings?.lowAttendanceThreshold) ? state.settings.lowAttendanceThreshold : 0.8;
