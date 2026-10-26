@@ -147,7 +147,8 @@ describe("Tracking on desktop", () => {
   it("scopes the figures to one group", async () => {
     const user = userEvent.setup();
     setup();
-    await user.click(screen.getByRole("button", { name: "Prepa" }));
+    await user.click(screen.getByRole("combobox", { name: "Filter by group" }));
+    await user.click(screen.getByRole("option", { name: "Prepa" }));
     const list = screen.getByRole("complementary", { name: "Students · lowest attendance first" });
     expect(within(list).getAllByRole("button")).toHaveLength(1);
     expect(within(list).getByText("Sofía Martín")).toBeInTheDocument();

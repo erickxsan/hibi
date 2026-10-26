@@ -403,7 +403,7 @@ export default function Tracking({
   const selectedRow = students.find((row) => row.student.id === studentId) || null;
 
   const groupChips = [
-    { value: "all", label: t("All") },
+    { value: "all", label: t("All groups") },
     ...(state.groups || [])
       .filter((group) => group.status !== "Inactive")
       .map((group) => ({ value: group.id, label: group.name })),
@@ -1236,23 +1236,22 @@ export default function Tracking({
         <Segmented value={mode} onChange={setMode} label={t("Show")} items={MODE_ITEMS} />
       </div>
       <div className="tracking-scope">
-        <div className="chip-row" role="group" aria-label={t("Scope")}>
+        <Select
+          className="tracking-group-select"
+          aria-label={t("Filter by group")}
+          value={scope}
+          onChange={(event) => {
+            setScope(event.target.value);
+            reset();
+            setStudentId("");
+          }}
+        >
           {groupChips.map((item) => (
-            <button
-              type="button"
-              key={item.value}
-              className={`chip ${scope === item.value ? "is-active" : ""}`}
-              aria-pressed={scope === item.value}
-              onClick={() => {
-                setScope(item.value);
-                reset();
-                setStudentId("");
-              }}
-            >
+            <option key={item.value} value={item.value}>
               {item.label}
-            </button>
+            </option>
           ))}
-        </div>
+        </Select>
         {scopeNode}
       </div>
       {reportDate ? (

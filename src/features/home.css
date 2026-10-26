@@ -902,8 +902,9 @@
   flex-wrap: wrap;
 }
 
-.home-page .frow .overline {
-  margin-right: 4px;
+.home-page .frow .home-group-select {
+  width: 280px;
+  max-width: 100%;
 }
 
 .home-page .xp-kpis {

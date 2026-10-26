@@ -313,7 +313,7 @@ export default function Home({
       (student) => student.status !== "Inactive" && (student.isIndividual || !(student.groupIds || []).length),
     );
     return [
-      { value: "all", label: t("All") },
+      { value: "all", label: t("All groups") },
       ...active.map((group) => ({ value: group.id, label: group.name })),
       ...(hasIndividual ? [{ value: "individual", label: t("Individual") }] : []),
     ];

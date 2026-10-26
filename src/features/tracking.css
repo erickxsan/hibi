@@ -37,8 +37,9 @@
   flex-wrap: wrap;
 }
 
-.tracking-scope .overline {
-  margin-right: 4px;
+.tracking-scope .tracking-group-select {
+  width: 280px;
+  max-width: 100%;
 }
 
 .tracking-date-note {

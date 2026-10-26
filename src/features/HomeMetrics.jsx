@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { ChevronRight, X } from "lucide-react";
 import { useI18n } from "../i18n/index.jsx";
-import { BottomSheet, Button, IconButton, Segmented } from "../components/ui";
+import { BottomSheet, Button, IconButton, Segmented, Select } from "../components/ui";
 import { StudentAvatar } from "../components/StudentAvatar";
 import { addDays, endOfMonth } from "../domain/dates";
 import {
@@ -1239,23 +1239,21 @@ export function MetricExplorer({
         <IconButton label={t("Close detail and return to the three charts")} icon={X} onClick={onClose} />
       </div>
       <div className="frow">
-        <div className="chip-row" role="group" aria-label={t("Filter by group")}>
-          <span className="overline">{t("Group")}</span>
+        <Select
+          className="home-group-select"
+          aria-label={t("Filter by group")}
+          value={group}
+          onChange={(event) => {
+            setGroup(event.target.value);
+            setSelected(null);
+          }}
+        >
           {groups.map((item) => (
-            <button
-              type="button"
-              key={item.value}
-              className={`chip ${group === item.value ? "is-active" : ""}`}
-              aria-pressed={group === item.value}
-              onClick={() => {
-                setGroup(item.value);
-                setSelected(null);
-              }}
-            >
+            <option key={item.value} value={item.value}>
               {item.label}
-            </button>
+            </option>
           ))}
-        </div>
+        </Select>
         {open === "collections" ? (
           <Segmented
             value={view}

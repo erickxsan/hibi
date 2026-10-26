@@ -200,7 +200,8 @@ describe("Home", () => {
     expect(screen.getByText("Who owes")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Month projection/ }));
     expect(screen.getByText("Accumulated collections", { selector: ".xp-caption" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Reading" }));
+    await user.click(screen.getByRole("combobox", { name: "Filter by group" }));
+    await user.click(screen.getByRole("option", { name: "Reading" }));
     await user.click(screen.getByRole("button", { name: "Close detail and return to the three charts" }));
     expect(screen.queryByRole("tablist", { name: "Charts" })).not.toBeInTheDocument();
     await user.click(within(attention).getByRole("button", { name: /still not recorded/ }));
