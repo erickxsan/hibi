@@ -126,7 +126,8 @@ describe("Community students", () => {
       .getAllByRole("button", { name: /^Open / })
       .map((button) => button.getAttribute("aria-label"));
     expect(names.slice(0, 1)).toEqual(["Open Luna López"]);
-    expect(within(list).getByText(/Attendance 33% · missed 2 of 3/)).toBeInTheDocument();
+    // The row names the group only; the attendance warning lives in the detail.
+    expect(within(list).queryByText(/missed 2 of 3/)).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Open Luna López" }));
     const detail = screen.getByRole("region", { name: "Luna López" });
     expect(within(detail).getByText("Missed 2 of 3")).toBeInTheDocument();

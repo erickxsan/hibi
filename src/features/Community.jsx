@@ -47,7 +47,7 @@ import {
   studentRecentClasses,
 } from "./communityModel";
 import { BillingFields, GroupEditor, StudentEditor } from "./CommunityEditors";
-import { groupNamesOf, StudentDetail, StudentSheet, studentContext } from "./CommunityStudent";
+import { groupNamesOf, StudentDetail, StudentSheet } from "./CommunityStudent";
 import { ArchiveGroupDialog, ArchivedGroupView, GroupDetail, GroupSheet, JoinGroupSheet } from "./CommunityGroup";
 import "../i18n/screenTranslations.js";
 import "./community.css";
@@ -556,10 +556,14 @@ export default function Community({
     const next = nextFor(group);
     if (next) openPage?.("classes", { type: "open-class", sessionKey: next.key });
   };
-  const contextFor = (student) =>
-    student.status === "Inactive"
-      ? { text: `${student.code} · ${t("Inactive")}`, tone: "" }
-      : studentContext(months.get(student.id), groupNamesOf(student, groupsById, t, { markArchived: true }), t, locale);
+  // The list names the student's groups only; what they owe or missed lives in their detail.
+  const contextFor = (student) => ({
+    text:
+      student.status === "Inactive"
+        ? `${student.code} · ${t("Inactive")}`
+        : groupNamesOf(student, groupsById, t, { markArchived: true }) || t("Individual"),
+    tone: "",
+  });
 
   const groupCount = activeGroups.length;
   const individualCount = activeStudents.filter((student) => student.isIndividual).length;
@@ -1100,24 +1104,18 @@ export default function Community({
                   <span>{pending.length}</span>
                 </div>
                 <div className="list-rows">
-                  {pending.map((month) => {
-                    const context = contextFor(month.student);
-                    return (
-                      <ListRow
-                        key={month.student.id}
-                        avatar={
-                          <StudentAvatar avatarId={month.student.avatarId} name={month.student.fullName} decorative />
-                        }
-                        name={month.student.fullName}
-                        context={context.text}
-                        contextTone={context.tone}
-                        value={context.value || null}
-                        valueTone="bad"
-                        label={t("Open {name}", { name: month.student.fullName })}
-                        onClick={() => select("student", month.student.id)}
-                      />
-                    );
-                  })}
+                  {pending.map((month) => (
+                    <ListRow
+                      key={month.student.id}
+                      avatar={
+                        <StudentAvatar avatarId={month.student.avatarId} name={month.student.fullName} decorative />
+                      }
+                      name={month.student.fullName}
+                      context={contextFor(month.student).text}
+                      label={t("Open {name}", { name: month.student.fullName })}
+                      onClick={() => select("student", month.student.id)}
+                    />
+                  ))}
                 </div>
               </section>
             ) : null}
