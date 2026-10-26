@@ -589,6 +589,7 @@ describe("class history rows", () => {
     const user = userEvent.setup();
     const state = classState();
     state.classSchedules[0].startDate = "2026-07-08";
+    state.students[1].groupIds = ["g1"];
     state.classLog = [
       {
         id: "done",
@@ -605,6 +606,17 @@ describe("class history rows", () => {
         paymentDate: AS_OF_DATE,
         paymentState: "Paid",
       },
+      {
+        id: "done-absent",
+        classDate: AS_OF_DATE,
+        studentId: "s2",
+        groupId: "g1",
+        startTime: "10:00",
+        classStatus: "Completed",
+        attendance: "A",
+        hours: 2,
+        appliedHourlyRate: 100,
+      },
     ];
     const { container } = renderClasses(state);
     await user.click(screen.getByRole("tab", { name: "History" }));
@@ -614,8 +626,8 @@ describe("class history rows", () => {
     // «Sin registrar» once, not under the title, in an action column and again as the status.
     expect(pending.textContent.match(/Not recorded/g)).toHaveLength(1);
     expect(pending).not.toHaveTextContent("Record attendance and payment");
-    // A recorded, paid class with no assignment flags nothing: no «Sin tarea», «Todo en orden» or badge.
-    expect(done).not.toHaveTextContent(/No assignment|All in order/);
-    expect(done.querySelector(".st")).toBeNull();
+    // A recorded class flags nothing on its row: no «Sin tarea», no P/A boxes, no «Faltó …» badge.
+    expect(done).not.toHaveTextContent(/No assignment|All in order|Missed/);
+    expect(done.querySelector(".st, .pa-tags")).toBeNull();
   });
 });

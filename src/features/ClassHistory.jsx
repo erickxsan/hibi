@@ -20,7 +20,6 @@ import {
   attendanceWord,
   paymentWord,
   sessionAssessment,
-  sessionInsight,
   SessionDetailSheet,
   sessionStudentLines,
 } from "./ClassSessionDetail";
@@ -29,14 +28,11 @@ import { STATUS_LOOK } from "./classesWorkspaceModel";
 const WEEKS_PER_PAGE = 4;
 
 /**
- * The one status a row shows: «Sin registrar», «Cancelada» or what went wrong in a recorded class
- * («Emilio faltó», «1 pago pendiente»). A recorded class with nothing to fix shows none.
+ * The one status a row shows: «Sin registrar» or «Cancelada». A recorded class shows none: who missed it
+ * or still owes lives in its detail, not repeated on every row.
  */
-function rowStatus(session, insight, t) {
-  if (session.statusLabel === "Registered")
-    return insight.tone === "ok" || !insight.text
-      ? null
-      : { className: insight.tone === "pend" ? "st-pend" : "st-venc", text: insight.text };
+function rowStatus(session, t) {
+  if (session.statusLabel === "Registered") return null;
   const look = STATUS_LOOK[session.statusLabel] || STATUS_LOOK.Scheduled;
   return { className: look.className, text: t(look.label) };
 }
@@ -124,18 +120,6 @@ export function ClassHistory({
   });
   const weekEntries = [...byWeek.entries()];
 
-  const marks = (session) => (
-    <span className="pa-tags" aria-hidden="true">
-      {(session.rows || [])
-        .filter((row) => row.attendance)
-        .map((row) => (
-          <b key={row.id} className={row.attendance === "A" ? "is-a" : ""}>
-            {row.attendance === "A" ? "A" : "P"}
-          </b>
-        ))}
-    </span>
-  );
-
   return (
     <div className="class-history" role="tabpanel" data-onboarding-tour="classes">
       <div className="history-toolbar">
@@ -199,9 +183,8 @@ export function ClassHistory({
             </div>
             {items.map((session) => {
               const open = openKey === session.key;
-              const insight = sessionInsight(state, session, derivedRows, t, locale);
               const assessment = sessionAssessment(state, session);
-              const status = rowStatus(session, insight, t);
+              const status = rowStatus(session, t);
               // Only an assignment earns a subtitle: «Sin tarea» and «Sin registrar» repeated the status.
               const subtitle = assessment.name
                 ? `${assessment.name}${assessment.average !== null ? ` · ${t("average {value}", { value: formatScore(assessment.average, locale) })}` : ""}`
@@ -234,11 +217,8 @@ export function ClassHistory({
                         {session.title}
                         {session.format === "individual" ? ` · ${t("individual")}` : ""}
                       </strong>
-                      <small>
-                        {compact ? marks(session) : null} {subtitle}
-                      </small>
+                      {subtitle ? <small>{subtitle}</small> : null}
                     </span>
-                    <span className="history-marks">{marks(session)}</span>
                     <span className={`history-status ${status ? `st ${status.className}` : ""}`}>
                       {status ? status.text : <span className="sr-only">{t("Completed")}</span>}
                     </span>

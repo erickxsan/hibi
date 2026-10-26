@@ -928,28 +928,6 @@ button.kpi[aria-pressed="true"] {
   box-shadow: inset 0 0 0 1.5px var(--line-control);
 }
 
-.pa-tags {
-  display: inline-flex;
-  gap: 3px;
-}
-
-.pa-tags b {
-  display: grid;
-  place-items: center;
-  width: 17px;
-  height: 17px;
-  border-radius: 4px;
-  background: var(--sumi);
-  color: var(--papel);
-  font: 800 10px/1 var(--font-sans);
-}
-
-.pa-tags b.is-a {
-  background: var(--papel);
-  color: var(--bermellon-ink);
-  box-shadow: inset 0 0 0 1.5px var(--bermellon);
-}
-
 /* Progress bar. */
 .meter {
   height: 4px;
