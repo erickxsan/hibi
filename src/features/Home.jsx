@@ -369,7 +369,7 @@ export default function Home({
         )
       : classCount
         ? t("You finished today's classes.")
-        : t("No classes today. A good moment to catch up.");
+        : null; // The empty state below already says there are no classes today.
   // Archived groups stay out of Inicio's figures by default; the chip only appears to say they were let in
   // (from Seguimiento) and to take them out again.
   const scope = archiveScope?.count && archiveScope.included ? <ArchivedGroupsScope scope={archiveScope} /> : null;
@@ -466,16 +466,13 @@ export default function Home({
           {formatDayMonth(asOf, locale) ? `${formatLongDate(asOf, locale)} · ${formatTime(nowTime, locale)}` : ""}
         </span>
         <h1>{t(greetingKey(now))}</h1>
-        <p>{headline}</p>
+        {headline ? <p>{headline}</p> : null}
       </header>
 
       <section aria-labelledby="home-today-title" data-onboarding-tour="home">
         <div className="sh">
           <h2 id="home-today-title">{t("Today's classes")}</h2>
           <div className="sh-meta">
-            <span className="meta">
-              {t(classCount === 1 ? "{count} class" : "{count} classes", { count: classCount })}
-            </span>
             <span className="meta">
               {t(timeline.expected === 1 ? "{count} expected student" : "{count} expected students", {
                 count: timeline.expected,
