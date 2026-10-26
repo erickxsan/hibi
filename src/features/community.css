@@ -176,25 +176,6 @@
   color: var(--sumi-muted);
 }
 
-.community-page .gi-pct {
-  font: 800 14px/20px var(--font-sans);
-}
-
-.community-page .gi .bar {
-  height: 4px;
-  overflow: hidden;
-  border-radius: 2px;
-  background: var(--line);
-}
-
-.community-page .gi .bar i {
-  display: block;
-  height: 100%;
-  border-radius: 2px;
-  background: var(--sumi);
-  transition: width 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
 .community-page .gi.ar strong {
   color: var(--sumi-muted);
 }

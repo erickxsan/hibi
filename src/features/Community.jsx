@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Archive, ChevronRight, Plus, Search, UsersRound } from "lucide-react";
 import { useI18n } from "../i18n/index.jsx";
 import {
-  AttendanceRing,
   BottomSheet,
   Button,
   ConfirmDialog,
@@ -660,37 +659,21 @@ export default function Community({
 
   const groupCards = (
     <>
-      {visibleGroups.map((group) => {
-        const summary = groupSummaries.get(group.id);
-        const members = membersOf(group);
-        return (
-          <button
-            type="button"
-            key={group.id}
-            data-onboarding-group={group.id}
-            className={`gi ${selected.type === "group" && selected.id === group.id ? "on" : ""}`}
-            aria-current={selected.id === group.id ? "true" : undefined}
-            aria-label={t("Open {name}", { name: group.name })}
-            onClick={() => select("group", group.id)}
-          >
-            <span className="gi-top">
-              <strong>{group.name}</strong>
-              <span className="gi-pct">{formatPercent(summary.attendance, locale)}</span>
-            </span>
-            <small>
-              {[
-                t(members.length === 1 ? "{count} student" : "{count} students", { count: members.length }),
-                groupScheduleShort(group, locale),
-              ]
-                .filter(Boolean)
-                .join(" · ")}
-            </small>
-            <span className="bar" aria-hidden="true">
-              <i style={{ width: `${Math.round((summary.attendance ?? 0) * 100)}%` }} />
-            </span>
-          </button>
-        );
-      })}
+      {visibleGroups.map((group) => (
+        <button
+          type="button"
+          key={group.id}
+          data-onboarding-group={group.id}
+          className={`gi ${selected.type === "group" && selected.id === group.id ? "on" : ""}`}
+          aria-current={selected.id === group.id ? "true" : undefined}
+          aria-label={t("Open {name}", { name: group.name })}
+          onClick={() => select("group", group.id)}
+        >
+          <span className="gi-top">
+            <strong>{group.name}</strong>
+          </span>
+        </button>
+      ))}
       {activeStudents
         .filter((student) => student.isIndividual && studentMatches(student))
         .map((student) => (
@@ -1146,19 +1129,14 @@ export default function Community({
         ) : (
           <>
             <div className="list-rows">
-              {visibleGroups.map((group) => {
-                const summary = groupSummaries.get(group.id);
-                return (
-                  <ListRow
-                    key={group.id}
-                    avatar={<AttendanceRing value={summary.attendance === null ? NaN : summary.attendance * 100} />}
-                    name={group.name}
-                    context={groupScheduleShort(group, locale)}
-                    label={t("Open {name}", { name: group.name })}
-                    onClick={() => select("group", group.id)}
-                  />
-                );
-              })}
+              {visibleGroups.map((group) => (
+                <ListRow
+                  key={group.id}
+                  name={group.name}
+                  label={t("Open {name}", { name: group.name })}
+                  onClick={() => select("group", group.id)}
+                />
+              ))}
             </div>
             {archivedGroupsToggle}
           </>
