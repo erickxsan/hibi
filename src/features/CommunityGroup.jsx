@@ -37,21 +37,6 @@ export function nextClassLabel(next, asOf, t, locale) {
   return `${relative ? t(relative.key) : formatShortDate(next.classDate, locale)} · ${formatTime(next.startTime, locale)}`;
 }
 
-/** Status line under a group in the list: what is owed, overdue, or up to date. */
-export function groupPaymentLine(summary, group, t, locale) {
-  const billing = normalizeGroupBilling(group.billing);
-  if (summary.overdue > 0)
-    return {
-      tone: "st-venc",
-      text: t("Overdue payments · {amount}", { amount: formatMoney(summary.overdue, locale) }),
-    };
-  if (summary.owed > 0)
-    return { tone: "st-pend", text: t("To collect · {amount}", { amount: formatMoney(summary.owed, locale) }) };
-  if (billing?.mode === "monthly")
-    return { tone: "st-ok", text: t("Monthly · {amount}", { amount: formatMoney(billing.monthlyFee, locale) }) };
-  return { tone: "st-ok", text: t("Payments up to date") };
-}
-
 export function AttendanceGrid({ grid, asOf, highlight, onHighlight }) {
   const { t, locale } = useI18n();
   if (!grid.columns.length) return <p className="muted">{t("No classes recorded yet.")}</p>;

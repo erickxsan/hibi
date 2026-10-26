@@ -29,10 +29,6 @@ export const COMMUNITY_TRANSLATIONS = Object.freeze({
   "Edit enrollment and rate": "Editar grupos y tarifa",
   "Edit schedule and details": "Editar horario y datos",
   // Lista de grupos
-  "Overdue payments · {amount}": "Pagos vencidos · {amount}",
-  "To collect · {amount}": "Por cobrar · {amount}",
-  "Monthly · {amount}": "Mensual · {amount}",
-  "Payments up to date": "Pagos al día",
   // Ficha del alumno
   "Attendance {value}": "Asistencia {value}",
   "missed {missed} of {total}": "faltó {missed} de {total}",

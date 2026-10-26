@@ -48,14 +48,7 @@ import {
 } from "./communityModel";
 import { BillingFields, GroupEditor, StudentEditor } from "./CommunityEditors";
 import { groupNamesOf, StudentDetail, StudentSheet, studentContext } from "./CommunityStudent";
-import {
-  ArchiveGroupDialog,
-  ArchivedGroupView,
-  GroupDetail,
-  GroupSheet,
-  groupPaymentLine,
-  JoinGroupSheet,
-} from "./CommunityGroup";
+import { ArchiveGroupDialog, ArchivedGroupView, GroupDetail, GroupSheet, JoinGroupSheet } from "./CommunityGroup";
 import "../i18n/screenTranslations.js";
 import "./community.css";
 
@@ -666,7 +659,6 @@ export default function Community({
       {visibleGroups.map((group) => {
         const summary = groupSummaries.get(group.id);
         const members = membersOf(group);
-        const line = groupPaymentLine(summary, group, t, locale);
         return (
           <button
             type="button"
@@ -692,7 +684,6 @@ export default function Community({
             <span className="bar" aria-hidden="true">
               <i style={{ width: `${Math.round((summary.attendance ?? 0) * 100)}%` }} />
             </span>
-            <span className={`st ${line.tone}`}>{line.text}</span>
           </button>
         );
       })}
@@ -1159,14 +1150,12 @@ export default function Community({
             <div className="list-rows">
               {visibleGroups.map((group) => {
                 const summary = groupSummaries.get(group.id);
-                const line = groupPaymentLine(summary, group, t, locale);
                 return (
                   <ListRow
                     key={group.id}
                     avatar={<AttendanceRing value={summary.attendance === null ? NaN : summary.attendance * 100} />}
                     name={group.name}
-                    context={[groupScheduleShort(group, locale), line.text].filter(Boolean).join(" · ")}
-                    contextTone={line.tone === "st-venc" ? "bad" : line.tone === "st-pend" ? "pend" : ""}
+                    context={groupScheduleShort(group, locale)}
                     label={t("Open {name}", { name: group.name })}
                     onClick={() => select("group", group.id)}
                   />
