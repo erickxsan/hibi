@@ -21,6 +21,26 @@ export const DEFAULT_SETTINGS = Object.freeze({
 
 export const STUDENT_STATUSES = Object.freeze(["Active", "Inactive"]);
 export const STUDENT_AVATAR_IDS = Object.freeze(["cat", "dog", "penguin", "fox", "rabbit", "bear", "frog", "owl"]);
+export const GROUP_COLOR_IDS = Object.freeze(["bermellon", "ocre", "jade", "indigo", "kraft"]);
+export const GROUP_ICON_IDS = Object.freeze([
+  "book",
+  "pencil",
+  "calculator",
+  "shapes",
+  "flask",
+  "atom",
+  "globe",
+  "languages",
+  "music",
+  "palette",
+  "brain",
+  "puzzle",
+  "star",
+  "sun",
+  "sprout",
+  "graduation",
+  "checklist",
+]);
 export const CLASS_STATUSES = Object.freeze(["Scheduled", "Completed", "Cancelled"]);
 export const ATTENDANCE_CODES = Object.freeze(["P", "A", "L", "E"]);
 export const GRADE_CATEGORIES = Object.freeze(["Quiz", "Exam", "Project", "Homework", "Participation", "Other"]);

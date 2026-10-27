@@ -66,6 +66,21 @@
   font: 800 15px/20px var(--font-sans);
 }
 
+.community-page .gh.has-badge {
+  align-items: center;
+}
+
+.community-page .gh.has-badge .link-button {
+  flex: none;
+}
+
+.community-page .gh-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .community-page .sr {
   display: flex;
   align-items: center;
@@ -165,6 +180,12 @@
   justify-content: space-between;
   align-items: baseline;
   gap: 8px;
+}
+
+.community-page .gi-name {
+  justify-content: flex-start;
+  align-items: center;
+  gap: 12px;
 }
 
 .community-page .gi strong {
@@ -1005,6 +1026,16 @@
 .student-sheet .detail-head {
   padding-bottom: 0;
   gap: 14px;
+}
+
+.group-sheet-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.group-sheet-head p {
+  margin: 0;
 }
 
 .student-sheet .figs,

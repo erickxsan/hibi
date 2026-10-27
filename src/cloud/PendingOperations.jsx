@@ -29,6 +29,8 @@ const FIELD_LABELS = {
   isIndividual: "Individual classes",
   customHourlyRate: "Custom hourly rate",
   avatarId: "Avatar",
+  iconId: "Group icon",
+  colorId: "Group color",
   schedule: "Schedule",
   classDate: "Class date",
   startTime: "Start time",

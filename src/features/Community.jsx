@@ -15,6 +15,7 @@ import {
   Tabs,
 } from "../components/ui";
 import { StudentAvatar } from "../components/StudentAvatar";
+import { GroupBadge } from "../components/GroupBadge";
 import { useCompactViewport } from "../components/OverlayContext";
 import {
   createNavigationPass,
@@ -669,7 +670,8 @@ export default function Community({
           aria-label={t("Open {name}", { name: group.name })}
           onClick={() => select("group", group.id)}
         >
-          <span className="gi-top">
+          <span className="gi-top gi-name">
+            <GroupBadge group={group} />
             <strong>{group.name}</strong>
           </span>
         </button>
@@ -703,12 +705,15 @@ export default function Community({
         const summary = groupSummaries.get(group.id);
         return (
           <div className="list-group" key={group.id} data-onboarding-group={group.id}>
-            <div className="gh">
-              <span>
-                <strong>{group.name}</strong>
-                <span className="muted">
-                  {" "}
-                  · {members.length} · {formatPercent(summary.attendance, locale)}
+            <div className="gh has-badge">
+              <span className="gh-name">
+                <GroupBadge group={group} size="tiny" />
+                <span>
+                  <strong>{group.name}</strong>
+                  <span className="muted">
+                    {" "}
+                    · {members.length} · {formatPercent(summary.attendance, locale)}
+                  </span>
                 </span>
               </span>
               <button
@@ -882,6 +887,7 @@ export default function Community({
         onAddStudent={() => setJoinTarget(selectedGroup)}
         onOpenStudent={(student) => select("student", student.id)}
         onOpenNext={() => openNextClass(selectedGroup)}
+        onChangeBadge={(badge) => actions.setGroupBadge(selectedGroup.id, badge)}
         saving={saving}
         dirty={groupDirty}
       />
@@ -1132,6 +1138,7 @@ export default function Community({
               {visibleGroups.map((group) => (
                 <ListRow
                   key={group.id}
+                  avatar={<GroupBadge group={group} size="medium" />}
                   name={group.name}
                   label={t("Open {name}", { name: group.name })}
                   onClick={() => select("group", group.id)}
@@ -1198,6 +1205,7 @@ export default function Community({
               onOpenStudent={(student) => setSheet({ type: "student", id: student.id })}
               onAddStudent={() => setJoinTarget(sheetGroup)}
               onArchive={() => setArchiveTarget(sheetGroup)}
+              onChangeBadge={(badge) => actions.setGroupBadge(sheetGroup.id, badge)}
             />
           ) : null}
         </BottomSheet>

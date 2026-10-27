@@ -363,6 +363,200 @@
   background: var(--kraft);
 }
 
+/* Sello del grupo: ícono o iniciales sobre su color */
+.group-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.group-badge svg {
+  width: 18px;
+  height: 18px;
+}
+.group-badge-initials {
+  font: 800 13px/1 var(--font-sans);
+  letter-spacing: 0.02em;
+}
+.group-badge-tiny {
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+}
+.group-badge-tiny svg {
+  width: 14px;
+  height: 14px;
+}
+.group-badge-tiny .group-badge-initials {
+  font-size: 10px;
+}
+.group-badge-medium {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+}
+.group-badge-medium svg {
+  width: 22px;
+  height: 22px;
+}
+.group-badge-medium .group-badge-initials {
+  font-size: 15px;
+}
+.group-badge-large {
+  width: 60px;
+  height: 60px;
+  border-radius: 16px;
+}
+.group-badge-large svg {
+  width: 30px;
+  height: 30px;
+  stroke-width: 1.8;
+}
+.group-badge-large .group-badge-initials {
+  font-size: 21px;
+}
+.group-tone-bermellon {
+  background: var(--bermellon-soft);
+  color: var(--bermellon-strong);
+}
+.group-tone-ocre {
+  background: var(--ocre-soft);
+  color: var(--ocre-ink);
+}
+.group-tone-jade {
+  background: var(--jade-soft);
+  color: var(--jade-strong);
+}
+.group-tone-indigo {
+  background: var(--indigo-soft);
+  color: var(--indigo);
+}
+.group-tone-kraft {
+  background: var(--kraft);
+  color: var(--sumi-muted);
+}
+.group-badge-picker-wrap {
+  display: inline-flex;
+  flex: none;
+}
+.group-badge-trigger {
+  position: relative;
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+  border-radius: 16px;
+  background: none;
+  cursor: pointer;
+}
+.group-badge-edit {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-control);
+  color: var(--sumi-muted);
+}
+.group-badge-edit svg {
+  width: 13px;
+  height: 13px;
+}
+.group-badge-trigger:hover .group-badge-edit {
+  border-color: var(--line-control);
+  color: var(--sumi);
+}
+.group-badge-menu fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 8px 8px 6px;
+  border: 0;
+}
+.group-badge-menu legend {
+  padding: 0 0 8px;
+  font: 700 12px/16px var(--font-sans);
+  color: var(--sumi-muted);
+}
+.group-badge-menu input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.group-badge-colors .group-badge-options {
+  display: flex;
+  gap: 8px;
+}
+.group-color-option {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+.group-color-swatch {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  background: currentColor;
+}
+.group-color-swatch svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 3;
+  color: var(--papel);
+}
+.group-color-option.selected,
+.group-icon-option.selected {
+  box-shadow: inset 0 0 0 2px currentColor;
+}
+.group-badge-icons .group-badge-options {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 4px;
+}
+.group-icon-option {
+  position: relative;
+  aspect-ratio: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.group-icon-option:not(.selected) {
+  background: transparent;
+  color: var(--sumi-muted);
+}
+.group-icon-option:not(.selected):hover {
+  background: var(--washi);
+  color: var(--sumi);
+}
+.group-icon-option svg {
+  width: 20px;
+  height: 20px;
+}
+.group-color-option:has(input:focus-visible),
+.group-icon-option:has(input:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
 /* Hoja que sube (móvil) */
 .bottom-sheet-layer {
   position: absolute;

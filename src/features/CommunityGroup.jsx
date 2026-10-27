@@ -3,6 +3,7 @@ import { Archive, ChevronRight, RotateCcw, UserPlus } from "lucide-react";
 import { useI18n } from "../i18n/index.jsx";
 import { BottomSheet, Button, Drawer, Field, Input, ListRow, StudentSelect } from "../components/ui";
 import { StudentAvatar } from "../components/StudentAvatar";
+import { GroupBadgePicker } from "../components/GroupBadge";
 import { nextPeriod, normalizeGroupBilling, periodOf } from "../domain/monthlyBilling";
 import {
   dayNumber,
@@ -141,6 +142,7 @@ export function GroupDetail({
   onAddStudent,
   onOpenStudent,
   onOpenNext,
+  onChangeBadge,
   saving,
   dirty,
 }) {
@@ -164,6 +166,7 @@ export function GroupDetail({
   return (
     <section className="detail" aria-labelledby="community-group-title">
       <div className="detail-head is-group">
+        <GroupBadgePicker group={group} onChange={onChangeBadge} />
         <div className="detail-title">
           <h2 id="community-group-title">{group.name}</h2>
           <span className="detail-meta">
@@ -342,6 +345,7 @@ export function GroupSheet({
   onOpenStudent,
   onAddStudent,
   onArchive,
+  onChangeBadge,
 }) {
   const { t, locale } = useI18n();
   const [highlight, setHighlight] = useState("");
@@ -355,9 +359,12 @@ export function GroupSheet({
     .filter(Boolean);
   return (
     <div className="group-sheet">
-      {next ? (
-        <p className="muted">{t("Next class: {when}", { when: nextClassLabel(next, asOf, t, locale) })}</p>
-      ) : null}
+      <div className="group-sheet-head">
+        <GroupBadgePicker group={group} onChange={onChangeBadge} size="medium" />
+        {next ? (
+          <p className="muted">{t("Next class: {when}", { when: nextClassLabel(next, asOf, t, locale) })}</p>
+        ) : null}
+      </div>
       <div className="figs">
         <div className="fig">
           <span>{t("Attendance")}</span>

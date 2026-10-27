@@ -39,6 +39,7 @@ import {
 import { canonicalStringify } from "../crypto/canonical.js";
 import { isBillableAttendance } from "../domain/attendanceBilling.js";
 import { setGroupArchived, startGroupSchedule } from "../domain/groupArchiving.js";
+import { groupBadgeFields, withGroupBadge } from "../domain/groupBadge.js";
 import { normalizeRepeatRule } from "../domain/classRecurrence.js";
 import { updateDismissedNotes } from "../domain/noteDismissals.js";
 import {
@@ -108,6 +109,7 @@ export function canonicalGroup(draft) {
     status: draft.status ?? "Active",
     archivedAt: draft.archivedAt ?? "",
     scheduleResumeDate: draft.scheduleResumeDate ?? "",
+    ...groupBadgeFields(draft),
     ...(normalizeGroupBilling(draft.billing) ? { billing: normalizeGroupBilling(draft.billing) } : {}),
   };
 }
@@ -656,6 +658,16 @@ export function useClassManager({ persistence } = {}) {
       );
     },
     [commit, notify, operationalDate],
+  );
+
+  /** Changes a group's icon or color. The badge changes on screen, so there is no notice. */
+  const setGroupBadge = useCallback(
+    (groupId, badge) =>
+      commit((current) => ({
+        ...current,
+        groups: current.groups.map((group) => (group.id === groupId ? withGroupBadge(group, badge) : group)),
+      })),
+    [commit],
   );
 
   const setOnboardingStep = useCallback(
@@ -1373,6 +1385,7 @@ export function useClassManager({ persistence } = {}) {
       saveOnboardingGroup,
       saveOnboardingStudents,
       upsertGroup,
+      setGroupBadge,
       archiveGroup,
       reactivateGroup,
       deleteGroup,
@@ -1449,6 +1462,7 @@ export function useClassManager({ persistence } = {}) {
       saveGroupBilling,
       upsertGrade,
       upsertGroup,
+      setGroupBadge,
       upsertScheduleChange,
       upsertScheduleException,
       upsertStudent,

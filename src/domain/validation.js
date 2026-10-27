@@ -5,6 +5,8 @@ import {
   CLASS_STATUSES,
   DEFAULT_SETTINGS,
   GRADE_CATEGORIES,
+  GROUP_COLOR_IDS,
+  GROUP_ICON_IDS,
   PAYMENT_METHODS,
   PAYMENT_RECORD_STATES,
   SCHEMA_VERSION,
@@ -15,6 +17,7 @@ import {
 import { isDateOnly, startOfMonth } from "./dates.js";
 import { normalizeRepeatRule } from "./classRecurrence.js";
 import { normalizeDismissedNotes } from "./noteDismissals.js";
+import { groupBadgeFields } from "./groupBadge.js";
 import {
   billingIssues,
   normalizeBillingByGroup,
@@ -112,6 +115,8 @@ export function validateGroup(group, state = null) {
   requiredText(errors, group.id, "id", "Stable group ID");
   requiredText(errors, group.name, "name", "Group name");
   enumValue(errors, group.status, STUDENT_STATUSES, "status", "Group status", { optional: true });
+  if (group.iconId) enumValue(errors, group.iconId, GROUP_ICON_IDS, "iconId", "Group icon");
+  if (group.colorId) enumValue(errors, group.colorId, GROUP_COLOR_IDS, "colorId", "Group color");
   dateOnly(errors, group.archivedAt, "archivedAt", "Archive date", { optional: true });
   dateOnly(errors, group.scheduleResumeDate, "scheduleResumeDate", "Schedule resume date", { optional: true });
   finiteNumber(errors, group.plannedSessionsPerMonth, "plannedSessionsPerMonth", "Planned sessions per month", {
@@ -437,6 +442,7 @@ export function normalizeState(input) {
       status: group?.status ?? "Active",
       archivedAt: normalizeText(group?.archivedAt),
       scheduleResumeDate: normalizeText(group?.scheduleResumeDate),
+      ...groupBadgeFields(group),
       ...(normalizeGroupBilling(group?.billing) ? { billing: normalizeGroupBilling(group.billing) } : {}),
     })),
     students: normalizedStudents,

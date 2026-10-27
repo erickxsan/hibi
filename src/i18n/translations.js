@@ -1014,6 +1014,8 @@ const EXPLICIT_TRANSLATIONS = Object.freeze({
   "Student avatar": "Avatar del alumno",
   "Choose student avatar": "Elegir avatar del alumno",
   "Choose an avatar": "Elige un avatar",
+  "Group icon": "Ícono del grupo",
+  "Group color": "Color del grupo",
   "Selected student": "Alumno seleccionado",
   Change: "Cambiar",
   Cat: "Gato",

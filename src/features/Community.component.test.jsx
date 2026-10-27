@@ -183,6 +183,27 @@ describe("Community students", () => {
 });
 
 describe("Community groups", () => {
+  it("changes the group's icon and color from its header, and goes back to its initials", async () => {
+    const user = userEvent.setup();
+    const { saved } = setup();
+    const group = () => saved().groups.find((item) => item.id === "g1");
+    await user.click(screen.getByRole("tab", { name: "Groups" }));
+    await user.click(screen.getByRole("button", { name: "Open Primaria 5A" }));
+    await user.click(screen.getByRole("button", { name: "Change the icon of Primaria 5A" }));
+    const picker = await screen.findByRole("dialog", { name: "Group icon" });
+    expect(within(picker).getByRole("radio", { name: "Initials" })).toBeChecked();
+    await user.click(within(picker).getByRole("radio", { name: "Book" }));
+    await waitFor(() => expect(group().iconId).toBe("book"));
+    await user.click(within(picker).getByRole("radio", { name: "Indigo" }));
+    await waitFor(() => expect(group()).toMatchObject({ iconId: "book", colorId: "indigo" }));
+    expect(within(picker).getByRole("radio", { name: "Book" })).toBeChecked();
+    await user.click(within(picker).getByRole("radio", { name: "Initials" }));
+    await waitFor(() => expect(group()).not.toHaveProperty("iconId"));
+    expect(group().colorId).toBe("indigo");
+    // A badge change is visible at once: no «Group updated» notice.
+    expect(screen.queryByText("Group updated")).not.toBeInTheDocument();
+  });
+
   it("shows the attendance grid and directory, and switches the group to monthly from this month", async () => {
     const user = userEvent.setup();
     const { saved } = setup();
