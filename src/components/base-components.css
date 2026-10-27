@@ -363,6 +363,82 @@
   background: var(--kraft);
 }
 
+/* Selector de avatar: una fila de caras, la elegida con anillo */
+.avatar-picker {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.avatar-picker legend {
+  padding: 0;
+  margin-bottom: 8px;
+}
+.avatar-options {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 46px));
+  gap: 8px;
+}
+.avatar-option {
+  position: relative;
+  display: flex;
+  aspect-ratio: 1;
+  border-radius: 14px;
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.avatar-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.avatar-option .student-animal-avatar {
+  width: 100%;
+  height: 100%;
+}
+.avatar-option .student-animal-avatar svg {
+  width: 72%;
+  height: 72%;
+}
+.avatar-option:not(.selected):hover {
+  transform: translateY(-1px);
+}
+.avatar-option.selected {
+  box-shadow:
+    0 0 0 2px var(--surface-raised),
+    0 0 0 4px var(--sumi);
+}
+.avatar-option:has(input:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 5px;
+}
+.avatar-option-check {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  background: var(--sumi);
+  color: var(--surface-raised);
+  box-shadow: 0 0 0 2px var(--surface-raised);
+}
+@media (prefers-reduced-motion: reduce) {
+  .avatar-option {
+    transition: none;
+  }
+  .avatar-option:not(.selected):hover {
+    transform: none;
+  }
+}
+
 /* Sello del grupo: ícono o iniciales sobre su color */
 .group-badge {
   width: 32px;

@@ -287,7 +287,6 @@ describe("Hibi base controls", () => {
     );
     expect(screen.getByRole("img", { name: "Cat avatar for Student One" })).toHaveClass("avatar-tone-indigo");
     expect(view.container.querySelectorAll('ellipse[cx="24"][cy="26"][rx="13"][ry="17"]')).toHaveLength(2);
-    await user.click(screen.getByLabelText("Choose student avatar"));
     expect(screen.getAllByRole("radio")).toHaveLength(STUDENT_AVATAR_IDS.length);
     await user.click(screen.getByRole("radio", { name: "Owl" }));
     expect(change).toHaveBeenCalledWith("owl");

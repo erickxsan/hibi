@@ -1012,8 +1012,6 @@ const EXPLICIT_TRANSLATIONS = Object.freeze({
   "Advance payments remain tied to the future class record they cover.":
     "Los pagos anticipados permanecen vinculados a la clase futura que cubren.",
   "Student avatar": "Avatar del alumno",
-  "Choose student avatar": "Elegir avatar del alumno",
-  "Choose an avatar": "Elige un avatar",
   "Group icon": "Ícono del grupo",
   "Group color": "Color del grupo",
   "Selected student": "Alumno seleccionado",

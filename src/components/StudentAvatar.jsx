@@ -139,37 +139,35 @@ export function AvatarPicker({ value, onChange }) {
   const { t: uiT } = useI18n();
   const selected = STUDENT_AVATAR_IDS.includes(value) ? value : "cat";
   return (
-    <details className="avatar-picker">
-      <summary aria-label={uiT("Choose student avatar")}>
-        <StudentAvatar avatarId={selected} name="Selected student" size="small" decorative />
-        <span>
-          <strong>{uiT("Student avatar")}</strong>
-          <small>{uiT(AVATAR_META[selected].label)}</small>
-        </span>
-        <span className="avatar-picker-change">{uiT("Change")}</span>
-      </summary>
-      <fieldset>
-        <legend>{uiT("Choose an avatar")}</legend>
-        <div className="avatar-option-grid">
-          {STUDENT_AVATARS.map((avatar) => (
-            <label className={selected === avatar.id ? "avatar-option selected" : "avatar-option"} key={avatar.id}>
-              <input
-                type="radio"
-                name="student-avatar"
-                value={avatar.id}
-                checked={selected === avatar.id}
-                onChange={() => {
-                  onChange(avatar.id);
-                  playHibiSound("selection");
-                }}
-              />
-              <StudentAvatar avatarId={avatar.id} name={avatar.label} size="small" decorative />
-              <span>{uiT(avatar.label)}</span>
-              {selected === avatar.id ? <Check size={14} aria-hidden="true" /> : null}
-            </label>
-          ))}
-        </div>
-      </fieldset>
-    </details>
+    <fieldset className="avatar-picker">
+      <legend className="field-label">{uiT("Avatar")}</legend>
+      <div className="avatar-options">
+        {STUDENT_AVATARS.map((avatar) => (
+          <label
+            className={selected === avatar.id ? "avatar-option selected" : "avatar-option"}
+            key={avatar.id}
+            title={uiT(avatar.label)}
+          >
+            <input
+              type="radio"
+              name="student-avatar"
+              value={avatar.id}
+              checked={selected === avatar.id}
+              onChange={() => {
+                onChange(avatar.id);
+                playHibiSound("selection");
+              }}
+            />
+            <StudentAvatar avatarId={avatar.id} name={avatar.label} decorative />
+            <span className="sr-only">{uiT(avatar.label)}</span>
+            {selected === avatar.id ? (
+              <span className="avatar-option-check" aria-hidden="true">
+                <Check size={12} strokeWidth={3} />
+              </span>
+            ) : null}
+          </label>
+        ))}
+      </div>
+    </fieldset>
   );
 }
