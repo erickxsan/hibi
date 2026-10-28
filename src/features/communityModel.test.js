@@ -226,6 +226,37 @@ describe("monthly billing editor", () => {
     expect(billingChanges(group, roster, { ...draft, mode: "perClass" }, AS_OF).overrides).toEqual({});
   });
 
+  it("stores a student's own due date and drops it when they go back to the group's", () => {
+    const { state } = setup();
+    const group = {
+      ...state.groups[0],
+      billing: { mode: "monthly", monthlyFee: 1200, due: { type: "dayOfMonth", day: 5 }, effectiveFrom: "2026-10" },
+    };
+    const roster = members(state);
+    const draft = billingDraftFor(group, roster);
+    draft.adjustments = {
+      s1: { mode: "group", fee: null, due: { type: "nthClass", nth: 2 } },
+      s2: { mode: "customFee", fee: 900, due: { type: "dayOfMonth", day: 15 } },
+      s3: { mode: "perClass", fee: null, due: { type: "dayOfMonth", day: 15 } },
+    };
+    const { overrides } = billingChanges(group, roster, draft, AS_OF);
+    expect(overrides).toEqual({
+      s1: { mode: "group", due: { type: "nthClass", nth: 2 } },
+      s2: { mode: "customFee", fee: 900, due: { type: "dayOfMonth", day: 15 } },
+      s3: { mode: "perClass" },
+    });
+    const saved = roster.map((student) => ({ ...student, billingByGroup: { g1: overrides[student.id] } }));
+    expect(billingDraftFor(group, saved).adjustments.s1).toEqual({
+      mode: "group",
+      fee: null,
+      due: { type: "nthClass", nth: 2 },
+    });
+    // «Vence como el grupo» with the group's fee leaves nothing to store.
+    const back = { ...draft, adjustments: { s1: { mode: "group", fee: null, due: null } } };
+    expect(billingChanges(group, saved, back, AS_OF).overrides).toMatchObject({ s1: null });
+    expect(monthlyTotal(state, group, roster, draft)).toEqual({ total: 2100, monthly: 2, perClass: 1 });
+  });
+
   it("previews due dates, the suggested fee and the first month of a new student", () => {
     const { state } = setup();
     const group = {

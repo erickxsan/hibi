@@ -280,7 +280,10 @@ export function archivedGroupHistory(state, derived, group, members) {
   };
 }
 
-/** Editable billing for the group detail. Students' adjustments come from their billingByGroup. */
+/**
+ * Editable billing for the group detail. Students' adjustments come from their billingByGroup:
+ * another fee or per class, and for monthly payers optionally their own due date (`due`, null = the group's).
+ */
 export function billingDraftFor(group, members) {
   const billing = normalizeGroupBilling(group?.billing);
   return {
@@ -293,8 +296,8 @@ export function billingDraftFor(group, members) {
     adjustments: Object.fromEntries(
       members
         .map((student) => [student.id, normalizeBillingByGroup(student.billingByGroup)?.[group?.id]])
-        .filter(([, override]) => override && override.mode !== "group")
-        .map(([id, override]) => [id, { mode: override.mode, fee: override.fee ?? null }]),
+        .filter(([, override]) => override && (override.mode !== "group" || override.due))
+        .map(([id, override]) => [id, { mode: override.mode, fee: override.fee ?? null, due: override.due ?? null }]),
     ),
   };
 }
@@ -328,15 +331,18 @@ export function billingChanges(group, members, draft, asOf, applyFrom = "next") 
     const current = normalizeBillingByGroup(student.billingByGroup)?.[group?.id] || null;
     const wanted = draft.mode === "monthly" ? draft.adjustments[student.id] || null : null;
     const joined = current?.joinedOn ? { joinedOn: current.joinedOn, firstMonthAmount: current.firstMonthAmount } : {};
-    const next = wanted
-      ? {
-          mode: wanted.mode,
-          ...(wanted.mode === "customFee" ? { fee: roundMoney(Number(wanted.fee) || 0) } : {}),
-          ...joined,
-        }
-      : current?.joinedOn
-        ? { mode: "group", ...joined }
-        : null;
+    const ownDue = wanted?.due && wanted.mode !== "perClass" ? { due: wanted.due } : {};
+    const next =
+      wanted && (wanted.mode !== "group" || ownDue.due)
+        ? {
+            mode: wanted.mode,
+            ...(wanted.mode === "customFee" ? { fee: roundMoney(Number(wanted.fee) || 0) } : {}),
+            ...ownDue,
+            ...joined,
+          }
+        : current?.joinedOn
+          ? { mode: "group", ...joined }
+          : null;
     const same =
       JSON.stringify(current || null) === JSON.stringify(next ? normalizeBillingByGroup({ x: next })?.x || null : null);
     if (!same) overrides[student.id] = next;

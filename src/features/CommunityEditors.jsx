@@ -280,6 +280,66 @@ const NTH_OPTIONS = [
 ];
 
 /**
+ * «el día 5» / «en la clase 1.ª» as two selects. With `inherit` the first one also offers the group's
+ * own date, and choosing it hands back null.
+ */
+function DueSelects({ due, onChange, labels, inherit = false }) {
+  const { t } = useI18n();
+  const type = due?.type || (inherit ? "group" : "dayOfMonth");
+  return (
+    <>
+      <Select
+        small
+        aria-label={labels.type}
+        value={type}
+        onChange={(event) =>
+          onChange(
+            event.target.value === "group"
+              ? null
+              : event.target.value === "nthClass"
+                ? { type: "nthClass", nth: 1 }
+                : { type: "dayOfMonth", day: 5 },
+          )
+        }
+      >
+        {inherit ? <option value="group">{t("due like the group")}</option> : null}
+        <option value="dayOfMonth">{t(inherit ? "due on day" : "on day")}</option>
+        <option value="nthClass">{t(inherit ? "due at class" : "at class")}</option>
+      </Select>
+      {type === "dayOfMonth" ? (
+        <Select
+          small
+          aria-label={labels.day}
+          value={String(due.day)}
+          onChange={(event) => onChange({ type: "dayOfMonth", day: Number(event.target.value) })}
+        >
+          {Array.from({ length: 28 }, (_, index) => (
+            <option key={index + 1} value={String(index + 1)}>
+              {String(index + 1)}
+            </option>
+          ))}
+        </Select>
+      ) : type === "nthClass" ? (
+        <Select
+          small
+          aria-label={labels.nth}
+          value={String(due.nth)}
+          onChange={(event) =>
+            onChange({ type: "nthClass", nth: event.target.value === "last" ? "last" : Number(event.target.value) })
+          }
+        >
+          {NTH_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {t(option.label)}
+            </option>
+          ))}
+        </Select>
+      ) : null}
+    </>
+  );
+}
+
+/**
  * «Forma de cobro» as rows: per class with its rate, or monthly with fee, due date,
  * per-student adjustments and, when an existing group switches, from which month.
  */
@@ -308,6 +368,9 @@ export function BillingFields({
   const nextDues = monthly && group ? nextDueDates(state, group, draft, asOf) : [];
   const adjustedIds = Object.keys(draft.adjustments || {}).filter((id) => members.some((student) => student.id === id));
   const unadjusted = members.filter((student) => !adjustedIds.includes(student.id));
+  const groupFeePayers = members.filter(
+    (student) => !adjustedIds.includes(student.id) || draft.adjustments[student.id].mode === "group",
+  ).length;
   const totals = monthlyTotal(state, group, members, draft);
   const setAdjustment = (id, value) =>
     setDraft((current) => {
@@ -380,64 +443,12 @@ export function BillingFields({
             ) : null}
           </FieldRow>
           <FieldRow label={t("Due")}>
-            <Select
-              small
-              aria-label={t("How it falls due")}
-              value={due.type}
-              onChange={(event) =>
-                setDraft({
-                  ...draft,
-                  due:
-                    event.target.value === "nthClass" ? { type: "nthClass", nth: 1 } : { type: "dayOfMonth", day: 5 },
-                })
-              }
-            >
-              <option value="dayOfMonth">{t("on day")}</option>
-              <option value="nthClass">{t("at class")}</option>
-            </Select>
-            {due.type === "dayOfMonth" ? (
-              <>
-                <Select
-                  small
-                  aria-label={t("Day of the month")}
-                  value={String(due.day)}
-                  onChange={(event) =>
-                    setDraft({ ...draft, due: { type: "dayOfMonth", day: Number(event.target.value) } })
-                  }
-                >
-                  {Array.from({ length: 28 }, (_, index) => (
-                    <option key={index + 1} value={String(index + 1)}>
-                      {String(index + 1)}
-                    </option>
-                  ))}
-                </Select>
-                <span className="field-row-hint">{t("of each month")}</span>
-              </>
-            ) : (
-              <>
-                <Select
-                  small
-                  aria-label={t("Which class")}
-                  value={String(due.nth)}
-                  onChange={(event) =>
-                    setDraft({
-                      ...draft,
-                      due: {
-                        type: "nthClass",
-                        nth: event.target.value === "last" ? "last" : Number(event.target.value),
-                      },
-                    })
-                  }
-                >
-                  {NTH_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {t(option.label)}
-                    </option>
-                  ))}
-                </Select>
-                <span className="field-row-hint">{t("of the month")}</span>
-              </>
-            )}
+            <DueSelects
+              due={due}
+              onChange={(next) => setDraft((current) => ({ ...current, due: next }))}
+              labels={{ type: t("How it falls due"), day: t("Day of the month"), nth: t("Which class") }}
+            />
+            <span className="field-row-hint">{t(due.type === "dayOfMonth" ? "of each month" : "of the month")}</span>
             {nextDues.length ? (
               <span className="field-row-hint">
                 · {t("next: {dates}", { dates: nextDues.map((date) => formatShortDate(date, locale)).join(", ") })}
@@ -452,12 +463,14 @@ export function BillingFields({
                     adjustedIds.length === 1
                       ? "{group} pay the group fee · {count} with an adjustment:"
                       : "{group} pay the group fee · {count} with adjustments:",
-                    { group: members.length - adjustedIds.length, count: adjustedIds.length },
+                    { group: groupFeePayers, count: adjustedIds.length },
                   )}
                 </span>
                 {adjustedIds.map((id) => {
                   const student = members.find((item) => item.id === id);
                   const adjustment = draft.adjustments[id];
+                  const ownDue = adjustment.mode === "perClass" ? null : adjustment.due || null;
+                  const ownDues = ownDue && group ? nextDueDates(state, group, { ...draft, due: ownDue }, asOf, 1) : [];
                   return (
                     <div className="billing-adjustment" key={id}>
                       <b>{student.fullName}</b>
@@ -469,25 +482,47 @@ export function BillingFields({
                           setAdjustment(id, {
                             mode: event.target.value,
                             fee: event.target.value === "customFee" ? (adjustment.fee ?? draft.monthlyFee ?? 0) : null,
+                            due: event.target.value === "perClass" ? null : adjustment.due || null,
                           })
                         }
                       >
-                        <option value="perClass">{t("Per class")}</option>
+                        <option value="group">{t("Group fee")}</option>
                         <option value="customFee">{t("Other fee")}</option>
+                        <option value="perClass">{t("Per class")}</option>
                       </Select>
                       {adjustment.mode === "customFee" ? (
                         <MoneyInput
                           label={t("Fee for {name}", { name: student.fullName })}
                           value={adjustment.fee ?? ""}
                           onChange={(value) =>
-                            setAdjustment(id, { mode: "customFee", fee: value === "" ? null : Number(value) })
+                            setAdjustment(id, { ...adjustment, fee: value === "" ? null : Number(value) })
                           }
                         />
-                      ) : (
+                      ) : adjustment.mode === "perClass" ? (
                         <span className="field-row-hint">
                           {t("{amount} per class attended", { amount: formatMoney(perClass, locale) })}
                         </span>
-                      )}
+                      ) : null}
+                      {/* Monthly payers may fall due on their own day or class instead of the group's. */}
+                      {adjustment.mode !== "perClass" ? (
+                        <span className="billing-adjustment-due">
+                          <DueSelects
+                            inherit
+                            due={ownDue}
+                            onChange={(next) => setAdjustment(id, { ...adjustment, due: next })}
+                            labels={{
+                              type: t("When {name} pays", { name: student.fullName }),
+                              day: t("Day {name} pays", { name: student.fullName }),
+                              nth: t("Class {name} pays at", { name: student.fullName }),
+                            }}
+                          />
+                          {ownDues.length ? (
+                            <span className="field-row-hint">
+                              {t("next: {date}", { date: formatShortDate(ownDues[0], locale) })}
+                            </span>
+                          ) : null}
+                        </span>
+                      ) : null}
                       <IconButton
                         className="billing-remove"
                         label={t("Remove adjustment for {name}", { name: student.fullName })}

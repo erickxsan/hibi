@@ -13,7 +13,8 @@ import { dayOfWeekForDate, generateScheduledOccurrences, resolveHourlyRate } fro
  *   `coveredFrom` (new groups whose first fee falls next month): classes from that day until
  *   `effectiveFrom` are part of the monthly arrangement, so they are not charged per class.
  *     due = { type: "dayOfMonth", day: 1–28 } | { type: "nthClass", nth: 1–4 | "last" }
- *   student.billingByGroup[groupId] = { mode: "group" | "customFee" | "perClass", fee, joinedOn, firstMonthAmount }
+ *   student.billingByGroup[groupId] = { mode: "group" | "customFee" | "perClass", fee, due, joinedOn, firstMonthAmount }
+ *   `due` (same shape as the group's) moves that student's due date; absent, they follow the group's.
  *   student.monthlyPayments = [{ id, groupId, period: "YYYY-MM", amount, paidAt }]
  *
  * A group without `billing` (or with mode "perClass") keeps the current per-class behavior.
@@ -93,10 +94,11 @@ function normalizeOverride(value) {
   const firstMonthAmount = toNumber(value.firstMonthAmount);
   const override = { mode };
   if (mode === "customFee") override.fee = fee !== null && fee >= 0 ? roundMoney(fee) : 0;
+  if (mode !== "perClass" && value.due && typeof value.due === "object") override.due = normalizeDue(value.due);
   if (isDateOnly(value.joinedOn)) override.joinedOn = value.joinedOn;
   if (override.joinedOn && firstMonthAmount !== null && firstMonthAmount >= 0)
     override.firstMonthAmount = roundMoney(firstMonthAmount);
-  return mode === "group" && !override.joinedOn ? null : override;
+  return mode === "group" && !override.joinedOn && !override.due ? null : override;
 }
 
 /** Canonical per-group overrides for one student, or null when there are none. */
@@ -204,25 +206,33 @@ export function groupClassDates(state, group, period) {
   ].sort();
 }
 
+// The date a `due` rule lands on in a period of a group's calendar.
+function dueDateIn(state, group, period, due) {
+  const start = periodStart(period);
+  if (due.type === "dayOfMonth") return addDays(start, due.day - 1);
+  const dates = groupClassDates(state, group, period);
+  if (!dates.length) return endOfMonth(start);
+  return due.nth === "last" ? dates.at(-1) : dates[Math.min(Number(due.nth), dates.length) - 1];
+}
+
 /** Due date of a group's monthly fee in a period. */
 export function monthlyDueDate(state, group, period) {
   const billing = normalizeGroupBilling(group?.billing);
-  const start = periodStart(period);
-  if (!billing || billing.mode !== "monthly") return endOfMonth(start);
-  if (billing.due.type === "dayOfMonth") return addDays(start, billing.due.day - 1);
-  const dates = groupClassDates(state, group, period);
-  if (!dates.length) return endOfMonth(start);
-  const nth = billing.due.nth;
-  return nth === "last" ? dates.at(-1) : dates[Math.min(Number(nth), dates.length) - 1];
+  if (!billing || billing.mode !== "monthly") return endOfMonth(periodStart(period));
+  return dueDateIn(state, group, period, billing.due);
 }
 
 /**
- * A student's due date in a period: the group's, but never before the day the student joined,
- * so someone who joins after the due day is not overdue on arrival.
+ * A student's due date in a period: their own `due` when they have one, otherwise the group's, but
+ * never before the day the student joined, so someone who joins after the due day is not overdue on arrival.
  */
 export function studentMonthlyDueDate(state, student, group, period, groupDueDate = undefined) {
-  const dueDate = groupDueDate ?? monthlyDueDate(state, group, period);
-  const joinedOn = normalizeBillingByGroup(student?.billingByGroup)?.[group?.id]?.joinedOn || "";
+  const override = normalizeBillingByGroup(student?.billingByGroup)?.[group?.id];
+  const dueDate =
+    override?.due && isMonthlyGroup(group)
+      ? dueDateIn(state, group, period, override.due)
+      : (groupDueDate ?? monthlyDueDate(state, group, period));
+  const joinedOn = override?.joinedOn || "";
   return joinedOn > dueDate ? joinedOn : dueDate;
 }
 

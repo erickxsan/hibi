@@ -717,6 +717,18 @@
   font: 700 14px/18px var(--font-sans);
 }
 
+.billing-adjustment-due {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.billing-adjustment-due > .select-menu-wrap {
+  flex: 0 0 auto;
+  width: auto;
+}
+
 .billing-adjustment .billing-remove {
   margin-left: auto;
 }

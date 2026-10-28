@@ -212,6 +212,27 @@ describe("monthly billing", () => {
     expect(validateState(state).valid).toBe(true);
   });
 
+  it("lets a student fall due on their own day or class instead of the group's", () => {
+    const base = fixture({ due: { type: "dayOfMonth", day: 5 } });
+    const own = (due, mode = "group") => ({ ...base.students[0], billingByGroup: { p5a: { mode, due } } });
+    const state = { ...base, students: [own({ type: "dayOfMonth", day: 20 }), ...base.students.slice(1)] };
+    const [group] = state.groups;
+    expect(studentMonthlyDueDate(state, state.students[0], group, "2026-10")).toBe("2026-10-20");
+    // October's classes: Thu 1, Mon 5, Thu 8, Mon 12…; the 2nd class is the 5th.
+    expect(studentMonthlyDueDate(state, own({ type: "nthClass", nth: 2 }), group, "2026-10")).toBe("2026-10-05");
+    expect(studentMonthlyDueDate(state, own({ type: "nthClass", nth: "last" }), group, "2026-10")).toBe("2026-10-29");
+    const diego = deriveMonthlyCharges(state, "2026-10-12").find((item) => item.studentId === "diego");
+    expect(diego).toMatchObject({ dueDate: "2026-10-20", groupDueDate: "2026-10-05", status: "pending", amount: 1200 });
+    expect(deriveMonthlyCharges(state, "2026-10-21").find((item) => item.studentId === "diego").status).toBe("overdue");
+    // A due-only adjustment is kept; per class has no due date to move.
+    expect(normalizeBillingByGroup({ p5a: { mode: "group", due: { type: "dayOfMonth", day: 40 } } })).toEqual({
+      p5a: { mode: "group", due: { type: "dayOfMonth", day: 28 } },
+    });
+    expect(normalizeBillingByGroup({ p5a: { mode: "perClass", due: { type: "dayOfMonth", day: 9 } } })).toEqual({
+      p5a: { mode: "perClass" },
+    });
+  });
+
   it("never makes a student's fee due before the day they joined", () => {
     const base = fixture({ due: { type: "dayOfMonth", day: 5 } });
     const state = {

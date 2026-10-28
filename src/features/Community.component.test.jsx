@@ -237,6 +237,37 @@ describe("Community groups", () => {
     expect(saved().students.find((s) => s.id === "s1").billingByGroup).toEqual({ g1: { mode: "perClass" } });
   });
 
+  it("lets one student of a monthly group fall due on another day", async () => {
+    const user = userEvent.setup();
+    const state = communityState();
+    state.groups[0].billing = {
+      mode: "monthly",
+      monthlyFee: 900,
+      due: { type: "dayOfMonth", day: 5 },
+      effectiveFrom: "2026-10",
+    };
+    const { saved } = setup(state);
+    await user.click(screen.getByRole("tab", { name: "Groups" }));
+    await user.click(screen.getByRole("button", { name: "Open Primaria 5A" }));
+    await user.click(screen.getByRole("combobox", { name: "Adjust for a student" }));
+    await user.click(screen.getByRole("option", { name: "Diego Soto" }));
+    await user.click(screen.getByRole("combobox", { name: "How Diego Soto pays" }));
+    await user.click(screen.getByRole("option", { name: "Group fee" }));
+    expect(screen.queryByLabelText("Fee for Diego Soto")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("combobox", { name: "When Diego Soto pays" }));
+    await user.click(screen.getByRole("option", { name: "due on day" }));
+    await user.click(screen.getByRole("combobox", { name: "Day Diego Soto pays" }));
+    await user.click(screen.getByRole("option", { name: "20" }));
+    expect(screen.getByText(/1 with an adjustment/)).toHaveTextContent("2 pay the group fee");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() =>
+      expect(saved().students.find((s) => s.id === "s2").billingByGroup).toEqual({
+        g1: { mode: "group", due: { type: "dayOfMonth", day: 20 } },
+      }),
+    );
+    expect(saved().groups.find((g) => g.id === "g1").billing.due).toEqual({ type: "dayOfMonth", day: 5 });
+  });
+
   it("asks before archiving, then shows the archived history and reactivates", async () => {
     const user = userEvent.setup();
     const { saved } = setup();
@@ -329,6 +360,47 @@ describe("Community on a phone", () => {
     fireEvent.change(within(billing).getByLabelText("Tarifa por hora"), { target: { value: "80" } });
     await user.click(within(billing).getByRole("button", { name: "Guardar cambios" }));
     await waitFor(() => expect(saved().groups.find((g) => g.id === "g1").hourlyRate).toBe(80));
+  });
+
+  async function openBillingSheet(user) {
+    setCompact(true);
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, "es");
+    const result = setup();
+    await user.click(screen.getByRole("button", { name: "Grupos" }));
+    await user.click(screen.getByRole("button", { name: "Abrir Primaria 5A" }));
+    const group = await screen.findByRole("dialog", { name: "Primaria 5A" });
+    await user.click(within(group).getByRole("button", { name: /Forma de cobro/ }));
+    await waitFor(() => expect(screen.getAllByRole("dialog")).toHaveLength(2));
+    return { ...result, billing: () => screen.getAllByRole("dialog").at(-1) };
+  }
+
+  it("keeps an unsaved billing change while the schedule editor saves the group", async () => {
+    const user = userEvent.setup();
+    const { saved, billing } = await openBillingSheet(user);
+    await user.click(within(billing()).getByRole("button", { name: "Mensual" }));
+    await user.click(within(billing()).getByRole("button", { name: "Editar horario y datos" }));
+    const editor = await screen.findByRole("dialog", { name: "Editar grupo" });
+    fireEvent.change(within(editor).getByLabelText(/Nombre del grupo/), { target: { value: "Primaria 5B" } });
+    await user.click(within(editor).getByRole("button", { name: "Guardar grupo" }));
+    await waitFor(() => expect(saved().groups.find((g) => g.id === "g1").name).toBe("Primaria 5B"));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Editar grupo" })).not.toBeInTheDocument());
+    expect(within(billing()).getByRole("button", { name: "Mensual" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(billing()).getByLabelText("Cuota mensual por alumno")).toBeInTheDocument();
+    expect(within(billing()).getByLabelText("Nombre del grupo")).toHaveValue("Primaria 5B");
+  });
+
+  it("asks before «Atrás» drops an unsaved billing change", async () => {
+    const user = userEvent.setup();
+    const { billing } = await openBillingSheet(user);
+    await user.click(within(billing()).getByRole("button", { name: "Mensual" }));
+    await user.click(within(billing()).getByRole("button", { name: "Atrás" }));
+    const question = await screen.findByRole("alertdialog", { name: "¿Descartar los cambios sin guardar del grupo?" });
+    await user.click(within(question).getByRole("button", { name: "Descartar cambios" }));
+    await waitFor(() => expect(screen.getAllByRole("dialog")).toHaveLength(1));
+    const group = screen.getByRole("dialog", { name: "Primaria 5A" });
+    await user.click(within(group).getByRole("button", { name: /Forma de cobro/ }));
+    await waitFor(() => expect(screen.getAllByRole("dialog")).toHaveLength(2));
+    expect(within(billing()).getByRole("button", { name: "Por clase" })).toHaveAttribute("aria-pressed", "true");
   });
 });
 

@@ -322,11 +322,16 @@ export default function Community({
     }
     const nextGroup = cloneGroup(focusGroup);
     const nextBilling = billingDraftFor(focusGroup, focusMembers);
+    const { group: previousGroup, billing: previousBilling } = baselines.current;
+    const sameGroup = previousGroup?.id === focusGroup.id;
     baselines.current.group = nextGroup;
     baselines.current.billing = nextBilling;
-    setGroupDraft(nextGroup);
-    setBillingDraft(nextBilling);
-    setApplyFrom("next");
+    // A save elsewhere (schedule editor, badge, a new member) refreshes the record; unsaved edits here survive it.
+    setGroupDraft((current) => (sameGroup && current && draftChanged(current, previousGroup) ? current : nextGroup));
+    setBillingDraft((current) =>
+      sameGroup && current && draftChanged(current, previousBilling) ? current : nextBilling,
+    );
+    if (!sameGroup) setApplyFrom("next");
   }, [focusGroup, focusMembers]);
 
   const studentDirty = Boolean(studentDraft) && draftChanged(studentDraft, baselines.current.student);
@@ -426,6 +431,14 @@ export default function Community({
       "Discard your unsaved group changes?",
       () => setGroupEditor(null),
     );
+  // «Atrás» or ✕ on the billing sheet: unsaved billing is asked about and then dropped, so it does not linger.
+  const closeBillingSheet = () =>
+    proceedOrAsk(groupDirty, "Discard your unsaved group changes?", () => {
+      setGroupDraft(baselines.current.group);
+      setBillingDraft(baselines.current.billing);
+      setApplyFrom("next");
+      setBillingSheet(false);
+    });
 
   useEffect(() => {
     if (intent?.type === "open-group-archives") {
@@ -1211,7 +1224,7 @@ export default function Community({
         </BottomSheet>
         <BottomSheet
           open={Boolean(billingSheet && sheetGroup && groupDraft && billingDraft)}
-          onClose={() => setBillingSheet(false)}
+          onClose={closeBillingSheet}
           title={sheetGroup?.name || ""}
           kicker={t("Edit group")}
           backLabel={t("Back")}
