@@ -17,7 +17,7 @@ import { studentGroupIdsOf } from "./groupLabels";
  * Seguimiento: one period and one scope (all, a group or individual classes) feed the KPIs,
  * the chart, the linked student list, the student's history and the breakdown table.
  */
-export const TRACKING_PERIODS = Object.freeze(["week", "month", "thirty", "all"]);
+export const TRACKING_PERIODS = Object.freeze(["week", "month", "thirty", "all", "custom"]);
 
 function finite(value) {
   return typeof value === "number" && Number.isFinite(value);
@@ -36,7 +36,12 @@ function earliestRecord(state) {
 }
 
 /** The consulted range up to the report date and the comparable range before it. */
-export function trackingRange(asOf, period = "month", state = null) {
+export function trackingRange(asOf, period = "month", state = null, customStart = "") {
+  if (period === "custom" && customStart) {
+    const start = customStart < asOf ? customStart : asOf;
+    const span = daysBetween(start, asOf);
+    return { period, start, end: asOf, previousStart: addDays(start, -span - 1), previousEnd: addDays(start, -1) };
+  }
   if (period === "week") {
     const start = startOfWeek(asOf, 1);
     const span = daysBetween(start, asOf);

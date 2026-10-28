@@ -338,10 +338,14 @@ export default function Tracking({
   const [reportDate, setReportDate] = useState("");
   const [dateDraft, setDateDraft] = useState(liveDate);
   const [dateOpen, setDateOpen] = useState(false);
-  const asOf = reportDate || liveDate;
+  const [period, setPeriod] = useState("month");
+  // «Rango personalizado»: its own first and last day; the last one is the report date of the figures.
+  const [customRange, setCustomRange] = useState({ start: "", end: "" });
+  const [rangeDraft, setRangeDraft] = useState({ start: "", end: "" });
+  const [rangeOpen, setRangeOpen] = useState(false);
+  const asOf = period === "custom" ? customRange.end : reportDate || liveDate;
   const [tab, setTab] = useState("attendance");
   const [mode, setMode] = useState("summary");
-  const [period, setPeriod] = useState("month");
   const [scope, setScope] = useState("all");
   const [selected, setSelected] = useState(null);
   const [focus, setFocus] = useState(false);
@@ -375,7 +379,10 @@ export default function Tracking({
   }, [changeTab, clearIntent, intent]);
 
   const groupsById = useMemo(() => new Map((state.groups || []).map((group) => [group.id, group])), [state.groups]);
-  const range = useMemo(() => trackingRange(asOf, period, state), [asOf, period, state]);
+  const range = useMemo(
+    () => trackingRange(asOf, period, state, customRange.start),
+    [asOf, customRange.start, period, state],
+  );
   const students = useMemo(() => trackingStudents(state, derived, range, scope), [derived, range, scope, state]);
   const kpis = useMemo(
     () => trackingKpis(state, derived, range, scope, students),
@@ -426,7 +433,25 @@ export default function Tracking({
     { value: "week", label: t("This week"), short: t("This week"), meta: "" },
     { value: "thirty", label: t("Last 30 days"), short: t("30 days"), meta: "" },
     { value: "all", label: t("All records"), short: t("All"), meta: "" },
+    period === "custom"
+      ? {
+          value: "custom",
+          label: t("Range · {span}", { span: comparisonSpan(range.start, range.end, liveDate, locale) }),
+          short: comparisonSpan(range.start, range.end, liveDate, locale),
+          meta: "",
+        }
+      : { value: "custom", label: t("Custom range…"), short: t("Range…"), meta: "" },
   ];
+  const openRange = () => {
+    setRangeDraft({ start: range.start || asOf, end: asOf });
+    setRangeOpen(true);
+  };
+  const choosePeriod = (value) => {
+    if (value === "custom") return openRange();
+    setPeriod(value);
+    reset();
+  };
+  const rangeInvalid = !rangeDraft.start || !rangeDraft.end || rangeDraft.start > rangeDraft.end;
 
   // The linked list: sorted by what needs attention, filtered by a figure or by the chosen point.
   let list = [...students];
@@ -809,6 +834,52 @@ export default function Tracking({
   };
   const scopeNode = archiveScope?.count ? <ArchivedGroupsScope scope={archiveScope} /> : null;
 
+  const rangeDrawer = (
+    <Drawer
+      open={rangeOpen}
+      onClose={() => setRangeOpen(false)}
+      title={t("Custom range")}
+      description={t("Choose the first and last day to review.")}
+      size="compact"
+      footer={
+        <>
+          <Button onClick={() => setRangeOpen(false)}>{t("Cancel")}</Button>
+          <Button
+            variant="primary"
+            disabled={rangeInvalid}
+            onClick={() => {
+              setCustomRange(rangeDraft);
+              setPeriod("custom");
+              setReportDate("");
+              setRangeOpen(false);
+              reset();
+            }}
+          >
+            {t("Apply")}
+          </Button>
+        </>
+      }
+    >
+      <Field label={t("From")}>
+        <Input
+          type="date"
+          value={rangeDraft.start}
+          max={rangeDraft.end || liveDate}
+          onChange={(event) => setRangeDraft({ ...rangeDraft, start: event.target.value })}
+        />
+      </Field>
+      <Field label={t("To")}>
+        <Input
+          type="date"
+          value={rangeDraft.end}
+          min={rangeDraft.start}
+          max={liveDate}
+          onChange={(event) => setRangeDraft({ ...rangeDraft, end: event.target.value })}
+        />
+      </Field>
+    </Drawer>
+  );
+
   if (compact) {
     const mobileChips =
       tab === "attendance"
@@ -881,7 +952,7 @@ export default function Tracking({
         <div className="tracking-head">
           <div>
             <h1>{t("Tracking")}</h1>
-            {reportDate ? (
+            {reportDate && period !== "custom" ? (
               <span className="overline">
                 {t("Report date: {date}", { date: formatShortDate(reportDate, locale) })}
               </span>
@@ -891,10 +962,7 @@ export default function Tracking({
             small
             aria-label={t("Report period")}
             value={period}
-            onChange={(event) => {
-              setPeriod(event.target.value);
-              reset();
-            }}
+            onChange={(event) => choosePeriod(event.target.value)}
           >
             {periodOptions.map((option) => (
               <option key={option.value} value={option.value}>
@@ -1181,6 +1249,7 @@ export default function Tracking({
             />
           ) : null}
         </BottomSheet>
+        {rangeDrawer}
       </div>
     );
   }
@@ -1195,10 +1264,7 @@ export default function Tracking({
               aria-label={t("Report period")}
               className="tracking-period"
               value={period}
-              onChange={(event) => {
-                setPeriod(event.target.value);
-                reset();
-              }}
+              onChange={(event) => choosePeriod(event.target.value)}
             >
               {periodOptions.map((option) => (
                 <option
@@ -1216,11 +1282,16 @@ export default function Tracking({
             </Select>
             <IconButton
               label={
-                reportDate ? t("Report date: {date}", { date: formatShortDate(reportDate, locale) }) : t("Report date")
+                period === "custom"
+                  ? t("Custom range")
+                  : reportDate
+                    ? t("Report date: {date}", { date: formatShortDate(reportDate, locale) })
+                    : t("Report date")
               }
               icon={CalendarDays}
-              className={reportDate ? "is-active" : ""}
+              className={reportDate || period === "custom" ? "is-active" : ""}
               onClick={() => {
+                if (period === "custom") return openRange();
                 setDateDraft(asOf);
                 setDateOpen(true);
               }}
@@ -1254,7 +1325,7 @@ export default function Tracking({
         </Select>
         {scopeNode}
       </div>
-      {reportDate ? (
+      {reportDate && period !== "custom" ? (
         <p className="notice tracking-date-note">
           {t("Showing figures up to {date}.", { date: formatDayMonth(reportDate, locale) })}{" "}
           <button type="button" className="link-button" onClick={() => setReportDate("")}>
@@ -1563,6 +1634,7 @@ export default function Tracking({
           <Input type="date" value={dateDraft} max={liveDate} onChange={(event) => setDateDraft(event.target.value)} />
         </Field>
       </Drawer>
+      {rangeDrawer}
     </div>
   );
 }

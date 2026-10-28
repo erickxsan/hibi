@@ -124,6 +124,21 @@ describe("tracking ranges", () => {
     expect(trackingRange(AS_OF, "all", fixture())).toMatchObject({ start: "2026-10-12", previousStart: "" });
   });
 
+  it("uses the chosen first day for a custom range and compares it with as many days just before", () => {
+    expect(trackingRange("2026-10-15", "custom", null, "2026-10-06")).toEqual({
+      period: "custom",
+      start: "2026-10-06",
+      end: "2026-10-15",
+      previousStart: "2026-09-26",
+      previousEnd: "2026-10-05",
+    });
+    expect(trackingRange("2026-10-15", "custom", null, "2026-10-15")).toMatchObject({
+      start: "2026-10-15",
+      previousStart: "2026-10-14",
+      previousEnd: "2026-10-14",
+    });
+  });
+
   it("buckets payments by day, week or month depending on the length", () => {
     expect(trackingBuckets(trackingRange(AS_OF, "week")).map((bucket) => bucket.kind)).toEqual(["day", "day", "day"]);
     const weeks = trackingBuckets(trackingRange(AS_OF, "month"));

@@ -180,6 +180,46 @@ describe("Tracking on desktop", () => {
     expect(absent).toHaveLength(2);
     for (const item of absent) expect(item.textContent).not.toMatch(/Pending|Paid/);
   });
+
+  it("consults a custom range of days", async () => {
+    const user = userEvent.setup();
+    setup();
+    await user.click(screen.getByRole("combobox", { name: "Report period" }));
+    await user.click(screen.getByRole("option", { name: "Custom range…" }));
+    const drawer = screen.getByRole("dialog", { name: "Custom range" });
+    await waitFor(() => expect(within(drawer).getByRole("combobox", { name: "From" })).toBeEnabled());
+    await user.click(within(drawer).getByRole("combobox", { name: "From" }));
+    await user.click(screen.getByRole("button", { name: "Monday, October 12, 2026" }));
+    await user.click(within(drawer).getByRole("combobox", { name: "To" }));
+    await user.click(screen.getByRole("button", { name: "Monday, October 12, 2026" }));
+    await user.click(within(drawer).getByRole("button", { name: "Apply" }));
+    expect(screen.getByRole("combobox", { name: "Report period" })).toHaveTextContent(/^Range · /);
+    await user.click(screen.getByRole("button", { name: "Breakdown" }));
+    const rows = within(screen.getByRole("table", { name: "Records" }))
+      .getAllByRole("row")
+      .slice(1);
+    expect(rows).toHaveLength(2);
+
+    // The Excel export covers the same days: its name, its title and its rows.
+    const blobs = [];
+    const downloads = [];
+    URL.createObjectURL = vi.fn((blob) => blobs.push(blob) && "blob:hibi");
+    URL.revokeObjectURL = vi.fn();
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function save() {
+      downloads.push(this.download);
+    });
+    await user.click(screen.getByRole("button", { name: "Export Excel" }));
+    expect(downloads).toEqual(["hibi-attendance-2026-10-12-2026-10-12.xls"]);
+    const sheet = await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.readAsText(blobs[0]);
+    });
+    expect(sheet).toContain("2026-10-12");
+    expect(sheet).not.toContain("2026-10-05");
+    expect(sheet).not.toContain("2026-10-19");
+    click.mockRestore();
+  });
 });
 
 describe("Tracking on mobile", () => {

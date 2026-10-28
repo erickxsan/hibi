@@ -5,6 +5,11 @@ export const TRACKING_TRANSLATIONS = Object.freeze({
   "This month · {month}": "Este mes · {month}",
   "{start} to {end} · through today": "{start} al {end} · hasta hoy",
   "30 days": "30 días",
+  "Custom range…": "Rango personalizado…",
+  "Custom range": "Rango personalizado",
+  "Range…": "Rango…",
+  "Range · {span}": "Rango · {span}",
+  "Choose the first and last day to review.": "Elige el primer y el último día que quieres consultar.",
   "Up to {date}": "Hasta el {date}",
   "Showing figures up to {date}.": "Mostrando las cifras hasta el {date}.",
   "See the figures as they were on another day. Saved records do not change.":
