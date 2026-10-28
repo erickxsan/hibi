@@ -98,7 +98,7 @@ export function sessionAttendance(session) {
 }
 
 /** Sessions of a range with what the home needs about each one. */
-function sessionsIn(state, start, end, asOf, groupFilter = "all") {
+export function sessionsIn(state, start, end, asOf, groupFilter = "all") {
   return buildClassWorkspaceSessionsForRange(state, start, end, asOf).filter(
     (session) => session.statusLabel !== "Cancelled" && matchesGroup(groupFilter, session.groupId),
   );

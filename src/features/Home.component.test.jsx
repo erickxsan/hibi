@@ -119,14 +119,19 @@ function setCompact(matches) {
   }));
 }
 
+let random;
+
 beforeEach(() => {
   localStorage.setItem("hibi:language:v1", "en");
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date(2026, 9, 21, 12, 30));
+  // Each card draws its view at random; the first view of each metric keeps the tests stable.
+  random = vi.spyOn(Math, "random").mockReturnValue(0);
 });
 
 afterEach(() => {
   vi.useRealTimers();
+  random.mockRestore();
   setCompact(false);
 });
 
@@ -196,9 +201,9 @@ describe("Home", () => {
     expect(within(tabs).getByRole("tab", { name: /Grade/ })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("table", { name: "Students · what needs attention first" })).toBeInTheDocument();
     await user.click(within(tabs).getByRole("tab", { name: /Collections/ }));
-    await user.click(screen.getByRole("button", { name: /To collect/ }));
-    expect(screen.getByText("Who owes")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /Month projection/ }));
+    expect(screen.getByText("Collections by payment date", { selector: ".xp-caption" })).toBeInTheDocument();
+    await user.click(screen.getByRole("combobox", { name: "Chart view" }));
+    await user.click(screen.getByRole("option", { name: "Accumulated" }));
     expect(screen.getByText("Accumulated collections", { selector: ".xp-caption" })).toBeInTheDocument();
     await user.click(screen.getByRole("combobox", { name: "Filter by group" }));
     await user.click(screen.getByRole("option", { name: "Reading" }));
@@ -245,8 +250,12 @@ describe("Home", () => {
     await user.click(screen.getByRole("button", { name: "Monthly" }));
     expect(screen.getByRole("heading", { name: "Your month · October" })).toBeInTheDocument();
     const attendance = screen.getByRole("article", { name: /^Attendance:/ });
-    await user.click(within(attendance).getByRole("button", { name: /Mon 12 Oct · Reading: 100%/ }));
+    expect(within(attendance).getByText("Attendance day by day")).toBeInTheDocument();
+    await user.click(within(attendance).getByRole("button", { name: /Mon 12 Oct: 100%/ }));
     expect(within(attendance).getByText("Nobody missed. Perfect attendance!")).toBeInTheDocument();
+    await user.click(within(attendance).getByRole("button", { name: "Map" }));
+    expect(within(attendance).getByRole("button", { name: "Map" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(attendance).getByText("Each student's latest classes")).toBeInTheDocument();
     // Archived groups stay out of Inicio without a notice; the chip only appears once they are included.
     expect(screen.queryByRole("button", { name: /archived group/ })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Yearly" }));
@@ -266,7 +275,8 @@ describe("Home", () => {
     await user.click(screen.getByRole("button", { name: "Close" }));
     await user.click(screen.getByRole("button", { name: /^Attendance:/ }));
     const sheet = await screen.findByRole("dialog", { name: "Attendance" });
-    expect(within(sheet).getByText("Below 80%")).toBeInTheDocument();
+    expect(within(sheet).getByRole("combobox", { name: "Chart view" })).toHaveTextContent("Calendar");
+    expect(within(sheet).getByText("Below 80%", { selector: ".overline" })).toBeInTheDocument();
     await user.click(within(sheet).getByRole("button", { name: "Open in Tracking" }));
     expect(props.openPage).toHaveBeenCalledWith("grades", { type: "open-tracking", tab: "attendance" });
   });

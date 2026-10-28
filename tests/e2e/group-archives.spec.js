@@ -51,11 +51,12 @@ for (const width of [390, 1440]) {
       await chip.click();
       const scope = page.getByRole("switch", { name: "Incluir grupos archivados", exact: true });
       await expect(scope).toHaveAttribute("aria-checked", "false");
-      await expect(page.getByText("$350", { exact: true }).first()).toBeVisible();
+      // The week's collections bar names its amount, on a phone and on a desktop alike.
+      await expect(page.getByRole("button", { name: /: \$350$/ }).first()).toBeVisible();
       await scope.click();
       await expect(scope).toHaveAttribute("aria-checked", "true");
       await expect(page.getByText(/sesión/).first()).toBeVisible();
-      await expect(page.getByText("$600", { exact: true }).first()).toBeVisible();
+      await expect(page.getByRole("button", { name: /: \$600$/ }).first()).toBeVisible();
       await page.screenshot({ path: testInfo.outputPath("included-statistics.png"), fullPage: true });
       await page.reload();
       await page.getByRole("button", { name: /grupos? archivados? fuera$/ }).click();

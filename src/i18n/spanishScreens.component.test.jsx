@@ -83,10 +83,10 @@ describe("Spanish screens and opaque user content", () => {
       },
     ];
     renderSpanish(<Tracking state={state} derived={deriveAll(state, "2026-10-21")} />);
-    expect(screen.getByRole("heading", { name: "Asistencia por clase" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Asistencia día por día" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("combobox", { name: "Filtrar por grupo" }));
     expect(screen.getByRole("option", { name: "Home" })).toBeInTheDocument();
-    expect(screen.getByText("Asistencia promedio")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Vista de la gráfica" })).toHaveTextContent("Calendario");
     expect(translateMessage("Collection period: {p0}", { p0: uiText("Weekly") }, "es")).toBe(
       "Periodo de cobros: Semanal",
     );

@@ -31,8 +31,11 @@ import {
   monthLong,
   monthShort,
 } from "../utils/displayFormat";
-import { defaultPointIndex, monthProjection, shortNames } from "./homeDashboardModel";
+import { assignmentsIn, defaultPointIndex, shortNames } from "./homeDashboardModel";
+import { ChartView, ChartViewPicker, chartViewDetail, chartViewEmpty, chartViewTitle, isPlotView } from "./ChartViews";
+import { buildChartView, CHART_VIEWS } from "./chartViewsModel";
 import {
+  bucketLabel,
   bucketTitle,
   collectionsMax,
   compactMoney,
@@ -65,6 +68,8 @@ const MODE_ITEMS = [
   { value: "breakdown", label: "Breakdown" },
 ];
 const TAB_VALUES = TAB_ITEMS.map((item) => item.value);
+/** Each tab's metric in the shared chart views. */
+const TAB_METRIC = Object.freeze({ attendance: "attendance", grades: "grade", payments: "collections" });
 
 function capitalize(text) {
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
@@ -349,9 +354,9 @@ export default function Tracking({
   const [scope, setScope] = useState("all");
   const [selected, setSelected] = useState(null);
   const [focus, setFocus] = useState(false);
-  const [kpiFilter, setKpiFilter] = useState("");
   const [studentId, setStudentId] = useState("");
-  const [view, setView] = useState("rhythm");
+  // The chart view of each tab; a tab opens on its metric's first view.
+  const [views, setViews] = useState({});
   const [chip, setChip] = useState("all");
   const [sheet, setSheet] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -359,7 +364,6 @@ export default function Tracking({
   const reset = () => {
     setSelected(null);
     setFocus(false);
-    setKpiFilter("");
     setChip("all");
   };
   const changeTab = useHistoryBackedState({
@@ -393,10 +397,6 @@ export default function Tracking({
     () => (tab === "payments" ? monthlyBlocks(state, asOf, scope) : []),
     [asOf, scope, state, tab],
   );
-  const projection = useMemo(
-    () => (period === "month" && scope === "all" ? monthProjection(state, derived?.classLog || [], asOf) : null),
-    [asOf, derived, period, scope, state],
-  );
   const records = useMemo(
     () =>
       mode === "breakdown" || studentId
@@ -404,9 +404,55 @@ export default function Tracking({
         : [],
     [derived, mode, range, scope, state, studentId],
   );
-  const threshold = { attendance: kpis.threshold, grade: kpis.gradeThreshold };
-  const index = selected === null || selected >= metric.points.length ? defaultPointIndex(metric) : selected;
-  const point = focus ? metric.points[index] : null;
+  const threshold = useMemo(
+    () => ({ attendance: kpis.threshold, grade: kpis.gradeThreshold }),
+    [kpis.gradeThreshold, kpis.threshold],
+  );
+  const viewOptions = CHART_VIEWS[TAB_METRIC[tab]];
+  const view = viewOptions.includes(views[tab]) ? views[tab] : viewOptions[0];
+  const plot = isPlotView(view);
+  const index = typeof selected !== "number" || selected >= metric.points.length ? defaultPointIndex(metric) : selected;
+  const point = focus && plot ? metric.points[index] : null;
+  const studentsById = useMemo(
+    () => new Map((state.students || []).map((student) => [student.id, student])),
+    [state.students],
+  );
+  const viewData = useMemo(
+    () =>
+      plot
+        ? null
+        : buildChartView(view, {
+            state,
+            derived,
+            asOf: range.end,
+            start: range.start,
+            end: range.end,
+            group: scope,
+            threshold,
+            rows: students,
+            assignments: tab === "grades" && range.start ? assignmentsIn(state, range.start, range.end, scope) : [],
+            points: metric.points,
+            previousStart: range.previousStart,
+            previousEnd: range.previousEnd,
+            monthly: period === "month",
+          }),
+    [derived, metric.points, period, plot, range, scope, state, students, tab, threshold, view],
+  );
+  const viewContext = {
+    t,
+    locale,
+    threshold,
+    monthly: period === "month",
+    points: metric.points,
+    names: (list) => shortNames(list, locale),
+    nameOf: (id) => studentsById.get(id)?.fullName || t("Former student"),
+    groupName: (id) => (id ? groupsById.get(id)?.name || "" : t("Individual")),
+    bucketLabel: (item) => (item ? bucketLabel(item, locale) : ""),
+    bucketTitle: (item) => (item ? bucketTitle(item, t, locale) : ""),
+  };
+  const viewDetail = plot
+    ? null
+    : chartViewDetail(view, viewData, focus && typeof selected === "string" ? selected : "", viewContext);
   const selectedRow = students.find((row) => row.student.id === studentId) || null;
 
   const groupChips = [
@@ -462,27 +508,13 @@ export default function Tracking({
     );
   if (tab === "payments") list.sort((left, right) => right.owed - left.owed || right.paid - left.paid);
   let focusLabel = null;
-  const kpiSets = {
-    low: tab === "attendance" ? kpis.attendance.low : kpis.grades.low,
-    ungraded: kpis.grades.ungraded,
-    owed: students.filter((row) => row.owed > 0),
-  };
-  if (kpiFilter && kpiSets[kpiFilter]) {
-    const ids = new Set(kpiSets[kpiFilter].map((row) => row.student.id));
-    list = list.filter((row) => ids.has(row.student.id));
-    focusLabel = {
-      title: t(
-        kpiFilter === "low"
-          ? tab === "attendance"
-            ? "Students below {value}%"
-            : "With a low grade"
-          : kpiFilter === "ungraded"
-            ? "Ungraded"
-            : "To collect",
-        { value: Math.round(kpis.threshold * 100) },
-      ),
-      sub: t(ids.size === 1 ? "{count} student" : "{count} students", { count: ids.size }),
-    };
+  if (viewDetail && focus) {
+    // A picked mark of a chart view narrows the list to the students it concerns.
+    if (viewDetail.studentIds) {
+      const ids = new Set(viewDetail.studentIds);
+      list = list.filter((row) => ids.has(row.student.id));
+    }
+    focusLabel = { title: viewDetail.title, sub: [viewDetail.big, viewDetail.sub].filter(Boolean).join(" · ") };
   } else if (point) {
     if (tab === "payments") {
       const ids = new Set(point.payments.map((item) => item.studentId));
@@ -492,28 +524,6 @@ export default function Tracking({
         sub: point.payments.length
           ? `${t(point.payments.length === 1 ? "{count} payment" : "{count} payments", { count: point.payments.length })} · ${formatMoney(point.value, locale)}`
           : t("No payments in this stretch."),
-      };
-    } else if (tab === "attendance") {
-      const ids = new Set(point.studentIds);
-      list = list
-        .filter((row) => ids.has(row.student.id))
-        .sort(
-          (left, right) =>
-            Number(point.absentIds.includes(right.student.id)) - Number(point.absentIds.includes(left.student.id)),
-        );
-      focusLabel = {
-        title: `${formatShortDate(point.date, locale)} · ${point.title}`,
-        sub:
-          point.kind !== "reg"
-            ? t("Not recorded")
-            : point.absentIds.length
-              ? `${t("{present} of {total}", { present: point.present, total: point.total })} · ${t("{names} missed", {
-                  names: shortNames(
-                    point.absentIds.map((id) => students.find((row) => row.student.id === id)?.student.fullName || ""),
-                    locale,
-                  ),
-                })}`
-              : `${t("{present} of {total}", { present: point.present, total: point.total })} · ${t("nobody missed")}`,
       };
     } else if (point.assignment) {
       const grades = new Map(point.assignment.grades.map((grade) => [grade.studentId, grade.value]));
@@ -542,12 +552,7 @@ export default function Tracking({
       result.value = percentText(row.attendance, locale);
       result.tone = row.attendance !== null && row.attendance < kpis.threshold ? "text-bad" : "";
       result.squares = row.sequence.slice(-6);
-      if (point && point.kind === "reg") {
-        result.hit = point.absentIds.includes(row.student.id);
-        result.sub = t(result.hit ? "Missed on {date}" : "Present on {date}", {
-          date: formatShortDate(point.date, locale),
-        });
-      } else if (row.absences) {
+      if (row.absences) {
         result.sub = `${t(row.absences === 1 ? "{count} absence" : "{count} absences", { count: row.absences })} · ${result.sub}`;
       }
     } else if (tab === "grades") {
@@ -659,164 +664,40 @@ export default function Tracking({
     .filter(Boolean)
     .join(" · ");
 
-  // With no grade and nothing waiting for one, four «—» indicators would each say so: one line says it once.
-  const kpisEmpty =
-    tab === "grades" && !kpis.grades.count && !kpis.grades.ungraded.length
-      ? t("No graded assignments in this period")
-      : "";
-  const kpiStrip =
+  // The phone's headline figure and its comparison.
+  const headlineNote =
     tab === "attendance"
-      ? [
-          {
-            label: t("Average attendance"),
-            value: percentText(kpis.attendance.value, locale),
-            note:
-              kpis.attendance.delta !== null
-                ? `${kpis.attendance.delta >= 0 ? "↑" : "↓"} ${t("{value} pp vs. {previous}", { value: Math.abs(Math.round(kpis.attendance.delta * 100)), previous: comparison })}`
-                : t("{present} of {total} records", {
-                    present: kpis.attendance.present,
-                    total: kpis.attendance.records,
-                  }),
-            noteTone: kpis.attendance.delta === null ? "" : kpis.attendance.delta >= 0 ? "text-ok" : "text-bad",
-          },
-          {
-            label: t("Recorded classes"),
-            value: String(kpis.attendance.registered),
-            note: kpis.attendance.unregistered
-              ? t("{count} not recorded", { count: kpis.attendance.unregistered })
-              : t("Everything recorded"),
-            noteTone: kpis.attendance.unregistered ? "text-pend" : "text-ok",
-          },
-          {
-            label: t("Absences"),
-            value: String(kpis.attendance.absences),
-            note: t("of {count} records", { count: kpis.attendance.records }),
-          },
-          {
-            id: "low",
-            label: t("Below {value}%", { value: Math.round(kpis.threshold * 100) }),
-            // With nothing measured there is no «all good» to celebrate: neutral value and «Sin datos».
-            value: kpis.attendance.records ? String(kpis.attendance.low.length) : "—",
-            valueTone: !kpis.attendance.records ? "" : kpis.attendance.low.length ? "text-bad" : "text-ok",
-            note: !kpis.attendance.records
-              ? t("No data")
-              : kpis.attendance.low.length
-                ? shortNames(
-                    kpis.attendance.low.map((row) => row.student.fullName),
-                    locale,
-                  )
-                : t("Nobody"),
-          },
-        ]
+      ? kpis.attendance.delta !== null
+        ? `${kpis.attendance.delta >= 0 ? "↑" : "↓"} ${t("{value} pp vs. {previous}", { value: Math.abs(Math.round(kpis.attendance.delta * 100)), previous: comparison })}`
+        : t("{present} of {total} records", { present: kpis.attendance.present, total: kpis.attendance.records })
       : tab === "grades"
-        ? [
-            {
-              label: t("Average"),
-              value: kpis.grades.value === null ? "—" : `${formatScore(kpis.grades.value, locale)} /10`,
-              note:
-                kpis.grades.delta !== null
-                  ? Math.round(kpis.grades.delta * 10) === 0
-                    ? t("Same as {previous}", { previous: comparison })
-                    : `${kpis.grades.delta >= 0 ? "↑" : "↓"} ${t("{value} vs. {previous}", { value: formatScore(Math.abs(kpis.grades.delta), locale), previous: comparison })}`
-                  : t(kpis.grades.count === 1 ? "{count} grade" : "{count} grades", { count: kpis.grades.count }),
-              noteTone: "text-data",
-            },
-            {
-              label: t("Graded assignments"),
-              value: String(kpis.grades.graded),
-              note: t(kpis.grades.count === 1 ? "{count} grade" : "{count} grades", { count: kpis.grades.count }),
-            },
-            {
-              id: "low",
-              label: t("Low grades"),
-              value: kpis.grades.count ? String(kpis.grades.low.length) : "—",
-              valueTone: !kpis.grades.count ? "" : kpis.grades.low.length ? "text-bad" : "text-ok",
-              note: !kpis.grades.count
-                ? t("No data")
-                : kpis.grades.low.length
-                  ? shortNames(
-                      kpis.grades.low.map((row) => row.student.fullName),
-                      locale,
-                    )
-                  : t("Nobody below {value}", { value: formatScore(kpis.gradeThreshold, locale) }),
-            },
-            {
-              id: "ungraded",
-              label: t("Ungraded"),
-              value: String(kpis.grades.ungraded.length),
-              valueTone: kpis.grades.ungraded.length ? "text-pend" : "text-ok",
-              note: kpis.grades.ungraded.length
-                ? shortNames(
-                    kpis.grades.ungraded.map((row) => row.student.fullName),
-                    locale,
-                  )
-                : t("Everything graded"),
-            },
-          ]
-        : [
-            {
-              label: t("Collected"),
-              value: formatMoney(kpis.payments.collected, locale),
-              note: [
-                paymentsDelta,
-                kpis.payments.monthlyCount
-                  ? t(
-                      kpis.payments.monthlyCount === 1
-                        ? "Includes {count} monthly fee"
-                        : "Includes {count} monthly fees",
-                      {
-                        count: kpis.payments.monthlyCount,
-                      },
-                    )
-                  : t(kpis.payments.paymentCount === 1 ? "{count} payment" : "{count} payments", {
-                      count: kpis.payments.paymentCount,
-                    }),
-              ]
-                .filter(Boolean)
-                .join(" · "),
-              noteTone: paymentsDeltaTone,
-            },
-            {
-              id: "owed",
-              label: t("To collect"),
-              value: formatMoney(kpis.payments.owed, locale),
-              valueTone: kpis.payments.owed ? "text-bad" : "text-ok",
-              note: owedNote,
-              noteTone: kpis.payments.overdue ? "text-bad" : "",
-            },
-            {
-              label: t("Month projection"),
-              value: projection ? formatMoney(projection.projected, locale) : "—",
-              note: projection
-                ? projection.monthlyDue
-                  ? t("With {amount} in pending monthly fees", { amount: formatMoney(projection.monthlyDue, locale) })
-                  : t("Upcoming classes at their rate")
-                : t("This month with all groups"),
-            },
-            {
-              label: t("Paid classes"),
-              value: String(kpis.payments.paidClasses),
-              note: kpis.payments.unpaidClasses
-                ? t("{count} unpaid", { count: kpis.payments.unpaidClasses })
-                : t("Everything paid"),
-              noteTone: kpis.payments.unpaidClasses ? "text-pend" : "text-ok",
-            },
-          ];
+        ? kpis.grades.delta !== null
+          ? Math.round(kpis.grades.delta * 10) === 0
+            ? t("Same as {previous}", { previous: comparison })
+            : `${kpis.grades.delta >= 0 ? "↑" : "↓"} ${t("{value} vs. {previous}", { value: formatScore(Math.abs(kpis.grades.delta), locale), previous: comparison })}`
+          : t(kpis.grades.count === 1 ? "{count} grade" : "{count} grades", { count: kpis.grades.count })
+        : paymentsDelta ||
+          t(kpis.payments.paymentCount === 1 ? "{count} payment" : "{count} payments", {
+            count: kpis.payments.paymentCount,
+          });
+  const headlineTone =
+    tab === "attendance"
+      ? kpis.attendance.delta === null
+        ? ""
+        : kpis.attendance.delta >= 0
+          ? "text-ok"
+          : "text-bad"
+      : tab === "grades"
+        ? "text-data"
+        : paymentsDeltaTone;
 
-  const chartTitle =
-    tab === "attendance"
-      ? t("Attendance by class")
-      : tab === "grades"
-        ? t("Average by assignment")
-        : t("Collections by payment date");
+  const chartTitle = plot
+    ? t(tab === "grades" ? "Average by assignment" : "Collections by payment date")
+    : chartViewTitle(view, viewContext);
   const ticks =
-    tab === "attendance"
-      ? ["0%", "50%", "100%"]
-      : tab === "grades"
-        ? ["0", "5", "10"]
-        : [0, 0.5, 1].map((fraction) =>
-            compactMoney(collectionsMax(metric.points, view, projection?.projected || 0) * fraction, locale),
-          );
+    tab === "grades"
+      ? ["0", "5", "10"]
+      : [0, 0.5, 1].map((fraction) => compactMoney(collectionsMax(metric.points) * fraction, locale));
   const listTitle = focusLabel
     ? t("Students · {count} in the filter", { count: list.length })
     : t(
@@ -830,7 +711,11 @@ export default function Tracking({
   const pickPoint = (value) => {
     setSelected(value);
     setFocus(true);
-    setKpiFilter("");
+  };
+  const pickView = (value) => {
+    setViews((current) => ({ ...current, [tab]: value }));
+    setSelected(null);
+    setFocus(false);
   };
   const scopeNode = archiveScope?.count ? <ArchivedGroupsScope scope={archiveScope} /> : null;
 
@@ -911,7 +796,7 @@ export default function Tracking({
       pending: kpis.payments.pendingStudents,
     };
     const mobileList = chip !== "all" && chipSets[chip] ? list.filter((row) => chipSets[chip].includes(row)) : list;
-    const bars = tab === "payments" ? metric.points : metric.points.filter((item) => item.kind === "reg");
+    const bars = !plot ? [] : tab === "payments" ? metric.points : metric.points.filter((item) => item.kind === "reg");
     // Past a dozen bars the values crowd each other; the sheet still shows each one.
     const dense = bars.length > 12;
     const max = tab === "payments" ? Math.max(...bars.map((item) => item.value), 1) : 1;
@@ -919,8 +804,8 @@ export default function Tracking({
       tab === "attendance"
         ? {
             value: percentText(kpis.attendance.value, locale),
-            delta: kpiStrip[0].note,
-            deltaTone: kpiStrip[0].noteTone,
+            delta: headlineNote,
+            deltaTone: headlineTone,
             line: `${t(
               kpis.attendance.low.length === 1 ? "{count} student below {value}%" : "{count} students below {value}%",
               {
@@ -932,8 +817,8 @@ export default function Tracking({
         : tab === "grades"
           ? {
               value: kpis.grades.value === null ? "—" : formatScore(kpis.grades.value, locale),
-              delta: kpiStrip[0].note,
-              deltaTone: "text-data",
+              delta: headlineNote,
+              deltaTone: headlineTone,
               line: `${t(kpis.grades.low.length === 1 ? "{count} with a low grade" : "{count} with low grades", { count: kpis.grades.low.length })} · ${t(
                 "{count} ungraded",
                 { count: kpis.grades.ungraded.length },
@@ -941,8 +826,8 @@ export default function Tracking({
             }
           : {
               value: formatMoney(kpis.payments.collected, locale),
-              delta: paymentsDelta || kpiStrip[0].note,
-              deltaTone: paymentsDeltaTone,
+              delta: headlineNote,
+              deltaTone: headlineTone,
               line: `${t("To collect {amount}", { amount: formatMoney(kpis.payments.owed, locale) })} · ${owedNote}`,
             };
     const sheetPoint = sheet?.type === "point" ? metric.points[sheet.index] : null;
@@ -988,44 +873,59 @@ export default function Tracking({
         {blocks.map((block) => (
           <MonthlyBlock key={block.group.id} block={block} asOf={asOf} onToggle={toggleMonthly} busy={busy} compact />
         ))}
-        {bars.length ? (
+        <ChartViewPicker
+          metric={TAB_METRIC[tab]}
+          value={view}
+          monthly={period === "month"}
+          menu
+          className="tracking-view-select"
+          onChange={pickView}
+        />
+        {!plot ? (
+          <section
+            className={`tracking-view hibi-chart ${tab === "grades" ? "is-indigo" : ""}`}
+            aria-label={chartTitle}
+          >
+            <h2 className="overline">{chartTitle}</h2>
+            <ChartView
+              view={view}
+              data={viewData}
+              size="big"
+              selected={viewDetail?.key}
+              onSelect={pickPoint}
+              context={viewContext}
+            />
+            {viewDetail && !chartViewEmpty(view, viewData) ? (
+              <div className="tracking-pick" aria-live="polite">
+                <b>{viewDetail.title}</b>
+                <span>{[viewDetail.big, viewDetail.sub].filter(Boolean).join(" · ")}</span>
+              </div>
+            ) : null}
+          </section>
+        ) : bars.length ? (
           <div className="tracking-bars">
             <div className="ch" role="group" aria-label={chartTitle}>
               {tab === "payments" ? null : (
-                <span
-                  className="thr"
-                  style={{ bottom: `${tab === "attendance" ? kpis.threshold * 100 : kpis.gradeThreshold * 10}%` }}
-                >
-                  <b>
-                    {tab === "attendance"
-                      ? `${Math.round(kpis.threshold * 100)}%`
-                      : formatScore(kpis.gradeThreshold, locale)}
-                  </b>
+                <span className="thr" style={{ bottom: `${kpis.gradeThreshold * 10}%` }}>
+                  <b>{formatScore(kpis.gradeThreshold, locale)}</b>
                 </span>
               )}
               {bars.map((item) => {
                 const pointIndex = metric.points.indexOf(item);
-                const ratio = tab === "payments" ? item.value / max : tab === "grades" ? item.value / 10 : item.value;
-                const low =
-                  tab === "attendance"
-                    ? item.value < kpis.threshold
-                    : tab === "grades"
-                      ? item.value < kpis.gradeThreshold
-                      : false;
+                const ratio = tab === "payments" ? item.value / max : item.value / 10;
+                const low = tab === "grades" && item.value < kpis.gradeThreshold;
                 const label =
                   tab === "payments"
                     ? item.value
                       ? compactMoney(item.value, locale)
                       : ""
-                    : tab === "attendance"
-                      ? percentText(item.value, locale)
-                      : formatScore(item.value, locale);
+                    : formatScore(item.value, locale);
                 return (
                   <button
                     type="button"
                     key={item.key}
                     className={`cb ${low ? "is-low" : ""} ${tab === "grades" ? "is-grade" : ""}`}
-                    aria-label={`${tab === "payments" ? bucketTitle(item, t, locale) : `${formatShortDate(item.date, locale)} · ${item.title || item.assignment?.assessment || ""}`}: ${label || formatMoney(0, locale)}`}
+                    aria-label={`${tab === "payments" ? bucketTitle(item, t, locale) : `${formatShortDate(item.date, locale)} · ${item.assignment?.assessment || ""}`}: ${label || formatMoney(0, locale)}`}
                     onClick={() => setSheet({ type: "point", index: pointIndex })}
                   >
                     {dense ? null : <em>{label}</em>}
@@ -1116,59 +1016,13 @@ export default function Tracking({
             sheetPoint
               ? tab === "payments"
                 ? bucketTitle(sheetPoint, t, locale)
-                : tab === "grades"
-                  ? sheetPoint.assignment?.assessment
-                  : sheetPoint.title
+                : sheetPoint.assignment?.assessment
               : ""
-          }
-          description={
-            sheetPoint && tab === "attendance"
-              ? (state.grades || []).find((grade) => grade.classSessionKey === sheetPoint.key)?.assessment
-              : undefined
           }
         >
           {sheetPoint ? (
             <div className="point-sheet">
-              {tab === "attendance" ? (
-                <>
-                  <div className="point-big">
-                    <b>{t("{present} of {total}", { present: sheetPoint.present, total: sheetPoint.total })}</b>
-                    {sheetPoint.absentIds.length ? (
-                      <span className="text-bad">
-                        {t("{names} missed", {
-                          names: shortNames(
-                            sheetPoint.absentIds.map(
-                              (id) => (state.students || []).find((s) => s.id === id)?.fullName || "",
-                            ),
-                            locale,
-                          ),
-                        })}
-                      </span>
-                    ) : (
-                      <span className="text-ok">{t("nobody missed")}</span>
-                    )}
-                  </div>
-                  <h3 className="overline">{t("Attendance")}</h3>
-                  <div className="list-rows">
-                    {sheetPoint.session.rows.map((item) => {
-                      const student = (state.students || []).find((s) => s.id === item.studentId);
-                      if (!student) return null;
-                      const absent = item.attendance === "A";
-                      return (
-                        <ListRow
-                          key={item.id}
-                          avatar={<StudentAvatar avatarId={student.avatarId} name={student.fullName} decorative />}
-                          name={student.fullName}
-                          context={t(absent ? "Absent" : "Present")}
-                          value={absent ? "A" : "P"}
-                          valueTone={absent ? "bad" : ""}
-                          onClick={() => setSheet({ type: "student", id: student.id })}
-                        />
-                      );
-                    })}
-                  </div>
-                </>
-              ) : tab === "grades" ? (
+              {tab === "grades" ? (
                 <>
                   <div className="point-big">
                     <b>{formatScore(sheetPoint.value, locale)}</b>
@@ -1302,7 +1156,7 @@ export default function Tracking({
           </>
         }
       />
-      <div className="tracking-bar">
+      <div className="tracking-bar" data-onboarding-tour="tracking">
         <Tabs value={tab} onChange={(value) => changeTab(value)} items={TAB_ITEMS} ariaLabel={t("Tracking views")} />
         <Segmented value={mode} onChange={setMode} label={t("Show")} items={MODE_ITEMS} />
       </div>
@@ -1324,6 +1178,13 @@ export default function Tracking({
           ))}
         </Select>
         {scopeNode}
+        <ChartViewPicker
+          metric={TAB_METRIC[tab]}
+          value={view}
+          monthly={period === "month"}
+          className="tracking-view-picker"
+          onChange={pickView}
+        />
       </div>
       {reportDate && period !== "custom" ? (
         <p className="notice tracking-date-note">
@@ -1333,33 +1194,6 @@ export default function Tracking({
           </button>
         </p>
       ) : null}
-      <div className="tracking-kpis" data-onboarding-tour="tracking">
-        {kpisEmpty ? <p className="tracking-kpis-empty">{kpisEmpty}</p> : null}
-        {(kpisEmpty ? [] : kpiStrip).map((kpi) =>
-          kpi.id ? (
-            <button
-              type="button"
-              key={kpi.label}
-              className={`tkpi ${kpiFilter === kpi.id ? "on" : ""}`}
-              aria-pressed={kpiFilter === kpi.id}
-              onClick={() => {
-                setKpiFilter(kpiFilter === kpi.id ? "" : kpi.id);
-                setFocus(false);
-              }}
-            >
-              <span>{kpi.label}</span>
-              <b className={kpi.valueTone || ""}>{kpi.value}</b>
-              <small className={kpi.noteTone || ""}>{kpi.note}</small>
-            </button>
-          ) : (
-            <div className="tkpi" key={kpi.label}>
-              <span>{kpi.label}</span>
-              <b className={kpi.valueTone || ""}>{kpi.value}</b>
-              <small className={kpi.noteTone || ""}>{kpi.note}</small>
-            </div>
-          ),
-        )}
-      </div>
       {blocks.map((block) => (
         <MonthlyBlock key={block.group.id} block={block} asOf={asOf} onToggle={toggleMonthly} busy={busy} />
       ))}
@@ -1367,86 +1201,47 @@ export default function Tracking({
         <div className={`tracking-cols hibi-chart ${tab === "grades" ? "is-indigo" : ""}`}>
           <section className="tracking-chart" aria-labelledby="tracking-chart-title">
             <div className="chead">
-              <div>
-                <h2 id="tracking-chart-title">{chartTitle}</h2>
+              <h2 id="tracking-chart-title">{chartTitle}</h2>
+            </div>
+            {!plot ? (
+              <ChartView
+                view={view}
+                data={viewData}
+                size="big"
+                selected={viewDetail?.key}
+                onSelect={pickPoint}
+                context={viewContext}
+              />
+            ) : (
+              <div className={`bplot ${studentId ? "is-dim" : ""}`}>
+                {ticks.map((label, tickIndex) => (
+                  <span className="grid" key={tickIndex} style={{ bottom: `${tickIndex * 50}%` }}>
+                    <b>{label}</b>
+                  </span>
+                ))}
+                {metric.points.length ? (
+                  <Plot
+                    metric={metric}
+                    selected={focus ? index : -1}
+                    onSelect={pickPoint}
+                    threshold={threshold}
+                    size="big"
+                    mineFor={
+                      tab === "payments" && studentId
+                        ? (bucket) =>
+                            bucket.payments
+                              .filter((item) => item.studentId === studentId)
+                              .reduce((sum, item) => sum + item.amount, 0)
+                        : null
+                    }
+                  />
+                ) : (
+                  <p className="muted xp-empty">{t("No data in this period.")}</p>
+                )}
               </div>
-              {tab === "payments" ? (
-                <Segmented
-                  value={view}
-                  label={t("Collections view")}
-                  onChange={(value) => {
-                    setView(value);
-                    setFocus(false);
-                  }}
-                  items={[
-                    { value: "rhythm", label: "Pace" },
-                    { value: "cumulative", label: "Accumulated" },
-                  ]}
-                />
-              ) : null}
-            </div>
-            <div className={`bplot ${studentId ? "is-dim" : ""}`}>
-              {ticks.map((label, tickIndex) => (
-                <span className="grid" key={tickIndex} style={{ bottom: `${tickIndex * 50}%` }}>
-                  <b>{label}</b>
-                </span>
-              ))}
-              {metric.points.length ? (
-                <Plot
-                  metric={metric}
-                  selected={focus ? index : -1}
-                  onSelect={pickPoint}
-                  threshold={threshold}
-                  size="big"
-                  view={view}
-                  projection={projection?.projected || 0}
-                  mineFor={
-                    tab === "payments" && studentId
-                      ? (bucket) =>
-                          bucket.payments
-                            .filter((item) => item.studentId === studentId)
-                            .reduce((sum, item) => sum + item.amount, 0)
-                      : null
-                  }
-                />
-              ) : (
-                <p className="muted xp-empty">{t("No data in this period.")}</p>
-              )}
-              {tab === "attendance" && selectedRow ? (
-                <div className="srow" aria-label={t("Attendance of {name}", { name: selectedRow.student.fullName })}>
-                  {metric.points.map((item, pointIndex) => {
-                    const mark = selectedRow.sequence.find(
-                      (entry) => entry.date === item.date && item.studentIds.includes(selectedRow.student.id),
-                    );
-                    if (!mark) return null;
-                    const x = metric.points.length === 1 ? 50 : 4 + (pointIndex * 92) / (metric.points.length - 1);
-                    return (
-                      <span
-                        key={item.key}
-                        className={mark.code === "A" ? "is-absent" : "is-present"}
-                        style={{ left: `${x}%` }}
-                      >
-                        {mark.code}
-                      </span>
-                    );
-                  })}
-                </div>
-              ) : null}
-            </div>
-            <div className="leg" hidden={!metric.points.length}>
-              {tab === "attendance" ? (
-                <>
-                  <span>
-                    <i className="leg-dot" />
-                    {t("Recorded class")}
-                  </span>
-                  <span>
-                    <i className="leg-dot is-unreg" />
-                    {t("Not recorded")}
-                  </span>
-                  {/* The threshold line carries its own label in the chart («Asistencia baja · 80%»). */}
-                </>
-              ) : tab === "grades" ? (
+            )}
+            <div className="leg" hidden={!plot || !metric.points.length}>
+              {tab === "grades" ? (
                 <>
                   <span>
                     <i className="leg-dot" />
@@ -1464,7 +1259,7 @@ export default function Tracking({
               ) : (
                 <span>
                   <i className="leg-bar" />
-                  {t(view === "cumulative" ? "Accumulated collections" : "Collections by payment date")}
+                  {t("Collections by payment date")}
                 </span>
               )}
             </div>
@@ -1473,14 +1268,7 @@ export default function Tracking({
                 <span className="overline">{t("Showing")}</span>
                 <b>{focusLabel.title}</b>
                 <span className="muted">{focusLabel.sub}</span>
-                <button
-                  type="button"
-                  className="xbtn"
-                  onClick={() => {
-                    setFocus(false);
-                    setKpiFilter("");
-                  }}
-                >
+                <button type="button" className="xbtn" onClick={() => setFocus(false)}>
                   {t("Clear filter")}
                 </button>
               </div>

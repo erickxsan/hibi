@@ -124,11 +124,9 @@ describe("Home money", () => {
     );
     expect(alert).not.toHaveTextContent(/Old/);
     await user.click(alert);
-    const kpi = screen.getByRole("button", { name: /To collect/ });
-    expect(kpi).toHaveAttribute("aria-pressed", "true");
-    expect(kpi).toHaveTextContent("$600");
-    expect(kpi).toHaveTextContent("1 student · $400 overdue");
     const aside = document.querySelector("aside.det");
+    expect(within(aside).getByText("To collect")).toBeInTheDocument();
+    expect(aside.querySelector(".big")).toHaveTextContent("$600");
     expect(within(aside).getByText("$400 overdue")).toBeInTheDocument();
     const values = [...aside.querySelectorAll(".kv")].map((item) => item.textContent);
     expect(values).toEqual(["Overdue from October$200", "Overdue from earlier months$200", "Not due yet$200"]);
@@ -174,18 +172,14 @@ describe("Home money", () => {
 });
 
 describe("Tracking money", () => {
-  it("uses Inicio's figures and wording for payments", async () => {
+  it("keeps the money in the list, without a row of figures over the chart", async () => {
     const user = userEvent.setup();
     renderTracking();
     await user.click(screen.getByRole("tab", { name: "Payments" }));
-    const collected = screen.getByText("Collected").closest(".tkpi");
-    expect(collected).toHaveTextContent("↑ 100% vs. 1–21 Sep · 1 payment");
-    const owed = screen.getByRole("button", { name: /To collect/ });
-    expect(owed).toHaveTextContent("$600");
-    expect(owed).toHaveTextContent(
-      "$400 overdue ($200 from October · $200 from earlier months) · Aside, $200 in classes owed by inactive students.",
-    );
-    expect(screen.queryByText(/previous period/)).not.toBeInTheDocument();
+    expect(document.querySelector(".tkpi")).toBeNull();
+    expect(screen.getByRole("combobox", { name: "Chart view" })).toHaveTextContent("Pace");
+    const list = screen.getByRole("complementary", { name: "Students · what is owed first" });
+    expect(within(list).getAllByRole("button")[0]).toHaveTextContent("$600");
   });
 
   it("says it in Spanish on a phone", async () => {

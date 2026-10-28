@@ -30,6 +30,7 @@ import {
 import { rosterForClassSession } from "./classesWorkspaceModel";
 import { ClassCard, SeenButton, ShowSeenButton, TodayAgenda, TodayTimeline } from "./HomeToday";
 import { metricSummary, MetricCard, MetricExplorer, MetricRows, overdueSplit, thresholds } from "./HomeMetrics";
+import { randomChartView } from "./chartViewsModel";
 import "../i18n/screenTranslations.js";
 import "./home.css";
 
@@ -240,6 +241,13 @@ export default function Home({
   }, [asOf]);
   const [period, setPeriod] = useState("weekly");
   const [explorer, setExplorer] = useState(null);
+  // Each card shows one of its metric's views, drawn at random on every visit; the detail opens on it.
+  const [cardViews, setCardViews] = useState(() => ({
+    attendance: randomChartView("attendance"),
+    grade: randomChartView("grade"),
+    collections: randomChartView("collections"),
+  }));
+  const chooseView = (metric, view) => setCardViews((current) => ({ ...current, [metric]: view }));
   // What the explorer opens on: an overdue alert lands on the debts, the figure it quotes.
   const [explorerFocus, setExplorerFocus] = useState({ aside: "point", request: 0 });
   const openExplorer = (metric, aside = "point") => {
@@ -568,6 +576,8 @@ export default function Home({
             derived={derived}
             asOf={asOf}
             context={context}
+            views={cardViews}
+            onViewChange={chooseView}
             onAction={runDetailAction}
           />
         ) : (
@@ -578,6 +588,8 @@ export default function Home({
                 metric={metrics[id]}
                 summary={summaries[id]}
                 context={context}
+                view={cardViews[id]}
+                onViewChange={(view) => chooseView(id, view)}
                 onOpen={() => openExplorer(id)}
               />
             ))}

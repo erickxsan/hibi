@@ -1,9 +1,21 @@
 import { useMemo, useState } from "react";
 import { ChevronRight, X } from "lucide-react";
 import { useI18n } from "../i18n/index.jsx";
-import { BottomSheet, Button, IconButton, Segmented, Select } from "../components/ui";
+import { BottomSheet, Button, IconButton, Select } from "../components/ui";
 import { StudentAvatar } from "../components/StudentAvatar";
 import { addDays, endOfMonth } from "../domain/dates";
+import {
+  ChartView,
+  ChartViewPicker,
+  chartViewCaptions,
+  chartViewDetail,
+  chartViewEmpty,
+  chartViewInsight,
+  chartViewLabel,
+  chartViewTitle,
+  isPlotView,
+} from "./ChartViews";
+import { buildChartView, CHART_VIEWS } from "./chartViewsModel";
 import {
   axisTickLabels,
   dayNumber,
@@ -17,7 +29,7 @@ import {
   weekdayShort,
 } from "../utils/displayFormat";
 import "../components/charts.css";
-import { debtSummary, defaultPointIndex, monthProjection, studentPeriodRows } from "./homeDashboardModel";
+import { assignmentsIn, debtSummary, defaultPointIndex, periodRange, studentPeriodRows } from "./homeDashboardModel";
 
 const RED = "var(--bermellon)";
 const OCRE = "var(--ocre)";
@@ -565,13 +577,8 @@ function DotPlot({ metric, selected, onSelect, threshold, size = "mini", labels 
   );
 }
 
-/** Top of the collections scale, shared by the bars, the accumulated line and the grid labels. */
-export function collectionsMax(points, view, projection) {
-  if (view === "cumulative") {
-    const sums = cumulative(points);
-    const lastReal = points.reduce((found, point, index) => (!point.future ? index : found), 0);
-    return Math.max(sums[lastReal] || 0, projection, 1) * 1.08;
-  }
+/** Top of the collections scale, shared by the bars and the grid labels. */
+export function collectionsMax(points) {
   return Math.max(...points.map((point) => point.value), 1) * 1.08;
 }
 
@@ -581,72 +588,12 @@ export function compactMoney(value, locale) {
   return formatMoney(Math.round(value), locale);
 }
 
-function cumulative(points) {
-  let running = 0;
-  return points.map((point) => (running += point.future ? 0 : point.value));
-}
-
-/** Collections by payment date: bars, or the accumulated line with the projection pace. */
-function BarPlot({ metric, selected, onSelect, size = "mini", view = "rhythm", projection = 0, mineFor = null }) {
+/** Collections by payment date, one bar per stretch. */
+function BarPlot({ metric, selected, onSelect, size = "mini", mineFor = null }) {
   const { t, locale } = useI18n();
   const points = metric.points;
   const values = points.map((point) => point.value);
-  if (view === "cumulative") {
-    const sums = cumulative(points);
-    const lastReal = points.reduce((found, point, index) => (!point.future ? index : found), 0);
-    const max = collectionsMax(points, view, projection);
-    const x = (index) => (points.length === 1 ? 50 : 4 + (index * 92) / (points.length - 1));
-    const line = sums
-      .slice(0, lastReal + 1)
-      .map((value, index) => `${x(index).toFixed(2)},${(100 - (value / max) * 100).toFixed(2)}`)
-      .join(" ");
-    const pace = projection
-      ? points
-          .map(
-            (_, index) =>
-              `${x(index).toFixed(2)},${(100 - ((projection * (index + 1)) / points.length / max) * 100).toFixed(2)}`,
-          )
-          .join(" ")
-      : "";
-    return (
-      <>
-        <svg className="ln" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-          <polygon points={`${x(0).toFixed(2)},100 ${line} ${x(lastReal).toFixed(2)},100`} />
-          {pace ? <polyline className="pj" points={pace} /> : null}
-          <polyline points={line} />
-        </svg>
-        {points.map((point, index) => {
-          const tip = `${bucketTitle(point, t, locale)}: ${point.future ? t("upcoming") : t("{amount} accumulated", { amount: formatMoney(sums[index], locale) })}`;
-          return (
-            <button
-              type="button"
-              key={point.key}
-              className={`dt ${point.future ? "fut" : ""} ${index === selected ? "on" : ""}`.trim()}
-              style={{ left: `${x(index)}%`, bottom: `${point.future ? 0 : (sums[index] / max) * 100}%` }}
-              aria-label={tip}
-              aria-pressed={index === selected}
-              disabled={point.future}
-              onClick={() => onSelect(index)}
-            >
-              <span className="tip">{tip}</span>
-            </button>
-          );
-        })}
-        {size === "big"
-          ? points.map((point, index) => (
-              <span
-                key={`label-${point.key}`}
-                className={`xl2 ${index === selected ? "on" : ""}`}
-                style={{ left: `${x(index)}%` }}
-              >
-                {bucketLabel(point, locale)}
-              </span>
-            ))
-          : null}
-      </>
-    );
-  }
-  const max = collectionsMax(points, view, projection);
+  const max = collectionsMax(points);
   const peak = Math.max(...values);
   return (
     <div className={size === "big" ? "bars" : "mbars"}>
@@ -688,17 +635,9 @@ function BarPlot({ metric, selected, onSelect, size = "mini", view = "rhythm", p
   );
 }
 
-export function Plot({ metric, selected, onSelect, threshold, size, view = "rhythm", projection = 0, mineFor = null }) {
+export function Plot({ metric, selected, onSelect, threshold, size, mineFor = null }) {
   return metric.metric === "collections" ? (
-    <BarPlot
-      metric={metric}
-      selected={selected}
-      onSelect={onSelect}
-      size={size}
-      view={view}
-      projection={projection}
-      mineFor={mineFor}
-    />
+    <BarPlot metric={metric} selected={selected} onSelect={onSelect} size={size} mineFor={mineFor} />
   ) : (
     <DotPlot
       metric={metric}
@@ -721,9 +660,78 @@ function plotCaptions(metric, locale) {
   return [label(first), label(last)];
 }
 
-export function MetricCard({ metric, summary, context, onOpen }) {
+/** Views that read a fixed window (twelve weeks, the next fourteen days…) instead of the chosen period. */
+const PERIOD_FREE_VIEWS = new Set(["trend", "students", "upcoming", "punctuality"]);
+
+/** The last day of the whole previous period, for the accumulated comparison line. */
+function previousPeriodEnd(range, period) {
+  if (period === "monthly") return endOfMonth(range.previousStart);
+  if (period === "weekly") return addDays(range.previousStart, 6);
+  if (period === "yearly") return `${range.previousStart.slice(0, 4)}-12-31`;
+  return range.previousStart;
+}
+
+/** What a chart view reads in Inicio: the chosen period, a group scope and the metric's own points. */
+export function homeViewScope(metric, context, group = "all", rows = context.rows) {
+  const range = periodRange(context.asOf, context.period);
+  const through = range.end > context.asOf ? context.asOf : range.end;
+  return {
+    state: context.state,
+    derived: { classLog: context.derivedRows },
+    asOf: context.asOf,
+    start: range.start,
+    end: range.end,
+    group,
+    threshold: context.threshold,
+    rows,
+    assignments: metric.metric === "grade" ? assignmentsIn(context.state, range.start, through, group) : [],
+    points: metric.points,
+    previousStart: range.previousStart,
+    previousEnd: previousPeriodEnd(range, context.period),
+    monthly: context.period === "monthly",
+  };
+}
+
+/** Inicio's context plus what the views name: the period's stretches. */
+export function homeViewContext(context, metric, t, locale) {
+  return {
+    ...context,
+    monthly: context.period === "monthly",
+    points: metric.points,
+    bucketLabel: (point) => (point ? bucketLabel(point, locale) : ""),
+    bucketTitle: (point) => (point ? bucketTitle(point, t, locale) : ""),
+  };
+}
+
+/** The little dots next to a card's name: one per view, the shown one wider. */
+function ViewDots({ metric, value, onChange, name, monthly }) {
+  const { t } = useI18n();
+  return (
+    <div className="mdots" role="group" aria-label={t("{name} charts", { name })}>
+      {(CHART_VIEWS[metric] || []).map((view) => (
+        <button
+          type="button"
+          key={view}
+          className={view === value ? "on" : ""}
+          aria-pressed={view === value}
+          aria-label={t(chartViewLabel(view, monthly))}
+          title={t(chartViewLabel(view, monthly))}
+          onClick={() => onChange(view)}
+        >
+          <i />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function MetricCard({ metric, summary, context, view = "", onViewChange = (_view) => {}, onOpen }) {
   const { t } = useI18n();
   const [selected, setSelected] = useState(null);
+  const views = CHART_VIEWS[metric.metric] || [];
+  const current = views.includes(view) ? view : views[0];
+  // A view with its own window (the next 14 days, the last 12 weeks…) still has something to show.
+  const empty = summary.empty && !PERIOD_FREE_VIEWS.has(current);
   return (
     <article
       className={`mini hibi-chart k-${metric.metric}`}
@@ -731,6 +739,16 @@ export function MetricCard({ metric, summary, context, onOpen }) {
     >
       <div className="nm">
         <span>{summary.name}</span>
+        <ViewDots
+          metric={metric.metric}
+          value={current}
+          name={summary.name}
+          monthly={context.period === "monthly"}
+          onChange={(next) => {
+            setSelected(null);
+            onViewChange(next);
+          }}
+        />
         <button
           type="button"
           className="xbtn"
@@ -751,12 +769,21 @@ export function MetricCard({ metric, summary, context, onOpen }) {
           <span className={`dl ${summary.deltaTone}`}>{summary.delta}</span>
         )}
       </div>
-      {summary.empty ? (
+      {empty ? (
         <p className="mempty">{summary.empty}</p>
-      ) : (
+      ) : isPlotView(current) ? (
         <MetricCardBody
           metric={metric}
           summary={summary}
+          context={context}
+          onOpen={onOpen}
+          selected={selected}
+          onSelect={setSelected}
+        />
+      ) : (
+        <ViewCardBody
+          view={current}
+          metric={metric}
           context={context}
           onOpen={onOpen}
           selected={selected}
@@ -767,12 +794,77 @@ export function MetricCard({ metric, summary, context, onOpen }) {
   );
 }
 
-function MetricCardBody({ metric, summary, context, onOpen, selected, onSelect }) {
+/** The detail box of a card: the shown mark's title, figure, line and first names. */
+function CardDetail({ detail, onOpen }) {
+  const { t } = useI18n();
+  const chips = detail.list.slice(0, 3);
+  return (
+    <div className="mdet" aria-live="polite">
+      <div className="mdh">
+        <span className="overline">{detail.title}</span>
+        <b className={detail.tone}>{detail.big}</b>
+      </div>
+      <span className="mds">
+        {detail.rows[0] ? `${detail.rows[0].key}: ${detail.rows[0].value} · ` : ""}
+        {detail.sub}
+      </span>
+      <div className="mchips">
+        {chips.map((item) => (
+          <span className="mchip" key={item.id}>
+            <i style={{ background: item.color }} />
+            {item.short ?? firstName(item.name)}
+            {item.value ? <b>{item.value}</b> : null}
+          </span>
+        ))}
+        {detail.list.length > 3 ? (
+          <button type="button" className="mmore" onClick={onOpen}>
+            {t("+{count} more", { count: detail.list.length - 3 })}
+          </button>
+        ) : null}
+        {!detail.list.length && detail.emptyMessage ? (
+          <span className={`mmsg ${detail.emptyTone || "muted"}`}>{detail.emptyMessage}</span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function ViewCardBody({ view, metric, context, onOpen, selected, onSelect }) {
   const { t, locale } = useI18n();
+  const data = useMemo(() => buildChartView(view, homeViewScope(metric, context)), [view, metric, context]);
+  const vc = homeViewContext(context, metric, t, locale);
+  const detail = chartViewDetail(view, data, selected, vc);
+  const insight = chartViewInsight(view, data, vc);
+  const [left, right] = chartViewCaptions(view, data, vc);
+  const empty = chartViewEmpty(view, data);
+  return (
+    <>
+      <span className="cnt">{chartViewTitle(view, vc)}</span>
+      <div className="mplot">
+        {empty ? (
+          <p className="mempty cv-mini-empty">{t("No data in this period.")}</p>
+        ) : (
+          <ChartView view={view} data={data} size="mini" selected={detail.key} onSelect={onSelect} context={vc} />
+        )}
+      </div>
+      <div className="mcap">
+        <span>{left}</span>
+        <span>{right}</span>
+      </div>
+      {empty ? null : <CardDetail detail={detail} onOpen={onOpen} />}
+      <div className="ins">
+        <i style={{ background: insight.color }} />
+        <span>{insight.text}</span>
+      </div>
+    </>
+  );
+}
+
+function MetricCardBody({ metric, summary, context, onOpen, selected, onSelect }) {
+  const { locale } = useI18n();
   const index = selected === null || selected >= metric.points.length ? defaultPointIndex(metric) : selected;
   const detail = pointDetail(metric, index, context);
   const [left, right] = plotCaptions(metric, locale);
-  const chips = detail.list.slice(0, 3);
   return (
     <>
       <span className="cnt">{summary.count}</span>
@@ -785,33 +877,7 @@ function MetricCardBody({ metric, summary, context, onOpen, selected, onSelect }
         <span>{left}</span>
         <span>{right}</span>
       </div>
-      <div className="mdet" aria-live="polite">
-        <div className="mdh">
-          <span className="overline">{detail.title}</span>
-          <b className={detail.tone}>{detail.big}</b>
-        </div>
-        <span className="mds">
-          {detail.rows[0] ? `${detail.rows[0].key}: ${detail.rows[0].value} · ` : ""}
-          {detail.sub}
-        </span>
-        <div className="mchips">
-          {chips.map((item) => (
-            <span className="mchip" key={item.id}>
-              <i style={{ background: item.color }} />
-              {firstName(item.name)}
-              {item.value ? <b>{item.value}</b> : null}
-            </span>
-          ))}
-          {detail.list.length > 3 ? (
-            <button type="button" className="mmore" onClick={onOpen}>
-              {t("+{count} more", { count: detail.list.length - 3 })}
-            </button>
-          ) : null}
-          {!detail.list.length && detail.emptyMessage ? (
-            <span className={`mmsg ${detail.emptyTone || "muted"}`}>{detail.emptyMessage}</span>
-          ) : null}
-        </div>
-      </div>
+      <CardDetail detail={detail} onOpen={onOpen} />
       <div className="ins">
         <i style={{ background: summary.insightColor }} />
         <span>{summary.insight}</span>
@@ -1051,18 +1117,21 @@ export function MetricExplorer({
   asOf,
   context,
   onAction,
+  views = {},
+  onViewChange = (_metric, _view) => {},
   initialAside = "point",
 }) {
   const { t, locale } = useI18n();
   const [group, setGroup] = useState("all");
   const [selected, setSelected] = useState(null);
-  const [view, setView] = useState("rhythm");
   // «Ver en la gráfica» from an overdue alert opens straight on the debts, the figure the alert quotes.
   const [aside, setAside] = useState(initialAside);
   const scoped = useMemo(() => (group === "all" ? metrics : buildForGroup(group)), [buildForGroup, group, metrics]);
   const metric = scoped[open];
-  const summary = group === "all" ? summaries[open] : metricSummary(metric, { ...context, period });
-  const index = selected === null || selected >= metric.points.length ? defaultPointIndex(metric) : selected;
+  const options = CHART_VIEWS[open] || [];
+  const view = options.includes(views[open]) ? views[open] : options[0];
+  const plot = isPlotView(view);
+  const index = typeof selected !== "number" || selected >= metric.points.length ? defaultPointIndex(metric) : selected;
   const rows = useMemo(() => {
     const derivedStudents = new Map((derived?.students || []).map((student) => [student.id, student]));
     return studentPeriodRows(state, derived, asOf, period, group).map((row) => ({
@@ -1071,9 +1140,15 @@ export function MetricExplorer({
     }));
   }, [asOf, derived, group, period, state]);
   const derivedRows = useMemo(() => derived?.classLog || [], [derived]);
-  const projection = useMemo(() => monthProjection(state, derivedRows, asOf), [asOf, derivedRows, state]);
   const debts = useMemo(() => debtSummary(state, derivedRows, asOf, group), [asOf, derivedRows, group, state]);
   const { owed, overdue } = debts;
+  const groupContext = useMemo(() => ({ ...context, rows }), [context, rows]);
+  const data = useMemo(
+    () => (plot ? null : buildChartView(view, homeViewScope(metric, groupContext, group, rows))),
+    [group, groupContext, metric, plot, rows, view],
+  );
+  const vc = homeViewContext(groupContext, metric, t, locale);
+  const viewDetail = plot ? null : chartViewDetail(view, data, typeof selected === "string" ? selected : "", vc);
   const reasonsText = (item) =>
     item.reasons
       .map((reason) =>
@@ -1083,8 +1158,7 @@ export function MetricExplorer({
       )
       .slice(0, 3)
       .join(" · ");
-  const pace = period === "monthly" && group === "all" ? projection.projected : 0;
-  let detail = pointDetail(metric, index, context);
+  let detail = plot ? pointDetail(metric, index, context) : viewDetail;
   if (open === "collections" && aside === "debts") {
     // Everything active students owe, with the overdue part split by month; inactive students apart.
     detail = {
@@ -1129,87 +1203,16 @@ export function MetricExplorer({
         })),
       },
     };
-  } else if (open === "collections" && view === "cumulative") {
-    const sums = cumulative(metric.points);
-    const point = metric.points[index];
-    const expected = pace ? (pace * (index + 1)) / metric.points.length : 0;
-    const difference = (sums[index] || 0) - expected;
-    detail = {
-      title: t("Accumulated · {when}", { when: point ? bucketTitle(point, t, locale) : "" }),
-      big: formatMoney(sums[index] || 0, locale),
-      sub: pace
-        ? difference >= 0
-          ? t("{amount} ahead of pace", { amount: formatMoney(difference, locale) })
-          : t("{amount} behind pace", { amount: formatMoney(-difference, locale) })
-        : t("Accumulated in the period"),
-      tone: pace ? (difference >= 0 ? "text-ok" : "text-bad") : "",
-      rows: [
-        { key: t("Collected in this stretch"), value: formatMoney(point?.value || 0, locale) },
-        ...(pace
-          ? [
-              { key: t("Expected pace"), value: formatMoney(expected, locale) },
-              { key: t("Projection for the period"), value: formatMoney(pace, locale) },
-            ]
-          : []),
-      ],
-      listTitle: "",
-      list: [],
-    };
   }
-  const caption =
-    open === "collections"
-      ? t(view === "cumulative" ? "Accumulated collections" : "Collections by payment date")
-      : open === "attendance"
-        ? t(period === "yearly" ? "Attendance by month" : "Attendance by class")
-        : t(period === "yearly" ? "Average by month" : "Average by assignment");
-  const kpis =
-    open === "collections"
-      ? [
-          {
-            id: "rhythm",
-            label: t("Collected this period"),
-            value: formatMoney(metric.value, locale),
-            note: summary.delta,
-            noteTone: summary.deltaTone,
-            on: view === "rhythm" && aside !== "debts",
-            pick: () => {
-              setView("rhythm");
-              setAside("point");
-              setSelected(null);
-            },
-          },
-          {
-            id: "projection",
-            label: t("Month projection"),
-            value: group === "all" ? formatMoney(projection.projected, locale) : "—",
-            note:
-              group === "all"
-                ? t("{fees} in monthly fees · {classes} in upcoming classes", {
-                    fees: formatMoney(projection.monthlyDue, locale),
-                    classes: formatMoney(projection.perClass, locale),
-                  })
-                : t("Only with all groups"),
-            bar: group === "all" && projection.projected ? (projection.collected / projection.projected) * 100 : null,
-            on: view === "cumulative" && aside !== "debts",
-            pick: () => {
-              setView("cumulative");
-              setAside("point");
-              setSelected(null);
-            },
-          },
-          {
-            id: "debts",
-            label: t("To collect"),
-            value: formatMoney(owed, locale),
-            note: `${t(debts.debts.length === 1 ? "{count} student" : "{count} students", { count: debts.debts.length })}${
-              overdue ? ` · ${t("{amount} overdue", { amount: formatMoney(overdue, locale) })}` : ""
-            }`,
-            noteTone: overdue ? "text-bad" : "",
-            on: aside === "debts",
-            pick: () => setAside("debts"),
-          },
-        ]
-      : [];
+  const caption = plot
+    ? open === "collections"
+      ? t("Collections by payment date")
+      : t(period === "yearly" ? "Average by month" : "Average by assignment")
+    : chartViewTitle(view, vc);
+  const pickPoint = (value) => {
+    setSelected(value);
+    setAside("point");
+  };
   return (
     <div className={`xp hibi-chart k-${open}`}>
       <div className="xp-head">
@@ -1254,76 +1257,47 @@ export function MetricExplorer({
             </option>
           ))}
         </Select>
-        {open === "collections" ? (
-          <Segmented
-            value={view}
-            label={t("Collections view")}
-            onChange={(value) => {
-              setView(value);
-              setSelected(null);
-              setAside("point");
-            }}
-            items={[
-              { value: "rhythm", label: "Pace" },
-              { value: "cumulative", label: "Accumulated" },
-            ]}
-          />
-        ) : null}
+        <ChartViewPicker
+          metric={open}
+          value={view}
+          monthly={period === "monthly"}
+          onChange={(next) => {
+            onViewChange(open, next);
+            setSelected(null);
+            setAside("point");
+          }}
+        />
       </div>
-      {kpis.length ? (
-        <div className="xp-kpis">
-          {kpis.map((kpi) => (
-            <button
-              type="button"
-              key={kpi.id}
-              className={`xp-kpi ${kpi.on ? "on" : ""}`}
-              aria-pressed={kpi.on}
-              onClick={kpi.pick}
-            >
-              <span>{kpi.label}</span>
-              <b>{kpi.value}</b>
-              <small className={kpi.noteTone || ""}>{kpi.note}</small>
-              {kpi.bar !== null && kpi.bar !== undefined ? (
-                <span className="pb">
-                  <i style={{ width: `${Math.min(100, kpi.bar)}%` }} />
-                </span>
-              ) : null}
-            </button>
-          ))}
-        </div>
-      ) : null}
       <div className="xg">
-        <div>
+        <div className="xg-chart">
           <p className="xp-caption">{caption}</p>
-          <div className="bplot">
-            {[0, 0.5, 1].map((fraction) => (
-              <span className="grid" key={fraction} style={{ bottom: `${fraction * 100}%` }}>
-                <b>
-                  {open === "attendance"
-                    ? `${fraction * 100}%`
-                    : open === "grade"
+          {plot ? (
+            <div className="bplot">
+              {[0, 0.5, 1].map((fraction) => (
+                <span className="grid" key={fraction} style={{ bottom: `${fraction * 100}%` }}>
+                  <b>
+                    {open === "grade"
                       ? String(fraction * 10)
-                      : compactMoney(collectionsMax(metric.points, view, pace) * fraction, locale)}
-                </b>
-              </span>
-            ))}
-            {metric.points.length ? (
-              <Plot
-                metric={metric}
-                selected={index}
-                onSelect={(value) => {
-                  setSelected(value);
-                  setAside("point");
-                }}
-                threshold={context.threshold}
-                size="big"
-                view={view}
-                projection={pace}
-              />
-            ) : (
-              <p className="muted xp-empty">{t("No data in this period.")}</p>
-            )}
-          </div>
+                      : compactMoney(collectionsMax(metric.points) * fraction, locale)}
+                  </b>
+                </span>
+              ))}
+              {metric.points.length ? (
+                <Plot metric={metric} selected={index} onSelect={pickPoint} threshold={context.threshold} size="big" />
+              ) : (
+                <p className="muted xp-empty">{t("No data in this period.")}</p>
+              )}
+            </div>
+          ) : (
+            <ChartView
+              view={view}
+              data={data}
+              size="big"
+              selected={viewDetail?.key}
+              onSelect={pickPoint}
+              context={vc}
+            />
+          )}
         </div>
         <DetailAside detail={detail} onAction={onAction} />
       </div>
@@ -1337,7 +1311,19 @@ export function MetricRows({ metrics, summaries, context, onOpenTracking, monthN
   const { t, locale } = useI18n();
   const [open, setOpen] = useState(null);
   const [selected, setSelected] = useState(null);
+  // The sheet opens on each metric's first view (today's chart where it was kept).
+  const [sheetViews, setSheetViews] = useState({});
   const metric = open ? metrics[open] : null;
+  const sheetView = open ? sheetViews[open] || CHART_VIEWS[open][0] : "";
+  const sheetPlot = !open || isPlotView(sheetView);
+  const sheetData = useMemo(
+    () => (metric && !sheetPlot ? buildChartView(sheetView, homeViewScope(metric, context)) : null),
+    [context, metric, sheetPlot, sheetView],
+  );
+  const sheetContext = metric ? homeViewContext(context, metric, t, locale) : context;
+  const sheetDetail = sheetData
+    ? chartViewDetail(sheetView, sheetData, typeof selected === "string" ? selected : "", sheetContext)
+    : null;
   const debts = useMemo(
     () => debtSummary(context.state, context.derivedRows, context.asOf),
     [context.asOf, context.derivedRows, context.state],
@@ -1398,7 +1384,7 @@ export function MetricRows({ metrics, summaries, context, onOpenTracking, monthN
     return { text: summaries[id].delta.replace(/^([↑↓]) /, "$1 "), tone: summaries[id].deltaTone };
   };
   const index = metric
-    ? selected === null || selected >= metric.points.length
+    ? typeof selected !== "number" || selected >= metric.points.length
       ? defaultPointIndex(metric)
       : selected
     : -1;
@@ -1534,7 +1520,37 @@ export function MetricRows({ metrics, summaries, context, onOpenTracking, monthN
               </span>
               <span className={summaries[open].deltaTone}>{summaries[open].delta}</span>
             </div>
-            {sheetBars.length ? (
+            <ChartViewPicker
+              metric={open}
+              value={sheetView}
+              monthly
+              menu
+              className="metric-sheet-picker"
+              onChange={(next) => {
+                setSheetViews((current) => ({ ...current, [open]: next }));
+                setSelected(null);
+              }}
+            />
+            {!sheetPlot ? (
+              <div className={`metric-sheet-view hibi-chart ${open === "grade" ? "is-indigo" : ""}`}>
+                <h3 className="overline">{chartViewTitle(sheetView, sheetContext)}</h3>
+                <ChartView
+                  view={sheetView}
+                  data={sheetData}
+                  size="big"
+                  selected={sheetDetail?.key}
+                  onSelect={setSelected}
+                  context={sheetContext}
+                />
+                {sheetDetail && !chartViewEmpty(sheetView, sheetData) ? (
+                  <div className="pick" aria-live="polite">
+                    <b>{sheetDetail.title}</b>
+                    <span>{[sheetDetail.big, sheetDetail.sub].filter(Boolean).join(" · ")}</span>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            {sheetPlot && sheetBars.length ? (
               <div>
                 <div className="ch" role="group" aria-label={t("{name} by point", { name: summaries[open].name })}>
                   {open !== "collections" ? (
@@ -1590,7 +1606,7 @@ export function MetricRows({ metrics, summaries, context, onOpenTracking, monthN
                 </div>
               </div>
             ) : null}
-            {detail && sheetIndex >= 0 ? (
+            {sheetPlot && detail && sheetIndex >= 0 ? (
               <div className="pick" aria-live="polite">
                 <b>{detail.title}</b>
                 <span>

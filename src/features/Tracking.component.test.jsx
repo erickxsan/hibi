@@ -99,17 +99,21 @@ afterEach(() => {
 });
 
 describe("Tracking on desktop", () => {
-  it("opens on attendance and filters the list from a figure", async () => {
+  it("opens on the attendance calendar and filters the list from a picked mark", async () => {
     const user = userEvent.setup();
     setup();
     expect(screen.getByRole("tab", { name: "Attendance" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByText("Average attendance")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Attendance day by day" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Chart view" })).toHaveTextContent("Calendar");
     const list = screen.getByRole("complementary", { name: "Students · lowest attendance first" });
     const names = within(list)
       .getAllByRole("button")
       .map((button) => button.textContent);
     expect(names[0]).toContain("Luna López");
-    await user.click(screen.getByRole("button", { name: /Below 80%/ }));
+    await user.click(screen.getByRole("combobox", { name: "Chart view" }));
+    await user.click(screen.getByRole("option", { name: "Map" }));
+    expect(screen.getByRole("heading", { name: "Each student's latest classes" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^Luna López:/ }));
     const filtered = screen.getByRole("complementary", { name: /Students · 1 in the filter/ });
     expect(within(filtered).getAllByRole("button")).toHaveLength(1);
     expect(within(filtered).getByText("Luna López")).toBeInTheDocument();
@@ -122,15 +126,12 @@ describe("Tracking on desktop", () => {
     expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Attendance", "Grades", "Payments"]);
   });
 
-  it("does not paint «Below 80%» green when there is nothing to measure", () => {
+  it("does not paint any day green when nothing was recorded", () => {
     const state = trackingState();
     state.classLog = [];
     setup(state);
-    const tile = screen.getByRole("button", { name: /Below 80%/ });
-    expect(tile).toHaveTextContent("No data");
-    expect(tile).toHaveTextContent("—");
-    expect(tile).not.toHaveTextContent("Nobody");
-    expect(tile.querySelector("b")).not.toHaveClass("text-ok");
+    expect(document.querySelector(".cv-day.is-high, .cv-day.is-mid")).toBeNull();
+    expect(document.querySelector(".tracking-kpis")).toBeNull();
   });
 
   it("opens a student's history and leads to their profile", async () => {
@@ -223,7 +224,7 @@ describe("Tracking on desktop", () => {
 });
 
 describe("Tracking on mobile", () => {
-  it("puts the title first, keeps the tab order and never repeats a day on the axis", async () => {
+  it("puts the title first, keeps the tab order and draws one calendar day per date", async () => {
     setCompact(true);
     const state = trackingState();
     // Two classes on the same day must not read «19 19» on the axis.
@@ -238,12 +239,10 @@ describe("Tracking on mobile", () => {
         .getAllByRole("button")
         .map((button) => button.textContent),
     ).toEqual(["Attendance", "Grades", "Payments"]);
-    await waitFor(() => expect(document.querySelector(".tracking-bars .cx")).not.toBeNull());
-    expect(document.querySelectorAll(".tracking-bars .cb")).toHaveLength(4);
-    const ticks = [...document.querySelectorAll(".tracking-bars .cx span")]
-      .map((span) => span.textContent)
-      .filter(Boolean);
-    expect(ticks).toEqual(["5", "12", "19"]);
+    expect(screen.getByRole("combobox", { name: "Chart view" })).toHaveTextContent("Calendar");
+    await waitFor(() => expect(document.querySelector(".tracking-view .cv-cal")).not.toBeNull());
+    // Two classes on the 19th are still one day of the calendar.
+    expect(screen.getAllByRole("button", { name: /\b19\b.*: \d+%$/ })).toHaveLength(1);
   });
 
   it("shows the bars, the filter chips and the student sheet", async () => {
