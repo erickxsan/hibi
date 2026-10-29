@@ -373,8 +373,8 @@ export function debtsThrough(state, derivedRows, asOf, groupFilter = "all") {
 /**
  * What is owed with its scope stated, shared by Inicio and Seguimiento so «vencido» means one thing:
  * active students' overdue money of the current month and of earlier months, what is not due yet,
- * and — apart, never in the headline — what inactive students still owe in classes (their monthly fees
- * are not derived once they leave, since no leave date is kept).
+ * and — apart, never in the headline — what inactive students still owe in classes and in the monthly
+ * fees that fell due before they left.
  */
 export function debtSummary(state, derivedRows, asOf, groupFilter = "all") {
   const all = debtsThrough(state, derivedRows, asOf, groupFilter);
@@ -749,8 +749,14 @@ function attentionItems(state, derived, asOf) {
       ],
     });
   }
+  // Inactive students' fees are named apart, with their debts, never among a group's students.
+  const inactiveIds = new Set(
+    (state.students || []).filter((student) => student.status === "Inactive").map((student) => student.id),
+  );
   const dueMonthly = deriveMonthlyCharges(state, asOf, { includeArchived: false }).filter(
-    (charge) => (charge.status === "pending" && charge.dueDate === asOf) || charge.status === "overdue",
+    (charge) =>
+      !inactiveIds.has(charge.studentId) &&
+      ((charge.status === "pending" && charge.dueDate === asOf) || charge.status === "overdue"),
   );
   const byGroup = new Map();
   dueMonthly.forEach((charge) => byGroup.set(charge.groupId, [...(byGroup.get(charge.groupId) || []), charge]));

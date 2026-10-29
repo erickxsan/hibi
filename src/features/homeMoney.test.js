@@ -78,18 +78,16 @@ describe("overdue money states its scope", () => {
     expect(es("{amount} in total", { amount: "$1,125" })).toBe("$1,125 en total");
     expect(es("{amount} overdue from {month}", { amount: "$900", month: "octubre" })).toBe("$900 vencidos de octubre");
     expect(es("{amount} overdue from earlier months", { amount: "$900" })).toBe("$900 vencidos de meses anteriores");
-    expect(es("Aside, {amount} in classes owed by inactive students.", { amount: "$11,700" })).toBe(
-      "Aparte, $11,700 en clases que deben alumnos inactivos.",
+    expect(es("Aside, {amount} owed by inactive students.", { amount: "$11,700" })).toBe(
+      "Aparte, $11,700 que deben alumnos inactivos.",
     );
-    expect(es("{amount} in classes owed by inactive students", { amount: "$11,700" })).toBe(
-      "$11,700 en clases que deben alumnos inactivos",
-    );
+    expect(es("{amount} owed by inactive students", { amount: "$11,700" })).toBe("$11,700 que deben alumnos inactivos");
     expect(es("Inactive students owe {amount}", { amount: "$200" })).toBe("Alumnos inactivos deben $200");
     expect(es("Overdue: {split}.", { split: "$900 de octubre" })).toBe("Vencido: $900 de octubre.");
     expect(es("Overdue from {month}", { month: "octubre" })).toBe("Vencido de octubre");
     expect(es("Overdue from earlier months")).toBe("Vencido de meses anteriores");
     expect(es("Not due yet")).toBe("Aún no vence");
-    expect(es("Classes owed by inactive students")).toBe("Clases que deben alumnos inactivos");
+    expect(es("Owed by inactive students")).toBe("Lo que deben alumnos inactivos");
     expect(es("Inactive student")).toBe("Alumno inactivo");
     expect(es("No active student owes.")).toBe("Ningún alumno activo debe.");
   });

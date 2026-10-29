@@ -170,6 +170,8 @@ export const COMMUNITY_TRANSLATIONS = Object.freeze({
   "Monthly fees from {month} on are created; what was already paid per class those months is discounted.":
     "Se crean las mensualidades desde {month}; lo ya pagado por clase en esos meses se descuenta.",
   "The new fee starts in {month}.": "La nueva cuota empieza en {month}.",
+  "Student changes apply from {month}; earlier months stay as they were.":
+    "Los cambios de alumnos aplican desde {month}; los meses anteriores no cambian.",
   "The new fee applies from {month}; months already paid stay as they are.":
     "La nueva cuota aplica desde {month}; los meses ya pagados no cambian.",
   "Monthly fees end in {last}; per-class charges start in {month}.":

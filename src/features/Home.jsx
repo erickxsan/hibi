@@ -170,7 +170,7 @@ function attentionText(item, t, locale, compact) {
           lead,
           rest: [
             t("from {names}", { names: names(item.names) }),
-            inactive ? t("{amount} in classes owed by inactive students", { amount: inactive }) : "",
+            inactive ? t("{amount} owed by inactive students", { amount: inactive }) : "",
           ]
             .filter(Boolean)
             .join(" · "),
@@ -181,7 +181,7 @@ function attentionText(item, t, locale, compact) {
         rest: [
           t("from {names}.", { names: names(item.names) }),
           split ? t("Overdue: {split}.", { split }) : "",
-          inactive ? t("Aside, {amount} in classes owed by inactive students.", { amount: inactive }) : "",
+          inactive ? t("Aside, {amount} owed by inactive students.", { amount: inactive }) : "",
         ]
           .filter(Boolean)
           .join(" "),

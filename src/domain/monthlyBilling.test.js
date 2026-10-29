@@ -19,7 +19,9 @@ import {
   normalizeMonthlyPayments,
   recordMonthlyPayment,
   setMonthlyPayment,
-  stampJoinedOn,
+  recordStays,
+  resumeGroupBilling,
+  changeStudentAdjustment,
   startGroupBilling,
   studentMonthlyDueDate,
   studentMonthlyPlan,
@@ -515,36 +517,168 @@ describe("monthly billing", () => {
   });
 });
 
-describe("joining a group", () => {
-  const groups = [
-    {
-      id: "mensual",
-      billing: { mode: "monthly", monthlyFee: 900, due: { type: "dayOfMonth", day: 5 }, effectiveFrom: "2026-05" },
-    },
-    { id: "porClase" },
-  ];
+// Mondays and Thursdays at $1,000 a month, due on day 5, since May 2026.
+function stayFixture(student = {}) {
+  return normalizeState({
+    ...createStarterState({ settings: { asOfDate: "2026-10-28", hourlyRate: 50 } }),
+    groups: [
+      {
+        id: "g",
+        name: "Grupo",
+        hourlyRate: 100,
+        scheduleResumeDate: "2026-05-01",
+        weeklySchedule: [
+          { id: "mon", dayOfWeek: 1, startTime: "16:00", durationHours: 2 },
+          { id: "thu", dayOfWeek: 4, startTime: "16:00", durationHours: 2 },
+        ],
+        billing: { mode: "monthly", monthlyFee: 1000, due: { type: "dayOfMonth", day: 5 }, effectiveFrom: "2026-05" },
+      },
+    ],
+    students: [{ id: "ana", code: "A", fullName: "Ana", status: "Active", groupIds: ["g"], ...student }],
+  });
+}
+
+const owed = (state, asOf = "2026-10-28") =>
+  deriveMonthlyCharges(state, asOf)
+    .filter((charge) => charge.status !== "paid")
+    .map((charge) => `${charge.period}:${charge.total}:${charge.dueDate}`);
+
+describe("joining and leaving a group", () => {
+  const groups = stayFixture().groups.concat({ id: "porClase" });
 
   it("dates the start of a student added to a monthly group, and only there", () => {
-    const added = stampJoinedOn(
+    const added = recordStays(
       { id: "ana", groupIds: ["porClase"] },
-      { id: "ana", groupIds: ["porClase", "mensual"] },
+      { id: "ana", groupIds: ["porClase", "g"] },
       groups,
       "2026-10-01",
     );
-    expect(added.billingByGroup).toEqual({ mensual: { mode: "group", joinedOn: "2026-10-01" } });
+    expect(added.billingByGroup).toEqual({ g: { mode: "group", joinedOn: "2026-10-01" } });
     expect(
-      stampJoinedOn(null, { id: "leo", groupIds: ["porClase"] }, groups, "2026-10-01").billingByGroup,
+      recordStays(null, { id: "leo", groupIds: ["porClase"] }, groups, "2026-10-01").billingByGroup,
     ).toBeUndefined();
   });
 
   it("keeps a first-month choice and leaves current members alone", () => {
     const chosen = {
       id: "ana",
-      groupIds: ["mensual"],
-      billingByGroup: { mensual: { mode: "group", joinedOn: "2026-09-20", firstMonthAmount: 0 } },
+      groupIds: ["g"],
+      billingByGroup: { g: { mode: "group", joinedOn: "2026-09-20", firstMonthAmount: 0 } },
     };
-    expect(stampJoinedOn({ id: "ana", groupIds: [] }, chosen, groups, "2026-10-01")).toBe(chosen);
-    const member = { id: "beto", groupIds: ["mensual"] };
-    expect(stampJoinedOn(member, { ...member, notes: "nuevo" }, groups, "2026-10-01").billingByGroup).toBeUndefined();
+    expect(recordStays({ id: "ana", groupIds: [] }, chosen, groups, "2026-10-01")).toBe(chosen);
+    const member = { id: "beto", groupIds: ["g"] };
+    expect(recordStays(member, { ...member, notes: "nuevo" }, groups, "2026-10-01").billingByGroup).toBeUndefined();
+  });
+
+  it("keeps what a deactivated student owed and stops billing them the day they leave", () => {
+    const state = stayFixture({
+      monthlyPayments: [{ id: "p5", groupId: "g", period: "2026-05", amount: 1000, paidAt: "2026-05-05" }],
+    });
+    const ana = state.students[0];
+    // Deactivated on 3 Aug, before August's fee fell due: she owes June and July.
+    const left = recordStays(ana, { ...ana, status: "Inactive" }, state.groups, "2026-08-03");
+    expect(left.billingByGroup).toEqual({ g: { mode: "group", leftOn: "2026-08-03" } });
+    const inactive = { ...state, students: [left] };
+    expect(owed(inactive)).toEqual(["2026-06:1000:2026-06-05", "2026-07:1000:2026-07-05"]);
+    expect(deriveMonthlyCharges(inactive, "2026-10-28").every((charge) => charge.left)).toBe(true);
+
+    // Back on 20 Oct: August and September are not owed; October is, from the day she returned.
+    const back = recordStays(left, { ...left, status: "Active" }, state.groups, "2026-10-20");
+    expect(back.billingByGroup).toEqual({ g: { mode: "group", away: [{ from: "2026-08-03", to: "2026-10-20" }] } });
+    expect(owed({ ...state, students: [back] })).toEqual([
+      "2026-06:1000:2026-06-05",
+      "2026-07:1000:2026-07-05",
+      "2026-10:1000:2026-10-20",
+    ]);
+  });
+
+  it("keeps what a student who left the group owed it", () => {
+    const state = stayFixture();
+    const ana = state.students[0];
+    const left = recordStays(ana, { ...ana, groupIds: [] }, state.groups, "2026-09-10");
+    const charges = deriveMonthlyCharges({ ...state, students: [left] }, "2026-10-28");
+    expect(charges.map((charge) => charge.period)).toEqual(["2026-05", "2026-06", "2026-07", "2026-08", "2026-09"]);
+    expect(charges.at(-1)).toMatchObject({ status: "overdue", left: true });
+  });
+});
+
+describe("a student's adjustment over time", () => {
+  it("changes how a student pays from a month without rewriting the months before it", () => {
+    const state = stayFixture();
+    const ana = state.students[0];
+    const perClass = changeStudentAdjustment(ana.billingByGroup?.g, { mode: "perClass" }, "2026-10");
+    expect(perClass).toEqual({ mode: "perClass", effectiveFrom: "2026-10" });
+    // Per class from October: May to September stay owed, October is no longer a fee.
+    expect(owed({ ...state, students: [{ ...ana, billingByGroup: { g: perClass } }] })).toEqual([
+      "2026-05:1000:2026-05-05",
+      "2026-06:1000:2026-06-05",
+      "2026-07:1000:2026-07-05",
+      "2026-08:1000:2026-08-05",
+      "2026-09:1000:2026-09-05",
+    ]);
+
+    // A fee of $600 due on the 20th from November keeps October as it was.
+    const custom = changeStudentAdjustment(
+      { mode: "customFee", fee: 800, joinedOn: "2026-09-01" },
+      { mode: "customFee", fee: 600, due: { type: "dayOfMonth", day: 20 } },
+      "2026-11",
+    );
+    expect(custom).toEqual({
+      mode: "customFee",
+      fee: 600,
+      due: { type: "dayOfMonth", day: 20 },
+      effectiveFrom: "2026-11",
+      history: [{ mode: "customFee", fee: 800 }],
+      joinedOn: "2026-09-01",
+    });
+    const withCustom = { ...state, students: [{ ...ana, billingByGroup: { g: custom } }] };
+    expect(owed(withCustom, "2026-11-28")).toEqual([
+      "2026-09:800:2026-09-05",
+      "2026-10:800:2026-10-05",
+      "2026-11:600:2026-11-20",
+    ]);
+    expect(studentMonthlyDueDate(withCustom, withCustom.students[0], withCustom.groups[0], "2026-10")).toBe(
+      "2026-10-05",
+    );
+    // Back to the earlier fee from the month the change started: nothing of the change is left.
+    expect(changeStudentAdjustment(custom, { mode: "customFee", fee: 800 }, "2026-11")).toEqual({
+      mode: "customFee",
+      fee: 800,
+      joinedOn: "2026-09-01",
+    });
+  });
+});
+
+describe("reactivating a monthly group", () => {
+  it("bills nothing for the months it spent archived and resumes its fee", () => {
+    const state = stayFixture({
+      monthlyPayments: ["05", "06"].map((month) => ({
+        id: `p${month}`,
+        groupId: "g",
+        period: `2026-${month}`,
+        amount: 1000,
+        paidAt: `2026-${month}-05`,
+      })),
+    });
+    const archived = { ...state.groups[0], status: "Inactive", archivedAt: "2026-06-30" };
+    // Reactivated on 28 Oct, after the due day of October: the fee resumes in November and the
+    // October classes left are covered by it.
+    const resumed = {
+      ...resumeGroupBilling(archived, "2026-10-28"),
+      status: "Active",
+      scheduleResumeDate: "2026-10-28",
+    };
+    expect(resumed.billing).toMatchObject({ mode: "monthly", effectiveFrom: "2026-11", coveredFrom: "2026-10-28" });
+    expect(resumed.billing.history.map((term) => `${term.mode}:${term.effectiveFrom}`)).toEqual([
+      "monthly:2026-05",
+      "perClass:2026-07",
+    ]);
+    const next = { ...state, groups: [resumed] };
+    expect(owed(next)).toEqual([]);
+    expect(owed(next, "2026-11-28")).toEqual(["2026-11:1000:2026-11-05"]);
+    expect(coveredByMonthlyFee(next, "ana", "g", "2026-10-29")).toBe(true);
+    // Archived and reactivated within the same month: nothing to pause.
+    const brief = { ...archived, archivedAt: "2026-10-02" };
+    expect(resumeGroupBilling(brief, "2026-10-04")).toBe(brief);
   });
 });

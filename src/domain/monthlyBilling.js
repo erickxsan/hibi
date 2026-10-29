@@ -16,8 +16,13 @@ import { dayOfWeekForDate, generateScheduledOccurrences, resolveHourlyRate } fro
  *   `coveredFrom` (new groups whose first fee falls next month): classes from that day until
  *   `effectiveFrom` are part of the monthly arrangement, so they are not charged per class.
  *     due = { type: "dayOfMonth", day: 1–28 } | { type: "nthClass", nth: 1–4 | "last" }
- *   student.billingByGroup[groupId] = { mode: "group" | "customFee" | "perClass", fee, due, joinedOn, firstMonthAmount }
+ *   student.billingByGroup[groupId] = { mode: "group" | "customFee" | "perClass", fee, due, effectiveFrom: "YYYY-MM",
+ *                                      history?: [earlier adjustments], joinedOn, firstMonthAmount, leftOn, away }
  *   `due` (same shape as the group's) moves that student's due date; absent, they follow the group's.
+ *   The adjustment (mode, fee, due) has a start month and earlier ones, like the group's terms, so changing
+ *   it from a month never rewrites the months before it; before its first start the student pays the group fee.
+ *   `joinedOn` is the day they joined, `leftOn` the day they left (removed or deactivated) and `away` the
+ *   stretches they were gone and came back: they owe the months whose fee fell due while they were there.
  *   student.monthlyPayments = [{ id, groupId, period: "YYYY-MM", amount, paidAt, partial? }]
  *   A month may have several payments (abonos). `partial` marks one that left a balance; a payment
  *   without it settled the month when it was recorded, so later fee changes do not reopen it.
@@ -171,18 +176,114 @@ export function moveBillingStart(billing, from) {
   return changeGroupBilling(base, latest, from);
 }
 
+// One adjustment: how the student pays (mode, fee, due) from its start month.
+function normalizeAdjustment(value) {
+  const mode = ["customFee", "perClass"].includes(value?.mode) ? value.mode : "group";
+  const fee = toNumber(value?.fee);
+  const adjustment = { mode };
+  if (mode === "customFee") adjustment.fee = fee !== null && fee >= 0 ? roundMoney(fee) : 0;
+  if (mode !== "perClass" && value?.due && typeof value.due === "object") adjustment.due = normalizeDue(value.due);
+  if (isPeriod(value?.effectiveFrom)) adjustment.effectiveFrom = value.effectiveFrom;
+  return adjustment;
+}
+
+function sameAdjustment(a, b) {
+  return (
+    a.mode === b.mode &&
+    (a.mode !== "customFee" || a.fee === b.fee) &&
+    JSON.stringify(a.due || null) === JSON.stringify(b.due || null)
+  );
+}
+
+// The days a student was in the group: when they joined, when they left and the stretches they were away.
+function normalizeStay(value) {
+  const stay = {};
+  const firstMonthAmount = toNumber(value.firstMonthAmount);
+  if (isDateOnly(value.joinedOn)) stay.joinedOn = value.joinedOn;
+  if (stay.joinedOn && firstMonthAmount !== null && firstMonthAmount >= 0)
+    stay.firstMonthAmount = roundMoney(firstMonthAmount);
+  if (isDateOnly(value.leftOn)) stay.leftOn = value.leftOn;
+  const away = (Array.isArray(value.away) ? value.away : [])
+    .filter((item) => isDateOnly(item?.from) && isDateOnly(item?.to) && item.from < item.to)
+    .map((item) => ({ from: item.from, to: item.to }))
+    .sort((a, b) => a.from.localeCompare(b.from));
+  if (away.length) stay.away = away;
+  return stay;
+}
+
+/**
+ * @typedef {object} StudentOverride
+ * @property {string} mode "group" | "customFee" | "perClass"
+ * @property {number} [fee]
+ * @property {{ type: string, nth?: string | number, day?: number }} [due]
+ * @property {string} [effectiveFrom]
+ * @property {StudentOverride[]} [history]
+ * @property {string} [joinedOn]
+ * @property {number} [firstMonthAmount]
+ * @property {string} [leftOn]
+ * @property {{ from: string, to: string }[]} [away]
+ */
+
+/** @returns {StudentOverride | null} */
 function normalizeOverride(value) {
   if (!value || typeof value !== "object") return null;
-  const mode = ["customFee", "perClass"].includes(value.mode) ? value.mode : "group";
-  const fee = toNumber(value.fee);
-  const firstMonthAmount = toNumber(value.firstMonthAmount);
-  const override = { mode };
-  if (mode === "customFee") override.fee = fee !== null && fee >= 0 ? roundMoney(fee) : 0;
-  if (mode !== "perClass" && value.due && typeof value.due === "object") override.due = normalizeDue(value.due);
-  if (isDateOnly(value.joinedOn)) override.joinedOn = value.joinedOn;
-  if (override.joinedOn && firstMonthAmount !== null && firstMonthAmount >= 0)
-    override.firstMonthAmount = roundMoney(firstMonthAmount);
-  return mode === "group" && !override.joinedOn && !override.due ? null : override;
+  const adjustment = normalizeAdjustment(value);
+  // Earlier adjustments need their own start, before the latest one's (the first may have none: since always).
+  const history = adjustment.effectiveFrom
+    ? (Array.isArray(value.history) ? value.history : [])
+        .filter((item) => item && typeof item === "object")
+        .map(normalizeAdjustment)
+        .filter(
+          (item, index) => (item.effectiveFrom || index === 0) && (item.effectiveFrom || "") < adjustment.effectiveFrom,
+        )
+        .sort((a, b) => (a.effectiveFrom || "").localeCompare(b.effectiveFrom || ""))
+        .filter((item, index, list) => index === 0 || item.effectiveFrom !== list[index - 1].effectiveFrom)
+    : [];
+  const stay = normalizeStay(value);
+  if (adjustment.mode === "group" && !adjustment.due && !history.length && !Object.keys(stay).length) return null;
+  return { ...adjustment, ...(history.length ? { history } : {}), ...stay };
+}
+
+/**
+ * A student's adjustment in force in a month (YYYY-MM), with their stay in the group; without a
+ * period, the latest one. Before the first adjustment starts they pay the group fee.
+ */
+/** @returns {StudentOverride | null} */
+export function adjustmentFor(override, period = "") {
+  const normalized = normalizeOverride(override);
+  if (!normalized) return null;
+  const { history = [], mode, fee, due, effectiveFrom, ...stay } = normalized;
+  const terms = [...history, { mode, fee, due, effectiveFrom }];
+  const term = period ? terms.findLast((item) => !item.effectiveFrom || item.effectiveFrom <= period) : terms.at(-1);
+  const found = term || { mode: "group" };
+  return {
+    mode: found.mode,
+    ...(found.mode === "customFee" ? { fee: found.fee } : {}),
+    ...(found.due ? { due: found.due } : {}),
+    ...stay,
+  };
+}
+
+/**
+ * The student's override after changing how they pay from `from` (YYYY-MM): adjustments before that
+ * month stay and the ones starting on or after it are replaced by `next` (mode, fee, due). Their stay
+ * in the group (joined, left, away) is kept. Null when nothing is left to keep.
+ */
+export function changeStudentAdjustment(override, next, from) {
+  const before = normalizeOverride(override);
+  const { history = [], mode, fee, due, effectiveFrom, ...stay } = before || /** @type {StudentOverride} */ ({});
+  const terms = before ? [...history, normalizeAdjustment({ mode, fee, due, effectiveFrom })] : [];
+  const term = normalizeAdjustment({ ...next, effectiveFrom: "" });
+  // A start-less group fee says nothing a student without an adjustment does not.
+  const kept = terms
+    .filter((item) => (item.effectiveFrom || "") < from)
+    .filter((item, index) => index > 0 || item.effectiveFrom || item.mode !== "group" || item.due);
+  const last = kept.at(-1);
+  let latest;
+  if (last && sameAdjustment(last, term)) latest = { ...last, history: kept.slice(0, -1) };
+  else if (!kept.length && term.mode === "group" && !term.due) latest = { mode: "group" };
+  else latest = { ...term, effectiveFrom: from, history: kept };
+  return normalizeOverride({ ...latest, ...stay });
 }
 
 /** Canonical per-group overrides for one student, or null when there are none. */
@@ -329,7 +430,7 @@ export function monthlyDueDate(state, group, period) {
  * never before the day the student joined, so someone who joins after the due day is not overdue on arrival.
  */
 export function studentMonthlyDueDate(state, student, group, period, groupDueDate = undefined) {
-  const override = normalizeBillingByGroup(student?.billingByGroup)?.[group?.id];
+  const override = overrideOf(student, group, period);
   const dueDate =
     override?.due && isMonthlyGroup(group, period)
       ? dueDateIn(state, group, period, override.due)
@@ -376,14 +477,15 @@ export function startGroupBilling(group, asOf) {
   return { ...group, billing: next };
 }
 
-// The student's own adjustment in a group, and whether they pay that group monthly in `period`.
-function overrideOf(student, group) {
-  return normalizeBillingByGroup(student?.billingByGroup)?.[group?.id] || null;
+// The student's own adjustment in a group in `period` (the latest without one), and whether they pay
+// that group monthly in `period`.
+function overrideOf(student, group, period = "") {
+  return adjustmentFor(student?.billingByGroup?.[group?.id], period);
 }
 
 function paysMonthly(student, group, period) {
   if (!student || groupBillingFor(group, period)?.mode !== "monthly") return false;
-  const override = overrideOf(student, group);
+  const override = overrideOf(student, group, period);
   if (override?.mode === "perClass") return false;
   const joinedPeriod = periodOf(override?.joinedOn);
   return !(joinedPeriod && period < joinedPeriod);
@@ -406,7 +508,7 @@ function paidPerClassIn(state, student, group, period) {
 export function studentMonthlyPlan(state, student, group, period, paidPerClass = undefined) {
   if (!paysMonthly(student, group, period)) return null;
   const billing = groupBillingFor(group, period);
-  const override = overrideOf(student, group);
+  const override = overrideOf(student, group, period);
   const joinedPeriod = periodOf(override?.joinedOn);
   const fee = override?.mode === "customFee" ? override.fee : billing.monthlyFee;
   const base =
@@ -427,7 +529,7 @@ function coveredBeforeFirstFee(student, group, date) {
       date >= item.coveredFrom &&
       period < item.effectiveFrom,
   );
-  return Boolean(term) && overrideOf(student, group)?.mode !== "perClass";
+  return Boolean(term) && overrideOf(student, group, period)?.mode !== "perClass";
 }
 
 /**
@@ -462,23 +564,89 @@ export function joiningAmounts(state, group, fee, joinedOn) {
   };
 }
 
+// The groups a student is taking part in: none while deactivated.
+function activeGroupIds(student) {
+  return !student || student.status === "Inactive" ? [] : studentGroupIds(student);
+}
+
 /**
- * The student after being saved with `previous` as their earlier record (none when new): each group with
- * a monthly fee they were just added to starts billing them on `date`, so they never owe the months
- * before they arrived. A start already chosen (a first-month choice) is kept.
+ * The student after being saved with `previous` as their earlier record (none when new), with the
+ * days they joined, left or came back to each group with a monthly fee, so they owe only the months
+ * they were there. Joining stamps `joinedOn` (a first-month choice is kept); leaving the group or
+ * being deactivated stamps `leftOn`; coming back turns that into an `away` stretch.
  */
-export function stampJoinedOn(previous, student, groups, date) {
+export function recordStays(previous, student, groups, date) {
   if (!isDateOnly(date)) return student;
-  const before = new Set(studentGroupIds(previous));
-  const added = studentGroupIds(student).filter(
-    (id) => !before.has(id) && isMonthlyGroup((groups || []).find((group) => group.id === id)),
-  );
+  const monthly = (id) => isMonthlyGroup((groups || []).find((group) => group.id === id));
+  const before = new Set(activeGroupIds(previous));
+  const after = new Set(activeGroupIds(student));
+  const wasMember = new Set(studentGroupIds(previous));
   const current = student.billingByGroup || {};
-  const missing = added.filter((id) => !isDateOnly(current[id]?.joinedOn));
-  if (!missing.length) return student;
   const billingByGroup = { ...current };
-  for (const id of missing) billingByGroup[id] = { mode: "group", ...current[id], joinedOn: date };
-  return { ...student, billingByGroup };
+  let changed = false;
+  for (const id of after) {
+    if (before.has(id) || !monthly(id)) continue;
+    const override = current[id] || { mode: "group" };
+    if (isDateOnly(override.leftOn)) {
+      const { leftOn, ...rest } = override;
+      const away =
+        leftOn < date
+          ? [...(Array.isArray(override.away) ? override.away : []), { from: leftOn, to: date }]
+          : override.away;
+      billingByGroup[id] = { ...rest, ...(away?.length ? { away } : {}) };
+    } else if (!wasMember.has(id) && !isDateOnly(override.joinedOn))
+      billingByGroup[id] = { ...override, joinedOn: date };
+    else continue;
+    changed = true;
+  }
+  for (const id of before) {
+    if (after.has(id) || !monthly(id) || isDateOnly(current[id]?.leftOn)) continue;
+    billingByGroup[id] = { mode: "group", ...current[id], leftOn: date };
+    changed = true;
+  }
+  return changed ? { ...student, billingByGroup } : student;
+}
+
+/**
+ * The due date a student's month keeps once their stay in the group is counted, or "" when they
+ * were not there when it fell due (left before it, or away all of it). Coming back partway through
+ * a month owes that month from the day they return, as joining does.
+ */
+function dueWhileThere(override, period, dueDate) {
+  const gaps = [...(override?.away || []), ...(override?.leftOn ? [{ from: override.leftOn, to: "" }] : [])];
+  let due = dueDate;
+  for (const { from, to } of gaps) {
+    const left = periodOf(from);
+    const back = to ? periodOf(to) : "";
+    if (back === period) {
+      if (!(left === period && dueDate <= from) && to > due) due = to;
+    } else if (left === period) {
+      if (dueDate > from) return "";
+    } else if (period > left && (!back || period < back)) return "";
+  }
+  return due;
+}
+
+/**
+ * A group being reactivated on `date`: the months it spent archived (from the one after `archivedAt`)
+ * have no fee, and its latest arrangement resumes from its first billable month, the classes left
+ * before it covered, as for a new group.
+ */
+export function resumeGroupBilling(group, date) {
+  const latest = groupBillingFor(group);
+  if (latest?.mode !== "monthly" || !isDateOnly(group?.archivedAt) || !isDateOnly(date) || date <= group.archivedAt)
+    return group;
+  const pauseFrom = nextPeriod(periodOf(group.archivedAt));
+  const first = firstBillingPeriod(latest, date, group.weeklySchedule);
+  const resumeFrom = latest.effectiveFrom > first ? latest.effectiveFrom : first;
+  if (resumeFrom <= pauseFrom) return group;
+  const { coveredFrom: _covered, ...term } = latest;
+  const resumed = changeGroupBilling(
+    changeGroupBilling(group.billing, { mode: "perClass" }, pauseFrom),
+    term,
+    resumeFrom,
+  );
+  return { ...group, billing: resumeFrom > periodOf(date) ? { ...resumed, coveredFrom: date } : resumed };
 }
 
 function firstPeriodFor(state, group, students) {
@@ -507,7 +675,7 @@ function settlement(total, payments) {
  * month, the same days in which classes are not charged on their own.
  */
 function coverage(state, student, group, period, dueDate) {
-  const override = overrideOf(student, group);
+  const override = overrideOf(student, group, period);
   const term = groupBillingFor(group, period);
   const previous = periodOf(addDays(periodStart(period), -1));
   const from = paysMonthly(student, group, previous)
@@ -525,7 +693,8 @@ function coverage(state, student, group, period, dueDate) {
 }
 
 /**
- * Monthly charges from each group's start through `through` (YYYY-MM), for active members.
+ * Monthly charges from each group's start through `through` (YYYY-MM), for its members and for the
+ * students who left it with a date (`left`), each only for the months they were there.
  * `dueDate` is the student's own (never before they joined); `groupDueDate` is the group's.
  * `total` is what the month costs, `paid` the payments so far and `balance` what is still owed;
  * `amount` is the money the charge stands for now: what was paid once settled, otherwise the balance.
@@ -534,7 +703,7 @@ function coverage(state, student, group, period, dueDate) {
  */
 export function deriveMonthlyCharges(state, asOfDate, { through = periodOf(asOfDate), includeArchived = true } = {}) {
   const charges = [];
-  const students = (state.students || []).filter((student) => student.status !== "Inactive");
+  const students = state.students || [];
   const perClassPaid = new Map();
   for (const row of state.classLog || []) {
     if (!(row?.amountPaid > 0)) continue;
@@ -543,7 +712,8 @@ export function deriveMonthlyCharges(state, asOfDate, { through = periodOf(asOfD
   }
   for (const group of state.groups || []) {
     if (!isMonthlyGroup(group) || (!includeArchived && isGroupArchived(group))) continue;
-    const members = students.filter((student) => studentGroupIds(student).includes(group.id));
+    const current = (student) => student.status !== "Inactive" && studentGroupIds(student).includes(group.id);
+    const members = students.filter((student) => current(student) || isDateOnly(overrideOf(student, group)?.leftOn));
     const lastPeriod =
       isGroupArchived(group) && isDateOnly(group.archivedAt) && periodOf(group.archivedAt) < through
         ? periodOf(group.archivedAt)
@@ -560,7 +730,11 @@ export function deriveMonthlyCharges(state, asOfDate, { through = periodOf(asOfD
           (item) => item.groupId === group.id && item.period === period,
         );
         const { paid, settled, balance } = settlement(plan.amount, payments);
-        const dueDate = studentMonthlyDueDate(state, student, group, period, groupDueDate);
+        const ownDueDate = studentMonthlyDueDate(state, student, group, period, groupDueDate);
+        const dueThere = dueWhileThere(overrideOf(student, group, period), period, ownDueDate);
+        // A month they were not there for is not owed, unless it was paid anyway.
+        if (!dueThere && !payments.length) continue;
+        const dueDate = dueThere || ownDueDate;
         const last = payments.at(-1);
         charges.push({
           id: `${student.id}|${group.id}|${period}`,
@@ -583,6 +757,8 @@ export function deriveMonthlyCharges(state, asOfDate, { through = periodOf(asOfD
           adjusted: plan.adjusted,
           prorated: plan.prorated,
           archived: isGroupArchived(group),
+          // Left the group or was deactivated: still owes, but is no longer one of its students.
+          left: !current(student),
           ...coverage(state, student, group, period, dueDate),
         });
       }

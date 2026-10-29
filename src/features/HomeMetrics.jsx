@@ -1193,7 +1193,7 @@ export function MetricExplorer({
       emptyMessage: t(debts.inactive.debts.length ? "No active student owes." : "Nobody owes. Everything collected!"),
       emptyTone: "text-ok",
       extra: {
-        title: `${t("Classes owed by inactive students")} · ${formatMoney(debts.inactive.owed, locale)}`,
+        title: `${t("Owed by inactive students")} · ${formatMoney(debts.inactive.owed, locale)}`,
         list: debts.inactive.debts.map((item) => ({
           id: item.studentId,
           name: context.nameOf(item.studentId),
@@ -1645,7 +1645,7 @@ export function MetricRows({ metrics, summaries, context, onOpenTracking, monthN
             {inactiveList.length ? (
               <div>
                 <span className="overline">
-                  {`${t("Classes owed by inactive students")} · ${formatMoney(debts.inactive.owed, locale)}`}
+                  {`${t("Owed by inactive students")} · ${formatMoney(debts.inactive.owed, locale)}`}
                 </span>
                 {inactiveList.map((item) => (
                   <div className="lr" key={item.student?.id}>

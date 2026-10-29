@@ -195,3 +195,62 @@ describe("a student added to a monthly group through the live manager", () => {
     }
   });
 });
+
+describe("leaving and coming back through the live manager", () => {
+  it("keeps a deactivated student's fees, skips the months away and pauses an archived group", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 7, 3, 9));
+    try {
+      const initial = createStarterState();
+      initial.groups = [
+        createGroup({
+          id: "g-mensual",
+          name: "Mensual",
+          weeklySchedule: [{ id: "thu", dayOfWeek: 4, startTime: "16:00", durationHours: 1 }],
+          scheduleResumeDate: "2026-06-01",
+          billing: { mode: "monthly", monthlyFee: 1000, due: { type: "dayOfMonth", day: 5 }, effectiveFrom: "2026-06" },
+        }),
+      ];
+      initial.students = [createStudent({ id: "ana", code: "ANA", fullName: "Ana Ruiz", groupIds: ["g-mensual"] })];
+      const persistence = { initialState: initial, mode: "cloud", save: vi.fn(async (state) => state) };
+      const hook = renderHook(() => useClassManager({ persistence }));
+      // The manager reads today again when the page becomes visible.
+      const travel = async (date) => {
+        vi.setSystemTime(date);
+        await act(async () => document.dispatchEvent(new Event("visibilitychange")));
+      };
+      const owedOn = (asOf) =>
+        deriveMonthlyCharges(hook.result.current.state, asOf)
+          .filter((charge) => charge.status !== "paid")
+          .map((charge) => charge.period);
+
+      // Deactivated on 3 Aug: June and July stay owed.
+      await act(async () => {
+        await hook.result.current.actions.archiveStudent("ana");
+      });
+      expect(owedOn("2026-10-28")).toEqual(["2026-06", "2026-07"]);
+
+      // Back on 20 Oct: August and September are not billed.
+      await travel(new Date(2026, 9, 20, 9));
+      const ana = hook.result.current.state.students.find((student) => student.id === "ana");
+      await act(async () => {
+        await hook.result.current.actions.upsertStudent({ ...ana, status: "Active" });
+      });
+      expect(owedOn("2026-10-28")).toEqual(["2026-06", "2026-07", "2026-10"]);
+
+      // The group is archived on 22 Oct and reactivated on 2 Dec: November is not billed.
+      await travel(new Date(2026, 9, 22, 9));
+      await act(async () => {
+        await hook.result.current.actions.archiveGroup("g-mensual");
+      });
+      await travel(new Date(2026, 11, 2, 9));
+      await act(async () => {
+        await hook.result.current.actions.reactivateGroup("g-mensual");
+      });
+      expect(owedOn("2026-12-10")).toEqual(["2026-06", "2026-07", "2026-10", "2026-12"]);
+      hook.unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

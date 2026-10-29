@@ -2,7 +2,9 @@ import { roundMoney, sumMoney } from "../domain/money.js";
 import { addDays, startOfMonth } from "../domain/dates";
 import { gradeGroupId } from "../domain/semanticIdentity";
 import {
+  adjustmentFor,
   changeGroupBilling,
+  changeStudentAdjustment,
   deriveMonthlyCharges,
   groupBillingFor,
   groupClassDates,
@@ -391,27 +393,34 @@ export function billingChanges(group, members, draft, asOf, applyFrom = draft?.a
   const overrides = {};
   // Per class from some month on: the adjustments stay for the monthly months before it.
   if (draft.mode !== "monthly") return { billing, overrides };
+  const from = adjustmentStart(group, draft, asOf, applyFrom);
   members.forEach((student) => {
     const current = normalizeBillingByGroup(student.billingByGroup)?.[group?.id] || null;
     const wanted = draft.adjustments[student.id] || null;
-    const joined = current?.joinedOn ? { joinedOn: current.joinedOn, firstMonthAmount: current.firstMonthAmount } : {};
-    const ownDue = wanted?.due && wanted.mode !== "perClass" ? { due: wanted.due } : {};
-    const next =
-      wanted && (wanted.mode !== "group" || ownDue.due)
-        ? {
-            mode: wanted.mode,
-            ...(wanted.mode === "customFee" ? { fee: roundMoney(Number(wanted.fee) || 0) } : {}),
-            ...ownDue,
-            ...joined,
-          }
-        : current?.joinedOn
-          ? { mode: "group", ...joined }
-          : null;
-    const same =
-      JSON.stringify(current || null) === JSON.stringify(next ? normalizeBillingByGroup({ x: next })?.x || null : null);
-    if (!same) overrides[student.id] = next;
+    const term = wanted
+      ? {
+          mode: wanted.mode,
+          fee: roundMoney(Number(wanted.fee) || 0),
+          due: wanted.mode !== "perClass" ? wanted.due || null : null,
+        }
+      : { mode: "group" };
+    const latest = adjustmentFor(current) || { mode: "group" };
+    /** @param {{ mode: string, fee?: number, due?: object | null }} value */
+    const termKey = ({ mode, fee, due }) => JSON.stringify(adjustmentFor({ mode, fee, due }) || { mode: "group" });
+    // Unchanged (including a change already planned for a later month): nothing to save.
+    if (termKey(latest) === termKey(term)) return;
+    overrides[student.id] = changeStudentAdjustment(current, term, from);
   });
   return { billing, overrides };
+}
+
+/**
+ * The month a change to students' adjustments applies from: the group's «Aplica desde» when its
+ * arrangement changes too, otherwise this month. Earlier months keep the adjustment they had.
+ */
+export function adjustmentStart(group, draft, asOf, applyFrom = draft?.applyFrom ?? null) {
+  if (!group?.id || !billingTermChanged(group, draft)) return periodOf(asOf);
+  return applyFromFor(group, draft, asOf, applyFrom) || periodOf(asOf);
 }
 
 /** What each student owes in `period` (this month by default) when the group bills monthly from it. */
@@ -485,7 +494,7 @@ export function nextDueDates(state, group, draft, asOf, count = 2) {
 export function joiningOptions(state, group, student, asOf) {
   if (!isMonthlyGroup(group, periodOf(asOf))) return null;
   const billing = groupBillingFor(group, periodOf(asOf));
-  const override = normalizeBillingByGroup(student?.billingByGroup)?.[group.id];
+  const override = adjustmentFor(student?.billingByGroup?.[group.id], periodOf(asOf));
   const fee = override?.mode === "customFee" ? override.fee : billing.monthlyFee;
   const amounts = joiningAmounts(state, group, fee, asOf);
   if (!amounts.total || amounts.remaining === amounts.total) return { started: false, fee, amounts };
@@ -495,7 +504,8 @@ export function joiningOptions(state, group, student, asOf) {
 /** The student record after joining a group, with the first-month choice when the group is monthly. */
 export function joinGroup(student, group, asOf, choice = null) {
   const groupIds = [...new Set([...studentGroupIdsOf(student), group.id])];
-  if (!choice) return { ...student, groupIds };
+  // A student coming back keeps the day they first joined: saving records their return.
+  if (!choice || student.billingByGroup?.[group.id]?.leftOn) return { ...student, groupIds };
   const billingByGroup = { ...(student.billingByGroup || {}) };
   billingByGroup[group.id] = {
     ...(billingByGroup[group.id] || { mode: "group" }),

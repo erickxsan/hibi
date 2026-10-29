@@ -235,7 +235,9 @@ describe("Community groups", () => {
       }),
     );
     expect(saved().groups.find((g) => g.id === "g1").billing.history).toBeUndefined();
-    expect(saved().students.find((s) => s.id === "s1").billingByGroup).toEqual({ g1: { mode: "perClass" } });
+    expect(saved().students.find((s) => s.id === "s1").billingByGroup).toEqual({
+      g1: { mode: "perClass", effectiveFrom: "2026-10" },
+    });
   });
 
   it("lets one student of a monthly group fall due on another day", async () => {
@@ -260,10 +262,14 @@ describe("Community groups", () => {
     await user.click(screen.getByRole("combobox", { name: "Day Diego Soto pays" }));
     await user.click(screen.getByRole("option", { name: "20" }));
     expect(screen.getByText(/1 with an adjustment/)).toHaveTextContent("2 pay the group fee");
+    // The change starts this month: September keeps the group's due day.
+    expect(
+      screen.getByText("Student changes apply from October; earlier months stay as they were."),
+    ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() =>
       expect(saved().students.find((s) => s.id === "s2").billingByGroup).toEqual({
-        g1: { mode: "group", due: { type: "dayOfMonth", day: 20 } },
+        g1: { mode: "group", due: { type: "dayOfMonth", day: 20 }, effectiveFrom: "2026-10" },
       }),
     );
     expect(saved().groups.find((g) => g.id === "g1").billing.due).toEqual({ type: "dayOfMonth", day: 5 });

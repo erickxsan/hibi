@@ -20,8 +20,10 @@ import { addDays } from "../domain/dates";
 import { groupBillingFor, periodOf } from "../domain/monthlyBilling";
 import { formatHours, formatMoney, formatShortDate, monthLong } from "../utils/displayFormat";
 import {
+  adjustmentStart,
   applyFromFor,
   applyFromOptions,
+  billingChanges,
   billingTermChanged,
   feeSuggestion,
   monthlyTotal,
@@ -425,6 +427,11 @@ export function BillingFields({ draft, setDraft, group, members = [], state, asO
       return { ...current, adjustments };
     });
   const start = chooseStart && group?.id ? startChoice(state, group, members, draft, asOf) : null;
+  // Changing how a student pays never rewrites the months before it applies.
+  const adjustmentsFrom =
+    chooseStart && monthly && group?.id && Object.keys(billingChanges(group, members, draft, asOf).overrides).length
+      ? adjustmentStart(group, draft, asOf)
+      : "";
   return (
     <div className="field-rows billing-fields">
       <FieldRow label={t("Billing")}>
@@ -594,6 +601,13 @@ export function BillingFields({ draft, setDraft, group, members = [], state, asO
                       </option>
                     ))}
                   </Select>
+                ) : null}
+                {adjustmentsFrom ? (
+                  <span className="field-row-hint">
+                    {t("Student changes apply from {month}; earlier months stay as they were.", {
+                      month: monthLong(`${adjustmentsFrom}-01`, locale),
+                    })}
+                  </span>
                 ) : null}
               </div>
             </FieldRow>

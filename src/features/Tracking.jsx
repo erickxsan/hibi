@@ -685,7 +685,7 @@ export default function Tracking({
   const owedNote = [
     overdueLine(kpis.payments, t, locale),
     kpis.payments.inactiveOwed > 0
-      ? t("Aside, {amount} in classes owed by inactive students.", {
+      ? t("Aside, {amount} owed by inactive students.", {
           amount: formatMoney(kpis.payments.inactiveOwed, locale),
         })
       : "",

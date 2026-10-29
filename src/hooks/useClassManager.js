@@ -47,8 +47,9 @@ import {
   normalizeGroupBilling,
   normalizeMonthlyPayments,
   monthlyBalance,
+  recordStays,
+  resumeGroupBilling,
   setMonthlyPayment,
-  stampJoinedOn,
   startGroupBilling,
 } from "../domain/monthlyBilling.js";
 
@@ -748,7 +749,7 @@ export function useClassManager({ persistence } = {}) {
         const item = applyGeneratedId(
           createStudent,
           canonicalStudent(
-            stampJoinedOn(
+            recordStays(
               previous,
               {
                 ...draft,
@@ -792,9 +793,25 @@ export function useClassManager({ persistence } = {}) {
     (id) => commit((current) => setGroupArchived(current, id, true), "Group archived"),
     [commit],
   );
+  // Reactivating pauses its monthly fee for the months it spent archived.
   const reactivateGroup = useCallback(
-    (id) => commit((current) => setGroupArchived(current, id, false), "Group reactivated"),
-    [commit],
+    (id) =>
+      commit(
+        (current) =>
+          setGroupArchived(
+            {
+              ...current,
+              groups: current.groups.map((group) =>
+                group.id === id ? resumeGroupBilling(group, operationalDate) : group,
+              ),
+            },
+            id,
+            false,
+            operationalDate,
+          ),
+        "Group reactivated",
+      ),
+    [commit, operationalDate],
   );
 
   const deleteGroup = useCallback(
@@ -823,7 +840,7 @@ export function useClassManager({ persistence } = {}) {
   const upsertStudent = useCallback(
     (draft) => {
       const previous = draft.id ? stateRef.current.students.find((student) => student.id === draft.id) : null;
-      const joined = stampJoinedOn(previous, draft, stateRef.current.groups, operationalDate);
+      const joined = recordStays(previous, draft, stateRef.current.groups, operationalDate);
       const item = applyGeneratedId(createStudent, canonicalStudent(joined));
       const validation = validateStudent(item, stateRef.current);
       if (!validation.valid) {
@@ -843,18 +860,21 @@ export function useClassManager({ persistence } = {}) {
     [commit, notify, operationalDate],
   );
 
+  // A deactivated student stops owing monthly fees from that day (`leftOn` in each monthly group).
   const archiveStudent = useCallback(
     (id) =>
       commit(
         (current) => ({
           ...current,
           students: current.students.map((student) =>
-            student.id === id ? { ...student, status: "Inactive" } : student,
+            student.id === id
+              ? recordStays(student, { ...student, status: "Inactive" }, current.groups, operationalDate)
+              : student,
           ),
         }),
         "Student archived",
       ),
-    [commit],
+    [commit, operationalDate],
   );
 
   const deleteStudent = useCallback(
@@ -1063,7 +1083,8 @@ export function useClassManager({ persistence } = {}) {
         students.map((student) => {
           if (!Object.hasOwn(overrides, student.id)) return student;
           const next = { ...(student.billingByGroup || {}) };
-          if (overrides[student.id]) next[item.id] = { ...next[item.id], ...overrides[student.id] };
+          // Each override is the student's whole entry for the group (adjustments and stay).
+          if (overrides[student.id]) next[item.id] = overrides[student.id];
           else delete next[item.id];
           const billingByGroup = normalizeBillingByGroup(next);
           const { billingByGroup: _previous, ...rest } = student;

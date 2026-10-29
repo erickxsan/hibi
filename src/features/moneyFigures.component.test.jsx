@@ -120,7 +120,7 @@ describe("Home money", () => {
     const alert = within(attention).getByRole("button", { name: /overdue/ });
     // Overdue (all months) and the total with what is not due yet; the inactive student stays apart.
     expect(alert).toHaveTextContent(
-      "$400 overdue · $600 in total from Maya. Overdue: $200 from October · $200 from earlier months. Aside, $200 in classes owed by inactive students.",
+      "$400 overdue · $600 in total from Maya. Overdue: $200 from October · $200 from earlier months. Aside, $200 owed by inactive students.",
     );
     expect(alert).not.toHaveTextContent(/Old/);
     await user.click(alert);
@@ -132,7 +132,7 @@ describe("Home money", () => {
     expect(values).toEqual(["Overdue from October$200", "Overdue from earlier months$200", "Not due yet$200"]);
     const who = [...aside.querySelectorAll(".who")].map((item) => item.textContent);
     expect(who[0]).toMatch(/^Maya Torres\$400 overdue · class on .*\$600$/);
-    expect(within(aside).getByText("Classes owed by inactive students · $200")).toBeInTheDocument();
+    expect(within(aside).getByText("Owed by inactive students · $200")).toBeInTheDocument();
     expect(who[1]).toMatch(/^Old Student.*\$200$/);
   });
 
@@ -153,7 +153,7 @@ describe("Home money", () => {
     const props = renderHome();
     const attention = screen.getByRole("heading", { name: "To attend to" }).closest("section");
     expect(within(attention).getByRole("button", { name: /overdue/ })).toHaveTextContent(
-      "$400 overdue · $600 in total from Maya · $200 in classes owed by inactive students",
+      "$400 overdue · $600 in total from Maya · $200 owed by inactive students",
     );
     const row = screen.getByRole("button", { name: /^Collections:/ });
     expect(row).toHaveTextContent("$200 overdue from October");
@@ -164,7 +164,7 @@ describe("Home money", () => {
     const maya = within(sheet).getByText("Maya Torres").closest(".lr");
     expect(maya).toHaveTextContent("$400 overdue");
     expect(maya).toHaveTextContent("$600");
-    expect(within(sheet).getByText("Classes owed by inactive students · $200")).toBeInTheDocument();
+    expect(within(sheet).getByText("Owed by inactive students · $200")).toBeInTheDocument();
     expect(within(sheet).getByText("Old Student").closest(".lr")).toHaveTextContent("Inactive student");
     await user.click(within(sheet).getByRole("button", { name: "Open in Tracking" }));
     expect(props.openPage).toHaveBeenCalledWith("grades", { type: "open-tracking", tab: "payments" });
@@ -191,7 +191,7 @@ describe("Tracking money", () => {
     const hero = document.querySelector(".tracking-hero");
     expect(hero).toHaveTextContent("↑ 100% vs. 1–21 sep");
     expect(hero).toHaveTextContent(
-      "Por cobrar $600 · $400 vencidos ($200 de octubre · $200 de meses anteriores) · Aparte, $200 en clases que deben alumnos inactivos.",
+      "Por cobrar $600 · $400 vencidos ($200 de octubre · $200 de meses anteriores) · Aparte, $200 que deben alumnos inactivos.",
     );
   });
 });
