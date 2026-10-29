@@ -28,7 +28,7 @@ import { useConfirmPrompt } from "../components/ConfirmPrompt";
 import { useHistoryBackedState } from "../hooks/useHistoryNavigation";
 import { isGroupArchived } from "../domain/groupArchiving";
 import { gradeGroupId } from "../domain/semanticIdentity";
-import { normalizeGroupBilling, periodOf, startGroupBilling } from "../domain/monthlyBilling";
+import { periodOf, startGroupBilling } from "../domain/monthlyBilling";
 import { todayDateOnly } from "../domain/dates";
 import { formatPercent, formatShortDate, monthLong } from "../utils/displayFormat";
 import { normalizeSearchText } from "../utils/searchText";
@@ -170,7 +170,6 @@ export default function Community({
   const [studentDraft, setStudentDraft] = useState(null);
   const [groupDraft, setGroupDraft] = useState(null);
   const [billingDraft, setBillingDraft] = useState(null);
-  const [applyFrom, setApplyFrom] = useState("next");
   const [studentEditor, setStudentEditor] = useState(null);
   const [groupEditor, setGroupEditor] = useState(null);
   const [newGroupBilling, setNewGroupBilling] = useState(NEW_GROUP_BILLING);
@@ -331,7 +330,6 @@ export default function Community({
     setBillingDraft((current) =>
       sameGroup && current && draftChanged(current, previousBilling) ? current : nextBilling,
     );
-    if (!sameGroup) setApplyFrom("next");
   }, [focusGroup, focusMembers]);
 
   const studentDirty = Boolean(studentDraft) && draftChanged(studentDraft, baselines.current.student);
@@ -436,7 +434,6 @@ export default function Community({
     proceedOrAsk(groupDirty, "Discard your unsaved group changes?", () => {
       setGroupDraft(baselines.current.group);
       setBillingDraft(baselines.current.billing);
-      setApplyFrom("next");
       setBillingSheet(false);
     });
 
@@ -515,7 +512,7 @@ export default function Community({
     runSave(async () => {
       if (!groupDraft || !billingDraft) return false;
       const members = membersOf(group);
-      const { billing, overrides } = billingChanges(group, members, billingDraft, asOf, applyFrom);
+      const { billing, overrides } = billingChanges(group, members, billingDraft, asOf);
       const draft = { ...group, name: groupDraft.name, hourlyRate: billingDraft.hourlyRate, billing };
       const saved = actions.saveGroupBilling
         ? await actions.saveGroupBilling(draft, overrides)
@@ -891,9 +888,6 @@ export default function Community({
         setDraft={setGroupDraft}
         billingDraft={billingDraft}
         setBillingDraft={setBillingDraft}
-        applyFrom={applyFrom}
-        setApplyFrom={setApplyFrom}
-        switching={normalizeGroupBilling(selectedGroup.billing)?.mode !== "monthly" && billingDraft.mode === "monthly"}
         onSave={() => saveGroupDetail(selectedGroup)}
         onArchive={() => setArchiveTarget(selectedGroup)}
         onEditSchedule={() => openGroupEditor(selectedGroup)}
@@ -1250,11 +1244,7 @@ export default function Community({
                 state={state}
                 asOf={asOf}
                 defaultRate={state.settings?.hourlyRate}
-                applyFrom={applyFrom}
-                setApplyFrom={setApplyFrom}
-                switching={
-                  normalizeGroupBilling(sheetGroup.billing)?.mode !== "monthly" && billingDraft.mode === "monthly"
-                }
+                chooseStart
               />
               <button type="button" className="link-button" onClick={() => openGroupEditor(sheetGroup)}>
                 {t("Edit schedule and details")}

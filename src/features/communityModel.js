@@ -2,10 +2,14 @@ import { roundMoney, sumMoney } from "../domain/money.js";
 import { addDays, startOfMonth } from "../domain/dates";
 import { gradeGroupId } from "../domain/semanticIdentity";
 import {
+  changeGroupBilling,
   deriveMonthlyCharges,
+  groupBillingFor,
   groupClassDates,
   isMonthlyGroup,
+  isPeriod,
   joiningAmounts,
+  moveBillingStart,
   nextPeriod,
   normalizeBillingByGroup,
   normalizeGroupBilling,
@@ -285,8 +289,10 @@ export function archivedGroupHistory(state, derived, group, members) {
  * another fee or per class, and for monthly payers optionally their own due date (`due`, null = the group's).
  */
 export function billingDraftFor(group, members) {
-  const billing = normalizeGroupBilling(group?.billing);
+  const billing = groupBillingFor(group);
   return {
+    // The month the arrangement applies from; null keeps its start, or next month when it changes.
+    applyFrom: null,
     mode: billing?.mode === "monthly" ? "monthly" : "perClass",
     monthlyFee: billing?.mode === "monthly" ? billing.monthlyFee : null,
     due: billing?.mode === "monthly" ? billing.due : { type: "dayOfMonth", day: 5 },
@@ -302,34 +308,92 @@ export function billingDraftFor(group, members) {
   };
 }
 
+// The arrangement the draft describes, without its start.
+function draftTerm(draft) {
+  return draft.mode === "monthly"
+    ? {
+        mode: "monthly",
+        monthlyFee: roundMoney(Number(draft.monthlyFee) || 0),
+        due: draft.due,
+        creditFirstMonth: false,
+      }
+    : { mode: "perClass" };
+}
+
+/** True when the draft changes the group's mode, fee or due rule (not just its start). */
+export function billingTermChanged(group, draft) {
+  const latest = groupBillingFor(group);
+  const term = normalizeGroupBilling(draftTerm(draft));
+  if ((latest?.mode || "perClass") !== term.mode) return true;
+  return (
+    term.mode === "monthly" &&
+    (latest.monthlyFee !== term.monthlyFee || JSON.stringify(latest.due) !== JSON.stringify(term.due))
+  );
+}
+
+/**
+ * The month a group's arrangement applies from: the one chosen («current», «next» or YYYY-MM), else
+ * its current start while unchanged, else next month (never before an arrangement still to come).
+ */
+export function applyFromFor(group, draft, asOf, applyFrom = draft?.applyFrom ?? null) {
+  const period = periodOf(asOf);
+  if (applyFrom === "current") return period;
+  if (applyFrom === "next") return nextPeriod(period);
+  if (isPeriod(applyFrom)) return applyFrom;
+  const start = groupBillingFor(group)?.effectiveFrom || "";
+  if (!billingTermChanged(group, draft)) return start;
+  return start > nextPeriod(period) ? start : nextPeriod(period);
+}
+
+// The saved billing for a draft starting in `from`.
+function billingFrom(group, draft, from) {
+  if (!billingTermChanged(group, draft))
+    return from === (groupBillingFor(group)?.effectiveFrom || "")
+      ? normalizeGroupBilling(group.billing) || { mode: "perClass" }
+      : moveBillingStart(group.billing, from);
+  return changeGroupBilling(group.billing, draftTerm(draft), from);
+}
+
+/**
+ * Months the arrangement may start in, six back to six ahead. A month already lived through that
+ * had a monthly fee keeps it: its classes were recorded as covered, so they cannot turn per class.
+ */
+export function applyFromOptions(group, draft, asOf) {
+  const period = periodOf(asOf);
+  let first = period;
+  for (let step = 0; step < 6; step += 1) first = periodOf(addDays(`${first}-01`, -1));
+  const options = [];
+  for (let month = first, step = 0; step < 13; step += 1, month = nextPeriod(month)) {
+    const after = { billing: billingFrom(group, draft, month) };
+    let lived = month;
+    let keeps = true;
+    for (; lived <= period; lived = nextPeriod(lived))
+      if (isMonthlyGroup(group, lived) && !isMonthlyGroup(after, lived)) keeps = false;
+    if (keeps) options.push(month);
+  }
+  // Its current start stays listed while only the start is being chosen.
+  const start = groupBillingFor(group)?.effectiveFrom;
+  if (start && !options.includes(start) && !billingTermChanged(group, draft)) options.push(start);
+  return options.sort();
+}
+
 /**
  * Turns the billing draft into the saved group and the per-student overrides for saveGroupBilling.
- * Switching an existing per-class group starts next month, or this month crediting what was already paid per class.
+ * An existing group's change applies from `applyFrom` (see applyFromFor): earlier months keep the
+ * arrangement they had. A new group starts this month (startGroupBilling may move it to the next).
  */
-export function billingChanges(group, members, draft, asOf, applyFrom = "next") {
-  const before = normalizeGroupBilling(group?.billing);
-  const period = periodOf(asOf);
-  let billing = { mode: "perClass" };
-  if (draft.mode === "monthly") {
-    const switching = !before || before.mode !== "monthly";
-    const effectiveFrom = switching
-      ? applyFrom === "current" || !group?.id
-        ? period
-        : nextPeriod(period)
-      : before.effectiveFrom || period;
-    billing = {
-      mode: "monthly",
-      monthlyFee: roundMoney(Number(draft.monthlyFee) || 0),
-      due: draft.due,
-      effectiveFrom,
-      creditFirstMonth: switching ? applyFrom === "current" && Boolean(group?.id) : Boolean(before.creditFirstMonth),
-      ...(!switching && before.coveredFrom ? { coveredFrom: before.coveredFrom } : {}),
-    };
-  }
+export function billingChanges(group, members, draft, asOf, applyFrom = draft?.applyFrom ?? null) {
+  const billing = group?.id
+    ? billingFrom(group, draft, applyFromFor(group, draft, asOf, applyFrom))
+    : draft.mode === "monthly"
+      ? { ...draftTerm(draft), effectiveFrom: periodOf(asOf) }
+      : { mode: "perClass" };
   const overrides = {};
+  // Per class from some month on: the adjustments stay for the monthly months before it.
+  if (draft.mode !== "monthly") return { billing, overrides };
   members.forEach((student) => {
     const current = normalizeBillingByGroup(student.billingByGroup)?.[group?.id] || null;
-    const wanted = draft.mode === "monthly" ? draft.adjustments[student.id] || null : null;
+    const wanted = draft.adjustments[student.id] || null;
     const joined = current?.joinedOn ? { joinedOn: current.joinedOn, firstMonthAmount: current.firstMonthAmount } : {};
     const ownDue = wanted?.due && wanted.mode !== "perClass" ? { due: wanted.due } : {};
     const next =
@@ -350,9 +414,8 @@ export function billingChanges(group, members, draft, asOf, applyFrom = "next") 
   return { billing, overrides };
 }
 
-/** What each student owes in the first month when a group switches to monthly this month. */
-export function switchCredits(state, group, members, draft, asOf) {
-  const period = periodOf(asOf);
+/** What each student owes in `period` (this month by default) when the group bills monthly from it. */
+export function switchCredits(state, group, members, draft, asOf, period = periodOf(asOf)) {
   const preview = {
     ...group,
     billing: {
@@ -360,7 +423,6 @@ export function switchCredits(state, group, members, draft, asOf) {
       monthlyFee: Number(draft.monthlyFee) || 0,
       due: draft.due,
       effectiveFrom: period,
-      creditFirstMonth: true,
     },
   };
   const previewState = {
@@ -422,7 +484,7 @@ export function nextDueDates(state, group, draft, asOf, count = 2) {
 /** Options for a student who joins a monthly group after the month started. */
 export function joiningOptions(state, group, student, asOf) {
   if (!isMonthlyGroup(group, periodOf(asOf))) return null;
-  const billing = normalizeGroupBilling(group.billing);
+  const billing = groupBillingFor(group, periodOf(asOf));
   const override = normalizeBillingByGroup(student?.billingByGroup)?.[group.id];
   const fee = override?.mode === "customFee" ? override.fee : billing.monthlyFee;
   const amounts = joiningAmounts(state, group, fee, asOf);

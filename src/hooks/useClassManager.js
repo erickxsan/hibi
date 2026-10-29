@@ -46,6 +46,7 @@ import {
   normalizeBillingByGroup,
   normalizeGroupBilling,
   normalizeMonthlyPayments,
+  monthlyBalance,
   setMonthlyPayment,
   startGroupBilling,
 } from "../domain/monthlyBilling.js";
@@ -1024,12 +1025,17 @@ export function useClassManager({ persistence } = {}) {
     [commit, notify],
   );
 
+  // Records a monthly payment (the balance, or `amount` as an abono) or takes back `paymentId`.
   const setMonthlyPaid = useCallback(
-    ({ studentId, groupId, period, amount, paid = true }) =>
-      commit(
-        (current) => setMonthlyPayment(current, { studentId, groupId, period, amount, paid, paidAt: operationalDate }),
-        paid ? "Monthly fee marked as paid" : "Monthly fee marked as pending",
-      ),
+    ({ studentId, groupId, period, amount, paid = true, paymentId = "" }) => {
+      const before = paid ? monthlyBalance(stateRef.current, { studentId, groupId, period }) : null;
+      const partial = Boolean(before && Number(amount) < before.balance);
+      return commit(
+        (current) =>
+          setMonthlyPayment(current, { studentId, groupId, period, amount, paid, paymentId, paidAt: operationalDate }),
+        !paid ? "Monthly payment removed" : partial ? "Partial payment recorded" : "Monthly fee marked as paid",
+      );
+    },
     [commit, operationalDate],
   );
 

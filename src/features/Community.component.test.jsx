@@ -219,7 +219,8 @@ describe("Community groups", () => {
 
     await user.click(screen.getByRole("button", { name: "Monthly" }));
     fireEvent.change(screen.getByLabelText("Monthly fee per student"), { target: { value: "1200" } });
-    await user.click(screen.getByRole("button", { name: "This month" }));
+    await user.click(screen.getByRole("combobox", { name: "Applies from" }));
+    await user.click(screen.getByRole("option", { name: /\(this month\)/ }));
     expect(screen.getByText(/Diego \$1,200 − \$450 =/)).toBeInTheDocument();
     await user.click(screen.getByRole("combobox", { name: "Adjust for a student" }));
     await user.click(screen.getByRole("option", { name: "Luna López" }));
@@ -231,9 +232,9 @@ describe("Community groups", () => {
         mode: "monthly",
         monthlyFee: 1200,
         effectiveFrom: "2026-10",
-        creditFirstMonth: true,
       }),
     );
+    expect(saved().groups.find((g) => g.id === "g1").billing.history).toBeUndefined();
     expect(saved().students.find((s) => s.id === "s1").billingByGroup).toEqual({ g1: { mode: "perClass" } });
   });
 

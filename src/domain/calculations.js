@@ -16,6 +16,7 @@ import {
 import { gradeGroupId } from "./semanticIdentity.js";
 import { isGroupArchived } from "./groupArchiving.js";
 import { generateScheduledOccurrences, resolveHourlyRate } from "./schedule.js";
+import { monthlyFeeCovers } from "./monthlyBilling.js";
 
 function isRecord(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -143,6 +144,10 @@ function chargeForContext(context, row, student, group) {
   if (row.classStatus === "Cancelled") return 0;
   // Absent and unmarked students are not charged, whatever price the record kept.
   if (attendanceBilling(row) !== "billable") return 0;
+  // A class a monthly fee covers (even one recorded before the fee started) costs only what was
+  // already paid for it, which the fee then discounts.
+  if (monthlyFeeCovers(student, context.groupsById.get(row.groupId), row.classDate, { startedOnly: true }))
+    return validPaymentAmount(row);
   if (finiteNumber(row.appliedCharge)) return roundMoney(row.appliedCharge);
   const hours = finiteNumber(row.hours) ? row.hours : context.config.defaultClassHours;
   const rate = finiteNumber(row.appliedHourlyRate) ? row.appliedHourlyRate : rateForContext(context, student, group);
@@ -215,6 +220,16 @@ export function calculateCharge(state, row) {
   if (row.classStatus === "Cancelled") return 0;
   // Absent and unmarked students are not charged, whatever price the record kept.
   if (attendanceBilling(row) !== "billable") return 0;
+  const { groups, students } = arrays(state);
+  if (
+    monthlyFeeCovers(
+      students.find((student) => student.id === row.studentId),
+      groups.find((group) => group.id === row.groupId),
+      row.classDate,
+      { startedOnly: true },
+    )
+  )
+    return validPaymentAmount(row);
   if (finiteNumber(row.appliedCharge)) return roundMoney(row.appliedCharge);
 
   // Blank hours use the default; an explicit 0 waives the charge.

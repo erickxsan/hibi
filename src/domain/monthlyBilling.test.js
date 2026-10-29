@@ -3,17 +3,21 @@ import { createStarterState } from "./starterState.js";
 import { normalizeState, validateState } from "./validation.js";
 import {
   billingIssues,
+  changeGroupBilling,
   coveredByMonthlyFee,
   deriveMonthlyCharges,
   firstBillingPeriod,
+  groupBillingFor,
   groupClassDates,
   joiningAmounts,
   monthlyDueDate,
   monthlyPaymentsBetween,
+  moveBillingStart,
   nextPeriod,
   normalizeBillingByGroup,
   normalizeGroupBilling,
   normalizeMonthlyPayments,
+  recordMonthlyPayment,
   setMonthlyPayment,
   startGroupBilling,
   studentMonthlyDueDate,
@@ -21,6 +25,7 @@ import {
   suggestedMonthlyFee,
 } from "./monthlyBilling.js";
 import { startGroupSchedule } from "./groupArchiving.js";
+import { calculateCharge } from "./calculations.js";
 import { buildAttentionItems, debtSummary } from "../features/homeDashboardModel.js";
 
 // Mondays and Thursdays, 2 h at $75: October 2026 has 9 classes (5, 8, 12, 15, 19, 22, 26, 29 + Thu 1).
@@ -92,9 +97,10 @@ describe("monthly billing", () => {
       normalizeMonthlyPayments([
         { id: "a", groupId: "g", period: "2026-10", amount: 5, paidAt: "2026-10-05" },
         { id: "b", groupId: "g", period: "2026-10", amount: 5, paidAt: "2026-10-06" },
+        { id: "b", groupId: "g", period: "2026-10", amount: 9, paidAt: "2026-10-07" },
         { id: "c", groupId: "g", period: "2026-13", amount: 5, paidAt: "2026-10-06" },
-      ]),
-    ).toHaveLength(1);
+      ]).map((item) => item.id),
+    ).toEqual(["a", "b"]);
     const legacy = normalizeState({ ...createStarterState(), groups: [{ id: "g", name: "G" }] });
     expect(Object.hasOwn(legacy.groups[0], "billing")).toBe(false);
     expect(nextPeriod("2026-12")).toBe("2027-01");
@@ -363,5 +369,147 @@ describe("monthly billing", () => {
     };
     expect(suggestedMonthlyFee(base, draft, "2026-11")).toEqual({ classes: 4, perClass: 150, fee: 600 });
     expect(base.groups.map((item) => item.id)).toEqual(["p5a"]);
+  });
+  it("records abonos until the month is settled and takes back only the last one", () => {
+    let state = fixture({ due: { type: "dayOfMonth", day: 15 } });
+    const ids = { studentId: "diego", groupId: "p5a", period: "2026-10" };
+    const diego = () => deriveMonthlyCharges(state, "2026-10-20").find((item) => item.studentId === "diego");
+    state = recordMonthlyPayment(state, { ...ids, amount: 100, paidAt: "2026-10-10" });
+    expect(diego()).toMatchObject({
+      status: "overdue",
+      partial: true,
+      total: 1200,
+      paid: 100,
+      balance: 1100,
+      amount: 1100,
+      paidAt: "",
+    });
+    // More than what is owed is capped at the balance, which settles the month.
+    state = recordMonthlyPayment(state, { ...ids, amount: 5000, paidAt: "2026-10-20" });
+    expect(diego()).toMatchObject({ status: "paid", partial: false, paid: 1200, balance: 0, amount: 1200 });
+    expect(diego().paidAt).toBe("2026-10-20");
+    expect(state.students[0].monthlyPayments.map((item) => [item.amount, Boolean(item.partial)])).toEqual([
+      [100, true],
+      [1100, false],
+    ]);
+    expect(recordMonthlyPayment(state, { ...ids, amount: 50, paidAt: "2026-10-21" })).toBe(state);
+    state = setMonthlyPayment(state, { ...ids, paid: false, paymentId: diego().paymentId });
+    expect(diego()).toMatchObject({ status: "overdue", paid: 100, balance: 1100 });
+    // Revenue counts each abono on the day it was paid.
+    expect(monthlyPaymentsBetween(state, "2026-10-01", "2026-10-31").map((item) => item.amount)).toEqual([100]);
+  });
+
+  it("keeps a month settled by a full payment when the fee changes later", () => {
+    let state = fixture();
+    state = recordMonthlyPayment(state, {
+      studentId: "diego",
+      groupId: "p5a",
+      period: "2026-10",
+      paidAt: "2026-10-08",
+    });
+    const [group] = state.groups;
+    const raised = { ...state, groups: [{ ...group, billing: { ...group.billing, monthlyFee: 1500 } }] };
+    expect(deriveMonthlyCharges(raised, "2026-10-20").find((item) => item.studentId === "diego")).toMatchObject({
+      status: "paid",
+      amount: 1200,
+    });
+  });
+
+  it("applies a billing change from a month and leaves the months before it as they were", () => {
+    const state = fixture({ due: { type: "dayOfMonth", day: 5 } });
+    const [group] = state.groups;
+    const due = { type: "dayOfMonth", day: 5 };
+    const raised = changeGroupBilling(group.billing, { mode: "monthly", monthlyFee: 1500, due }, "2026-11");
+    expect(raised).toMatchObject({
+      monthlyFee: 1500,
+      effectiveFrom: "2026-11",
+      history: [{ monthlyFee: 1200, effectiveFrom: "2026-10" }],
+    });
+    const withRaise = { ...state, groups: [{ ...group, billing: raised }] };
+    expect(groupBillingFor(withRaise.groups[0], "2026-10").monthlyFee).toBe(1200);
+    expect(
+      deriveMonthlyCharges(withRaise, "2026-11-20")
+        .filter((item) => item.studentId === "diego")
+        .map((item) => [item.period, item.total]),
+    ).toEqual([
+      ["2026-10", 1200],
+      ["2026-11", 1500],
+    ]);
+    // Per class from December: October and November keep their monthly fees.
+    const perClass = changeGroupBilling(raised, { mode: "perClass" }, "2026-12");
+    expect(normalizeGroupBilling(perClass)).toEqual(perClass);
+    const ended = { ...state, groups: [{ ...group, billing: perClass }] };
+    expect(
+      deriveMonthlyCharges(ended, "2027-01-20")
+        .filter((item) => item.studentId === "diego")
+        .map((item) => item.period),
+    ).toEqual(["2026-10", "2026-11"]);
+    expect(coveredByMonthlyFee(ended, "diego", "p5a", "2026-11-30")).toBe(true);
+    expect(coveredByMonthlyFee(ended, "diego", "p5a", "2026-12-03")).toBe(false);
+    // A change from the first month replaces everything.
+    expect(changeGroupBilling(raised, { mode: "monthly", monthlyFee: 900, due }, "2026-10")).not.toHaveProperty(
+      "history",
+    );
+    expect(
+      billingIssues(
+        { billing: { mode: "perClass", history: [{ mode: "monthly", effectiveFrom: "2026-10" }, {}] } },
+        "group",
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("moves an arrangement's start back and stops charging that month's classes on their own", () => {
+    const base = fixture({ due: { type: "dayOfMonth", day: 5 }, effectiveFrom: "2026-11" });
+    const lesson = { groupId: "p5a", studentId: "diego", classStatus: "Completed", attendance: "P", hours: 2 };
+    const paid = {
+      ...lesson,
+      id: "r1",
+      classDate: "2026-10-05",
+      appliedCharge: 150,
+      amountPaid: 150,
+      paymentDate: "2026-10-05",
+    };
+    const unpaid = { ...lesson, id: "r2", classDate: "2026-10-08", appliedCharge: 150, amountPaid: 0 };
+    const state = { ...base, classLog: [paid, unpaid] };
+    expect(calculateCharge(state, unpaid)).toBe(150);
+    // An arrangement saved without a start month never erases what recorded classes owe.
+    const startless = { ...state.groups[0], billing: { ...state.groups[0].billing, effectiveFrom: "" } };
+    expect(calculateCharge({ ...state, groups: [startless] }, unpaid)).toBe(150);
+    const billing = moveBillingStart(state.groups[0].billing, "2026-10");
+    expect(billing).toMatchObject({ effectiveFrom: "2026-10", monthlyFee: 1200 });
+    const moved = { ...state, groups: [{ ...state.groups[0], billing }] };
+    // October is part of the fee now: the unpaid class costs nothing more and the paid one is discounted.
+    expect(calculateCharge(moved, unpaid)).toBe(0);
+    expect(calculateCharge(moved, paid)).toBe(150);
+    expect(deriveMonthlyCharges(moved, "2026-10-20").find((item) => item.studentId === "diego")).toMatchObject({
+      period: "2026-10",
+      total: 1050,
+    });
+    expect(moveBillingStart(billing, "2026-11")).toMatchObject({ effectiveFrom: "2026-11" });
+  });
+
+  it("covers from each due date to the day before the next, whenever the payment is made", () => {
+    let state = fixture({ due: { type: "dayOfMonth", day: 15 } });
+    state = recordMonthlyPayment(state, {
+      studentId: "diego",
+      groupId: "p5a",
+      period: "2026-11",
+      paidAt: "2026-11-28",
+    });
+    const diego = deriveMonthlyCharges(state, "2026-12-20").filter((item) => item.studentId === "diego");
+    expect(diego.map((item) => [item.period, item.coversFrom, item.coversTo])).toEqual([
+      ["2026-10", "2026-10-01", "2026-11-14"],
+      ["2026-11", "2026-11-15", "2026-12-14"],
+      ["2026-12", "2026-12-15", "2027-01-14"],
+    ]);
+    expect(diego[1]).toMatchObject({ status: "paid", paidAt: "2026-11-28" });
+    // The last month of an arrangement ends with its month.
+    const [group] = state.groups;
+    const billing = changeGroupBilling(group.billing, { mode: "perClass" }, "2026-12");
+    const ended = { ...state, groups: [{ ...group, billing }] };
+    const november = deriveMonthlyCharges(ended, "2026-12-20").find(
+      (item) => item.studentId === "diego" && item.period === "2026-11",
+    );
+    expect(november.coversTo).toBe("2026-11-30");
   });
 });

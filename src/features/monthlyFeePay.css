@@ -1,0 +1,36 @@
+/* Monthly fee: the amount reads as plain text until it is touched to record an abono. */
+.fee-pay {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.fee-amount {
+  display: inline-flex;
+  align-items: baseline;
+  border-bottom: 1.5px dotted var(--line-control);
+  font: 800 14px/18px var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  color: var(--sumi);
+  cursor: text;
+}
+
+.fee-amount:focus-within {
+  border-bottom-style: solid;
+  border-bottom-color: var(--indigo);
+}
+
+.fee-amount input {
+  min-width: 2ch;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+}
+
+.fee-amount input:disabled {
+  color: var(--sumi-muted);
+}

@@ -16,9 +16,18 @@ import {
 } from "../components/ui";
 import { AvatarPicker } from "../components/StudentAvatar";
 import { createStableId, DAY_OPTIONS } from "../domain";
-import { periodOf, nextPeriod } from "../domain/monthlyBilling";
+import { addDays } from "../domain/dates";
+import { groupBillingFor, periodOf } from "../domain/monthlyBilling";
 import { formatHours, formatMoney, formatShortDate, monthLong } from "../utils/displayFormat";
-import { feeSuggestion, monthlyTotal, nextDueDates, switchCredits } from "./communityModel";
+import {
+  applyFromFor,
+  applyFromOptions,
+  billingTermChanged,
+  feeSuggestion,
+  monthlyTotal,
+  nextDueDates,
+  switchCredits,
+} from "./communityModel";
 
 function capitalize(text) {
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
@@ -339,22 +348,58 @@ function DueSelects({ due, onChange, labels, inherit = false }) {
   );
 }
 
+// «Octubre (este mes)», «Noviembre», «Enero 2027»: the year only when it is not this one.
+function monthOption(month, asOf, locale, t) {
+  const name = capitalize(monthLong(`${month}-01`, locale));
+  const label = month.slice(0, 4) === asOf.slice(0, 4) ? name : `${name} ${month.slice(0, 4)}`;
+  return month === periodOf(asOf) ? `${label} (${t("this month")})` : label;
+}
+
+/**
+ * «Aplica desde»: shown once the arrangement is monthly or changes. The hint says what happens to the
+ * months around the chosen one; switching to monthly in this month lists what each student owes.
+ */
+function startChoice(state, group, members, draft, asOf) {
+  const latest = groupBillingFor(group);
+  const changed = billingTermChanged(group, draft);
+  if (!changed && latest?.mode !== "monthly") return null;
+  const period = periodOf(asOf);
+  const from = applyFromFor(group, draft, asOf);
+  const monthly = draft.mode === "monthly";
+  const wasMonthly = groupBillingFor(group, from)?.mode === "monthly";
+  const values = { month: from };
+  let hint = "";
+  if (!monthly) {
+    hint = "Monthly fees end in {last}; per-class charges start in {month}.";
+    values.last = periodOf(addDays(`${from}-01`, -1));
+  } else if (!changed && from === (latest?.effectiveFrom || "")) {
+    hint = from > period ? "Monthly fees start in {month}; until then classes are charged per class." : "";
+  } else if (wasMonthly && changed) {
+    hint =
+      from > period
+        ? "The new fee starts in {month}."
+        : "The new fee applies from {month}; months already paid stay as they are.";
+  } else if (from === period) {
+    hint = "The {month} fee is created and what they already paid per class is discounted:";
+  } else if (from < period) {
+    hint = "Monthly fees from {month} on are created; what was already paid per class those months is discounted.";
+  } else {
+    hint = "Monthly fees start in {month}; until then classes are charged per class.";
+  }
+  return {
+    from,
+    options: applyFromOptions(group, draft, asOf),
+    hint,
+    values,
+    credits: monthly && !wasMonthly && from === period ? switchCredits(state, group, members, draft, asOf, from) : [],
+  };
+}
+
 /**
  * «Forma de cobro» as rows: per class with its rate, or monthly with fee, due date,
- * per-student adjustments and, when an existing group switches, from which month.
+ * per-student adjustments and, for an existing group (`chooseStart`), the month it applies from.
  */
-export function BillingFields({
-  draft,
-  setDraft,
-  group,
-  members = [],
-  state,
-  asOf,
-  defaultRate,
-  applyFrom = "next",
-  setApplyFrom = undefined,
-  switching = false,
-}) {
+export function BillingFields({ draft, setDraft, group, members = [], state, asOf, defaultRate, chooseStart = false }) {
   const { t, locale } = useI18n();
   const monthly = draft.mode === "monthly";
   const rate = Number.isFinite(draft.hourlyRate) ? draft.hourlyRate : defaultRate;
@@ -379,9 +424,7 @@ export function BillingFields({
       else delete adjustments[id];
       return { ...current, adjustments };
     });
-  const thisMonth = monthLong(`${periodOf(asOf)}-01`, locale);
-  const nextMonth = monthLong(`${nextPeriod(periodOf(asOf))}-01`, locale);
-  const credits = switching && applyFrom === "current" ? switchCredits(state, group, members, draft, asOf) : [];
+  const start = chooseStart && group?.id ? startChoice(state, group, members, draft, asOf) : null;
   return (
     <div className="field-rows billing-fields">
       <FieldRow label={t("Billing")}>
@@ -555,44 +598,47 @@ export function BillingFields({
               </div>
             </FieldRow>
           ) : null}
-          {switching && setApplyFrom ? (
-            <FieldRow label={t("Apply from")}>
-              <div className="billing-adjustments">
-                <Segmented
-                  tone="soft"
-                  value={applyFrom}
-                  label={t("Apply from")}
-                  onChange={setApplyFrom}
-                  items={[
-                    { value: "next", label: capitalize(nextMonth), raw: true },
-                    { value: "current", label: "This month" },
-                  ]}
-                />
-                <span className="field-row-hint">
-                  {applyFrom === "current"
-                    ? t("The {month} fee is created and what they already paid per class is discounted:", {
-                        month: thisMonth,
-                      })
-                    : t("{month} is still charged per class. Monthly fees start in {next}.", {
-                        month: thisMonth,
-                        next: nextMonth,
-                      })}
-                </span>
-                {credits.length ? (
-                  <div className="billing-credits">
-                    {credits.map((item) => (
-                      <span key={item.student.id}>
-                        {item.student.fullName.split(" ")[0]} {formatMoney(item.fee, locale)} −{" "}
-                        {formatMoney(item.paid, locale)} = <b>{formatMoney(item.amount, locale)}</b>
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            </FieldRow>
-          ) : null}
         </>
       )}
+      {start ? (
+        <FieldRow label={t("Applies from")}>
+          <div className="billing-adjustments">
+            <Select
+              small
+              aria-label={t("Applies from")}
+              value={start.from}
+              onChange={(event) => setDraft((current) => ({ ...current, applyFrom: event.target.value }))}
+            >
+              {start.from === "" ? <option value="">{t("Since it started")}</option> : null}
+              {start.options.map((month) => (
+                <option key={month} value={month}>
+                  {monthOption(month, asOf, locale, t)}
+                </option>
+              ))}
+            </Select>
+            {start.hint ? (
+              <span className="field-row-hint">
+                {t(
+                  start.hint,
+                  Object.fromEntries(
+                    Object.entries(start.values).map(([key, month]) => [key, monthLong(`${month}-01`, locale)]),
+                  ),
+                )}
+              </span>
+            ) : null}
+            {start.credits.length ? (
+              <div className="billing-credits">
+                {start.credits.map((item) => (
+                  <span key={item.student.id}>
+                    {item.student.fullName.split(" ")[0]} {formatMoney(item.fee, locale)} −{" "}
+                    {formatMoney(item.paid, locale)} = <b>{formatMoney(item.amount, locale)}</b>
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </FieldRow>
+      ) : null}
       {/* With no students yet the per-class total is the rate's own hint («Clase de 2 h = $250 por alumno»). */}
       {!monthly && !members.length ? null : (
         <FieldRow label={t(monthly ? "Per month" : "Per class")}>

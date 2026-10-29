@@ -4,7 +4,7 @@ import { useI18n } from "../i18n/index.jsx";
 import { BottomSheet, Button, Drawer, Field, Input, ListRow, StudentSelect } from "../components/ui";
 import { StudentAvatar } from "../components/StudentAvatar";
 import { GroupBadgePicker } from "../components/GroupBadge";
-import { nextPeriod, normalizeGroupBilling, periodOf } from "../domain/monthlyBilling";
+import { groupBillingFor, nextPeriod, periodOf } from "../domain/monthlyBilling";
 import {
   dayNumber,
   formatHours,
@@ -133,9 +133,6 @@ export function GroupDetail({
   setDraft,
   billingDraft,
   setBillingDraft,
-  applyFrom,
-  setApplyFrom,
-  switching,
   onSave,
   onArchive,
   onEditSchedule,
@@ -313,9 +310,7 @@ export function GroupDetail({
             state={state}
             asOf={asOf}
             defaultRate={state.settings?.hourlyRate}
-            applyFrom={applyFrom}
-            setApplyFrom={setApplyFrom}
-            switching={switching}
+            chooseStart
           />
         </div>
         <div className="detail-actions">
@@ -350,7 +345,9 @@ export function GroupSheet({
   const { t, locale } = useI18n();
   const [highlight, setHighlight] = useState("");
   const notes = figureNotes(summary, members, t, locale);
-  const billing = normalizeGroupBilling(group.billing);
+  // The arrangement the editor edits: the latest one, which may start in a later month.
+  const billing = groupBillingFor(group);
+  const startsLater = billing?.effectiveFrom > periodOf(asOf);
   const slots = group.weeklySchedule || [];
   const hours = slots.length ? Number(slots[0].durationHours) || 0 : Number(state.settings?.defaultClassHours) || 0;
   const rate = Number.isFinite(group.hourlyRate) ? group.hourlyRate : state.settings?.hourlyRate;
@@ -397,6 +394,7 @@ export function GroupSheet({
               : `${t("Per class")} · ${t("{amount} per hour", { amount: formatMoney(rate, locale) })}`}
           </strong>
           <small>
+            {startsLater ? `${t("From {month}", { month: monthLong(`${billing.effectiveFrom}-01`, locale) })} · ` : ""}
             {billing?.mode === "monthly"
               ? t("Due {when}", {
                   when:
@@ -678,7 +676,7 @@ export function JoinGroupSheet({ open, group, candidates, state, asOf, onClose, 
   const options = group && student ? joiningOptions(state, group, student, asOf) : null;
   const month = monthLong(asOf, locale);
   const nextMonth = monthLong(`${nextPeriod(periodOf(asOf))}-01`, locale);
-  const billing = normalizeGroupBilling(group?.billing);
+  const billing = groupBillingFor(group, periodOf(asOf));
   const choices = options?.started
     ? [
         {

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { deriveAll } from "../domain";
 import {
+  applyFromFor,
+  applyFromOptions,
   archivedGroupHistory,
   billingChanges,
   billingDraftFor,
@@ -169,9 +171,9 @@ describe("monthly billing editor", () => {
       effectiveFrom: "2026-11",
       creditFirstMonth: false,
     });
+    // What was paid per class in a month that turns monthly is discounted from its fee, whatever month it is.
     expect(billingChanges(group, members(state), draft, AS_OF, "current").billing).toMatchObject({
       effectiveFrom: "2026-10",
-      creditFirstMonth: true,
     });
     const credits = switchCredits(state, group, members(state), draft, AS_OF);
     expect(credits.map((item) => [item.student.id, item.paid, item.amount])).toEqual([
@@ -179,6 +181,30 @@ describe("monthly billing editor", () => {
       ["s2", 450, 750],
       ["s3", 300, 900],
     ]);
+  });
+
+  it("moves a monthly group's start back but never turns months already lived per class", () => {
+    const { state } = setup();
+    const due = { type: "dayOfMonth", day: 5 };
+    const group = {
+      ...state.groups[0],
+      billing: { mode: "monthly", monthlyFee: 1200, due, effectiveFrom: "2026-11" },
+    };
+    const draft = billingDraftFor(group, members(state));
+    expect(applyFromFor(group, draft, AS_OF)).toBe("2026-11");
+    expect(applyFromOptions(group, draft, AS_OF)).toHaveLength(13);
+    const moved = billingChanges(group, members(state), { ...draft, applyFrom: "2026-10" }, AS_OF).billing;
+    expect(moved).toMatchObject({ mode: "monthly", effectiveFrom: "2026-10" });
+    expect(moved).not.toHaveProperty("history");
+    const october = { ...group, billing: moved };
+    const perClass = { ...billingDraftFor(october, members(state)), mode: "perClass" };
+    expect(applyFromFor(october, perClass, AS_OF)).toBe("2026-11");
+    expect(applyFromOptions(october, perClass, AS_OF)[0]).toBe("2026-11");
+    expect(billingChanges(october, members(state), perClass, AS_OF).billing).toMatchObject({
+      mode: "perClass",
+      effectiveFrom: "2026-11",
+      history: [{ mode: "monthly", effectiveFrom: "2026-10" }],
+    });
   });
 
   it("keeps the covered start of a new group when its monthly fee is edited", () => {

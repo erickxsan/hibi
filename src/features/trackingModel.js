@@ -1,7 +1,7 @@
 import { sumMoney } from "../domain/money.js";
 import { isBillableAttendance } from "../domain/attendanceBilling.js";
 import { addDays, addMonths, endOfMonth, startOfMonth, startOfWeek } from "../domain/dates";
-import { deriveMonthlyCharges, isMonthlyGroup, normalizeGroupBilling, periodOf } from "../domain/monthlyBilling";
+import { deriveMonthlyCharges, groupBillingFor, isMonthlyGroup, periodOf } from "../domain/monthlyBilling";
 import { buildClassWorkspaceSessionsForRange } from "./classesWorkspaceModel";
 import {
   assignmentsIn,
@@ -335,6 +335,7 @@ export function monthlyBlocks(state, asOf, scope = "all") {
         .sort((left, right) => (left.charge.status === "paid" ? 0 : 1) - (right.charge.status === "paid" ? 0 : 1));
       const counted = rows.filter((item) => item.charge.status !== "waived");
       const paid = counted.filter((item) => item.charge.status === "paid");
+      // Abonos count toward the progress; a month settled for less than its fee expects what was paid.
       const perClass = (state.students || []).filter(
         (student) =>
           student.status !== "Inactive" &&
@@ -343,14 +344,14 @@ export function monthlyBlocks(state, asOf, scope = "all") {
       );
       return {
         group,
-        billing: normalizeGroupBilling(group.billing),
+        billing: groupBillingFor(group, period),
         period,
         dueDate: rows[0]?.charge.groupDueDate || "",
         rows,
         paidCount: paid.length,
         total: counted.length,
-        paidAmount: sumMoney(paid, (item) => item.charge.amount),
-        expectedAmount: sumMoney(counted, (item) => item.charge.amount),
+        paidAmount: sumMoney(counted, (item) => item.charge.paid),
+        expectedAmount: sumMoney(counted, (item) => item.charge.paid + item.charge.balance),
         perClass,
       };
     })

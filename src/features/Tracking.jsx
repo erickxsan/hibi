@@ -15,6 +15,7 @@ import {
   Tabs,
 } from "../components/ui";
 import { StudentAvatar } from "../components/StudentAvatar";
+import { MonthlyFeePay } from "./MonthlyFeePay";
 import { ArchivedGroupsScope } from "../components/ArchivedGroupsScope";
 import { useCompactViewport } from "../components/OverlayContext";
 import { useHistoryBackedState } from "../hooks/useHistoryNavigation";
@@ -116,8 +117,8 @@ function paymentWord(record, t) {
   return { tone: "", text: "—" };
 }
 
-/** «Mensualidades · octubre» for one monthly group: progress and «Marcar pagada» / «Deshacer». */
-function MonthlyBlock({ block, asOf, onToggle, busy, compact = false }) {
+/** «Mensualidades · octubre» for one monthly group: progress, payments (whole or abonos) and «Deshacer». */
+function MonthlyBlock({ block, asOf, onPay, onUndo, busy, compact = false }) {
   const { t, locale } = useI18n();
   const month = monthLong(`${block.period}-01`, locale);
   const due = block.billing?.due;
@@ -189,38 +190,62 @@ function MonthlyBlock({ block, asOf, onToggle, busy, compact = false }) {
       <div className="mlist">
         {block.rows.map(({ charge, student }) => {
           const paid = charge.status === "paid";
+          const paidToday = charge.lastPaidAt === asOf;
+          const until = formatShortDate(charge.coversTo, locale, { weekday: false });
           const sub = paid
-            ? charge.paidAt === asOf
-              ? t("Paid today")
-              : `${charge.adjusted ? `${t("Own fee")} · ` : compact ? `${t("Group fee")} · ` : ""}${t("paid on {day}", { day: dayNumber(charge.paidAt) })}`
-            : charge.status === "waived"
-              ? t("Free this month")
-              : charge.dueDate === asOf
-                ? t("Due today")
-                : charge.status === "overdue"
-                  ? t("Overdue · {date}", { date: formatShortDate(charge.dueDate, locale, { weekday: false }) })
-                  : t("Due {date}", { date: formatShortDate(charge.dueDate, locale) });
+            ? paidToday
+              ? t("Paid today · until {date}", { date: until })
+              : `${charge.adjusted ? `${t("Own fee")} · ` : compact ? `${t("Group fee")} · ` : ""}${t("Up to date until {date}", { date: until })}`
+            : charge.partial
+              ? t("Paid {paid} · {left} left", {
+                  paid: formatMoney(charge.paid, locale),
+                  left: formatMoney(charge.balance, locale),
+                })
+              : charge.status === "waived"
+                ? t("Free this month")
+                : charge.dueDate === asOf
+                  ? t("Due today")
+                  : charge.status === "overdue"
+                    ? t("Overdue · {date}", { date: formatShortDate(charge.dueDate, locale, { weekday: false }) })
+                    : t("Due {date}", { date: formatShortDate(charge.dueDate, locale) });
+          const undo = paidToday ? (
+            <button type="button" className="mlk" disabled={busy} onClick={() => onUndo(charge)}>
+              {t("Undo")}
+            </button>
+          ) : null;
           return (
             <div className="mrow" key={charge.id}>
               <StudentAvatar avatarId={student.avatarId} name={student.fullName} size="small" decorative />
               <span className="nm">
                 <strong>{student.fullName}</strong>
-                <small className={charge.status === "overdue" ? "text-bad" : undefined}>{sub}</small>
+                <small
+                  className={
+                    [charge.status === "overdue" ? "text-bad" : "", charge.partial && undo ? "has-undo" : ""]
+                      .filter(Boolean)
+                      .join(" ") || undefined
+                  }
+                >
+                  {sub}
+                  {charge.partial && undo ? <> · {undo}</> : null}
+                </small>
               </span>
-              {compact && paid ? null : <span className="mamt">{formatMoney(charge.amount, locale)}</span>}
               {paid ? (
-                <span className="mok">
-                  <span className="st st-ok">{t("Paid (fee)")}</span>
-                  {charge.paidAt === asOf ? (
-                    <button type="button" className="mlk" disabled={busy} onClick={() => onToggle(charge, false)}>
-                      {t("Undo")}
-                    </button>
-                  ) : null}
-                </span>
+                <>
+                  {compact ? null : <span className="mamt">{formatMoney(charge.amount, locale)}</span>}
+                  <span className="mok">
+                    <span className="st st-ok">{t("Paid (fee)")}</span>
+                    {undo}
+                  </span>
+                </>
               ) : charge.status === "waived" ? null : (
-                <button type="button" className="mbtn" disabled={busy} onClick={() => onToggle(charge, true)}>
-                  {t("Mark paid (fee)")}
-                </button>
+                <MonthlyFeePay
+                  key={`${charge.id}:${charge.balance}`}
+                  charge={charge}
+                  studentName={student.fullName}
+                  onPay={onPay}
+                  busy={busy}
+                  fullLabel={t("Mark paid (fee)")}
+                />
               )}
             </div>
           );
@@ -593,21 +618,25 @@ export default function Tracking({
     return result;
   };
 
-  const toggleMonthly = async (charge, paid) => {
+  const changeMonthly = async (change) => {
     if (!actions?.setMonthlyPaid || busy) return;
     setBusy(true);
     try {
-      await actions.setMonthlyPaid({
-        studentId: charge.studentId,
-        groupId: charge.groupId,
-        period: charge.period,
-        amount: charge.amount,
-        paid,
-      });
+      await actions.setMonthlyPaid(change);
     } finally {
       setBusy(false);
     }
   };
+  const payMonthly = (charge, amount) =>
+    changeMonthly({ studentId: charge.studentId, groupId: charge.groupId, period: charge.period, amount, paid: true });
+  const undoMonthly = (charge) =>
+    changeMonthly({
+      studentId: charge.studentId,
+      groupId: charge.groupId,
+      period: charge.period,
+      paid: false,
+      paymentId: charge.paymentId,
+    });
 
   const exportVisible = () => {
     const rows =
@@ -871,7 +900,15 @@ export default function Tracking({
           <small>{hero.line}</small>
         </div>
         {blocks.map((block) => (
-          <MonthlyBlock key={block.group.id} block={block} asOf={asOf} onToggle={toggleMonthly} busy={busy} compact />
+          <MonthlyBlock
+            key={block.group.id}
+            block={block}
+            asOf={asOf}
+            onPay={payMonthly}
+            onUndo={undoMonthly}
+            busy={busy}
+            compact
+          />
         ))}
         <ChartViewPicker
           metric={TAB_METRIC[tab]}
@@ -1195,7 +1232,14 @@ export default function Tracking({
         </p>
       ) : null}
       {blocks.map((block) => (
-        <MonthlyBlock key={block.group.id} block={block} asOf={asOf} onToggle={toggleMonthly} busy={busy} />
+        <MonthlyBlock
+          key={block.group.id}
+          block={block}
+          asOf={asOf}
+          onPay={payMonthly}
+          onUndo={undoMonthly}
+          busy={busy}
+        />
       ))}
       {mode === "summary" ? (
         <div className={`tracking-cols hibi-chart ${tab === "grades" ? "is-indigo" : ""}`}>

@@ -11,9 +11,14 @@ export const REDESIGN_TRANSLATIONS = Object.freeze({
   "Needs attention": "Requiere atención",
   "Monthly fee marked as paid": "Mensualidad marcada como pagada",
   "Monthly fee marked as pending": "Mensualidad marcada como pendiente",
+  "Monthly payment removed": "Pago de mensualidad deshecho",
+  "Partial payment recorded": "Abono registrado",
   "Billing must be per class or monthly.": "La forma de cobro debe ser por clase o mensual.",
   "Monthly fee must be zero or more.": "La cuota mensual debe ser cero o más.",
   "Billing start must use YYYY-MM.": "El inicio del cobro debe usar AAAA-MM.",
+  "Billing history must be an array.": "El historial de cobro debe ser una lista.",
+  "Each earlier billing term needs a mode and a start month (YYYY-MM).":
+    "Cada forma de cobro anterior necesita su modalidad y su mes de inicio (AAAA-MM).",
   "Monthly payment needs a period, a paid date and an amount.":
     "La mensualidad necesita un mes, una fecha de pago y un monto.",
   "Monthly payments must be an array.": "Las mensualidades deben ser una lista.",

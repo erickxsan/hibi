@@ -172,6 +172,11 @@
   color: var(--bermellon-ink);
 }
 
+/* An abono made today keeps its «Deshacer» in view. */
+.mrow small.has-undo {
+  white-space: normal;
+}
+
 .mamt {
   font: 800 14px/18px var(--font-sans);
   font-variant-numeric: tabular-nums;

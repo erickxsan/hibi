@@ -21,9 +21,9 @@ import { addDays, startOfWeek, todayDateOnly } from "../domain/dates";
 import { scheduledClassSupportsFutureScope } from "../domain";
 import {
   deriveMonthlyCharges,
+  groupBillingFor,
   isMonthlyGroup,
   monthlyDueDate,
-  normalizeGroupBilling,
   periodOf,
 } from "../domain/monthlyBilling";
 import { useHistoryBackedState } from "../hooks/useHistoryNavigation";
@@ -72,6 +72,7 @@ import { ClassHistory } from "./ClassHistory";
 import { NewClassDrawer } from "./NewClassDrawer";
 import { EditClassDrawer } from "./EditClassDrawer";
 import "../i18n/screenTranslations.js";
+import { MonthlyFeePay } from "./MonthlyFeePay";
 import "./classes.css";
 
 const TABS = [
@@ -253,25 +254,24 @@ function WeekRail({
   );
 }
 
-function MonthlyPaymentCell({ charge, today, classDate, onToggle, busy }) {
+function MonthlyPaymentCell({ charge, studentName, today, classDate, onMonthly, busy }) {
   const { t, locale } = useI18n();
   const month = capitalize(monthLong(`${charge.period}-01`, locale));
+  const until = formatShortDate(charge.coversTo, locale, { weekday: false });
+  const undo =
+    charge.lastPaidAt === today ? (
+      <button type="button" className="link-button" disabled={busy} onClick={() => onMonthly.undo(charge)}>
+        {t("Undo")}
+      </button>
+    ) : null;
   if (charge.status === "paid") {
-    const paidToday = charge.paidAt === today;
     return (
       <span className="monthly-pay">
         <span className="st st-ok">{t("{month} paid", { month })}</span>
         <small>
-          {formatMoney(charge.amount, locale)} ·{" "}
-          {paidToday
-            ? t("today")
-            : t("paid on {date}", { date: formatShortDate(charge.paidAt, locale, { weekday: false }) })}
+          {formatMoney(charge.amount, locale)} · {t("until {date}", { date: until })}
         </small>
-        {paidToday ? (
-          <button type="button" className="link-button" disabled={busy} onClick={() => onToggle(charge, false)}>
-            {t("Undo")}
-          </button>
-        ) : null}
+        {undo}
       </span>
     );
   }
@@ -283,21 +283,32 @@ function MonthlyPaymentCell({ charge, today, classDate, onToggle, busy }) {
       </span>
     );
   }
-  const due =
-    charge.dueDate === today
+  const due = charge.partial
+    ? t("Paid {paid} · {left} left", {
+        paid: formatMoney(charge.paid, locale),
+        left: formatMoney(charge.balance, locale),
+      })
+    : charge.dueDate === today
       ? t(classDate === today ? "Due today, in this class" : "Due today")
       : charge.status === "overdue"
         ? t("Overdue since {date}", { date: formatShortDate(charge.dueDate, locale, { weekday: false }) })
         : t("Due {date}", { date: formatShortDate(charge.dueDate, locale) });
   return (
     <span className="monthly-pay">
-      <span className={`st ${charge.status === "overdue" ? "st-venc" : "st-pend"}`}>
-        {month} · {formatMoney(charge.amount, locale)}
-      </span>
-      <small>{due}</small>
-      <button type="button" className="link-button" disabled={busy} onClick={() => onToggle(charge, true)}>
-        {t("Mark paid")}
-      </button>
+      <span className={`st ${charge.status === "overdue" ? "st-venc" : "st-pend"}`}>{month}</span>
+      <small>
+        {due}
+        {charge.partial && undo ? <> · {undo}</> : null}
+      </small>
+      <MonthlyFeePay
+        key={`${charge.id}:${charge.balance}`}
+        charge={charge}
+        studentName={studentName}
+        onPay={onMonthly.pay}
+        busy={busy}
+        fullLabel={t("Mark paid")}
+        buttonClassName="link-button"
+      />
     </span>
   );
 }
@@ -320,7 +331,14 @@ function RosterRow({
   let payment;
   if (monthlyCharge) {
     payment = (
-      <MonthlyPaymentCell charge={monthlyCharge} today={today} classDate={classDate} onToggle={onMonthly} busy={busy} />
+      <MonthlyPaymentCell
+        charge={monthlyCharge}
+        studentName={student.fullName}
+        today={today}
+        classDate={classDate}
+        onMonthly={onMonthly}
+        busy={busy}
+      />
     );
   } else if (attendance === "P") {
     payment = (
@@ -674,20 +692,33 @@ export default function Classes({
     });
     if (accepted) await saveSession("Cancelled");
   };
-  const toggleMonthly = async (charge, paid) => {
+  const changeMonthly = async (change) => {
     if (!actions.setMonthlyPaid) return;
     setMonthlyBusy(true);
     try {
-      await actions.setMonthlyPaid({
-        studentId: charge.studentId,
-        groupId: charge.groupId,
-        period: charge.period,
-        amount: charge.amount,
-        paid,
-      });
+      await actions.setMonthlyPaid(change);
     } finally {
       setMonthlyBusy(false);
     }
+  };
+  // «Marcar pagada» settles the balance or records the abono typed next to it; «Deshacer» takes back the last payment.
+  const monthlyHandlers = {
+    pay: (charge, amount) =>
+      changeMonthly({
+        studentId: charge.studentId,
+        groupId: charge.groupId,
+        period: charge.period,
+        amount,
+        paid: true,
+      }),
+    undo: (charge) =>
+      changeMonthly({
+        studentId: charge.studentId,
+        groupId: charge.groupId,
+        period: charge.period,
+        paid: false,
+        paymentId: charge.paymentId,
+      }),
   };
 
   // Switching class with a dirty draft asks first; the draft is dropped only after «Descartar cambios».
@@ -738,17 +769,15 @@ export default function Classes({
         entries,
         monthlyCharges
           .filter(
-            (item) =>
-              item.groupId === activeSession.groupId &&
-              item.status === "paid" &&
-              item.paidAt === currentDate &&
-              roster.some((student) => student.id === item.studentId),
+            (item) => item.groupId === activeSession.groupId && roster.some((student) => student.id === item.studentId),
           )
-          .reduce((sum, item) => sum + item.amount, 0),
+          .flatMap((item) => item.payments)
+          .filter((payment) => payment.paidAt === currentDate)
+          .reduce((sum, payment) => sum + payment.amount, 0),
       )
     : null;
   const derivedRows = derived?.classLog || [];
-  const billing = normalizeGroupBilling(activeGroup?.billing);
+  const billing = groupBillingFor(activeGroup, periodOf(activeSession?.classDate));
   const monthlyActive = Boolean(
     activeGroup && activeSession && isMonthlyGroup(activeGroup, periodOf(activeSession.classDate)),
   );
@@ -982,7 +1011,7 @@ export default function Classes({
                         monthlyCharge={chargeFor(student.id)}
                         today={currentDate}
                         classDate={activeSession.classDate}
-                        onMonthly={toggleMonthly}
+                        onMonthly={monthlyHandlers}
                         busy={monthlyBusy}
                       />
                     ))}

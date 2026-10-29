@@ -95,6 +95,12 @@ export const TRACKING_TRANSLATIONS = Object.freeze({
   "Due today": "Vence hoy",
   "Paid (fee)": "Pagada",
   "Mark paid (fee)": "Marcar pagada",
+  "Amount {name} pays": "Importe que paga {name}",
+  "Record {amount}": "Registrar {amount}",
+  "Paid today · until {date}": "Pagó hoy · hasta el {date}",
+  "Up to date until {date}": "Al corriente hasta el {date}",
+  "Paid {paid} · {left} left": "Abonó {paid} · faltan {left}",
+  "until {date}": "hasta el {date}",
   "Overdue · {date}": "Vencida · {date}",
   "{amount} of {expected}": "{amount} de {expected}",
   "{names} pays per class in this group; their payments stay in the list.":
