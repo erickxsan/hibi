@@ -126,8 +126,9 @@ export function classChargeFor(state, session, studentId, existing = null) {
 
 /**
  * Class records ready for saveProgress. Only present students carry the per-class charge and the payment
- * chosen. Absent students and students covered by a monthly fee carry a $0 charge; unmarked students too,
- * since they owe nothing until attendance is taken, but a payment already recorded for them is kept.
+ * chosen. Absent students carry a $0 charge. Students covered by a monthly fee and unmarked students carry
+ * a $0 charge too, but a payment already recorded for them is kept: a per-class payment made before the
+ * group turned monthly still counts toward that month's fee.
  */
 export function buildClassRecords(state, session, roster, entries, { classStatus = "Completed", today }) {
   return roster.map((student) => {
@@ -138,10 +139,12 @@ export function buildClassRecords(state, session, roster, entries, { classStatus
     const hours = existing?.hours ?? session.durationHours ?? state.settings?.defaultClassHours ?? 2;
     const attendance = classStatus === "Completed" ? entry.attendance || "" : "";
     const monthly = coveredByMonthlyFee(state, student.id, session.groupId || "", session.classDate);
-    const free = classStatus === "Cancelled" || attendance === "A" || monthly;
+    const free = classStatus === "Cancelled" || attendance === "A";
     const unmarked = classStatus === "Completed" && !attendance;
-    const charge = free || unmarked ? 0 : classChargeFor(state, session, student.id, existing);
-    const payment = free || unmarked ? "" : entry.paymentTouched ? entry.paymentState : existing?.paymentState || "";
+    // Nothing to charge now, but whatever was already paid for the class stays recorded.
+    const kept = unmarked || (monthly && !free);
+    const charge = free || kept ? 0 : classChargeFor(state, session, student.id, existing);
+    const payment = free || kept ? "" : entry.paymentTouched ? entry.paymentState : existing?.paymentState || "";
     const amountPaid =
       payment === "Paid"
         ? charge
@@ -181,7 +184,7 @@ export function buildClassRecords(state, session, roster, entries, { classStatus
             : free
               ? ""
               : existing?.paymentMethod || "",
-      paymentState: payment || (free || unmarked ? "" : "Pending"),
+      paymentState: payment || (free || kept ? "" : "Pending"),
     };
   });
 }

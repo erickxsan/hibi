@@ -462,6 +462,25 @@ export function joiningAmounts(state, group, fee, joinedOn) {
   };
 }
 
+/**
+ * The student after being saved with `previous` as their earlier record (none when new): each group with
+ * a monthly fee they were just added to starts billing them on `date`, so they never owe the months
+ * before they arrived. A start already chosen (a first-month choice) is kept.
+ */
+export function stampJoinedOn(previous, student, groups, date) {
+  if (!isDateOnly(date)) return student;
+  const before = new Set(studentGroupIds(previous));
+  const added = studentGroupIds(student).filter(
+    (id) => !before.has(id) && isMonthlyGroup((groups || []).find((group) => group.id === id)),
+  );
+  const current = student.billingByGroup || {};
+  const missing = added.filter((id) => !isDateOnly(current[id]?.joinedOn));
+  if (!missing.length) return student;
+  const billingByGroup = { ...current };
+  for (const id of missing) billingByGroup[id] = { mode: "group", ...current[id], joinedOn: date };
+  return { ...student, billingByGroup };
+}
+
 function firstPeriodFor(state, group, students) {
   const first = billingTerms(group).find((term) => term.mode === "monthly");
   if (first?.effectiveFrom) return first.effectiveFrom;

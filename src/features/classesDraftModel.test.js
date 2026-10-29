@@ -101,4 +101,47 @@ describe("class records from the roster", () => {
     );
     expect(records.s1).toMatchObject({ appliedCharge: 100, paymentState: "Pending" });
   });
+
+  it("keeps a per-class payment when the group later bills that month monthly and the class is saved again", () => {
+    const paid = {
+      id: "c1",
+      studentId: "s1",
+      groupId: "g1",
+      classDate: "2026-10-10",
+      classStatus: "Completed",
+      attendance: "P",
+      appliedHourlyRate: 50,
+      appliedCharge: 100,
+      amountPaid: 100,
+      paymentDate: "2026-10-10",
+      paymentMethod: "Cash",
+      paymentState: "Paid",
+    };
+    const monthly = {
+      ...rosterState,
+      groups: [
+        {
+          ...rosterState.groups[0],
+          billing: { mode: "monthly", monthlyFee: 800, due: { type: "dayOfMonth", day: 28 }, effectiveFrom: "2026-10" },
+        },
+      ],
+    };
+    const records = byStudent(
+      buildClassRecords(
+        monthly,
+        { ...classSession, rows: [paid] },
+        roster,
+        { s1: { attendance: "P", paymentState: "Paid", paymentTouched: false, classId: "c1" } },
+        { today: "2026-10-28" },
+      ),
+    );
+    expect(records.s1).toMatchObject({
+      appliedCharge: 0,
+      amountPaid: 100,
+      paymentDate: "2026-10-10",
+      paymentMethod: "Cash",
+      paymentState: "",
+    });
+    expect(records.s2).toMatchObject({ appliedCharge: 0, amountPaid: 0, paymentState: "" });
+  });
 });

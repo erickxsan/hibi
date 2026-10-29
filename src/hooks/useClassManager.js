@@ -48,6 +48,7 @@ import {
   normalizeMonthlyPayments,
   monthlyBalance,
   setMonthlyPayment,
+  stampJoinedOn,
   startGroupBilling,
 } from "../domain/monthlyBilling.js";
 
@@ -743,14 +744,22 @@ export function useClassManager({ persistence } = {}) {
       const avatarIds = ["cat", "dog", "penguin", "fox", "rabbit", "bear", "frog", "owl"];
       let nextCodeIndex = 0;
       const items = drafts.map((draft, index) => {
+        const previous = draft.id ? stateRef.current.students.find((student) => student.id === draft.id) : null;
         const item = applyGeneratedId(
           createStudent,
-          canonicalStudent({
-            ...draft,
-            code: draft.code || codes[nextCodeIndex],
-            avatarId: draft.avatarId || avatarIds[index % avatarIds.length],
-            groupIds: [...new Set([...(draft.groupIds || []), groupId])],
-          }),
+          canonicalStudent(
+            stampJoinedOn(
+              previous,
+              {
+                ...draft,
+                code: draft.code || codes[nextCodeIndex],
+                avatarId: draft.avatarId || avatarIds[index % avatarIds.length],
+                groupIds: [...new Set([...(draft.groupIds || []), groupId])],
+              },
+              stateRef.current.groups,
+              operationalDate,
+            ),
+          ),
         );
         if (!draft.id) nextCodeIndex += 1;
         return item;
@@ -776,7 +785,7 @@ export function useClassManager({ persistence } = {}) {
       );
       return saved ? items : false;
     },
-    [commit, notify],
+    [commit, notify, operationalDate],
   );
 
   const archiveGroup = useCallback(
@@ -813,7 +822,9 @@ export function useClassManager({ persistence } = {}) {
 
   const upsertStudent = useCallback(
     (draft) => {
-      const item = applyGeneratedId(createStudent, canonicalStudent(draft));
+      const previous = draft.id ? stateRef.current.students.find((student) => student.id === draft.id) : null;
+      const joined = stampJoinedOn(previous, draft, stateRef.current.groups, operationalDate);
+      const item = applyGeneratedId(createStudent, canonicalStudent(joined));
       const validation = validateStudent(item, stateRef.current);
       if (!validation.valid) {
         notify(validation.errors[0].message, "error");
@@ -829,7 +840,7 @@ export function useClassManager({ persistence } = {}) {
         draft.id ? "Student updated" : "Student added",
       );
     },
-    [commit, notify],
+    [commit, notify, operationalDate],
   );
 
   const archiveStudent = useCallback(

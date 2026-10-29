@@ -90,6 +90,43 @@ describe("additive record imports", () => {
     expect(plan.candidate.classLog[0]).toMatchObject({ studentId: "student-current", groupId: "group-current" });
   });
 
+  it("moves a student's billing adjustments and monthly payments to the group they now belong to", () => {
+    const current = stateWithRoster();
+    current.groups[0].billing = {
+      mode: "monthly",
+      monthlyFee: 1000,
+      due: { type: "dayOfMonth", day: 5 },
+      effectiveFrom: "2026-10",
+    };
+    const imported = createStarterState();
+    imported.groups.push(createGroup({ id: "foreign-group", name: "Math", billing: current.groups[0].billing }));
+    imported.students.push(
+      createStudent({
+        id: "foreign-student",
+        code: "STU-002",
+        fullName: "Luis",
+        groupIds: ["foreign-group"],
+        billingByGroup: { "foreign-group": { mode: "customFee", fee: 500, joinedOn: "2026-10-01" } },
+        monthlyPayments: [
+          { id: "pay-oct", groupId: "foreign-group", period: "2026-10", amount: 500, paidAt: "2026-10-05" },
+        ],
+      }),
+    );
+
+    const plan = buildImportPlan(current, imported);
+    const luis = plan.candidate.students.find((student) => student.fullName === "Luis");
+
+    expect(luis.groupIds).toEqual(["group-current"]);
+    expect(luis.billingByGroup).toEqual({
+      "group-current": { mode: "customFee", fee: 500, joinedOn: "2026-10-01" },
+    });
+    expect(luis.monthlyPayments).toEqual([
+      { id: "pay-oct", groupId: "group-current", period: "2026-10", amount: 500, paidAt: "2026-10-05" },
+    ]);
+    // Importing the same file again finds nothing new.
+    expect(buildImportPlan(plan.candidate, imported).summary).toMatchObject({ added: 0, conflicts: 0 });
+  });
+
   it("keeps current conflicting information by default", () => {
     const current = stateWithRoster();
     const imported = createStarterState();

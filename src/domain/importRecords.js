@@ -148,6 +148,23 @@ function remapClassSessionKey(value, groupIds, studentIds) {
   return parts.join("|");
 }
 
+// A student's billing is keyed by group: its adjustments and its monthly payments follow the group's final ID.
+function remapStudentBilling(record, groupIds) {
+  const remapped = { ...record };
+  if (record.billingByGroup && typeof record.billingByGroup === "object") {
+    remapped.billingByGroup = Object.fromEntries(
+      Object.entries(record.billingByGroup).map(([groupId, override]) => [groupIds.get(groupId) || groupId, override]),
+    );
+  }
+  if (Array.isArray(record.monthlyPayments)) {
+    remapped.monthlyPayments = record.monthlyPayments.map((payment) => ({
+      ...payment,
+      groupId: groupIds.get(payment.groupId) || payment.groupId,
+    }));
+  }
+  return remapped;
+}
+
 function remapRecord(collection, source, maps) {
   const { groupIds, studentIds, classScheduleIds, scheduleSlotIds } = maps;
   const record = { ...source };
@@ -170,6 +187,7 @@ function remapRecord(collection, source, maps) {
   if (Array.isArray(record.groupIds)) {
     record.groupIds = [...new Set(record.groupIds.map((id) => groupIds.get(id) || id))];
   }
+  if (collection === "students") Object.assign(record, remapStudentBilling(record, groupIds));
   if (Array.isArray(record.participantIds)) {
     record.participantIds = [...new Set(record.participantIds.map((id) => studentIds.get(id) || id))];
   }
@@ -203,7 +221,7 @@ export function buildImportPlan(currentInput, importedInput, decisions = {}) {
   const entries = [];
   const groupIds = buildFinalIdMap("groups", current.groups, imported.groups);
   const studentIds = buildFinalIdMap("students", current.students, imported.students, (record) => ({
-    ...record,
+    ...remapStudentBilling(record, groupIds),
     groupIds: record.groupIds.map((id) => groupIds.get(id) || id),
   }));
   const partialMaps = { groupIds, studentIds, classScheduleIds: new Map(), scheduleSlotIds: new Map() };

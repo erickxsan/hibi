@@ -19,6 +19,7 @@ import {
   normalizeMonthlyPayments,
   recordMonthlyPayment,
   setMonthlyPayment,
+  stampJoinedOn,
   startGroupBilling,
   studentMonthlyDueDate,
   studentMonthlyPlan,
@@ -511,5 +512,39 @@ describe("monthly billing", () => {
       (item) => item.studentId === "diego" && item.period === "2026-11",
     );
     expect(november.coversTo).toBe("2026-11-30");
+  });
+});
+
+describe("joining a group", () => {
+  const groups = [
+    {
+      id: "mensual",
+      billing: { mode: "monthly", monthlyFee: 900, due: { type: "dayOfMonth", day: 5 }, effectiveFrom: "2026-05" },
+    },
+    { id: "porClase" },
+  ];
+
+  it("dates the start of a student added to a monthly group, and only there", () => {
+    const added = stampJoinedOn(
+      { id: "ana", groupIds: ["porClase"] },
+      { id: "ana", groupIds: ["porClase", "mensual"] },
+      groups,
+      "2026-10-01",
+    );
+    expect(added.billingByGroup).toEqual({ mensual: { mode: "group", joinedOn: "2026-10-01" } });
+    expect(
+      stampJoinedOn(null, { id: "leo", groupIds: ["porClase"] }, groups, "2026-10-01").billingByGroup,
+    ).toBeUndefined();
+  });
+
+  it("keeps a first-month choice and leaves current members alone", () => {
+    const chosen = {
+      id: "ana",
+      groupIds: ["mensual"],
+      billingByGroup: { mensual: { mode: "group", joinedOn: "2026-09-20", firstMonthAmount: 0 } },
+    };
+    expect(stampJoinedOn({ id: "ana", groupIds: [] }, chosen, groups, "2026-10-01")).toBe(chosen);
+    const member = { id: "beto", groupIds: ["mensual"] };
+    expect(stampJoinedOn(member, { ...member, notes: "nuevo" }, groups, "2026-10-01").billingByGroup).toBeUndefined();
   });
 });

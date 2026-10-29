@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { useClassManager } from "./useClassManager.js";
 import {
   addDays,
+  createGroup,
   createStarterState,
   createStudent,
   createClassLogRow,
@@ -133,6 +134,61 @@ describe("a group created through the live manager", () => {
         });
       });
       expect(hook.result.current.state.groups[0].scheduleResumeDate).toBe(asOf);
+      hook.unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("a student added to a monthly group through the live manager", () => {
+  it("owes from the day they join, not every month since the group started", async () => {
+    // Thursday 1 Oct 2026, before that day's class: the join sheet asks nothing about the first month.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 9, 1, 9));
+    try {
+      const initial = createStarterState();
+      initial.groups = [
+        createGroup({
+          id: "g-mensual",
+          name: "Mensual",
+          weeklySchedule: [{ id: "thu", dayOfWeek: 4, startTime: "16:00", durationHours: 1 }],
+          scheduleResumeDate: "2026-05-01",
+          billing: { mode: "monthly", monthlyFee: 1000, due: { type: "dayOfMonth", day: 5 }, effectiveFrom: "2026-05" },
+        }),
+      ];
+      initial.students = [createStudent({ id: "ana", code: "ANA", fullName: "Ana Ruiz", groupIds: [] })];
+      const persistence = { initialState: initial, mode: "cloud", save: vi.fn(async (state) => state) };
+      const hook = renderHook(() => useClassManager({ persistence }));
+      const ana = hook.result.current.state.students.find((student) => student.id === "ana");
+      await act(async () => {
+        await hook.result.current.actions.upsertStudent({ ...ana, groupIds: ["g-mensual"] });
+      });
+      await act(async () => {
+        await hook.result.current.actions.upsertStudent({ code: "LEO", fullName: "Leo Paz", groupIds: ["g-mensual"] });
+      });
+      const state = hook.result.current.state;
+      const periods = (name) => {
+        const id = state.students.find((student) => student.fullName === name).id;
+        return deriveMonthlyCharges(state, "2026-10-28")
+          .filter((charge) => charge.studentId === id)
+          .map((charge) => `${charge.period}:${charge.total}`);
+      };
+      expect(state.students.find((student) => student.id === "ana").billingByGroup).toEqual({
+        "g-mensual": { mode: "group", joinedOn: "2026-10-01" },
+      });
+      expect(periods("Ana Ruiz")).toEqual(["2026-10:1000"]);
+      expect(periods("Leo Paz")).toEqual(["2026-10:1000"]);
+
+      // Saving her again (another field) keeps the date she joined.
+      vi.setSystemTime(new Date(2026, 9, 20, 9));
+      const joined = hook.result.current.state.students.find((student) => student.id === "ana");
+      await act(async () => {
+        await hook.result.current.actions.upsertStudent({ ...joined, notes: "Llega 10 min tarde" });
+      });
+      expect(
+        hook.result.current.state.students.find((student) => student.id === "ana").billingByGroup["g-mensual"].joinedOn,
+      ).toBe("2026-10-01");
       hook.unmount();
     } finally {
       vi.useRealTimers();
