@@ -243,6 +243,15 @@ button {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* iPhone Safari zooms the page into any field under 16px when it is tapped; touch screens get 16px. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"], [type="radio"], [type="range"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
 img,
 svg {
   display: block;

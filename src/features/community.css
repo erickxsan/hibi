@@ -982,6 +982,7 @@
 
 .community-head {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: flex-end;
   gap: 12px;
@@ -1196,6 +1197,22 @@
 
   .billing-fields .field-row {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* «próximas» wraps under the selects, where a leading «·» reads as a stray dot. */
+  .billing-sep {
+    display: none;
+  }
+
+  /* The remove button stays on the student's line instead of wrapping alone under the selects. */
+  .billing-adjustment > b {
+    order: -2;
+    flex: 1 0 calc(100% - 52px);
+    min-width: 0;
+  }
+
+  .billing-adjustment .billing-remove {
+    order: -1;
   }
 }
 

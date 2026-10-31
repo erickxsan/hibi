@@ -373,15 +373,15 @@ function RosterRow({
     );
   } else grade = <span className="roster-muted">{attendance === "A" && assessmentOn ? t("— absent") : "—"}</span>;
   const empty = (node) => (!monthlyCharge && attendance !== "P" ? "is-empty" : node ? "" : "is-empty");
+  // The payment cell already says how the month stands («Vencida desde…», «Abonó…»): no second note for it.
+  const noteLine = monthlyCharge && note.kind === "monthlyPending" ? "" : noteText(note, t, locale);
   return (
     <div className="roster-row" role="row">
       <span role="rowheader" className="person" data-cell="who">
         <StudentAvatar avatarId={student.avatarId} name={student.fullName} size="small" decorative />
         <span>
           <strong>{student.fullName}</strong>
-          {noteText(note, t, locale) ? (
-            <small className={note.tone ? `text-${note.tone}` : "muted"}>{noteText(note, t, locale)}</small>
-          ) : null}
+          {noteLine ? <small className={note.tone ? `text-${note.tone}` : "muted"}>{noteLine}</small> : null}
         </span>
       </span>
       <span role="cell" data-cell="attendance">

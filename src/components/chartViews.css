@@ -1282,6 +1282,19 @@
   font-weight: 700;
 }
 
+.cv-punct-early {
+  left: 0;
+}
+
+.cv-punct-due {
+  left: var(--due);
+  transform: translateX(-50%);
+}
+
+.cv-punct-late {
+  right: 0;
+}
+
 .cv-punct-name {
   overflow: hidden;
   font: 600 14px/18px var(--font-sans);
@@ -1670,6 +1683,17 @@
     font-size: 11px;
   }
 
+  /* The track is too short to fit both labels beside «vence»: they hang off it into the empty columns. */
+  .cv-punct-early {
+    left: auto;
+    right: calc(100% - var(--due) + 22px);
+  }
+
+  .cv-punct-late {
+    right: auto;
+    left: calc(var(--due) + 22px);
+  }
+
   .cv-sub-cells i {
     width: 18px;
     height: 18px;
@@ -1686,6 +1710,10 @@
 
   .cv-vmark b {
     font-size: 11px;
+  }
+
+  .hibi-chart .cv-upcoming .bar .xl.cv-xl-alt {
+    visibility: hidden;
   }
 }
 

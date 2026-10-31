@@ -501,7 +501,8 @@ export function BillingFields({ draft, setDraft, group, members = [], state, asO
             <span className="field-row-hint">{t(due.type === "dayOfMonth" ? "of each month" : "of the month")}</span>
             {nextDues.length ? (
               <span className="field-row-hint">
-                · {t("next: {dates}", { dates: nextDues.map((date) => formatShortDate(date, locale)).join(", ") })}
+                <span className="billing-sep">· </span>
+                {t("next: {dates}", { dates: nextDues.map((date) => formatShortDate(date, locale)).join(", ") })}
               </span>
             ) : null}
           </FieldRow>

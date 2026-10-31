@@ -1636,7 +1636,8 @@ function CloseView({ data, size, selected, onSelect, context }) {
         .filter(
           ({ index }) =>
             index === data.lastReal ||
-            ((index % 7 === 0 || index === count - 1) && Math.abs(index - data.lastReal) > 3),
+            ((index === count - 1 || (index % 7 === 0 && count - 1 - index > 3)) &&
+              Math.abs(index - data.lastReal) > 3),
         )
     : series.map((step, index) => ({ step, index }));
   return (
@@ -1704,6 +1705,11 @@ function UpcomingView({ data, size, selected, onSelect, context }) {
   const big = size === "big";
   const peak = Math.max(...data.days.map((day) => day.total), 1);
   const max = big ? niceCeil(peak * 1.1) : peak;
+  // On a phone only every other day keeps its label, counted from «1 nov» so the month start always shows.
+  const anchor = Math.max(
+    0,
+    data.days.findIndex((day) => day.date.slice(8) === "01"),
+  );
   return (
     <>
       {big
@@ -1739,7 +1745,7 @@ function UpcomingView({ data, size, selected, onSelect, context }) {
                 {big && index === data.peak ? <em className="cv-count">{shortMoney(day.total, locale)}</em> : null}
               </span>
               {big ? (
-                <span className="xl">
+                <span className={(index - anchor) % 2 ? "xl cv-xl-alt" : "xl"}>
                   {day.date.slice(8) === "01" ? `1 ${monthShort(day.date, locale)}` : dayNumber(day.date)}
                 </span>
               ) : null}
@@ -1796,14 +1802,10 @@ function PunctualityView({ data, size, selected, onSelect, context }) {
     <div className="cv-punct">
       <div className="cv-punct-row cv-punct-head" aria-hidden="true">
         <span />
-        <span className="cv-ticks">
-          <span style={{ left: 0 }} className="text-ok">
-            {t("← pays early")}
-          </span>
-          <span style={{ left: `${x(0)}%`, transform: "translateX(-50%)" }}>{t("due")}</span>
-          <span style={{ right: 0 }} className="text-bad">
-            {t("pays late →")}
-          </span>
+        <span className="cv-ticks" style={{ "--due": `${x(0)}%` }}>
+          <span className="cv-punct-early text-ok">{t("← pays early")}</span>
+          <span className="cv-punct-due">{t("due")}</span>
+          <span className="cv-punct-late text-bad">{t("pays late →")}</span>
         </span>
         <span />
       </div>

@@ -7,6 +7,7 @@
 }
 
 .fee-amount {
+  position: relative;
   display: inline-flex;
   align-items: baseline;
   border-bottom: 1.5px dotted var(--line-control);
@@ -14,6 +15,12 @@
   font-variant-numeric: tabular-nums;
   color: var(--sumi);
   cursor: text;
+}
+
+.fee-amount::after {
+  content: "";
+  position: absolute;
+  inset: -13px -8px;
 }
 
 .fee-amount:focus-within {
@@ -29,6 +36,13 @@
   background: transparent;
   font: inherit;
   color: inherit;
+}
+
+/* Its field grows to 16px on touch screens (see design-system.css), so the «$» grows with it. */
+@media (pointer: coarse) {
+  .fee-amount {
+    font-size: 16px;
+  }
 }
 
 .fee-amount input:disabled {

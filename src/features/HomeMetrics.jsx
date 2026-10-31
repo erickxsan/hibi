@@ -1550,6 +1550,13 @@ export function MetricRows({ metrics, summaries, context, onOpenTracking, monthN
                 ) : null}
               </div>
             ) : null}
+            {sheetPlot && !sheetBars.length ? (
+              <div className="metric-sheet-view hibi-chart">
+                <div className="cv-empty">
+                  <p className="muted">{t("No data in this period.")}</p>
+                </div>
+              </div>
+            ) : null}
             {sheetPlot && sheetBars.length ? (
               <div>
                 <div className="ch" role="group" aria-label={t("{name} by point", { name: summaries[open].name })}>
