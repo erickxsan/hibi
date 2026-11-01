@@ -251,4 +251,44 @@ describe("device recovery store", () => {
     await expect(store.loadWorkspaceCache("user-b")).resolves.toMatchObject({ revision: 1 });
     await expect(store.listMutations("user-b")).resolves.toHaveLength(1);
   });
+
+  it("stages the same bytes as serializing each payload on its own", async () => {
+    const plaintexts = [];
+    const cryptoApi = {
+      getRandomValues: globalThis.crypto.getRandomValues.bind(globalThis.crypto),
+      subtle: {
+        generateKey: globalThis.crypto.subtle.generateKey.bind(globalThis.crypto.subtle),
+        decrypt: globalThis.crypto.subtle.decrypt.bind(globalThis.crypto.subtle),
+        encrypt(algorithm, key, data) {
+          plaintexts.push(new TextDecoder().decode(data));
+          return globalThis.crypto.subtle.encrypt(algorithm, key, data);
+        },
+      },
+    };
+    const store = createDeviceRecoveryStore(new IDBFactory(), cryptoApi);
+    const state = createStarterState();
+    const workspace = {
+      state,
+      versions: { students: { s1: 2 } },
+      revision: 7,
+      updatedAt: "2026-10-21T12:00:00.000Z",
+      envelopes: [{ collection: "settings", entityId: "__settings__", ciphertext: "abc" }],
+      workspaceCryptoId: "workspace-1",
+      keyVersion: 1,
+    };
+    const mutation = { operationId: "44444444-4444-4444-8444-444444444444", expectedVersions: {} };
+
+    await store.stageMutation({ ownerId: "user-1", workspace, mutation });
+
+    const staged = JSON.parse(plaintexts.at(-2));
+    expect(plaintexts.slice(-3)).toEqual([
+      JSON.stringify({ mutation, workspace: staged }),
+      JSON.stringify(staged),
+      JSON.stringify(staged.state),
+    ]);
+    expect(staged).toMatchObject({ state, revision: 7, envelopes: workspace.envelopes, keyVersion: 1 });
+    await expect(store.listMutations("user-1")).resolves.toEqual([
+      expect.objectContaining({ mutation, workspace: staged }),
+    ]);
+  });
 });

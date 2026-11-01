@@ -130,6 +130,23 @@ describe("workspace encryption protocol", () => {
     ).rejects.toMatchObject({ code: "revision_chain_mismatch" });
   });
 
+  it("still detects a record changed in place after its leaf was hashed", async () => {
+    const masterKey = generateAccountMasterKey();
+    const workspaceCryptoId = generateWorkspaceCryptoId();
+    const envelopes = await encryptWorkspace({ masterKey, workspaceCryptoId, state: privateFixture() });
+    const details = { masterKey, workspaceCryptoId, workspaceRevision: 1, operationId: crypto.randomUUID() };
+    const manifest = await createManifest({ ...details, envelopes });
+    await expect(verifyManifest({ masterKey, workspaceCryptoId, envelopes, manifest })).resolves.toBe(true);
+
+    envelopes[0].ciphertext = envelopes[1].ciphertext;
+
+    await expect(verifyManifest({ masterKey, workspaceCryptoId, envelopes, manifest })).rejects.toMatchObject({
+      code: "manifest_mismatch",
+    });
+    const fresh = await createManifest({ ...details, envelopes: structuredClone(envelopes) });
+    await expect(createManifest({ ...details, envelopes })).resolves.toMatchObject({ root: fresh.root });
+  });
+
   it("wraps one stable AMK with independent secrets", async () => {
     const masterKey = generateAccountMasterKey();
     const wrappingSecret = generateAccountMasterKey();

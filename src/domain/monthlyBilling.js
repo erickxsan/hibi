@@ -3,6 +3,7 @@ import { isGroupArchived } from "./groupArchiving.js";
 import { createStableId } from "./ids.js";
 import { roundMoney, sumMoney } from "./money.js";
 import { dayOfWeekForDate, generateScheduledOccurrences, resolveHourlyRate } from "./schedule.js";
+import { memoizeOnState } from "./stateMemo.js";
 
 /*
  * Optional monthly billing, stored only as optional fields on existing entities
@@ -701,7 +702,7 @@ function coverage(state, student, group, period, dueDate) {
  * Status: "paid" once settled; otherwise "pending" until the due date and "overdue" after it
  * (`partial` when part of it is paid). `coversFrom`–`coversTo` are the days the month pays for.
  */
-export function deriveMonthlyCharges(state, asOfDate, { through = periodOf(asOfDate), includeArchived = true } = {}) {
+function monthlyCharges(state, asOfDate, { through = periodOf(asOfDate), includeArchived = true } = {}) {
   const charges = [];
   const students = state.students || [];
   const perClassPaid = new Map();
@@ -880,3 +881,9 @@ export function setMonthlyPayment(state, { studentId, groupId, period, amount, p
     payments.filter((item) => !(item.groupId === groupId && item.period === period)),
   );
 }
+
+export const deriveMonthlyCharges = memoizeOnState(
+  monthlyCharges,
+  (asOfDate, { through = periodOf(asOfDate), includeArchived = true } = {}) =>
+    `${asOfDate}|${through}|${includeArchived}`,
+);

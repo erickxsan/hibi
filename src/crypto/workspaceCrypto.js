@@ -296,18 +296,18 @@ export async function decryptWorkspace({ masterKey, workspaceCryptoId, envelopes
   return { state, versions, orderingRepairs, positions: orderKeys };
 }
 
+const LEAF_FIELDS = ["collection", "entityId", "entityRevision", "keyVersion", "nonce", "ciphertext"];
+// An edit changes a handful of records, yet the root covers all of them. Each record's leaf is remembered with
+// the exact fields it was hashed from and reused only while every one of them is still identical.
+const leafHashes = new WeakMap();
+
 async function envelopeLeaf(envelope, cryptoApi) {
-  return sha256(
-    canonicalBytes({
-      collection: envelope.collection,
-      entityId: envelope.entityId,
-      entityRevision: envelope.entityRevision,
-      keyVersion: envelope.keyVersion,
-      nonce: envelope.nonce,
-      ciphertext: envelope.ciphertext,
-    }),
-    cryptoApi,
-  );
+  const known = leafHashes.get(envelope);
+  if (known && LEAF_FIELDS.every((field) => known.fields[field] === envelope[field])) return known.leaf;
+  const fields = Object.fromEntries(LEAF_FIELDS.map((field) => [field, envelope[field]]));
+  const leaf = await sha256(canonicalBytes(fields), cryptoApi);
+  leafHashes.set(envelope, { fields, leaf });
+  return leaf;
 }
 
 async function merkleRoot(envelopes, cryptoApi) {
@@ -317,11 +317,12 @@ async function merkleRoot(envelopes, cryptoApi) {
   let level = await Promise.all(sorted.map((envelope) => envelopeLeaf(envelope, cryptoApi)));
   if (!level.length) return sha256(new Uint8Array(), cryptoApi);
   while (level.length > 1) {
-    const next = [];
+    const pairs = [];
     for (let index = 0; index < level.length; index += 2) {
-      next.push(await sha256(concatBytes(level[index], level[index + 1] || level[index]), cryptoApi));
+      pairs.push(concatBytes(level[index], level[index + 1] || level[index]));
     }
-    level = next;
+    // The pairs of one level are independent, so they are hashed together instead of one await at a time.
+    level = await Promise.all(pairs.map((pair) => sha256(pair, cryptoApi)));
   }
   return level[0];
 }

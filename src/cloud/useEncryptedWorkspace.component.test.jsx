@@ -39,6 +39,9 @@ let queue;
 beforeEach(() => {
   mocks.readIntegrity.mockReset().mockResolvedValue(null);
   queue = [];
+  delete mocks.repository.hasVerifiedWorkspace;
+  delete mocks.repository.prepareMutation;
+  delete mocks.store.stageMutation;
   Object.assign(mocks.store, {
     listMutations: vi.fn(async () => [...queue]),
     loadWorkspaceCache: vi.fn(async () => workspace),
@@ -193,6 +196,37 @@ describe("encrypted offline queue", () => {
     });
     expect(mocks.repository.loadWorkspace).toHaveBeenCalledTimes(before + 1);
     unsubscribe();
+    cloud.unmount();
+  });
+
+  it("sends a fresh edit on the verified revision without downloading every record again", async () => {
+    mocks.repository.hasVerifiedWorkspace = vi.fn(() => true);
+    mocks.repository.prepareMutation = vi.fn(async ({ state }) => ({
+      operationId: "edit",
+      upserts: [{ collection: "settings", entityId: "__settings__" }],
+      deletes: [],
+      state,
+    }));
+    mocks.store.stageMutation = vi.fn(async ({ mutation, workspace: staged }) => {
+      queue.push({ id: mutation.operationId, status: "pending", workspace: staged, mutation });
+    });
+    const cloud = renderHook(() => useEncryptedWorkspace(user, session, security));
+    await waitFor(() => expect(cloud.result.current.syncStatus).toBe("saved"));
+    const loads = mocks.repository.loadWorkspace.mock.calls.length;
+    const edited = { ...workspace.state, settings: { ...workspace.state.settings, hourlyRate: 222 } };
+
+    await act(async () => {
+      await cloud.result.current.persistence.save(edited, workspace.state);
+    });
+    await waitFor(() => expect(cloud.result.current.syncStatus).toBe("saved"));
+
+    expect(mocks.repository.applyMutation).toHaveBeenCalledOnce();
+    expect(queue).toEqual([]);
+    expect(mocks.repository.loadWorkspace).toHaveBeenCalledTimes(loads);
+    await act(async () => {
+      await cloud.result.current.persistence.retrySync();
+    });
+    expect(mocks.repository.loadWorkspace).toHaveBeenCalledTimes(loads + 1);
     cloud.unmount();
   });
 

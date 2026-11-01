@@ -5,6 +5,7 @@ import { EmptyState, Segmented } from "../components/ui";
 import { ArchivedGroupsScope } from "../components/ArchivedGroupsScope";
 import { useCompactViewport } from "../components/OverlayContext";
 import { todayDateOnly } from "../domain/dates";
+import { memoizeRecent } from "../domain/stateMemo";
 import {
   dayNumber,
   formatDayMonth,
@@ -33,6 +34,14 @@ import { metricSummary, MetricCard, MetricExplorer, MetricRows, overdueSplit, th
 import { randomChartView } from "./chartViewsModel";
 import "../i18n/screenTranslations.js";
 import "./home.css";
+
+// Kept outside the component: coming back to Inicio with the same records reuses these instead of recomputing.
+const todayTimeline = memoizeRecent(buildTodayTimeline);
+const attentionItems = memoizeRecent(buildAttentionItems);
+const periodMetrics = memoizeRecent(buildPeriodMetrics);
+const periodRows = memoizeRecent(studentPeriodRows);
+// The timeline draws itself in on the first Inicio of a session; coming back later shows it already in place.
+let introShown = false;
 
 const PERIOD_ITEMS = [
   { value: "today", label: "Today" },
@@ -232,6 +241,11 @@ export default function Home({
   const today = agenda?.state || state;
   const todayDerived = agenda?.derived || derived;
   const [nowTime, setNowTime] = useState(() => nowTimeFor(asOf, todayDateOnly()));
+  const [revisit] = useState(() => introShown);
+  useEffect(() => {
+    introShown = true;
+  }, []);
+  const pageClass = `page home-page${compact ? " is-compact" : ""}${revisit ? " is-revisit" : ""}`;
   useEffect(() => {
     const update = () => setNowTime(nowTimeFor(asOf, todayDateOnly()));
     update();
@@ -256,7 +270,7 @@ export default function Home({
   };
   const shownPeriod = compact ? "monthly" : period;
   const timeline = useMemo(
-    () => buildTodayTimeline(today, todayDerived, asOf, nowTime),
+    () => todayTimeline(today, todayDerived, asOf, nowTime),
     [asOf, nowTime, today, todayDerived],
   );
   const [selectedKey, setSelectedKey] = useState("");
@@ -264,7 +278,7 @@ export default function Home({
     timeline.items.find((item) => item.key === selectedKey) ||
     timeline.items.find((item) => item.key === timeline.selectedKey) ||
     null;
-  const attentionAll = useMemo(() => buildAttentionItems(today, todayDerived, asOf), [asOf, today, todayDerived]);
+  const attentionAll = useMemo(() => attentionItems(today, todayDerived, asOf), [asOf, today, todayDerived]);
   // Items marked as seen stay out of the list and the counts until something new brings them back.
   const attention = attentionAll.filter((item) => !item.dismissed);
   const seenAttention = attentionAll.filter((item) => item.dismissed);
@@ -275,15 +289,12 @@ export default function Home({
       onDismiss={actions?.setNotesDismissed}
     />
   );
-  const metrics = useMemo(
-    () => buildPeriodMetrics(state, derived, asOf, shownPeriod),
-    [asOf, derived, shownPeriod, state],
-  );
+  const metrics = useMemo(() => periodMetrics(state, derived, asOf, shownPeriod), [asOf, derived, shownPeriod, state]);
   const buildForGroup = useCallback(
     (group) => buildPeriodMetrics(state, derived, asOf, shownPeriod, group),
     [asOf, derived, shownPeriod, state],
   );
-  const rows = useMemo(() => studentPeriodRows(state, derived, asOf, shownPeriod), [asOf, derived, shownPeriod, state]);
+  const rows = useMemo(() => periodRows(state, derived, asOf, shownPeriod), [asOf, derived, shownPeriod, state]);
   const studentsById = useMemo(
     () => new Map((state.students || []).map((student) => [student.id, student])),
     [state.students],
@@ -384,7 +395,7 @@ export default function Home({
 
   if (compact) {
     return (
-      <div className="page home-page is-compact">
+      <div className={pageClass}>
         <header className="hi">
           <span className="overline">{formatLongDate(asOf, locale)}</span>
           <h1>{t("Hi, Teacher")}</h1>
@@ -468,7 +479,7 @@ export default function Home({
   }
 
   return (
-    <div className="page home-page">
+    <div className={pageClass}>
       <header className="home-hello">
         <span className="overline">
           {formatDayMonth(asOf, locale) ? `${formatLongDate(asOf, locale)} · ${formatTime(nowTime, locale)}` : ""}

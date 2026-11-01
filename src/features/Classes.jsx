@@ -18,6 +18,7 @@ import { StudentAvatar } from "../components/StudentAvatar";
 import { useCompactViewport } from "../components/OverlayContext";
 import { useConfirmPrompt } from "../components/ConfirmPrompt";
 import { addDays, startOfWeek, todayDateOnly } from "../domain/dates";
+import { memoizeRecent } from "../domain/stateMemo";
 import { scheduledClassSupportsFutureScope } from "../domain";
 import {
   deriveMonthlyCharges,
@@ -74,6 +75,9 @@ import { EditClassDrawer } from "./EditClassDrawer";
 import "../i18n/screenTranslations.js";
 import { MonthlyFeePay } from "./MonthlyFeePay";
 import "./classes.css";
+
+// Outside the component, so returning to Clases with the same records reuses the sessions already built.
+const workspaceSessions = memoizeRecent(buildClassWorkspaceSessions);
 
 const TABS = [
   { value: "next", label: "Next class" },
@@ -414,7 +418,7 @@ export default function Classes({
   const { t, locale } = useI18n();
   const compact = useCompactViewport();
   const currentDate = asOfDate || state.settings?.asOfDate || todayDateOnly();
-  const sessions = useMemo(() => buildClassWorkspaceSessions(state, currentDate), [currentDate, state]);
+  const sessions = useMemo(() => workspaceSessions(state, currentDate), [currentDate, state]);
   const [currentTime, setCurrentTime] = useState(() => nowTimeFor(currentDate, todayDateOnly()));
   useEffect(() => {
     const update = () => setCurrentTime(nowTimeFor(currentDate, todayDateOnly()));

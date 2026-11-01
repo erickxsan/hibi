@@ -11,8 +11,25 @@ function utcDate(year, month, day) {
   return value;
 }
 
+// Every calculation checks the same few hundred dates over and over (each row, each range, each week), so
+// results are remembered. The caches are bounded because a long session can see arbitrary strings.
+const CACHE_LIMIT = 20_000;
+const dateOnlyChecks = new Map();
+const shiftedDates = new Map();
+
+function remember(cache, key, value) {
+  if (cache.size >= CACHE_LIMIT) cache.clear();
+  cache.set(key, value);
+  return value;
+}
+
 export function isDateOnly(value) {
-  if (typeof value !== "string") return false;
+  if (typeof value !== "string" || value.length !== 10) return false;
+  const known = dateOnlyChecks.get(value);
+  return known === undefined ? remember(dateOnlyChecks, value, checkDateOnly(value)) : known;
+}
+
+function checkDateOnly(value) {
   const match = DATE_ONLY_RE.exec(value);
   if (!match) return false;
   const year = Number(match[1]);
@@ -24,8 +41,7 @@ export function isDateOnly(value) {
 
 export function parseDateOnly(value) {
   if (!isDateOnly(value)) throw new TypeError(`Invalid date-only value: ${String(value)}`);
-  const [year, month, day] = value.split("-").map(Number);
-  return utcDate(year, month, day);
+  return utcDate(Number(value.slice(0, 4)), Number(value.slice(5, 7)), Number(value.slice(8, 10)));
 }
 
 export function formatDateOnly(value) {
@@ -60,9 +76,12 @@ export function compareDateOnly(left, right) {
 
 export function addDays(value, amount) {
   if (!Number.isInteger(amount)) throw new TypeError("Day offset must be an integer");
+  const key = `${value}|${amount}`;
+  const known = shiftedDates.get(key);
+  if (known !== undefined) return known;
   const date = parseDateOnly(value);
   date.setUTCDate(date.getUTCDate() + amount);
-  return formatDateOnly(date);
+  return remember(shiftedDates, key, formatDateOnly(date));
 }
 
 export function addMonths(value, amount) {

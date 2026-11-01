@@ -133,17 +133,40 @@
   border-radius: 1px;
   background: var(--sumi);
   transform-origin: left center;
-  animation: tl-grow 1.4s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation: tl-grow 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
 .home-page .free {
   position: absolute;
   top: 86px;
   height: 2px;
+}
+
+/* The dashes march by sliding a strip one dash period wider than its clipped box: a transform the GPU moves
+   without repainting, where animating background-position repainted the line on every frame. */
+.home-page .dash {
+  position: relative;
+  display: block;
+  height: 2px;
+  overflow: hidden;
+  opacity: 0.55;
+}
+
+.home-page .free .dash {
+  position: absolute;
+  inset: 0;
+}
+
+.home-page .dash::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -12px;
+  right: 0;
   background-image: linear-gradient(90deg, var(--bermellon) 0 6px, transparent 6px 12px);
   background-size: 12px 2px;
   animation: tl-flow 1.2s linear infinite;
-  opacity: 0.55;
 }
 
 .home-page .free b {
@@ -157,7 +180,7 @@
   font: 700 12px/16px var(--font-sans);
   color: var(--sumi-muted);
   white-space: nowrap;
-  animation: tl-in 0.6s 0.9s ease-out both;
+  animation: tl-in 0.4s 0.4s ease-out both;
 }
 
 .home-page .blk {
@@ -226,13 +249,16 @@
   border: 2px solid var(--sumi);
 }
 
+/* The halo is drawn once and only its opacity breathes, so it never repaints. */
 .home-page .blk.next::after {
   content: "";
   position: absolute;
   inset: -2px;
   border-radius: 12px;
   pointer-events: none;
-  animation: tl-breathe 2.8s 1.2s ease-in-out infinite;
+  box-shadow: 0 0 0 7px color-mix(in srgb, var(--bermellon) 14%, transparent);
+  opacity: 0;
+  animation: tl-breathe 2.8s 0.6s ease-in-out infinite;
 }
 
 .home-page .blk.next .bl,
@@ -290,7 +316,7 @@
   border-radius: 1px;
   background: var(--bermellon);
   transform-origin: top;
-  animation: tl-drop 0.8s 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation: tl-drop 0.5s 0.15s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
 .home-page .nl {
@@ -304,7 +330,7 @@
   color: var(--on-accent);
   font: 800 12px/16px var(--font-sans);
   white-space: nowrap;
-  animation: tl-in 0.5s 0.3s ease-out both;
+  animation: tl-in 0.4s 0.15s ease-out both;
 }
 
 .home-page .nd {
@@ -368,17 +394,13 @@
 
 @keyframes tl-flow {
   to {
-    background-position: 12px 0;
+    transform: translateX(12px);
   }
 }
 
 @keyframes tl-breathe {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 transparent;
-  }
   50% {
-    box-shadow: 0 0 0 7px color-mix(in srgb, var(--bermellon) 14%, transparent);
+    opacity: 1;
   }
 }
 
@@ -1404,14 +1426,9 @@
   color: var(--sumi-muted);
 }
 
-.home-page .now span::after {
-  content: "";
+.home-page .now .dash {
   flex: 1;
-  height: 2px;
-  background-image: linear-gradient(90deg, var(--bermellon) 0 6px, transparent 6px 12px);
-  background-size: 12px 2px;
   opacity: 0.45;
-  animation: tl-flow 1.2s linear infinite;
 }
 
 .home-page .nx {
@@ -1788,8 +1805,19 @@
   width: 100%;
 }
 
+/* Back on Inicio in the same session: what draws itself in jumps straight to where it ends, so the screen is
+   ready at once and looks exactly as it did when the first visit's animation finished. The staggered delays are
+   inline styles, hence !important. */
+.home-page.is-revisit :is(.rail-past, .free b, .blk, .nl, .dcard, .rs, .nx, .spark i),
+.home-page.is-revisit .needle::before {
+  animation-duration: 0s;
+  animation-delay: 0s !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .home-page *,
+  .home-page *::before,
+  .home-page *::after,
   .metric-sheet * {
     animation: none !important;
   }

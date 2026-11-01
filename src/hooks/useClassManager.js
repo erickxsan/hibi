@@ -20,7 +20,7 @@ import {
   REAL_ROSTER_BACKUP_KEY,
   REAL_ROSTER_MIGRATION_KEY,
   safeLoadStateWithMigrations,
-  saveState,
+  saveSerializedState,
   serializeState,
   startOfMonth,
   STORAGE_KEY,
@@ -280,25 +280,31 @@ function upsertManyById(currentItems, nextItems) {
 }
 
 export async function persistRecipe({ baseState, recipe, adapter, replace = false, importMetadata = null }) {
-  const canonicalize = (state) => importState(serializeState(state));
-  const persist = async (state) => {
+  const cloudEdit = adapter?.mode === "cloud" && !replace && !importMetadata;
+  // One trip through the strict serializer normalizes and validates the edit. Its text is what this device
+  // stores and what later edits compare against, so nothing serializes the whole workspace a second time.
+  const canonicalize = (state) => {
+    const serialized = serializeState(state);
+    return { state: importState(serialized), serialized };
+  };
+  const persist = async (candidate) => {
+    const { state } = candidate;
+    if (!adapter?.importRecords && !adapter?.replace && !adapter?.save) {
+      saveSerializedState(candidate.serialized);
+      return { ...candidate, pending: false };
+    }
     const result =
       importMetadata && adapter?.importRecords
         ? await adapter.importRecords(state, importMetadata)
         : replace && adapter?.replace
           ? await adapter.replace(state)
-          : adapter?.save
-            ? await adapter.save(state, baseState)
-            : saveState(state);
+          : await adapter.save(state, baseState);
     const saved = result?.state ?? result ?? state;
-    return {
-      state: adapter?.mode === "cloud" && !replace && !importMetadata ? saved : canonicalize(saved),
-      pending: Boolean(result?.pending),
-    };
+    const settled = cloudEdit ? { state: saved, serialized: null } : saved === state ? candidate : canonicalize(saved);
+    return { ...settled, pending: Boolean(result?.pending) };
   };
 
-  const next =
-    adapter?.mode === "cloud" && !replace && !importMetadata ? recipe(baseState) : canonicalize(recipe(baseState));
+  const next = cloudEdit ? { state: recipe(baseState), serialized: null } : canonicalize(recipe(baseState));
   try {
     const result = await persist(next);
     return { ...result, mergedConflict: false };
@@ -307,10 +313,15 @@ export async function persistRecipe({ baseState, recipe, adapter, replace = fals
     // the newest revision, preserving unrelated changes from another device.
     // Full backup replacement is intentionally never merged automatically.
     if (replace || importMetadata || !error?.latestState || typeof adapter?.save !== "function") throw error;
-    const latest = canonicalize(error.latestState);
+    const latest = canonicalize(error.latestState).state;
     const rebased = recipe(latest);
     const retried = await adapter.save(rebased, latest);
-    return { state: retried?.state ?? retried ?? rebased, pending: Boolean(retried?.pending), mergedConflict: true };
+    return {
+      state: retried?.state ?? retried ?? rebased,
+      serialized: null,
+      pending: Boolean(retried?.pending),
+      mergedConflict: true,
+    };
   }
 }
 
@@ -347,7 +358,9 @@ export function useClassManager({ persistence } = {}) {
   const stateRef = useRef(initial.state);
   const mountedRef = useRef(true);
   const persistenceRef = useRef(persistence);
-  const persistedSnapshot = useRef(serializeState(initial.state));
+  // Serialized once: an argument to useRef would be recomputed (and thrown away) on every render.
+  const [initialSnapshot] = useState(() => serializeState(initial.state));
+  const persistedSnapshot = useRef(initialSnapshot);
   const operationQueue = useRef(Promise.resolve());
   const pendingWrites = useRef(0);
   const [syncStatus, setSyncStatus] = useState(
@@ -429,12 +442,13 @@ export function useClassManager({ persistence } = {}) {
             importMetadata,
           });
           if (!mountedRef.current) return false;
+          // A local save already returns the canonical state together with the exact text it stored.
           const saved =
-            adapter?.mode === "cloud" && !replace && !importMetadata
+            (adapter?.mode === "cloud" && !replace && !importMetadata) || result.serialized
               ? result.state
               : importState(serializeState(result.state));
           stateRef.current = saved;
-          if (adapter?.mode !== "cloud") persistedSnapshot.current = serializeState(saved);
+          if (adapter?.mode !== "cloud") persistedSnapshot.current = result.serialized ?? serializeState(saved);
           setCanonicalState(saved);
           if (result.mergedConflict) notify("Your edit was safely combined with a newer cloud change.");
           if (successMessage) notify(successMessage);

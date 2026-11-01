@@ -1,4 +1,5 @@
-import { deserializeState, MAX_BACKUP_BYTES } from "../domain/index.js";
+import { MAX_BACKUP_BYTES } from "../domain/index.js";
+import { canonicalWorkspaceState } from "./canonicalWorkspaceState.js";
 import {
   canonicalWorkspaceHash,
   createImportFingerprint,
@@ -94,7 +95,7 @@ function firstRow(data) {
 }
 
 function canonicalState(value) {
-  return deserializeState(JSON.stringify(value));
+  return canonicalWorkspaceState(value);
 }
 
 function byteLength(value) {
@@ -720,6 +721,11 @@ export function createEncryptedWorkspaceRepository(
       throw invalid;
     }
     return prepareMutation({ state, workspace: latest, session });
+  }
+
+  /** Whether a verified revision of this workspace is at hand, so an edit can be sent without a full load. */
+  function hasVerifiedWorkspace(workspaceCryptoId) {
+    return Boolean(cache && cache.workspaceCryptoId === workspaceCryptoId);
   }
 
   function optimisticWorkspace(workspace, mutation, session) {
@@ -1704,6 +1710,7 @@ export function createEncryptedWorkspaceRepository(
     loadWorkspace,
     prepareMutation,
     optimisticWorkspace,
+    hasVerifiedWorkspace,
     projectPendingWorkspace,
     applyMutation,
     resolveMutation,

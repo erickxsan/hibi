@@ -63,6 +63,8 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
   const syncMessageRef = useRef("");
   const flushPromiseRef = useRef(null);
   const forceFlushLoadRef = useRef(false);
+  // A full download and verification was asked for and not done yet; the next flush starts with it.
+  const reloadFlushRef = useRef(false);
   const mutationGenerationRef = useRef(0);
   const rerunFlushRef = useRef(false);
   const clearingDeviceRef = useRef(false);
@@ -198,14 +200,16 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
   }, [publishLatest, serialize]);
 
   const flushPending = useCallback(
-    ({ onlyIfQueued = false } = {}) => {
+    ({ onlyIfQueued = false, reload = true } = {}) => {
       if (clearingDeviceRef.current) return Promise.resolve({ status: "paused" });
       if (resolvingRef.current) return Promise.resolve({ status: "pending" });
       if (flushPromiseRef.current) {
         if (!onlyIfQueued) forceFlushLoadRef.current = true;
+        if (!onlyIfQueued && reload) reloadFlushRef.current = true;
         return flushPromiseRef.current;
       }
       forceFlushLoadRef.current = !onlyIfQueued;
+      if (!onlyIfQueued && reload) reloadFlushRef.current = true;
       globalThis.clearTimeout(retryTimerRef.current);
       retryTimerRef.current = null;
       const generation = mutationGenerationRef.current;
@@ -242,11 +246,21 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
         if (!["conflict", "error"].includes(syncStatusRef.current)) {
           updateSync("pending", "Verifying encrypted changes and pending operations.");
         }
-        const witness = await deviceKeyStore.readIntegrity({
-          ownerId: user.id,
-          workspaceCryptoId: cryptoSession.workspaceCryptoId,
-        });
-        acceptConfirmed(await encryptedWorkspaceRepository.loadWorkspace(cryptoSession, user.id, witness || {}));
+        // An edit saved a moment ago is sent on top of the newest revision this device verified. The server
+        // refuses it if another revision landed meanwhile, and only then is every record downloaded and checked
+        // again, so a phone does not fetch and decrypt the whole workspace for each tap. Retries, reconnects
+        // and anything else still start from a full verified load.
+        if (
+          reloadFlushRef.current ||
+          !encryptedWorkspaceRepository.hasVerifiedWorkspace?.(cryptoSession.workspaceCryptoId)
+        ) {
+          const witness = await deviceKeyStore.readIntegrity({
+            ownerId: user.id,
+            workspaceCryptoId: cryptoSession.workspaceCryptoId,
+          });
+          reloadFlushRef.current = false;
+          acceptConfirmed(await encryptedWorkspaceRepository.loadWorkspace(cryptoSession, user.id, witness || {}));
+        }
         const held = new Set();
         for (const entry of queued) {
           const keys = operationEntityKeys(entry.mutation);
@@ -309,7 +323,8 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
           publishIfBehind();
           if (!clearingDeviceRef.current && rerunFlushRef.current) {
             rerunFlushRef.current = false;
-            globalThis.setTimeout?.(() => void flushPending(), 0);
+            // Edits queued while this flush ran; whatever else asked for a full load already had it.
+            globalThis.setTimeout?.(() => void flushPending({ reload: false }), 0);
           }
         });
       flushPromiseRef.current = task;
@@ -438,7 +453,7 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
         // The caller receives its own optimistic edit; subscribers receive confirmed snapshots.
         applyWorkspace(optimistic, { notify: false });
         updateSync("pending", "Encrypted changes are safe on this device and waiting to sync.");
-        globalThis.setTimeout?.(() => void flushPending(), 0);
+        globalThis.setTimeout?.(() => void flushPending({ reload: false }), 0);
         return { state: optimistic.state, pending: true };
       });
       task.catch((caught) => {

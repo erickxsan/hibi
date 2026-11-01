@@ -112,6 +112,7 @@ export {
   removeSavedState,
   safeLoadState,
   safeLoadStateWithMigrations,
+  saveSerializedState,
   saveState,
   serializeState,
   StorageUnavailableError,

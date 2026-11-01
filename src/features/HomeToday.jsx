@@ -148,6 +148,7 @@ export function TodayTimeline({ timeline, selectedKey, onSelect }) {
             className="free"
             style={{ left: `${pct(timeline.now)}%`, width: `${pct(timeline.next.start) - pct(timeline.now)}%` }}
           >
+            <i className="dash" aria-hidden="true" />
             {pct(timeline.next.start) - pct(timeline.now) > 14 ? (
               <b>{t("Free · {span}", { span: formatSpan(timeline.freeMinutes) })}</b>
             ) : null}
@@ -361,6 +362,7 @@ export function TodayAgenda({ timeline, onRecord, onOpen, onDismissNotes = undef
             {timeline.freeMinutes > 0 ? (
               <em>· {t("{span} free", { span: formatSpan(timeline.freeMinutes) })}</em>
             ) : null}
+            <b className="dash" aria-hidden="true" />
           </span>
         </div>,
       );
@@ -434,7 +436,10 @@ export function TodayAgenda({ timeline, onRecord, onOpen, onDismissNotes = undef
     rows.push(
       <div className="now" key="now">
         <i />
-        <span>{t("{time} now", { time: clockLabel(timeline.now, locale, { suffix: false }) })}</span>
+        <span>
+          {t("{time} now", { time: clockLabel(timeline.now, locale, { suffix: false }) })}
+          <b className="dash" aria-hidden="true" />
+        </span>
       </div>,
     );
   return (

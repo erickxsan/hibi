@@ -102,10 +102,14 @@ export function importState(text) {
 }
 
 export function saveState(state, storage = getDefaultStorage(), key = STORAGE_KEY) {
-  const target = requireStorage(storage);
   const serialized = serializeState(state);
-  target.setItem(key, serialized);
+  saveSerializedState(serialized, storage, key);
   return deserializeState(serialized);
+}
+
+/** Stores text that already came out of serializeState, so an edit is validated once, not again on save. */
+export function saveSerializedState(serialized, storage = getDefaultStorage(), key = STORAGE_KEY) {
+  requireStorage(storage).setItem(key, serialized);
 }
 
 export function loadState(storage = getDefaultStorage(), key = STORAGE_KEY) {

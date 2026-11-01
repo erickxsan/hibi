@@ -1,4 +1,4 @@
-import { deserializeState } from "../domain/index.js";
+import { canonicalWorkspaceState } from "./canonicalWorkspaceState.js";
 
 const DATABASE_NAME = "hibi-device-recovery-v1";
 const RECOVERY_STORE = "workspace-copies";
@@ -21,7 +21,7 @@ export function workspaceCounts(state) {
 }
 
 function canonicalState(state) {
-  return deserializeState(JSON.stringify(state));
+  return canonicalWorkspaceState(state);
 }
 
 function canonicalWorkspace(workspace) {
@@ -130,10 +130,14 @@ export function createDeviceRecoveryStore(indexedDb = globalThis.indexedDB, cryp
   }
 
   async function seal(database, ownerId, value) {
+    return sealText(database, ownerId, JSON.stringify(value));
+  }
+
+  async function sealText(database, ownerId, text) {
     const key = await encryptionKey(database, ownerId);
     const iv = cryptoApi.getRandomValues(new Uint8Array(12));
     const additionalData = new TextEncoder().encode(ownerId);
-    const plaintext = new TextEncoder().encode(JSON.stringify(value));
+    const plaintext = new TextEncoder().encode(text);
     const ciphertext = await cryptoApi.subtle.encrypt({ name: "AES-GCM", iv, additionalData }, key, plaintext);
     return { version: 1, iv, ciphertext };
   }
@@ -265,9 +269,19 @@ export function createDeviceRecoveryStore(indexedDb = globalThis.indexedDB, cryp
     if (!database) throw new Error("Encrypted offline storage is unavailable. The change was not applied.");
     const safeWorkspace = canonicalWorkspace(workspace);
     let createdAt = new Date().toISOString();
-    const operationPayload = await seal(database, ownerId, { mutation, workspace: safeWorkspace });
-    const cachePayload = await seal(database, ownerId, safeWorkspace);
-    const backupPayload = await seal(database, ownerId, safeWorkspace.state);
+    // The outbox entry, the cache and the backup all hold this workspace. Its JSON is written once and reused
+    // (state first, as canonicalWorkspace orders it), giving the same text JSON.stringify would for each payload.
+    const { state, ...workspaceDetails } = safeWorkspace;
+    const stateText = JSON.stringify(state);
+    const detailsText = JSON.stringify(workspaceDetails);
+    const workspaceText = `{"state":${stateText}${detailsText === "{}" ? "}" : `,${detailsText.slice(1)}`}`;
+    const operationPayload = await sealText(
+      database,
+      ownerId,
+      `{"mutation":${JSON.stringify(mutation)},"workspace":${workspaceText}}`,
+    );
+    const cachePayload = await sealText(database, ownerId, workspaceText);
+    const backupPayload = await sealText(database, ownerId, stateText);
     const transaction = database.transaction([OUTBOX_STORE, CACHE_STORE, RECOVERY_STORE], "readwrite");
     const done = transactionDone(transaction);
     const outbox = transaction.objectStore(OUTBOX_STORE);

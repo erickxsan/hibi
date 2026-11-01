@@ -209,9 +209,10 @@ describe("monthly fees block", () => {
     expect(block.group.id).toBe("g2");
     expect(block).toMatchObject({ paidCount: 0, total: 1, expectedAmount: 1000, dueDate: "2026-10-05" });
     expect(block.rows[0].charge.status).toBe("overdue");
-    state.students[2].monthlyPayments = [
-      { id: "m1", groupId: "g2", period: "2026-10", amount: 1000, paidAt: "2026-10-20" },
-    ];
+    state.students[2] = {
+      ...state.students[2],
+      monthlyPayments: [{ id: "m1", groupId: "g2", period: "2026-10", amount: 1000, paidAt: "2026-10-20" }],
+    };
     expect(monthlyBlocks(state, AS_OF)[0]).toMatchObject({ paidCount: 1, paidAmount: 1000 });
     expect(monthlyBlocks(state, AS_OF, "g1")).toEqual([]);
   });

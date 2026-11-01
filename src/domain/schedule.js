@@ -1,6 +1,7 @@
 import { addDays, isDateInRange, isDateOnly, parseDateOnly } from "./dates.js";
 import { isGroupArchived } from "./groupArchiving.js";
 import { normalizeRepeatRule, repeatRuleOccursOn } from "./classRecurrence.js";
+import { memoizeOnState } from "./stateMemo.js";
 
 export const DAY_OPTIONS = Object.freeze([
   { value: 1, label: "Monday", short: "Mon" },
@@ -16,9 +17,15 @@ function finiteNumber(value) {
   return typeof value === "number" && Number.isFinite(value);
 }
 
+const weekdays = new Map();
+
 export function dayOfWeekForDate(value) {
   if (!isDateOnly(value)) return null;
+  const known = weekdays.get(value);
+  if (known) return known;
   const day = parseDateOnly(value).getUTCDay();
+  if (weekdays.size >= 20_000) weekdays.clear();
+  weekdays.set(value, day === 0 ? 7 : day);
   return day === 0 ? 7 : day;
 }
 
@@ -41,13 +48,20 @@ export function resolveHourlyRate(state, studentOrId, groupOrId = "") {
   return finiteNumber(state?.settings?.hourlyRate) ? state.settings.hourlyRate : null;
 }
 
-function resolvedSlot(state, group, slot, date) {
-  const changes = (state.scheduleChanges || [])
-    .filter(
-      (change) => change.groupId === group.id && change.scheduleSlotId === slot.id && change.effectiveFrom <= date,
-    )
+/** The slot's schedule changes, oldest first, so each day only has to find the last one already in effect. */
+function slotChanges(state, group, slot) {
+  return (state.scheduleChanges || [])
+    .filter((change) => change.groupId === group.id && change.scheduleSlotId === slot.id)
     .sort((left, right) => left.effectiveFrom.localeCompare(right.effectiveFrom));
-  return changes.length ? { ...slot, ...changes.at(-1) } : slot;
+}
+
+function resolvedSlot(slot, changes, date) {
+  let latest = null;
+  for (const change of changes) {
+    if (change.effectiveFrom > date) break;
+    latest = change;
+  }
+  return latest ? { ...slot, ...latest } : slot;
 }
 
 function occurrenceId(groupId, scheduleSlotId, occurrenceDate) {
@@ -101,21 +115,32 @@ function targetOwner(state, source, exception = null) {
   };
 }
 
-function hasRecordedRows(classLog, occurrence) {
-  return classLog.some(
-    (row) =>
-      row.classDate === occurrence.classDate &&
-      (row.startTime || "") === (occurrence.startTime || "") &&
-      (occurrence.format === "group" ? row.groupId === occurrence.groupId : row.studentId === occurrence.studentId),
-  );
+function recordedKey(classDate, startTime, owner) {
+  return `${classDate}|${startTime || ""}|${owner}`;
 }
 
-export function generateScheduledOccurrences(state, startDate, endDate) {
+/** One pass over the class log, so checking whether an occurrence was recorded does not rescan every row. */
+function recordedRowsIndex(classLog) {
+  const keys = new Set();
+  for (const row of classLog) {
+    keys.add(recordedKey(row.classDate, row.startTime, `g:${row.groupId}`));
+    keys.add(recordedKey(row.classDate, row.startTime, `s:${row.studentId}`));
+  }
+  return keys;
+}
+
+function hasRecordedRows(recorded, occurrence) {
+  const owner = occurrence.format === "group" ? `g:${occurrence.groupId}` : `s:${occurrence.studentId}`;
+  return recorded.has(recordedKey(occurrence.classDate, occurrence.startTime, owner));
+}
+
+function scheduledOccurrences(state, startDate, endDate) {
   if (!isDateOnly(startDate) || !isDateOnly(endDate) || startDate > endDate) return [];
   const groups = Array.isArray(state?.groups) ? state.groups : [];
   const exceptions = Array.isArray(state?.scheduleExceptions) ? state.scheduleExceptions : [];
   const classLog = Array.isArray(state?.classLog) ? state.classLog : [];
   const classSchedules = Array.isArray(state?.classSchedules) ? state.classSchedules : [];
+  const recorded = recordedRowsIndex(classLog);
   const exceptionByKey = new Map(
     exceptions.filter((item) => item.kind !== "added").map((item) => [exceptionSourceKey(item), item]),
   );
@@ -126,8 +151,9 @@ export function generateScheduledOccurrences(state, startDate, endDate) {
   for (const group of groups) {
     if (isGroupArchived(group)) continue;
     for (const slot of group.weeklySchedule || []) {
+      const changes = slotChanges(state, group, slot);
       for (let date = scanStart; date <= scanEnd; date = addDays(date, 1)) {
-        const rule = resolvedSlot(state, group, slot, date);
+        const rule = resolvedSlot(slot, changes, date);
         if (rule.status === "Cancelled") continue;
         if (dayOfWeekForDate(date) !== Number(rule.dayOfWeek)) continue;
         const exception = exceptionByKey.get(`group:${group.id}:${slot.id}:${date}`);
@@ -149,7 +175,7 @@ export function generateScheduledOccurrences(state, startDate, endDate) {
           recorded: false,
         };
         if (!isDateInRange(occurrence.classDate, startDate, endDate)) continue;
-        occurrence.recorded = hasRecordedRows(classLog, occurrence);
+        occurrence.recorded = hasRecordedRows(recorded, occurrence);
         result.push(occurrence);
       }
     }
@@ -175,7 +201,7 @@ export function generateScheduledOccurrences(state, startDate, endDate) {
       exceptionId: exception.id,
       recorded: false,
     };
-    occurrence.recorded = hasRecordedRows(classLog, occurrence);
+    occurrence.recorded = hasRecordedRows(recorded, occurrence);
     result.push({
       ...occurrence,
     });
@@ -206,7 +232,7 @@ export function generateScheduledOccurrences(state, startDate, endDate) {
         recorded: false,
       };
       if (!isDateInRange(occurrence.classDate, startDate, endDate)) continue;
-      occurrence.recorded = hasRecordedRows(classLog, occurrence);
+      occurrence.recorded = hasRecordedRows(recorded, occurrence);
       result.push(occurrence);
     }
   }
@@ -250,12 +276,13 @@ export function generateScheduledOccurrences(state, startDate, endDate) {
       exceptionId: exception.id,
       recorded: false,
     };
-    occurrence.recorded = hasRecordedRows(classLog, occurrence);
+    occurrence.recorded = hasRecordedRows(recorded, occurrence);
     result.push(occurrence);
   }
 
   // A group's schedule counts from its start (creation or reactivation day). A one-off class the
   // teacher added on purpose for an earlier date stays visible so it can still be recorded.
+  const seenIds = new Set();
   const startsBy = (group, item) =>
     !group?.scheduleResumeDate || item.kind === "added" || item.classDate >= group.scheduleResumeDate;
   return result
@@ -264,8 +291,13 @@ export function generateScheduledOccurrences(state, startDate, endDate) {
       const target = groups.find((group) => group.id === item.groupId);
       return !isGroupArchived(source) && !isGroupArchived(target) && startsBy(source, item) && startsBy(target, item);
     })
-    .filter((item, index, all) => all.findIndex((candidate) => candidate.id === item.id) === index)
+    .filter((item) => !seenIds.has(item.id) && seenIds.add(item.id))
     .sort(
       (left, right) => left.classDate.localeCompare(right.classDate) || left.startTime.localeCompare(right.startTime),
     );
 }
+
+export const generateScheduledOccurrences = memoizeOnState(
+  scheduledOccurrences,
+  (startDate, endDate) => `${startDate}|${endDate}`,
+);
