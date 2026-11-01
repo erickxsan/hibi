@@ -1,8 +1,19 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
-import { afterEach, vi } from "vitest";
+import { afterEach, beforeEach, vi } from "vitest";
+
+// Screens read «today» from the clock. Every test starts on the same day of October 2026, the month
+// the fixtures describe, so the suite gives the same result whatever day it runs (CI runs in UTC).
+// A test may still set its own date; HIBI_TEST_NOW tries the suite on another day.
+const TEST_NOW = new Date(process.env.HIBI_TEST_NOW || "2026-10-21T12:00:00");
+
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"], shouldAdvanceTime: true });
+  vi.setSystemTime(TEST_NOW);
+});
 
 afterEach(async () => {
+  vi.useRealTimers();
   if (typeof document !== "undefined") {
     cleanup();
     document.body.innerHTML = "";
