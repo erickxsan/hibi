@@ -59,53 +59,71 @@
   margin-left: 0;
 }
 
-/* Mensualidades */
-.mens {
-  display: grid;
-  grid-template-columns: minmax(230px, 270px) minmax(0, 1fr);
-  gap: 28px;
-  padding: 18px 20px;
+/* Mensualidades bajo las gráficas: una tarjeta, una línea por grupo y filas densas. */
+.tracking-fees {
+  display: flex;
+  flex-direction: column;
+  padding: 14px 18px 8px;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--papel);
 }
 
-.mhd {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.tracking-fees > .overline {
+  margin: 0 0 2px;
 }
 
-.mhd h2 {
+.mens {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 0 6px;
+}
+
+.mens + .mens {
+  border-top: 1px solid var(--line-soft);
+}
+
+.mhd {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: baseline;
+  column-gap: 12px;
+  row-gap: 6px;
+}
+
+.mhd h3 {
   margin: 0;
-  font: 800 20px/26px var(--font-sans);
+  font: 800 15px/20px var(--font-sans);
 }
 
 .mhd p {
+  overflow: hidden;
   margin: 0;
-  font: 500 13px/18px var(--font-sans);
+  font: 500 12px/16px var(--font-sans);
   color: var(--sumi-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-.mprog {
+.mhd-sum {
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.mprog b {
-  font: 800 26px/30px var(--font-sans);
-  font-variant-numeric: tabular-nums;
-}
-
-.mprog span {
-  font: 600 13px/18px var(--font-sans);
+  gap: 6px;
+  font: 600 12px/16px var(--font-sans);
   color: var(--sumi-muted);
+  white-space: nowrap;
+}
+
+.mhd-sum b {
+  font: 800 14px/18px var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  color: var(--sumi);
 }
 
 .pbar {
-  height: 6px;
+  grid-column: 1 / -1;
+  height: 3px;
   overflow: hidden;
   border-radius: var(--radius-pill);
   background: var(--washi);
@@ -120,7 +138,7 @@
 }
 
 .mhd small {
-  margin-top: 4px;
+  grid-column: 1 / -1;
   font: 500 12px/16px var(--font-sans);
   color: var(--sumi-muted);
 }
@@ -128,25 +146,24 @@
 .mlist {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   column-gap: 24px;
   align-content: start;
 }
 
 .mrow {
   min-width: 0;
-  min-height: 60px;
+  min-height: 40px;
   display: flex;
   align-items: center;
-  gap: 12px;
-  border-bottom: 1px solid var(--line-soft);
+  gap: 10px;
 }
 
 .mrow .student-animal-avatar {
-  width: 34px;
-  height: 34px;
+  width: 24px;
+  height: 24px;
   flex: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
 }
 
 .mrow .nm {
@@ -156,13 +173,16 @@
 
 .mrow strong {
   display: block;
-  font: 700 14px/18px var(--font-sans);
+  overflow: hidden;
+  font: 600 13px/18px var(--font-sans);
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .mrow small {
   display: block;
   overflow: hidden;
-  font: 500 12px/16px var(--font-sans);
+  font: 500 11px/14px var(--font-sans);
   color: var(--sumi-muted);
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -177,24 +197,19 @@
   white-space: normal;
 }
 
-@media (max-width: 780px) {
-  .mrow small {
-    white-space: normal;
-  }
-}
-
-.mamt {
-  font: 800 14px/18px var(--font-sans);
+.mamt,
+.mens .fee-amount {
+  font: 800 13px/18px var(--font-sans);
   font-variant-numeric: tabular-nums;
 }
 
 .mbtn {
-  height: 32px;
-  padding: 0 12px;
-  border: 1.5px solid var(--line-control);
-  border-radius: 9px;
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid var(--line-control);
+  border-radius: 7px;
   background: var(--papel);
-  font: 700 13px/16px var(--font-sans);
+  font: 700 12px/16px var(--font-sans);
   color: var(--sumi);
   white-space: nowrap;
   cursor: pointer;
@@ -219,6 +234,28 @@
   text-decoration: underline;
   text-underline-offset: 2px;
   cursor: pointer;
+}
+
+@media (max-width: 980px) {
+  .mhd {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .mhd p {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
+/* Its field grows to 16px on touch screens (see design-system.css), so the «$» grows with it. */
+@media (pointer: coarse) {
+  .mens .fee-amount {
+    font-size: 16px;
+  }
+
+  .mbtn {
+    height: 32px;
+  }
 }
 
 /* Resumen: gráfica y lista ligada */
@@ -710,47 +747,6 @@
   color: var(--sumi-muted);
 }
 
-.tracking-page.is-compact .mens {
-  grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
-  padding: 16px;
-  border-radius: var(--radius-xl);
-}
-
-.mhd-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.mhd-count {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-}
-
-.mhd-count b {
-  font: 800 24px/28px var(--font-sans);
-}
-
-.mhd-count small {
-  margin: 0;
-  font: 500 13px/18px var(--font-sans);
-}
-
-.tracking-page.is-compact .mlist {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.mfoot {
-  margin: 0;
-  padding-top: 10px;
-  border-top: 1px solid var(--line-soft);
-  font: 500 13px/18px var(--font-sans);
-  color: var(--sumi-muted);
-}
-
 .tracking-bars .ch {
   position: relative;
   height: 170px;
@@ -897,16 +893,6 @@
 
 @media (max-width: 980px) {
   .tracking-cols {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .mens {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-@media (max-width: 1180px) {
-  .mlist {
     grid-template-columns: minmax(0, 1fr);
   }
 }

@@ -82,14 +82,12 @@ export const TRACKING_TRANSLATIONS = Object.freeze({
   "Monthly fees · {month}": "Mensualidades · {month}",
   "Monthly fees · {month} · {group}": "Mensualidades · {month} · {group}",
   "{paid} of {total}": "{paid} de {total}",
-  "paid (plural)": "pagadas",
   "{amount} a month": "{amount} al mes",
   "due on day {day}": "vence el día {day}",
   "due at class {nth} of the month": "vence en la {nth} clase del mes",
   "paid · {amount} of {expected}": "pagadas · {amount} de {expected}",
   "Monthly fees paid": "Mensualidades pagadas",
   "Paid today": "Pagó hoy",
-  "Group fee": "Cuota del grupo",
   "paid on {day}": "pagó el {day}",
   "Free this month": "Sin costo este mes",
   "Due today": "Vence hoy",
@@ -102,11 +100,6 @@ export const TRACKING_TRANSLATIONS = Object.freeze({
   "Paid {paid} · {left} left": "Abonó {paid} · faltan {left}",
   "until {date}": "hasta el {date}",
   "Overdue · {date}": "Vencida · {date}",
-  "{amount} of {expected}": "{amount} de {expected}",
-  "{names} pays per class in this group; their payments stay in the list.":
-    "{names} paga por clase en este grupo; sus cobros siguen en la lista.",
-  "{names} pay per class in this group; their payments stay in the list.":
-    "{names} pagan por clase en este grupo; sus cobros siguen en la lista.",
   "{names} pays per class in this group.": "{names} paga por clase en este grupo.",
   "{names} pay per class in this group.": "{names} pagan por clase en este grupo.",
   // Móvil

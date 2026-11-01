@@ -117,8 +117,8 @@ function paymentWord(record, t) {
   return { tone: "", text: "—" };
 }
 
-/** «Mensualidades · octubre» for one monthly group: progress, payments (whole or abonos) and «Deshacer». */
-function MonthlyBlock({ block, asOf, onPay, onUndo, busy, compact = false }) {
+/** One monthly group under «Mensualidades · octubre»: a line with fee, due date and progress, then dense rows. */
+function MonthlyBlock({ block, asOf, onPay, onUndo, busy }) {
   const { t, locale } = useI18n();
   const month = monthLong(`${block.period}-01`, locale);
   const due = block.billing?.due;
@@ -127,40 +127,23 @@ function MonthlyBlock({ block, asOf, onPay, onUndo, busy, compact = false }) {
       ? t("due at class {nth} of the month", { nth: due.nth === "last" ? t("last (class)") : `${due.nth}.ª` })
       : t("due on day {day}", { day: due?.day ?? "" });
   const pct = block.expectedAmount ? Math.round((block.paidAmount / block.expectedAmount) * 100) : 0;
+  const fee = t("{amount} a month", { amount: formatMoney(block.billing?.monthlyFee || 0, locale) });
+  const dueOn =
+    block.dueDate === asOf ? ` (${t("today")})` : block.dueDate ? ` (${formatShortDate(block.dueDate, locale)})` : "";
   return (
     <section className="mens" aria-label={t("Monthly fees · {month} · {group}", { month, group: block.group.name })}>
       <div className="mhd">
-        {compact ? (
-          <div className="mhd-top">
-            <span className="overline">{t("Monthly fees · {month}", { month })}</span>
-            <span className="mhd-count">
-              <b>{t("{paid} of {total}", { paid: block.paidCount, total: block.total })}</b>
-              <small>{t("paid (plural)")}</small>
-            </span>
-          </div>
-        ) : (
-          <span className="overline">{t("Monthly fees · {month}", { month })}</span>
-        )}
-        <h2>{block.group.name}</h2>
-        <p>
-          {t("{amount} a month", { amount: formatMoney(block.billing?.monthlyFee || 0, locale) })} · {dueText}
-          {block.dueDate === asOf
-            ? ` (${t("today")})`
-            : block.dueDate
-              ? ` (${formatShortDate(block.dueDate, locale)})`
-              : ""}
-        </p>
-        {compact ? null : (
-          <div className="mprog">
-            <b>{t("{paid} of {total}", { paid: block.paidCount, total: block.total })}</b>
-            <span>
-              {t("paid · {amount} of {expected}", {
-                amount: formatMoney(block.paidAmount, locale),
-                expected: formatMoney(block.expectedAmount, locale),
-              })}
-            </span>
-          </div>
-        )}
+        <h3>{block.group.name}</h3>
+        <p>{`${fee} · ${dueText}${dueOn}`}</p>
+        <span className="mhd-sum">
+          <b>{t("{paid} of {total}", { paid: block.paidCount, total: block.total })}</b>
+          <span>
+            {t("paid · {amount} of {expected}", {
+              amount: formatMoney(block.paidAmount, locale),
+              expected: formatMoney(block.expectedAmount, locale),
+            })}
+          </span>
+        </span>
         <div
           className="pbar"
           role="progressbar"
@@ -171,12 +154,12 @@ function MonthlyBlock({ block, asOf, onPay, onUndo, busy, compact = false }) {
         >
           <i style={{ width: `${pct}%` }} />
         </div>
-        {!compact && block.perClass.length ? (
+        {block.perClass.length ? (
           <small>
             {t(
               block.perClass.length === 1
-                ? "{names} pays per class in this group; their payments stay in the list."
-                : "{names} pay per class in this group; their payments stay in the list.",
+                ? "{names} pays per class in this group."
+                : "{names} pay per class in this group.",
               {
                 names: shortNames(
                   block.perClass.map((student) => student.fullName),
@@ -195,7 +178,7 @@ function MonthlyBlock({ block, asOf, onPay, onUndo, busy, compact = false }) {
           const sub = paid
             ? paidToday
               ? t("Paid today · until {date}", { date: until })
-              : `${charge.adjusted ? `${t("Own fee")} · ` : compact ? `${t("Group fee")} · ` : ""}${t("Up to date until {date}", { date: until })}`
+              : `${charge.adjusted ? `${t("Own fee")} · ` : ""}${t("Up to date until {date}", { date: until })}`
             : charge.partial
               ? t("Paid {paid} · {left} left", {
                   paid: formatMoney(charge.paid, locale),
@@ -203,11 +186,13 @@ function MonthlyBlock({ block, asOf, onPay, onUndo, busy, compact = false }) {
                 })
               : charge.status === "waived"
                 ? t("Free this month")
-                : charge.dueDate === asOf
-                  ? t("Due today")
-                  : charge.status === "overdue"
-                    ? t("Overdue · {date}", { date: formatShortDate(charge.dueDate, locale, { weekday: false }) })
-                    : t("Due {date}", { date: formatShortDate(charge.dueDate, locale) });
+                : charge.status === "overdue"
+                  ? t("Overdue · {date}", { date: formatShortDate(charge.dueDate, locale, { weekday: false }) })
+                  : charge.dueDate === block.dueDate
+                    ? ""
+                    : charge.dueDate === asOf
+                      ? t("Due today")
+                      : t("Due {date}", { date: formatShortDate(charge.dueDate, locale) });
           const undo = paidToday ? (
             <button type="button" className="mlk" disabled={busy} onClick={() => onUndo(charge)}>
               {t("Undo")}
@@ -217,21 +202,24 @@ function MonthlyBlock({ block, asOf, onPay, onUndo, busy, compact = false }) {
             <div className="mrow" key={charge.id}>
               <StudentAvatar avatarId={student.avatarId} name={student.fullName} size="small" decorative />
               <span className="nm">
-                <strong>{student.fullName}</strong>
-                <small
-                  className={
-                    [charge.status === "overdue" ? "text-bad" : "", charge.partial && undo ? "has-undo" : ""]
-                      .filter(Boolean)
-                      .join(" ") || undefined
-                  }
-                >
-                  {sub}
-                  {charge.partial && undo ? <> · {undo}</> : null}
-                </small>
+                <strong title={student.fullName}>{student.fullName}</strong>
+                {/* The group line already says when the fee is due; a row only speaks up when it differs. */}
+                {sub ? (
+                  <small
+                    className={
+                      [charge.status === "overdue" ? "text-bad" : "", charge.partial && undo ? "has-undo" : ""]
+                        .filter(Boolean)
+                        .join(" ") || undefined
+                    }
+                  >
+                    {sub}
+                    {charge.partial && undo ? <> · {undo}</> : null}
+                  </small>
+                ) : null}
               </span>
               {paid ? (
                 <>
-                  {compact ? null : <span className="mamt">{formatMoney(charge.amount, locale)}</span>}
+                  <span className="mamt">{formatMoney(charge.amount, locale)}</span>
                   <span className="mok">
                     <span className="st st-ok">{t("Paid (fee)")}</span>
                     {undo}
@@ -251,28 +239,23 @@ function MonthlyBlock({ block, asOf, onPay, onUndo, busy, compact = false }) {
           );
         })}
       </div>
-      {compact ? (
-        <p className="mfoot">
-          {t("{amount} of {expected}", {
-            amount: formatMoney(block.paidAmount, locale),
-            expected: formatMoney(block.expectedAmount, locale),
-          })}
-          {block.perClass.length
-            ? ` · ${t(
-                block.perClass.length === 1
-                  ? "{names} pays per class in this group."
-                  : "{names} pay per class in this group.",
-                {
-                  names: shortNames(
-                    block.perClass.map((student) => student.fullName),
-                    locale,
-                  ),
-                },
-              )}`
-            : ""}
-        </p>
-      ) : null}
     </section>
+  );
+}
+
+/** «Mensualidades · octubre» below the charts: one card holding every monthly group. */
+function MonthlyFees({ blocks, asOf, onPay, onUndo, busy }) {
+  const { t, locale } = useI18n();
+  if (!blocks.length) return null;
+  return (
+    <div className="tracking-fees">
+      <h2 className="overline">
+        {t("Monthly fees · {month}", { month: monthLong(`${blocks[0].period}-01`, locale) })}
+      </h2>
+      {blocks.map((block) => (
+        <MonthlyBlock key={block.group.id} block={block} asOf={asOf} onPay={onPay} onUndo={onUndo} busy={busy} />
+      ))}
+    </div>
   );
 }
 
@@ -899,17 +882,6 @@ export default function Tracking({
           {hero.delta ? <span className={hero.deltaTone}>{hero.delta}</span> : null}
           <small>{hero.line}</small>
         </div>
-        {blocks.map((block) => (
-          <MonthlyBlock
-            key={block.group.id}
-            block={block}
-            asOf={asOf}
-            onPay={payMonthly}
-            onUndo={undoMonthly}
-            busy={busy}
-            compact
-          />
-        ))}
         <ChartViewPicker
           metric={TAB_METRIC[tab]}
           value={view}
@@ -1042,6 +1014,7 @@ export default function Tracking({
             {!mobileList.length ? <p className="muted">{t("Nobody in this filter.")}</p> : null}
           </div>
         </section>
+        <MonthlyFees blocks={blocks} asOf={asOf} onPay={payMonthly} onUndo={undoMonthly} busy={busy} />
         <Button icon={Download} className="tracking-export" onClick={exportVisible}>
           {t("Export to Excel")}
         </Button>
@@ -1231,16 +1204,6 @@ export default function Tracking({
           </button>
         </p>
       ) : null}
-      {blocks.map((block) => (
-        <MonthlyBlock
-          key={block.group.id}
-          block={block}
-          asOf={asOf}
-          onPay={payMonthly}
-          onUndo={undoMonthly}
-          busy={busy}
-        />
-      ))}
       {mode === "summary" ? (
         <div className={`tracking-cols hibi-chart ${tab === "grades" ? "is-indigo" : ""}`}>
           <section className="tracking-chart" aria-labelledby="tracking-chart-title">
@@ -1432,6 +1395,7 @@ export default function Tracking({
           </div>
         </section>
       )}
+      <MonthlyFees blocks={blocks} asOf={asOf} onPay={payMonthly} onUndo={undoMonthly} busy={busy} />
       <Drawer
         open={dateOpen}
         onClose={() => setDateOpen(false)}
