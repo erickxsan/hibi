@@ -1,6 +1,6 @@
 import { roundMoney, sumMoney } from "../domain/money";
 import { resolveHourlyRate } from "../domain/schedule";
-import { coveredByMonthlyFee, deriveMonthlyCharges, periodOf } from "../domain/monthlyBilling";
+import { coveredByMonthlyFee, deriveMonthlyCharges, monthlyChargeForClass } from "../domain/monthlyBilling";
 import { rosterForClassSession } from "./classesWorkspaceModel";
 
 const EMPTY_CLASS_DRAFT = {
@@ -226,16 +226,21 @@ export function classDraftSummary(state, session, roster, entries, monthlyPaidTo
  * One short note per student before class: absences, debts, missing grades or the monthly fee.
  * tone: "bad" (bermellón), "pend" (ocre) or "" (muted).
  */
-export function studentClassNote(state, student, session, derivedRows = [], monthlyCharges = null) {
+export function studentClassNote(
+  state,
+  student,
+  session,
+  derivedRows = [],
+  monthlyCharges = null,
+  today = session?.classDate,
+) {
   const groupId = session?.groupId || "";
-  const period = periodOf(session?.classDate);
   if (groupId && coveredByMonthlyFee(state, student.id, groupId, session.classDate)) {
     const charges = monthlyCharges || deriveMonthlyCharges(state, session.classDate);
-    const charge = charges.find(
-      (item) => item.studentId === student.id && item.groupId === groupId && item.period === period,
-    );
-    if (charge && charge.status !== "paid" && charge.status !== "waived")
-      return { kind: "monthlyPending", tone: "pend", period };
+    // The fee that pays for this class, flagged only once it is due: not on the 1st of the month.
+    const charge = monthlyChargeForClass(charges, student.id, groupId, session.classDate);
+    if (charge && charge.status !== "paid" && charge.status !== "waived" && charge.dueDate <= today)
+      return { kind: "monthlyPending", tone: "pend", period: charge.period };
     if (charge?.adjusted) return { kind: "customFee", tone: "", fee: charge.fee };
     return { kind: "upToDate", tone: "" };
   }

@@ -882,6 +882,19 @@ export function setMonthlyPayment(state, { studentId, groupId, period, amount, p
   );
 }
 
+/**
+ * The month whose fee pays for a class: the one whose coverage holds the class date (a class before
+ * this month's due date still belongs to last month's fee), otherwise the class's calendar month.
+ */
+export function monthlyChargeForClass(charges, studentId, groupId, classDate) {
+  const own = (charges || []).filter((item) => item.studentId === studentId && item.groupId === groupId);
+  return (
+    own.find((item) => item.coversFrom <= classDate && classDate <= item.coversTo) ||
+    own.find((item) => item.period === periodOf(classDate)) ||
+    null
+  );
+}
+
 export const deriveMonthlyCharges = memoizeOnState(
   monthlyCharges,
   (asOfDate, { through = periodOf(asOfDate), includeArchived = true } = {}) =>

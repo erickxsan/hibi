@@ -446,6 +446,43 @@ describe("class notes and the «Not recorded» list", () => {
   });
 });
 
+describe("monthly fee in the roster", () => {
+  function monthlyState(billing, monthlyPayments = []) {
+    const state = classState();
+    state.groups[0] = { ...state.groups[0], billing: { mode: "monthly", monthlyFee: 800, ...billing } };
+    state.students[0] = { ...state.students[0], monthlyPayments };
+    return state;
+  }
+  const dueOn = (day) => ({ type: "dayOfMonth", day });
+
+  it("offers «Mark paid» only from the month's due date on", () => {
+    // July is due on the 20th: on the 15th the class says when, without the button.
+    const view = renderClasses(monthlyState({ due: dueOn(20), effectiveFrom: "2026-07" }));
+    expect(screen.getByText(`Due ${formatShortDate("2026-07-20", "en-MX")}`)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Mark paid" })).not.toBeInTheDocument();
+    view.unmount();
+
+    // Due on the 10th: it is owed now.
+    renderClasses(monthlyState({ due: dueOn(10), effectiveFrom: "2026-07" }));
+    expect(screen.getByRole("button", { name: "Mark paid" })).toBeInTheDocument();
+  });
+
+  it("shows the paid month until the next due date instead of asking for the new one", () => {
+    const june = { id: "p-june", groupId: "g1", period: "2026-06", amount: 800, paidAt: "2026-06-20" };
+    const view = renderClasses(monthlyState({ due: dueOn(20), effectiveFrom: "2026-06" }, [june]));
+    const until = formatShortDate("2026-07-19", "en-MX", { weekday: false });
+    expect(screen.getByText("June paid")).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`until ${until}`))).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Mark paid" })).not.toBeInTheDocument();
+    view.unmount();
+
+    // June never paid: that is the fee owed in this class.
+    renderClasses(monthlyState({ due: dueOn(20), effectiveFrom: "2026-06" }));
+    expect(screen.getByText("June")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Mark paid" })).toBeInTheDocument();
+  });
+});
+
 describe("new recurring class for a group", () => {
   it("opens on a free time, blocks a duplicate slot and points to the weekly schedule", async () => {
     const user = userEvent.setup();

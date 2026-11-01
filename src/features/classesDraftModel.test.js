@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { buildClassRecords, studentClassNote } from "./classesDraftModel";
+import { createStarterState } from "../domain/starterState";
+import { normalizeState } from "../domain/validation";
+import { recordMonthlyPayment } from "../domain/monthlyBilling";
 
 const student = { id: "s1", fullName: "Ana", groupIds: ["g1"], status: "Active" };
 const session = { key: "k", classDate: "2026-10-23", groupId: "g1", format: "group" };
@@ -29,6 +32,55 @@ describe("student note before class", () => {
       amount: 300,
       count: 1,
       date: "2026-08-15",
+    });
+  });
+});
+
+describe("monthly fee note before class", () => {
+  // Mondays and Thursdays, $1,200 a month due on the 15th since October.
+  const monthly = normalizeState({
+    ...createStarterState({ settings: { asOfDate: "2026-11-02" } }),
+    groups: [
+      {
+        id: "m1",
+        name: "Primaria 5A",
+        hourlyRate: 75,
+        weeklySchedule: [
+          { id: "mon", dayOfWeek: 1, startTime: "16:00", durationHours: 2 },
+          { id: "thu", dayOfWeek: 4, startTime: "16:00", durationHours: 2 },
+        ],
+        billing: { mode: "monthly", monthlyFee: 1200, due: { type: "dayOfMonth", day: 15 }, effectiveFrom: "2026-10" },
+      },
+    ],
+    students: [{ id: "diego", code: "D", fullName: "Diego", status: "Active", groupIds: ["m1"] }],
+  });
+  const diego = monthly.students[0];
+  const classOn = (classDate) => ({ key: classDate, classDate, groupId: "m1", format: "group" });
+  const paidOctober = recordMonthlyPayment(monthly, {
+    studentId: "diego",
+    groupId: "m1",
+    period: "2026-10",
+    paidAt: "2026-10-15",
+  });
+
+  it("waits for the due date: a class before the 15th still belongs to last month's fee", () => {
+    expect(studentClassNote(paidOctober, diego, classOn("2026-11-02"))).toEqual({ kind: "upToDate", tone: "" });
+    expect(studentClassNote(paidOctober, diego, classOn("2026-11-16"))).toEqual({
+      kind: "monthlyPending",
+      tone: "pend",
+      period: "2026-11",
+    });
+    // A later class looked at today is not flagged before its month is due.
+    expect(studentClassNote(paidOctober, diego, classOn("2026-11-16"), [], null, "2026-11-02")).toMatchObject({
+      kind: "upToDate",
+    });
+  });
+
+  it("still flags last month's fee when it was never paid", () => {
+    expect(studentClassNote(monthly, diego, classOn("2026-11-02"))).toEqual({
+      kind: "monthlyPending",
+      tone: "pend",
+      period: "2026-10",
     });
   });
 });

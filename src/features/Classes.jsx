@@ -24,6 +24,7 @@ import {
   deriveMonthlyCharges,
   groupBillingFor,
   isMonthlyGroup,
+  monthlyChargeForClass,
   monthlyDueDate,
   periodOf,
 } from "../domain/monthlyBilling";
@@ -297,6 +298,8 @@ function MonthlyPaymentCell({ charge, studentName, today, classDate, onMonthly, 
       : charge.status === "overdue"
         ? t("Overdue since {date}", { date: formatShortDate(charge.dueDate, locale, { weekday: false }) })
         : t("Due {date}", { date: formatShortDate(charge.dueDate, locale) });
+  // Paying ahead is done in Seguimiento: the class offers the payment from its due date on.
+  const payable = charge.dueDate <= today;
   return (
     <span className="monthly-pay">
       <span className={`st ${charge.status === "overdue" ? "st-venc" : "st-pend"}`}>{month}</span>
@@ -304,15 +307,17 @@ function MonthlyPaymentCell({ charge, studentName, today, classDate, onMonthly, 
         {due}
         {charge.partial && undo ? <> · {undo}</> : null}
       </small>
-      <MonthlyFeePay
-        key={`${charge.id}:${charge.balance}`}
-        charge={charge}
-        studentName={studentName}
-        onPay={onMonthly.pay}
-        busy={busy}
-        fullLabel={t("Mark paid")}
-        buttonClassName="link-button"
-      />
+      {payable ? (
+        <MonthlyFeePay
+          key={`${charge.id}:${charge.balance}`}
+          charge={charge}
+          studentName={studentName}
+          onPay={onMonthly.pay}
+          busy={busy}
+          fullLabel={t("Mark paid")}
+          buttonClassName="link-button"
+        />
+      ) : null}
     </span>
   );
 }
@@ -481,12 +486,7 @@ export default function Classes({
     [activeGroup, activeSession, currentDate, state],
   );
   const chargeFor = (studentId) =>
-    monthlyCharges.find(
-      (item) =>
-        item.studentId === studentId &&
-        item.groupId === activeSession?.groupId &&
-        item.period === periodOf(activeSession?.classDate),
-    ) || null;
+    monthlyChargeForClass(monthlyCharges, studentId, activeSession?.groupId, activeSession?.classDate);
 
   const remoteDraft = useMemo(() => buildClassDraft(state, activeSession), [activeSession, state]);
   const remoteSignature = useMemo(() => draftSignature(remoteDraft), [remoteDraft]);
@@ -1008,7 +1008,7 @@ export default function Classes({
                         key={student.id}
                         student={student}
                         entry={entries[student.id] || {}}
-                        note={studentClassNote(state, student, activeSession, derivedRows, monthlyCharges)}
+                        note={studentClassNote(state, student, activeSession, derivedRows, monthlyCharges, currentDate)}
                         setEntry={setEntry}
                         assessmentOn={assessmentOn}
                         maximum={maximum}
