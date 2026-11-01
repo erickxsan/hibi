@@ -12,7 +12,7 @@ import {
   generateScheduledOccurrences,
   serializeState,
 } from "../domain/index.js";
-import { deriveMonthlyCharges } from "../domain/monthlyBilling.js";
+import { deriveMonthlyCharges, monthlyPaymentsBetween } from "../domain/monthlyBilling.js";
 import { buildAttentionItems } from "../features/homeDashboardModel.js";
 describe("reviewed import through the live manager", () => {
   it.each(["invalid", NaN, Infinity])(
@@ -252,5 +252,57 @@ describe("leaving and coming back through the live manager", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("deleting a monthly group through the live manager", () => {
+  const setupGroup = (student) => {
+    const initial = createStarterState();
+    initial.groups = [
+      createGroup({
+        id: "g-mensual",
+        name: "Mensual",
+        weeklySchedule: [{ id: "thu", dayOfWeek: 4, startTime: "16:00", durationHours: 1 }],
+        billing: { mode: "monthly", monthlyFee: 1000, due: { type: "dayOfMonth", day: 5 }, effectiveFrom: "2026-09" },
+      }),
+    ];
+    initial.students = [createStudent({ id: "ana", code: "ANA", fullName: "Ana Ruiz", groupIds: [], ...student })];
+    const persistence = { initialState: initial, mode: "cloud", save: vi.fn(async (state) => state) };
+    return renderHook(() => useClassManager({ persistence }));
+  };
+
+  it("keeps a group whose monthly fees were paid, so the money still counts", async () => {
+    const hook = setupGroup({
+      monthlyPayments: [{ id: "p9", groupId: "g-mensual", period: "2026-09", amount: 1000, paidAt: "2026-09-05" }],
+    });
+    let deleted;
+    await act(async () => {
+      deleted = await hook.result.current.actions.deleteGroup("g-mensual");
+    });
+    expect(deleted).toBe(false);
+    expect(hook.result.current.state.groups.map((group) => group.id)).toEqual(["g-mensual"]);
+    expect(monthlyPaymentsBetween(hook.result.current.state, "2026-09-01", "2026-09-30")).toHaveLength(1);
+    hook.unmount();
+  });
+
+  it("keeps a group a former student still owes", async () => {
+    const hook = setupGroup({ billingByGroup: { "g-mensual": { mode: "group", leftOn: "2026-10-10" } } });
+    let deleted;
+    await act(async () => {
+      deleted = await hook.result.current.actions.deleteGroup("g-mensual");
+    });
+    expect(deleted).toBe(false);
+    hook.unmount();
+  });
+
+  it("deletes a group with nothing on record and drops its adjustments", async () => {
+    const hook = setupGroup({ billingByGroup: { "g-mensual": { mode: "customFee", fee: 800 } } });
+    await act(async () => {
+      await hook.result.current.actions.deleteGroup("g-mensual");
+    });
+    const state = hook.result.current.state;
+    expect(state.groups).toEqual([]);
+    expect(state.students[0]).not.toHaveProperty("billingByGroup");
+    hook.unmount();
   });
 });

@@ -47,6 +47,7 @@ import {
   normalizeGroupBilling,
   normalizeMonthlyPayments,
   monthlyBalance,
+  groupMoneyOnRecord,
   recordStays,
   resumeGroupBilling,
   setMonthlyPayment,
@@ -820,10 +821,22 @@ export function useClassManager({ persistence } = {}) {
         notify("Unassign or move every student before deleting this group.", "error");
         return Promise.resolve(false);
       }
+      // Its monthly payments and the fees former students owe only count while the group exists.
+      if (groupMoneyOnRecord(stateRef.current, id)) {
+        notify("This group has monthly fees on record. Archive it instead to keep them.", "error");
+        return Promise.resolve(false);
+      }
       return commit(
         (current) => ({
           ...current,
           groups: current.groups.filter((group) => group.id !== id),
+          // Nobody is in the group and nothing is owed to it: its billing adjustments go with it.
+          students: current.students.map((student) => {
+            if (!student.billingByGroup?.[id]) return student;
+            const { [id]: _removed, ...rest } = student.billingByGroup;
+            const { billingByGroup: _previous, ...fields } = student;
+            return Object.keys(rest).length ? { ...fields, billingByGroup: rest } : fields;
+          }),
           classLog: current.classLog.map((row) => (row.groupId === id ? { ...row, groupId: "" } : row)),
           classSchedules: current.classSchedules.filter((item) => item.groupId !== id),
           scheduleExceptions: current.scheduleExceptions.filter(

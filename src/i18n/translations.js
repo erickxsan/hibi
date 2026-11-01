@@ -249,6 +249,8 @@ const EXPLICIT_TRANSLATIONS = Object.freeze({
   "Old local browser copy removed": "Copia local anterior eliminada",
   "Unassign or move every student before deleting this group.":
     "Desasigna o mueve a todos los alumnos antes de eliminar este grupo.",
+  "This group has monthly fees on record. Archive it instead to keep them.":
+    "Este grupo tiene mensualidades registradas. Archívalo para conservarlas.",
   "Archive this student to preserve grade and payment history.":
     "Archiva a este alumno para conservar el historial de calificaciones y pagos.",
   "Enter at least one score, status, or feedback note.": "Captura al menos una puntuación, estado o comentario.",

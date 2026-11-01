@@ -1031,7 +1031,9 @@ export default function Community({
             ? t("The student becomes inactive while grades, attendance, and payment history stay available.")
             : confirmTarget?.action === "delete-student"
               ? t("Students with grades or class history cannot be deleted; deactivate them instead.")
-              : t("Groups with assigned students cannot be deleted. Existing class history remains protected.")
+              : t(
+                  "Groups with assigned students or monthly fees on record cannot be deleted. Existing class history remains protected.",
+                )
         }
         confirmLabel={
           confirmTarget?.action === "archive-student"

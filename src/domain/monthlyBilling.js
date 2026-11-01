@@ -769,6 +769,18 @@ export function deriveMonthlyCharges(state, asOfDate, { through = periodOf(asOfD
   );
 }
 
+/**
+ * True when deleting a group would lose money on record: a monthly payment made for it, or a
+ * student who left it and may still owe its fees. Such a group is archived instead.
+ */
+export function groupMoneyOnRecord(state, groupId) {
+  return (state.students || []).some(
+    (student) =>
+      normalizeMonthlyPayments(student.monthlyPayments).some((item) => item.groupId === groupId) ||
+      isDateOnly(student.billingByGroup?.[groupId]?.leftOn),
+  );
+}
+
 /** Monthly fees paid between two dates (inclusive), for revenue figures. */
 export function monthlyPaymentsBetween(state, startDate, endDate, { groupIds = null } = {}) {
   return (state.students || []).flatMap((student) =>
