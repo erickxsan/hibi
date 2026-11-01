@@ -5,6 +5,7 @@ import {
   createStarterState,
   generateScheduledOccurrences,
   importState,
+  repriceUnpaidClasses,
   serializeState,
 } from "./index.js";
 import { startGroupSchedule } from "./groupArchiving.js";
@@ -130,5 +131,56 @@ describe("recurring class schedules", () => {
     expect(startGroupSchedule(state.groups[0], "2026-07-30").scheduleResumeDate).toBe("2026-07-16");
     const restored = importState(serializeState(state));
     expect(restored.groups[0].scheduleResumeDate).toBe("2026-07-16");
+  });
+});
+
+describe("a student's own rate on classes they still owe", () => {
+  const row = (fields) => ({
+    studentId: "s1",
+    groupId: "g1",
+    classStatus: "Completed",
+    attendance: "P",
+    hours: 2,
+    appliedHourlyRate: 50,
+    appliedCharge: 100,
+    amountPaid: 0,
+    ...fields,
+  });
+  const state = {
+    settings: { hourlyRate: 50, defaultClassHours: 2 },
+    groups: [{ id: "g1", hourlyRate: null }],
+    students: [{ id: "s1", customHourlyRate: null }],
+    classLog: [
+      row({ id: "owed" }),
+      row({ id: "absent", attendance: "A", appliedCharge: 0 }),
+      row({ id: "paid", amountPaid: 100 }),
+      row({ id: "cancelled", classStatus: "Cancelled", appliedCharge: 0 }),
+      row({ id: "handSet", appliedCharge: 70 }),
+      row({ id: "other", studentId: "s2" }),
+    ],
+  };
+  const byId = (log) => Object.fromEntries(log.map((item) => [item.id, item]));
+
+  it("reprices unpaid classes and leaves paid, cancelled and hand-set ones alone", () => {
+    const log = byId(repriceUnpaidClasses(state, state.students[0], { id: "s1", customHourlyRate: 80 }));
+    expect(log.owed).toMatchObject({ appliedHourlyRate: 80, appliedCharge: 160 });
+    expect(log.absent).toMatchObject({ appliedHourlyRate: 80, appliedCharge: 0 });
+    expect(log.paid).toBe(state.classLog[2]);
+    expect(log.cancelled).toBe(state.classLog[3]);
+    expect(log.handSet).toBe(state.classLog[4]);
+    expect(log.other).toBe(state.classLog[5]);
+  });
+
+  it("corrects classes still at the group rate when the own rate was already saved", () => {
+    const own = { id: "s1", customHourlyRate: 80 };
+    const log = byId(repriceUnpaidClasses({ ...state, students: [own] }, own, own));
+    expect(log.owed).toMatchObject({ appliedHourlyRate: 80, appliedCharge: 160 });
+  });
+
+  it("goes back to the group rate when the own rate is removed", () => {
+    const own = { id: "s1", customHourlyRate: 80 };
+    const priced = repriceUnpaidClasses(state, state.students[0], own);
+    const log = byId(repriceUnpaidClasses({ ...state, classLog: priced }, own, { id: "s1", customHourlyRate: null }));
+    expect(log.owed).toMatchObject({ appliedHourlyRate: 50, appliedCharge: 100 });
   });
 });

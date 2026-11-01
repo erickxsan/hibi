@@ -551,7 +551,15 @@ export function BillingFields({ draft, setDraft, group, members = [], state, asO
                         />
                       ) : adjustment.mode === "perClass" ? (
                         <span className="field-row-hint">
-                          {t("{amount} per class attended", { amount: formatMoney(perClass, locale) })}
+                          {t("{amount} per class attended", {
+                            amount: formatMoney(
+                              // Their own rate, when they have one, prices their classes instead of the group's.
+                              Number.isFinite(student.customHourlyRate)
+                                ? Math.round(hours * student.customHourlyRate * 100) / 100
+                                : perClass,
+                              locale,
+                            ),
+                          })}
                         </span>
                       ) : null}
                       {/* Monthly payers may fall due on their own day or class instead of the group's. */}

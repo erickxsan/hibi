@@ -15,6 +15,7 @@ import {
   editScheduledClassState,
   exportState,
   importState,
+  repriceUnpaidClasses,
   resolveHourlyRate,
   removeScheduledClassState,
   REAL_ROSTER_BACKUP_KEY,
@@ -880,6 +881,11 @@ export function useClassManager({ persistence } = {}) {
           students: current.students.some((student) => student.id === item.id)
             ? current.students.map((student) => (student.id === item.id ? item : student))
             : [...current.students, item],
+          classLog: repriceUnpaidClasses(
+            current,
+            current.students.find((student) => student.id === item.id),
+            item,
+          ),
         }),
         draft.id ? "Student updated" : "Student added",
       );

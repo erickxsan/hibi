@@ -61,6 +61,7 @@ export {
   dayOfWeekForDate,
   formatWeeklySchedule,
   generateScheduledOccurrences,
+  repriceUnpaidClasses,
   resolveHourlyRate,
 } from "./schedule.js";
 export {

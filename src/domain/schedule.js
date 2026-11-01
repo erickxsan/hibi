@@ -2,6 +2,8 @@ import { addDays, isDateInRange, isDateOnly, parseDateOnly } from "./dates.js";
 import { isGroupArchived } from "./groupArchiving.js";
 import { normalizeRepeatRule, repeatRuleOccursOn } from "./classRecurrence.js";
 import { memoizeOnState } from "./stateMemo.js";
+import { isBillableAttendance } from "./attendanceBilling.js";
+import { roundMoney } from "./money.js";
 
 export const DAY_OPTIONS = Object.freeze([
   { value: 1, label: "Monday", short: "Mon" },
@@ -46,6 +48,33 @@ export function resolveHourlyRate(state, studentOrId, groupOrId = "") {
   if (finiteNumber(student?.customHourlyRate)) return student.customHourlyRate;
   if (finiteNumber(group?.hourlyRate)) return group.hourlyRate;
   return finiteNumber(state?.settings?.hourlyRate) ? state.settings.hourlyRate : null;
+}
+
+/**
+ * A student's own rate also prices the classes they still owe: unpaid records saved at their previous
+ * rate, or at the group's rate before the own rate existed, take the new one. Paid classes, cancelled
+ * ones and hand-set prices keep their amount.
+ */
+export function repriceUnpaidClasses(state, previous, student) {
+  const classLog = Array.isArray(state?.classLog) ? state.classLog : [];
+  if (!previous || !student) return classLog;
+  const inherited = { ...student, customHourlyRate: null };
+  const defaultHours = state?.settings?.defaultClassHours;
+  return classLog.map((row) => {
+    if (row.studentId !== student.id || row.classStatus === "Cancelled" || Number(row.amountPaid) > 0) return row;
+    const rate = resolveHourlyRate(state, student, row.groupId);
+    const oldRates = [
+      resolveHourlyRate(state, previous, row.groupId),
+      resolveHourlyRate(state, inherited, row.groupId),
+    ];
+    if (!finiteNumber(rate) || row.appliedHourlyRate === rate || !oldRates.includes(row.appliedHourlyRate)) return row;
+    const hours = finiteNumber(row.hours) ? row.hours : defaultHours;
+    if (!finiteNumber(hours)) return row;
+    const billable = isBillableAttendance(row);
+    const charged = billable ? roundMoney(hours * row.appliedHourlyRate) : 0;
+    if (finiteNumber(row.appliedCharge) && roundMoney(row.appliedCharge) !== charged) return row;
+    return { ...row, appliedHourlyRate: rate, appliedCharge: billable ? roundMoney(hours * rate) : 0 };
+  });
 }
 
 /** The slot's schedule changes, oldest first, so each day only has to find the last one already in effect. */
