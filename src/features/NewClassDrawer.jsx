@@ -141,12 +141,18 @@ export function NewClassDrawer({ open, onClose, state, asOfDate, actions, onEdit
   const occurrenceDates = recurring
     ? nextRecurrenceDates({ ...rule, startDate: draft.startDate }, 12)
     : [draft.startDate];
+  // A weekly class meets the same busy slot every week: the clock lists each slot once.
   const busyForClock = sessionsAround
     .filter((session) => occurrenceDates.includes(session.classDate))
     .map((session) => ({
       ...blockFor(session),
       label: `${session.title} (${weekdayShort(session.classDate, locale)})`,
-    }));
+    }))
+    .filter(
+      (block, index, all) =>
+        all.findIndex((item) => item.label === block.label && item.start === block.start && item.end === block.end) ===
+        index,
+    );
   const clashes = activeDates.flatMap((date) =>
     weekBlocks
       .filter((block) => block.date === date && overlaps(block, start, end))
