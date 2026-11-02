@@ -13,7 +13,6 @@ import {
   formatMoney,
   formatScore,
   formatShortDate,
-  formatSpan,
   formatTime,
   minutesOf,
   monthLong,
@@ -369,26 +368,9 @@ export default function Home({
   };
 
   const now = minutesOf(nowTime) ?? 0;
+  // The greeting has no subtitle on any screen size: the timeline (or the agenda on the phone) already says how
+  // many classes there are and which one is next, and «Para atender» counts its own items.
   const classCount = timeline.items.length;
-  const headline = timeline.live
-    ? t("You are in {title} now. It ends at {time}.", {
-        title: timeline.live.session.title,
-        time: formatTime(timeline.live.end, locale),
-      })
-    : timeline.next
-      ? t(
-          classCount === 1
-            ? "You have {count} class today. Next is {title}, in {span}."
-            : "You have {count} classes today. Next is {title}, in {span}.",
-          {
-            count: classCount,
-            title: timeline.next.session.title,
-            span: formatSpan(timeline.next.start - now),
-          },
-        )
-      : classCount
-        ? t("You finished today's classes.")
-        : null; // The empty state below already says there are no classes today.
   // Archived groups stay out of Inicio's figures by default; the chip only appears to say they were let in
   // (from Seguimiento) and to take them out again.
   const scope = archiveScope?.count && archiveScope.included ? <ArchivedGroupsScope scope={archiveScope} /> : null;
@@ -399,12 +381,6 @@ export default function Home({
         <header className="hi">
           <span className="overline">{formatLongDate(asOf, locale)}</span>
           <h1>{t("Hi, Teacher")}</h1>
-          <p>
-            {t(classCount === 1 ? "{count} class today" : "{count} classes today", { count: classCount })} ·{" "}
-            {t(attention.length === 1 ? "{count} thing to attend to" : "{count} things to attend to", {
-              count: attention.length,
-            })}
-          </p>
         </header>
         <section aria-labelledby="home-today-title" data-onboarding-tour="home">
           <div className="sh">
@@ -485,7 +461,6 @@ export default function Home({
           {formatDayMonth(asOf, locale) ? `${formatLongDate(asOf, locale)} · ${formatTime(nowTime, locale)}` : ""}
         </span>
         <h1>{t(greetingKey(now))}</h1>
-        {headline ? <p>{headline}</p> : null}
       </header>
 
       <section aria-labelledby="home-today-title" data-onboarding-tour="home">

@@ -56,7 +56,6 @@ export const REDESIGN_TRANSLATIONS = Object.freeze({
   "{name} · out of {max}": "{name} · sobre {max}",
   "Name it below": "Ponle nombre abajo",
   "This class has no assignment": "Esta clase no lleva tarea",
-  "They start unmarked": "Empiezan sin marcar",
   unmarked: "sin marcar",
   "collected today": "cobrado hoy",
   average: "promedio",

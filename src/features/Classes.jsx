@@ -978,7 +978,6 @@ export default function Classes({
               {compact ? (
                 <div className="roster-section-head">
                   <h2>{t("Students")}</h2>
-                  <span>{t("They start unmarked")}</span>
                 </div>
               ) : null}
               {!roster.length ? (

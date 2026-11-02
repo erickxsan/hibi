@@ -8,11 +8,6 @@ export const HOME_TRANSLATIONS = Object.freeze({
   "Your week · {span}": "Tu semana · {span}",
   "Your month · {month}": "Tu mes · {month}",
   "Your year · {year}": "Tu año · {year}",
-  "You are in {title} now. It ends at {time}.": "Ahora estás en {title}. Termina a las {time}.",
-  "You have {count} class today. Next is {title}, in {span}.": "Tienes {count} clase hoy. Es {title}, en {span}.",
-  "You have {count} classes today. Next is {title}, in {span}.":
-    "Tienes {count} clases hoy. La siguiente es {title}, en {span}.",
-  "You finished today's classes.": "Terminaste tus clases de hoy.",
   "No classes today. A good moment to catch up.": "Hoy no tienes clases. Buen momento para ponerte al día.",
   "No classes today": "Hoy no tienes clases",
   "A good moment to catch up. Your next classes appear in the calendar.":
@@ -20,10 +15,6 @@ export const HOME_TRANSLATIONS = Object.freeze({
   "Today's classes": "Clases de hoy",
   "View calendar": "Ver calendario",
   "Today's timeline": "Línea de tiempo de hoy",
-  "{count} class today": "{count} clase hoy",
-  "{count} classes today": "{count} clases hoy",
-  "{count} thing to attend to": "{count} cosa por atender",
-  "{count} things to attend to": "{count} cosas por atender",
   "{count} class": "{count} clase",
   "{count} classes": "{count} clases",
   "{count} student": "{count} alumno",

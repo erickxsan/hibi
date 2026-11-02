@@ -140,7 +140,10 @@ describe("Home", () => {
     const user = userEvent.setup();
     const props = renderHome();
     expect(screen.getByRole("heading", { name: "Good afternoon, Teacher!" })).toBeInTheDocument();
-    expect(screen.getByText("You have 1 class today. Next is Reading, in 3 h 30 min.")).toBeInTheDocument();
+    // The greeting stands alone: the line below already says how many classes there are and which is next.
+    expect(
+      screen.getByRole("heading", { name: "Good afternoon, Teacher!" }).closest("header").querySelector("p"),
+    ).toBeNull();
     const block = screen.getByRole("button", { name: /^Reading, 4:00 – 6:00 p\.m\./ });
     expect(block).toHaveAttribute("aria-pressed", "true");
     const card = screen.getByRole("article", { name: "Reading" });
@@ -268,7 +271,7 @@ describe("Home", () => {
     setCompact(true);
     const user = userEvent.setup();
     const props = renderHome();
-    expect(screen.getByRole("heading", { name: "Hi, Teacher" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Hi, Teacher" }).closest("header").querySelector("p")).toBeNull();
     expect(screen.getByText("12:30 now")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "View students of Reading" }));
     expect(await screen.findByRole("dialog", { name: "Reading" })).toBeInTheDocument();

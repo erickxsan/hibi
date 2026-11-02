@@ -16,13 +16,6 @@
   color: var(--sumi);
 }
 
-.home-hello p {
-  margin: 0;
-  font-size: 16px;
-  line-height: 24px;
-  color: var(--sumi-muted);
-}
-
 .home-page .sh {
   display: flex;
   justify-content: space-between;
@@ -1274,12 +1267,6 @@
   margin: 0;
   font: 400 24px/30px var(--font-display);
   color: var(--sumi);
-}
-
-.home-page .hi p {
-  margin: 0;
-  font: 600 14px/20px var(--font-sans);
-  color: var(--sumi-muted);
 }
 
 .home-page.is-compact .sh {
