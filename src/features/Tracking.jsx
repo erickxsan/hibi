@@ -730,6 +730,25 @@ export default function Tracking({
     setFocus(false);
   };
   const scopeNode = archiveScope?.count ? <ArchivedGroupsScope scope={archiveScope} /> : null;
+  // The same group menu on every screen size: on the phone it narrows the hero, chart, list and monthly fees too.
+  const groupSelect = (
+    <Select
+      className="tracking-group-select"
+      aria-label={t("Filter by group")}
+      value={scope}
+      onChange={(event) => {
+        setScope(event.target.value);
+        reset();
+        setStudentId("");
+      }}
+    >
+      {groupChips.map((item) => (
+        <option key={item.value} value={item.value}>
+          {item.label}
+        </option>
+      ))}
+    </Select>
+  );
 
   const rangeDrawer = (
     <Drawer
@@ -876,7 +895,10 @@ export default function Tracking({
           onChange={(value) => changeTab(value)}
           items={TAB_ITEMS}
         />
-        {scopeNode}
+        <div className="tracking-scope">
+          {groupSelect}
+          {scopeNode}
+        </div>
         <div className="tracking-hero">
           <b>{hero.value}</b>
           {hero.delta ? <span className={hero.deltaTone}>{hero.delta}</span> : null}
@@ -1171,22 +1193,7 @@ export default function Tracking({
         <Segmented value={mode} onChange={setMode} label={t("Show")} items={MODE_ITEMS} />
       </div>
       <div className="tracking-scope">
-        <Select
-          className="tracking-group-select"
-          aria-label={t("Filter by group")}
-          value={scope}
-          onChange={(event) => {
-            setScope(event.target.value);
-            reset();
-            setStudentId("");
-          }}
-        >
-          {groupChips.map((item) => (
-            <option key={item.value} value={item.value}>
-              {item.label}
-            </option>
-          ))}
-        </Select>
+        {groupSelect}
         {scopeNode}
         <ChartViewPicker
           metric={TAB_METRIC[tab]}

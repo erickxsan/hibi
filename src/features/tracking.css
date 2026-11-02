@@ -691,6 +691,16 @@
   width: 100%;
 }
 
+/* Phone: the group menu takes the full row; the archived-groups chip, when there is one, sits under it at the
+   right, where its panel opens. */
+.tracking-page.is-compact .tracking-scope {
+  gap: 8px;
+}
+
+.tracking-page.is-compact .tracking-scope .tracking-group-select {
+  width: 100%;
+}
+
 .tracking-switch button {
   flex: 1;
 }
@@ -903,8 +913,4 @@
 
 .tracking-scope .scope-menu {
   margin-left: auto;
-}
-
-.tracking-page .tracking-switch + .scope-menu {
-  align-self: flex-start;
 }

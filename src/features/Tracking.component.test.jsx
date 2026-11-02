@@ -256,4 +256,16 @@ describe("Tracking on mobile", () => {
     await user.click(screen.getByRole("button", { name: /Luna López/ }));
     expect(await screen.findByRole("dialog", { name: "Luna López" })).toBeInTheDocument();
   });
+
+  it("scopes the figures to one group on a phone too", async () => {
+    setCompact(true);
+    const user = userEvent.setup();
+    setup();
+    await user.click(screen.getByRole("combobox", { name: "Filter by group" }));
+    await user.click(screen.getByRole("option", { name: "Prepa" }));
+    const list = screen.getByRole("heading", { name: "Students" }).closest("section");
+    expect(within(list).getByText("1 student")).toBeInTheDocument();
+    expect(within(list).getByText("Sofía Martín")).toBeInTheDocument();
+    expect(within(list).queryByText("Diego Soto")).not.toBeInTheDocument();
+  });
 });
