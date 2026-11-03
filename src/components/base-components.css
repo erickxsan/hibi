@@ -2164,6 +2164,61 @@
   }
 }
 
+/* «Para atender» lands on what the alert named: the row warms with bermellón and the avatar is stamped like
+   Hibi's seal, then both fade on their own (useSpotlight drops the class after the same 2.6 s). */
+.is-spotlit {
+  animation: hibi-spotlight 2.6s ease-out both;
+}
+.is-spotlit .student-animal-avatar {
+  animation: hibi-stamp 2.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+/* Reduced motion shortens every animation to its last, transparent frame: keep a still mark instead. */
+@media (prefers-reduced-motion: reduce) {
+  .is-spotlit {
+    animation: none;
+    box-shadow: inset 0 0 0 100vmax color-mix(in srgb, var(--bermellon) 14%, transparent);
+  }
+  .is-spotlit .student-animal-avatar {
+    animation: none;
+    outline: 2px solid var(--bermellon);
+    outline-offset: -2px;
+  }
+}
+@keyframes hibi-spotlight {
+  0% {
+    box-shadow: inset 0 0 0 100vmax transparent;
+  }
+  8%,
+  70% {
+    box-shadow: inset 0 0 0 100vmax color-mix(in srgb, var(--bermellon) 14%, transparent);
+  }
+  100% {
+    box-shadow: inset 0 0 0 100vmax transparent;
+  }
+}
+@keyframes hibi-stamp {
+  0% {
+    transform: scale(1.3);
+    outline: 2px solid transparent;
+    outline-offset: -2px;
+  }
+  10% {
+    transform: scale(0.92);
+    outline-color: var(--bermellon);
+  }
+  18%,
+  70% {
+    transform: none;
+    outline: 2px solid var(--bermellon);
+    outline-offset: -2px;
+  }
+  100% {
+    transform: none;
+    outline: 2px solid transparent;
+    outline-offset: -2px;
+  }
+}
+
 /* Avisos */
 .toast-region {
   position: fixed;

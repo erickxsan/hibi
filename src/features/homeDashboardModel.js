@@ -690,6 +690,7 @@ function attentionItems(state, derived, asOf) {
       tone: "pend",
       session: latest.session,
       names: latest.studentIds.map(nameOf).filter(Boolean),
+      studentIds: latest.studentIds,
       count: unmarked.length,
       action: { type: "record", session: latest.session },
       seenKeys: unmarked.map(
@@ -739,6 +740,8 @@ function attentionItems(state, derived, asOf) {
       overdueEarlier: debts.overdueEarlier,
       period: debts.period,
       names: debts.overdueStudents.map((item) => nameOf(item.studentId)).filter(Boolean),
+      // Who the figure is about, active and inactive alike, for the rows the alert lands on.
+      studentIds: [...debts.overdueStudents, ...debts.inactive.debts].map((item) => item.studentId),
       inactiveAmount: debts.inactive.owed,
       inactiveNames: debts.inactive.debts.map((item) => nameOf(item.studentId)).filter(Boolean),
       action: { type: "metric", metric: "collections", focus: "debts" },
@@ -780,6 +783,8 @@ function attentionItems(state, derived, asOf) {
               amount: sumMoney(dueToday, (charge) => charge.amount),
             }
           : null,
+      // The fees the alert counts, as Seguimiento's monthly rows key them.
+      feeIds: charges.map((charge) => `${charge.studentId}:${charge.groupId}`),
       action: { type: "monthly" },
       seenKeys: charges.map(
         (charge) => `attention:fee:${charge.studentId}:${charge.groupId}:${charge.period}:${charge.status}`,
@@ -787,6 +792,25 @@ function attentionItems(state, derived, asOf) {
     });
   }
   return items;
+}
+
+/** What the page an alert opens marks for a moment: the students it names, its fees or its class. */
+export function attentionSpotlight(item) {
+  switch (item.kind) {
+    case "unrecorded":
+      return { kind: "class", ids: [item.session.key] };
+    case "unmarked":
+    case "overdue":
+      return { kind: "students", ids: item.studentIds || [] };
+    case "lowAttendance":
+      return { kind: "students", ids: item.students.map((student) => student.id) };
+    case "lowGrade":
+      return { kind: "students", ids: item.student ? [item.student.id] : [] };
+    case "monthlyDue":
+      return { kind: "fees", ids: item.feeIds || [] };
+    default:
+      return null;
+  }
 }
 
 /** First names joined for short sentences: «Luna, Valeria y Regina». */

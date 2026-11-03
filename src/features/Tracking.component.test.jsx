@@ -68,19 +68,19 @@ function trackingState() {
   return state;
 }
 
-function Harness({ persistence, openPage }) {
+function Harness({ persistence, openPage, intent = undefined }) {
   const manager = useClassManager({ persistence });
   return (
     <I18nProvider>
-      <Tracking {...manager} openPage={openPage} />
+      <Tracking {...manager} openPage={openPage} intent={intent} clearIntent={() => {}} />
     </I18nProvider>
   );
 }
 
-function setup(state = trackingState()) {
+function setup(state = trackingState(), intent = undefined) {
   const persistence = { initialState: state, mode: "cloud", save: vi.fn(async (next) => next) };
   const openPage = vi.fn();
-  render(<Harness persistence={persistence} openPage={openPage} />);
+  render(<Harness persistence={persistence} openPage={openPage} intent={intent} />);
   return { persistence, openPage, saved: () => persistence.save.mock.calls.at(-1)?.[0] };
 }
 
@@ -170,6 +170,31 @@ describe("Tracking on desktop", () => {
     expect(await screen.findByText("1 of 1")).toBeInTheDocument();
   });
 
+  it("lands an Inicio alert on the students and fees it named", () => {
+    setup(trackingState(), {
+      type: "open-tracking",
+      tab: "payments",
+      spotlight: { kind: "students", ids: ["s1"] },
+    });
+    expect(screen.getByRole("tab", { name: "Payments" })).toHaveAttribute("aria-selected", "true");
+    const lit = document.querySelectorAll(".is-spotlit");
+    expect(lit).toHaveLength(1);
+    expect(lit[0]).toHaveClass("tsr");
+    expect(lit[0]).toHaveTextContent("Luna López");
+  });
+
+  it("marks the monthly fee a «mensualidad vencida» alert counts", () => {
+    setup(trackingState(), {
+      type: "open-tracking",
+      tab: "payments",
+      spotlight: { kind: "fees", ids: ["s3:g2"] },
+    });
+    const lit = document.querySelectorAll(".is-spotlit");
+    expect(lit).toHaveLength(1);
+    expect(lit[0]).toHaveClass("mrow");
+    expect(lit[0]).toHaveTextContent("Sofía Martín");
+  });
+
   it("lists every record in the breakdown without charging absences", async () => {
     const user = userEvent.setup();
     setup();
@@ -255,6 +280,21 @@ describe("Tracking on mobile", () => {
     expect(screen.queryByText("Diego Soto")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Luna López/ }));
     expect(await screen.findByRole("dialog", { name: "Luna López" })).toBeInTheDocument();
+  });
+
+  it("marks the students an alert named in the phone list", () => {
+    setCompact(true);
+    setup(trackingState(), {
+      type: "open-tracking",
+      tab: "attendance",
+      spotlight: { kind: "students", ids: ["s1", "s2"] },
+    });
+    const list = screen.getByRole("heading", { name: "Students" }).closest("section");
+    const lit = [...list.querySelectorAll(".list-row.is-spotlit")].map((row) => row.textContent);
+    expect(lit).toHaveLength(2);
+    expect(lit.join(" ")).toContain("Luna López");
+    expect(lit.join(" ")).toContain("Diego Soto");
+    expect(within(list).getByText("Sofía Martín").closest(".list-row")).not.toHaveClass("is-spotlit");
   });
 
   it("scopes the figures to one group on a phone too", async () => {

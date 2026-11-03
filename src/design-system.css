@@ -491,6 +491,9 @@ button.sync-pill {
   min-width: 0;
   display: flex;
   flex-direction: column;
+  /* A calm fade between sections. Opacity only, and nothing kept once it ends: a transform or a lingering
+     animated value would turn the stage into the box that the page's fixed bars and z-indexes answer to. */
+  animation: hibi-fade 0.2s ease-out backwards;
 }
 
 .route-loading {

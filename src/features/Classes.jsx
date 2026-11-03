@@ -15,6 +15,7 @@ import {
   Tabs,
 } from "../components/ui";
 import { StudentAvatar } from "../components/StudentAvatar";
+import { useSpotlight } from "../components/useSpotlight";
 import { useCompactViewport } from "../components/OverlayContext";
 import { useConfirmPrompt } from "../components/ConfirmPrompt";
 import { addDays, startOfWeek, todayDateOnly } from "../domain/dates";
@@ -292,6 +293,7 @@ function MonthlyPaymentCell({ charge, studentName, today, classDate, onMonthly, 
 function RosterRow({
   student,
   entry,
+  spotlit = "",
   setEntry,
   assessmentOn,
   maximum,
@@ -349,7 +351,7 @@ function RosterRow({
   } else grade = <span className="roster-muted">{attendance === "A" && assessmentOn ? t("— absent") : "—"}</span>;
   const empty = (node) => (!monthlyCharge && attendance !== "P" ? "is-empty" : node ? "" : "is-empty");
   return (
-    <div className="roster-row" role="row">
+    <div className={`roster-row ${spotlit}`.trim()} role="row">
       <span role="rowheader" className="person" data-cell="who">
         <StudentAvatar avatarId={student.avatarId} name={student.fullName} size="small" decorative />
         {/* Only the name: the fee shows in the payment cell; debts in Comunidad and Seguimiento. */}
@@ -512,6 +514,8 @@ export default function Classes({
   });
   changeTabRef.current = changeTab;
 
+  // A «Para atender» alert marks the class it is about, or the students it left unmarked.
+  const { light, spotlit } = useSpotlight();
   const focusSession = useCallback((session) => {
     setSelectedKey(session.key);
     setWeekStart(startOfWeek(session.classDate));
@@ -527,11 +531,12 @@ export default function Classes({
       const session = sessions.find((item) => item.key === intent.sessionKey);
       if (changeTab("next", { replace: true }) && session) focusSession(session);
       else if (changeTab("next", { replace: true })) setSelectedKey(intent.sessionKey);
+      light(intent.spotlight);
     }
     if (intent?.type === "open-calendar") changeTab("calendar", { replace: true });
     if (intent === "new-class") setNewClassOpen(true);
     if (intent) clearIntent?.();
-  }, [changeTab, clearIntent, focusSession, intent, sessions]);
+  }, [changeTab, clearIntent, focusSession, intent, light, sessions]);
 
   useEffect(() => {
     const remote = latestRemoteRef.current;
@@ -859,7 +864,11 @@ export default function Classes({
           </aside>
           {activeSession ? (
             <section className="split-main register" aria-labelledby="register-title">
-              <button type="button" className="current-card" onClick={() => setAgendaOpen(true)}>
+              <button
+                type="button"
+                className={`current-card ${spotlit("class", activeSession.key)}`.trim()}
+                onClick={() => setAgendaOpen(true)}
+              >
                 <span className="current-kicker">
                   <span>
                     {relative ? t(relative.key) : formatShortDate(activeSession.classDate, locale)}
@@ -874,7 +883,7 @@ export default function Classes({
                 </small>
                 {monthlyBadge ? <span className="monthly-badge">{monthlyBadge}</span> : null}
               </button>
-              <div className="register-head">
+              <div className={`register-head ${spotlit("class", activeSession.key)}`.trim()}>
                 <div>
                   <span className="register-meta">
                     {metaDate} · {formatTimeRange(activeSession.startTime, activeSession.durationHours, locale)} ·{" "}
@@ -970,6 +979,7 @@ export default function Classes({
                         key={student.id}
                         student={student}
                         entry={entries[student.id] || {}}
+                        spotlit={spotlit("students", student.id)}
                         setEntry={setEntry}
                         assessmentOn={assessmentOn}
                         maximum={maximum}

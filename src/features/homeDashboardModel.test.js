@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { deriveAll } from "../domain";
 import {
+  attentionSpotlight,
   buildAttentionItems,
   buildMetric,
   buildTodayTimeline,
@@ -243,6 +244,16 @@ describe("home agenda", () => {
       action: { type: "metric", metric: "collections", focus: "debts" },
     });
     expect(items[4]).toMatchObject({ overdue: true, count: 1, amount: 1000 });
+    // What each alert's page marks when it opens.
+    expect(attentionSpotlight(items[0])).toEqual({ kind: "class", ids: [items[0].session.key] });
+    expect(attentionSpotlight(items[1])).toEqual({ kind: "students", ids: ["s2"] });
+    expect(attentionSpotlight(items[2])).toEqual({ kind: "students", ids: [items[2].student.id] });
+    expect(attentionSpotlight(items[3]).kind).toBe("students");
+    expect(attentionSpotlight(items[3]).ids).toHaveLength(2);
+    expect(attentionSpotlight(items[4])).toEqual({
+      kind: "fees",
+      ids: [expect.stringMatching(new RegExp(`:${items[4].group.id}$`))],
+    });
   });
 
   it("keeps an item marked as seen hidden until something new causes it", () => {
@@ -281,6 +292,7 @@ describe("home agenda", () => {
       seenKeys: ["attention:unmarked:2026-10-12|g:g1|16:00:s1"],
     });
     expect(unmarked.session.classDate).toBe("2026-10-12");
+    expect(attentionSpotlight(unmarked)).toEqual({ kind: "students", ids: ["s1"] });
     expect(items.find((item) => item.kind === "overdue")).toMatchObject({ amount: 1000, names: ["Ava Kim"] });
   });
 
@@ -353,6 +365,8 @@ describe("home money", () => {
     const { derived } = setup(state);
     const alert = buildAttentionItems(state, derived, AS_OF).find((item) => item.kind === "overdue");
     expect(alert).toMatchObject({ tone: "pend", amount: 0, inactiveAmount: 200, inactiveNames: ["Old Student"] });
+    // Inactive debtors are marked too, wherever their rows are listed (Inicio's debts on desktop).
+    expect(attentionSpotlight(alert)).toEqual({ kind: "students", ids: ["s9"] });
   });
 
   it("projects the month with unpaid fees and upcoming per-class charges", () => {

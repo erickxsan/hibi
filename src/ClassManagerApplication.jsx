@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BarChart3, CalendarDays, Home as HomeIcon, Settings as SettingsIcon, UsersRound } from "lucide-react";
 import { AccountMenu } from "./auth/AccountMenu";
 import { AppShell } from "./components/AppShell";
@@ -6,6 +6,7 @@ import { ToastRegion } from "./components/ui";
 import { PendingOperations } from "./cloud/PendingOperations";
 import { RecoveryKeyReminder } from "./cloud/RecoveryKeyReminder";
 import { useIdlePrefetch } from "./navigation/idlePrefetch";
+import { preloadableLazy } from "./navigation/preloadableLazy";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { useClassManager } from "./hooks/useClassManager";
 import { usePageNavigation } from "./hooks/useHistoryNavigation";
@@ -35,22 +36,19 @@ const NAV_ITEMS = [
   { id: "settings", label: "Settings", mobileLabel: "Adjustments", href: "/settings", icon: SettingsIcon },
 ];
 
-const loadHome = () => import("./features/Home");
-const loadCommunity = () => import("./features/Community");
-const loadClasses = () => import("./features/Classes");
-const loadTracking = () => import("./features/Tracking");
-const loadSettings = () => import("./features/Settings");
-const loadOnboarding = () => import("./onboarding/OnboardingTutorial");
+// Each section renders at once when its chunk is already here (see preloadableLazy).
+const HomeScreen = preloadableLazy(() => import("./features/Home"));
+const Community = preloadableLazy(() => import("./features/Community"));
+const Classes = preloadableLazy(() => import("./features/Classes"));
+const Tracking = preloadableLazy(() => import("./features/Tracking"));
+const Settings = preloadableLazy(() => import("./features/Settings"));
+const OnboardingTutorial = preloadableLazy(() => import("./onboarding/OnboardingTutorial"));
 // Warmed while the browser is idle so the first visit to a section does not stop on «Cargando…».
 // The tutorial is warmed too: a phone tab can stay open across a deploy, and by then its old chunk
 // no longer exists, so «Iniciar recorrido» could not load it.
-const SECTION_LOADERS = [loadHome, loadCommunity, loadClasses, loadTracking, loadSettings, loadOnboarding];
-const HomeScreen = lazy(loadHome);
-const Community = lazy(loadCommunity);
-const Classes = lazy(loadClasses);
-const Tracking = lazy(loadTracking);
-const Settings = lazy(loadSettings);
-const OnboardingTutorial = lazy(loadOnboarding);
+const SECTION_LOADERS = [HomeScreen, Community, Classes, Tracking, Settings, OnboardingTutorial].map(
+  (section) => section.load,
+);
 
 /** Inicio, led by the one-time recovery-key reminder when the encrypted workspace has no recovery key. */
 function Home(props) {

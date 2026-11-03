@@ -20,6 +20,7 @@ import {
   nowTimeFor,
 } from "../utils/displayFormat";
 import {
+  attentionSpotlight,
   buildAttentionItems,
   buildPeriodMetrics,
   buildTodayTimeline,
@@ -262,11 +263,15 @@ export default function Home({
   }));
   const chooseView = (metric, view) => setCardViews((current) => ({ ...current, [metric]: view }));
   // What the explorer opens on: an overdue alert lands on the debts, the figure it quotes.
-  const [explorerFocus, setExplorerFocus] = useState({ aside: "point", request: 0 });
-  const openExplorer = (metric, aside = "point") => {
-    setExplorerFocus((current) => ({ aside, request: current.request + 1 }));
+  const [explorerFocus, setExplorerFocus] = useState({ aside: "point", request: 0, spotlight: null });
+  const openExplorer = (metric, aside = "point", spotlight = null) => {
+    setExplorerFocus((current) => ({ aside, request: current.request + 1, spotlight }));
     setExplorer(metric);
   };
+  // The explorer marks the alert's students once it mounts; later remounts (another period) do not repeat it.
+  useEffect(() => {
+    if (explorerFocus.spotlight) setExplorerFocus((current) => ({ ...current, spotlight: null }));
+  }, [explorerFocus.spotlight]);
   const shownPeriod = compact ? "monthly" : period;
   const timeline = useMemo(
     () => todayTimeline(today, todayDerived, asOf, nowTime),
@@ -340,25 +345,29 @@ export default function Home({
   useEffect(() => {
     if (!intent) return;
     if (intent?.type === "open-home-metric" && ["attendance", "grade", "collections"].includes(intent.metric)) {
-      setExplorerFocus((current) => ({ aside: "point", request: current.request + 1 }));
+      setExplorerFocus((current) => ({ aside: "point", request: current.request + 1, spotlight: null }));
       setExplorer(intent.metric);
     }
     clearIntent?.();
   }, [clearIntent, intent]);
 
-  const openClass = (session) => openPage?.("classes", { type: "open-class", sessionKey: session.key });
+  const openClass = (session, spotlight = null) =>
+    openPage?.("classes", { type: "open-class", sessionKey: session.key, ...(spotlight ? { spotlight } : {}) });
   const openHistory = (session) => openPage?.("classes", { type: "open-history-class", sessionKey: session.key });
-  const openTracking = (metric) =>
+  const openTracking = (metric, spotlight = null) =>
     openPage?.("grades", {
       type: "open-tracking",
       tab: metric === "grade" ? "grades" : metric === "collections" ? "payments" : "attendance",
+      ...(spotlight ? { spotlight } : {}),
     });
+  // Each alert opens where it can be acted on, with what it named marked for a moment.
   const runAttention = (item) => {
-    if (item.action.type === "record") return openClass(item.action.session);
-    if (item.action.type === "monthly") return openPage?.("grades", { type: "open-tracking", tab: "payments" });
-    if (compact) return openTracking(item.action.metric);
+    const spotlight = attentionSpotlight(item);
+    if (item.action.type === "record") return openClass(item.action.session, spotlight);
+    if (item.action.type === "monthly") return openTracking("collections", spotlight);
+    if (compact) return openTracking(item.action.metric, spotlight);
     if (period !== "monthly" && item.kind === "lowAttendance") setPeriod("monthly");
-    openExplorer(item.action.metric, item.action.focus);
+    openExplorer(item.action.metric, item.action.focus, spotlight);
     globalThis.document?.getElementById("home-period")?.scrollIntoView?.({ behavior: "smooth", block: "start" });
   };
   const runDetailAction = (action) => {
@@ -550,6 +559,7 @@ export default function Home({
           <MetricExplorer
             key={`${period}-${archiveScope?.included ? "all" : "active"}-${explorerFocus.request}`}
             initialAside={explorerFocus.aside}
+            spotlight={explorerFocus.spotlight}
             open={explorer}
             onChange={setExplorer}
             onClose={() => setExplorer(null)}

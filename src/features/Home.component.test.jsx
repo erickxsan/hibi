@@ -199,10 +199,16 @@ describe("Home", () => {
     const user = userEvent.setup();
     const props = renderHome();
     const attention = screen.getByRole("heading", { name: /^To attend to · / }).closest("section");
-    await user.click(within(attention).getByRole("button", { name: /got 5\.0/ }));
+    const lowGrade = within(attention).getByRole("button", { name: /got 5\.0/ });
+    const firstName = lowGrade.querySelector("b").textContent.split(" got")[0];
+    await user.click(lowGrade);
     const tabs = screen.getByRole("tablist", { name: "Charts" });
     expect(within(tabs).getByRole("tab", { name: /Grade/ })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("table", { name: "Students · what needs attention first" })).toBeInTheDocument();
+    const table = screen.getByRole("table", { name: "Students · what needs attention first" });
+    // The explorer marks the student the alert named, and only that one.
+    const lit = table.querySelectorAll(".is-spotlit");
+    expect(lit).toHaveLength(1);
+    expect(lit[0]).toHaveTextContent(firstName);
     await user.click(within(tabs).getByRole("tab", { name: /Collections/ }));
     expect(screen.getByText("Collections by payment date", { selector: ".xp-caption" })).toBeInTheDocument();
     await user.click(screen.getByRole("combobox", { name: "Chart view" }));
@@ -213,7 +219,13 @@ describe("Home", () => {
     await user.click(screen.getByRole("button", { name: "Close detail and return to the three charts" }));
     expect(screen.queryByRole("tablist", { name: "Charts" })).not.toBeInTheDocument();
     await user.click(within(attention).getByRole("button", { name: /still not recorded/ }));
-    expect(props.openPage).toHaveBeenCalledWith("classes", expect.objectContaining({ type: "open-class" }));
+    expect(props.openPage).toHaveBeenCalledWith(
+      "classes",
+      expect.objectContaining({
+        type: "open-class",
+        spotlight: { kind: "class", ids: [props.openPage.mock.calls.at(-1)[1].sessionKey] },
+      }),
+    );
   });
 
   it("folds the included archived groups into a chip that turns them off again", async () => {

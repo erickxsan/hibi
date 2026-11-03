@@ -15,6 +15,7 @@ import {
   Tabs,
 } from "../components/ui";
 import { StudentAvatar } from "../components/StudentAvatar";
+import { useSpotlight } from "../components/useSpotlight";
 import { MonthlyFeePay } from "./MonthlyFeePay";
 import { TrackingStudentSheet } from "./TrackingStudentSheet";
 import { ArchivedGroupsScope } from "../components/ArchivedGroupsScope";
@@ -119,7 +120,7 @@ function paymentWord(record, t) {
 }
 
 /** One monthly group under «Mensualidades · octubre»: a line with fee, due date and progress, then dense rows. */
-function MonthlyBlock({ block, asOf, onPay, onUndo, busy }) {
+function MonthlyBlock({ block, asOf, onPay, onUndo, busy, spotlit }) {
   const { t, locale } = useI18n();
   const month = monthLong(`${block.period}-01`, locale);
   const due = block.billing?.due;
@@ -200,7 +201,7 @@ function MonthlyBlock({ block, asOf, onPay, onUndo, busy }) {
             </button>
           ) : null;
           return (
-            <div className="mrow" key={charge.id}>
+            <div className={`mrow ${spotlit("fees", `${charge.studentId}:${charge.groupId}`)}`.trim()} key={charge.id}>
               <StudentAvatar avatarId={student.avatarId} name={student.fullName} size="small" decorative />
               <span className="nm">
                 <strong title={student.fullName}>{student.fullName}</strong>
@@ -245,7 +246,7 @@ function MonthlyBlock({ block, asOf, onPay, onUndo, busy }) {
 }
 
 /** «Mensualidades · octubre» below the charts: one card holding every monthly group. */
-function MonthlyFees({ blocks, asOf, onPay, onUndo, busy }) {
+function MonthlyFees({ blocks, asOf, onPay, onUndo, busy, spotlit = (_kind, _id) => "" }) {
   const { t, locale } = useI18n();
   if (!blocks.length) return null;
   return (
@@ -254,7 +255,15 @@ function MonthlyFees({ blocks, asOf, onPay, onUndo, busy }) {
         {t("Monthly fees · {month}", { month: monthLong(`${blocks[0].period}-01`, locale) })}
       </h2>
       {blocks.map((block) => (
-        <MonthlyBlock key={block.group.id} block={block} asOf={asOf} onPay={onPay} onUndo={onUndo} busy={busy} />
+        <MonthlyBlock
+          key={block.group.id}
+          block={block}
+          asOf={asOf}
+          onPay={onPay}
+          onUndo={onUndo}
+          busy={busy}
+          spotlit={spotlit}
+        />
       ))}
     </div>
   );
@@ -369,6 +378,7 @@ export default function Tracking({
   const [chip, setChip] = useState("all");
   const [sheet, setSheet] = useState(null);
   const [busy, setBusy] = useState(false);
+  const { light, spotlit } = useSpotlight();
 
   const reset = () => {
     setSelected(null);
@@ -388,8 +398,15 @@ export default function Tracking({
   useEffect(() => {
     if (intent?.type !== "open-tracking") return;
     if (TAB_VALUES.includes(intent.tab)) changeTab(intent.tab, { replace: true });
+    if (intent.spotlight) {
+      // Show every student, so the ones the alert named are in the list to be marked.
+      setChip("all");
+      setSelected(null);
+      setFocus(false);
+      light(intent.spotlight);
+    }
     clearIntent?.();
-  }, [changeTab, clearIntent, intent]);
+  }, [changeTab, clearIntent, intent, light]);
 
   const groupsById = useMemo(() => new Map((state.groups || []).map((group) => [group.id, group])), [state.groups]);
   const range = useMemo(
@@ -1009,6 +1026,7 @@ export default function Tracking({
               return (
                 <ListRow
                   key={row.student.id}
+                  className={spotlit("students", row.student.id)}
                   avatar={<StudentAvatar avatarId={row.student.avatarId} name={row.student.fullName} decorative />}
                   name={row.student.fullName}
                   context={
@@ -1037,7 +1055,14 @@ export default function Tracking({
             {!mobileList.length ? <p className="muted">{t("Nobody in this filter.")}</p> : null}
           </div>
         </section>
-        <MonthlyFees blocks={blocks} asOf={asOf} onPay={payMonthly} onUndo={undoMonthly} busy={busy} />
+        <MonthlyFees
+          blocks={blocks}
+          asOf={asOf}
+          onPay={payMonthly}
+          onUndo={undoMonthly}
+          busy={busy}
+          spotlit={spotlit}
+        />
         <Button icon={Download} className="tracking-export" onClick={exportVisible}>
           {t("Export to Excel")}
         </Button>
@@ -1326,7 +1351,7 @@ export default function Tracking({
                 <button
                   type="button"
                   key={row.student.id}
-                  className={`tsr ${studentId === row.student.id ? "on" : look.hit ? "hit" : ""}`}
+                  className={`tsr ${studentId === row.student.id ? "on" : look.hit ? "hit" : ""} ${spotlit("students", row.student.id)}`}
                   aria-pressed={studentId === row.student.id}
                   onClick={() => setStudentId(studentId === row.student.id ? "" : row.student.id)}
                 >
@@ -1419,7 +1444,7 @@ export default function Tracking({
           </div>
         </section>
       )}
-      <MonthlyFees blocks={blocks} asOf={asOf} onPay={payMonthly} onUndo={undoMonthly} busy={busy} />
+      <MonthlyFees blocks={blocks} asOf={asOf} onPay={payMonthly} onUndo={undoMonthly} busy={busy} spotlit={spotlit} />
       <Drawer
         open={dateOpen}
         onClose={() => setDateOpen(false)}

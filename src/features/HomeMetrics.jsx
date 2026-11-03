@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronRight, X } from "lucide-react";
 import { useI18n } from "../i18n/index.jsx";
 import { BottomSheet, Button, IconButton, Select } from "../components/ui";
 import { StudentAvatar } from "../components/StudentAvatar";
+import { useSpotlight } from "../components/useSpotlight";
 import { addDays, endOfMonth } from "../domain/dates";
 import {
   ChartView,
@@ -886,7 +887,7 @@ function MetricCardBody({ metric, summary, context, onOpen, selected, onSelect }
   );
 }
 
-function DetailAside({ detail, onAction }) {
+function DetailAside({ detail, onAction, spotlit = (_kind, _id) => "" }) {
   return (
     <aside className="det" aria-live="polite">
       <span className="overline">{detail.title}</span>
@@ -906,7 +907,7 @@ function DetailAside({ detail, onAction }) {
         <div>
           <span className="overline det-list-title">{detail.listTitle}</span>
           {detail.list.map((item) => (
-            <div className="who" key={item.id}>
+            <div className={`who ${spotlit("students", item.id)}`.trim()} key={item.id}>
               <i style={{ background: item.color }} />
               <span className="wn">
                 {item.name}
@@ -929,7 +930,7 @@ function DetailAside({ detail, onAction }) {
         <div>
           <span className="overline det-list-title">{detail.extra.title}</span>
           {detail.extra.list.map((item) => (
-            <div className="who" key={item.id}>
+            <div className={`who ${spotlit("students", item.id)}`.trim()} key={item.id}>
               <i style={{ background: item.color }} />
               <span className="wn">
                 {item.name}
@@ -965,7 +966,7 @@ function AttendanceSquares({ sequence, t }) {
   );
 }
 
-function StudentTable({ metric, rows, context }) {
+function StudentTable({ metric, rows, context, spotlit = (_kind, _id) => "" }) {
   const { t, locale } = useI18n();
   const { threshold } = context;
   const sorted = [...rows].sort((left, right) => {
@@ -1016,7 +1017,7 @@ function StudentTable({ metric, rows, context }) {
                 : { tone: "st-ok", text: t("Up to date") };
             const groups = (row.student.groupNames || []).join(" · ");
             return (
-              <div className="tr" role="row" key={row.student.id}>
+              <div className={`tr ${spotlit("students", row.student.id)}`.trim()} role="row" key={row.student.id}>
                 <div className="person" role="cell">
                   <StudentAvatar avatarId={row.student.avatarId} name={row.student.fullName} size="small" decorative />
                   <div>
@@ -1120,8 +1121,12 @@ export function MetricExplorer({
   views = {},
   onViewChange = (_metric, _view) => {},
   initialAside = "point",
+  spotlight = null,
 }) {
   const { t, locale } = useI18n();
+  // An alert opened the explorer: mark who it named and bring the first of them into view.
+  const { light, spotlit } = useSpotlight();
+  useEffect(() => light(spotlight), [light, spotlight]);
   const [group, setGroup] = useState("all");
   const [selected, setSelected] = useState(null);
   // «Ver en la gráfica» from an overdue alert opens straight on the debts, the figure the alert quotes.
@@ -1299,9 +1304,9 @@ export function MetricExplorer({
             />
           )}
         </div>
-        <DetailAside detail={detail} onAction={onAction} />
+        <DetailAside detail={detail} onAction={onAction} spotlit={spotlit} />
       </div>
-      <StudentTable metric={open} rows={rows} context={context} />
+      <StudentTable metric={open} rows={rows} context={context} spotlit={spotlit} />
     </div>
   );
 }

@@ -424,6 +424,26 @@ describe("class notes and the «Not recorded» list", () => {
     ).toEqual(["10:00 a.m.", "5:00 p.m."]);
   });
 
+  it("marks the class or the students an Inicio alert opened it for", () => {
+    const state = classState();
+    const session = buildClassWorkspaceSessions(state, AS_OF_DATE).find((item) => item.classDate === AS_OF_DATE);
+    const view = renderClasses(state, {
+      intent: { type: "open-class", sessionKey: session.key, spotlight: { kind: "students", ids: ["s1"] } },
+      clearIntent: vi.fn(),
+    });
+    const lit = document.querySelectorAll(".roster-row.is-spotlit");
+    expect(lit).toHaveLength(1);
+    expect(lit[0]).toHaveTextContent("Ana");
+    view.unmount();
+
+    renderClasses(state, {
+      intent: { type: "open-class", sessionKey: session.key, spotlight: { kind: "class", ids: [session.key] } },
+      clearIntent: vi.fn(),
+    });
+    expect(document.querySelector(".register-head")).toHaveClass("is-spotlit");
+    expect(document.querySelector(".roster-row.is-spotlit")).toBeNull();
+  });
+
   it("shows only the name in each roster row, even when the student owes classes", () => {
     const owed = (classDate, outstanding) => ({
       studentId: "s1",
