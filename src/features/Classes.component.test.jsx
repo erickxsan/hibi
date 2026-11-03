@@ -424,7 +424,7 @@ describe("class notes and the «Not recorded» list", () => {
     ).toEqual(["10:00 a.m.", "5:00 p.m."]);
   });
 
-  it("says how many classes a debt spans", () => {
+  it("shows only the name in each roster row, even when the student owes classes", () => {
     const owed = (classDate, outstanding) => ({
       studentId: "s1",
       groupId: "g1",
@@ -433,16 +433,13 @@ describe("class notes and the «Not recorded» list", () => {
       attendance: "P",
       outstanding,
     });
-    const view = renderClasses(classState(), {
+    renderClasses(classState(), {
       derived: { classLog: [owed("2026-07-01", 200), owed("2026-07-08", 150)] },
     });
-    const since = formatShortDate("2026-07-01", "en-MX", { weekday: false });
-    expect(screen.getByText(`Owes $350 from 2 classes since ${since}`)).toBeInTheDocument();
-    view.unmount();
-
-    renderClasses(classState(), { derived: { classLog: [owed("2026-07-08", 150)] } });
-    const on = formatShortDate("2026-07-08", "en-MX", { weekday: false });
-    expect(screen.getByText(`Owes $150 from the class on ${on}`)).toBeInTheDocument();
+    const who = document.querySelectorAll('[data-cell="who"]');
+    expect(who.length).toBeGreaterThan(0);
+    for (const cell of who) expect(cell.querySelector("small")).toBeNull();
+    expect(screen.queryByText(/^Owes /)).not.toBeInTheDocument();
   });
 });
 
@@ -454,6 +451,18 @@ describe("monthly fee in the roster", () => {
     return state;
   }
   const dueOn = (day) => ({ type: "dayOfMonth", day });
+
+  it("says nothing under the name of a student with their own fee", () => {
+    // July already paid at the student's own $450, as in the roster where «Cuota propia $450» used to show.
+    const july = { id: "p-july", groupId: "g1", period: "2026-07", amount: 450, paidAt: "2026-07-10" };
+    const state = monthlyState({ due: dueOn(10), effectiveFrom: "2026-07" }, [july]);
+    state.students[0].billingByGroup = { g1: { mode: "customFee", fee: 450 } };
+    renderClasses(state);
+    expect(screen.queryByText(/Own fee/)).not.toBeInTheDocument();
+    for (const cell of document.querySelectorAll('[data-cell="who"]')) expect(cell.querySelector("small")).toBeNull();
+    // The fee itself still shows where it is charged.
+    expect(within(document.querySelector('[data-cell="payment"]')).getByText(/\$450/)).toBeInTheDocument();
+  });
 
   it("offers «Mark paid» only from the month's due date on", () => {
     // July is due on the 20th: on the 15th the class says when, without the button.

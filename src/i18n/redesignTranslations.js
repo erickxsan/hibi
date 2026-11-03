@@ -27,10 +27,6 @@ export const REDESIGN_TRANSLATIONS = Object.freeze({
   // Clases
   "{present} of {total} present": "{present} de {total} presentes",
   "{names} missed": "faltó {names}",
-  "Missed {missed} of their last {total} classes": "Faltó a {missed} de sus últimas {total} clases",
-  "Owes {amount} from the class on {date}": "Debe {amount} de la clase del {date}",
-  "Missing grade for {assessment}": "Falta calificar {assessment}",
-  "Own fee {amount}": "Cuota propia {amount}",
   Tomorrow: "Mañana",
   "No classes left this week.": "No quedan clases esta semana.",
   "{month} paid": "{month} pagado",
@@ -142,9 +138,7 @@ export const REDESIGN_TRANSLATIONS = Object.freeze({
   "The changes you haven't saved will be lost.": "Se perderán los cambios que no guardaste.",
   "Keep editing": "Seguir editando",
   // Clases: notes, «Sin registrar», calendar and «Nueva clase».
-  "{month} monthly fee pending": "Mensualidad de {month} pendiente",
   "Grade for {name}": "Calificación de {name}",
-  "Owes {amount} from {count} classes since {date}": "Debe {amount} de {count} clases desde el {date}",
   Yesterday: "Ayer",
   "{date}, {count} class: {list}": "{date}, {count} clase: {list}",
   "{date}, {count} classes: {list}": "{date}, {count} clases: {list}",

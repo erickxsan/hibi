@@ -140,13 +140,7 @@ describe("Spanish coverage of application sources", () => {
     expect([...new Set(missing)]).toEqual([]);
   });
 
-  it("translates the Classes notes that once leaked English", () => {
-    expect(translateToSpanish("{month} monthly fee pending").replace("{month}", "octubre")).toBe(
-      "Mensualidad de octubre pendiente",
-    );
-    expect(SPANISH_TRANSLATIONS["Owes {amount} from {count} classes since {date}"]).toBe(
-      "Debe {amount} de {count} clases desde el {date}",
-    );
+  it("translates the Classes day label that once leaked English", () => {
     expect(translateToSpanish("Yesterday")).toBe("Ayer");
   });
 

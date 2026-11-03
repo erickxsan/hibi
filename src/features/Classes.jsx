@@ -62,13 +62,7 @@ import {
   selectPrimaryClassSession,
   STATUS_LOOK,
 } from "./classesWorkspaceModel";
-import {
-  buildClassDraft,
-  buildClassRecords,
-  classDraftSummary,
-  rebaseClassDraft,
-  studentClassNote,
-} from "./classesDraftModel";
+import { buildClassDraft, buildClassRecords, classDraftSummary, rebaseClassDraft } from "./classesDraftModel";
 import { ClassCalendar } from "./ClassCalendar";
 import { ClassHistory } from "./ClassHistory";
 import { NewClassDrawer } from "./NewClassDrawer";
@@ -108,33 +102,6 @@ export function sessionSubline(state, session, t, locale) {
   if (session.format === "individual") return `${hours} · ${t("Individual")}`;
   const count = sessionStudentCount(state, session);
   return `${hours} · ${t(count === 1 ? "{count} student" : "{count} students", { count })}`;
-}
-
-function noteText(note, t, locale) {
-  switch (note.kind) {
-    case "absences":
-      return t("Missed {missed} of their last {total} classes", { missed: note.missed, total: note.total });
-    case "owes": {
-      // The amount spans every unpaid class; name how many so «Debe $1,125» does not read as one class.
-      const parameters = {
-        amount: formatMoney(note.amount, locale),
-        count: note.count,
-        date: formatShortDate(note.date, locale, { weekday: false }),
-      };
-      return note.count > 1
-        ? t("Owes {amount} from {count} classes since {date}", parameters)
-        : t("Owes {amount} from the class on {date}", parameters);
-    }
-    case "ungraded":
-      return t("Missing grade for {assessment}", { assessment: note.assessment });
-    case "monthlyPending":
-      return t("{month} monthly fee pending", { month: monthLong(`${note.period}-01`, locale) });
-    case "customFee":
-      return t("Own fee {amount}", { amount: formatMoney(note.fee, locale) });
-    default:
-      // Nothing to flag: an «Al día» under every name only repeated the normal case.
-      return "";
-  }
 }
 
 function capitalize(text) {
@@ -325,7 +292,6 @@ function MonthlyPaymentCell({ charge, studentName, today, classDate, onMonthly, 
 function RosterRow({
   student,
   entry,
-  note,
   setEntry,
   assessmentOn,
   maximum,
@@ -335,7 +301,7 @@ function RosterRow({
   onMonthly,
   busy,
 }) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const attendance = entry.attendance || "";
   let payment;
   if (monthlyCharge) {
@@ -382,15 +348,13 @@ function RosterRow({
     );
   } else grade = <span className="roster-muted">{attendance === "A" && assessmentOn ? t("— absent") : "—"}</span>;
   const empty = (node) => (!monthlyCharge && attendance !== "P" ? "is-empty" : node ? "" : "is-empty");
-  // The payment cell already says how the month stands («Vencida desde…», «Abonó…»): no second note for it.
-  const noteLine = monthlyCharge && note.kind === "monthlyPending" ? "" : noteText(note, t, locale);
   return (
     <div className="roster-row" role="row">
       <span role="rowheader" className="person" data-cell="who">
         <StudentAvatar avatarId={student.avatarId} name={student.fullName} size="small" decorative />
+        {/* Only the name: the fee shows in the payment cell; debts in Comunidad and Seguimiento. */}
         <span>
           <strong>{student.fullName}</strong>
-          {noteLine ? <small className={note.tone ? `text-${note.tone}` : "muted"}>{noteLine}</small> : null}
         </span>
       </span>
       <span role="cell" data-cell="attendance">
@@ -780,7 +744,6 @@ export default function Classes({
           .reduce((sum, payment) => sum + payment.amount, 0),
       )
     : null;
-  const derivedRows = derived?.classLog || [];
   const billing = groupBillingFor(activeGroup, periodOf(activeSession?.classDate));
   const monthlyActive = Boolean(
     activeGroup && activeSession && isMonthlyGroup(activeGroup, periodOf(activeSession.classDate)),
@@ -1007,7 +970,6 @@ export default function Classes({
                         key={student.id}
                         student={student}
                         entry={entries[student.id] || {}}
-                        note={studentClassNote(state, student, activeSession, derivedRows, monthlyCharges, currentDate)}
                         setEntry={setEntry}
                         assessmentOn={assessmentOn}
                         maximum={maximum}
