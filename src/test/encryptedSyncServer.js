@@ -45,6 +45,18 @@ export async function createEncryptedSyncServer(state, versions = {}, transformE
   const receipts = new Map();
   // Requests that a correct client never sends (for example stale entity revisions).
   const violations = [];
+  // The real functions lock the owner's encryption profile row (select ... for update), so writes from two
+  // devices run one after the other. apply() awaits manifest verification between its checks and its commit;
+  // without this queue two concurrent writes could both pass the revision check and leave a broken chain.
+  let writes = Promise.resolve();
+  const serialized = (write) => {
+    const run = writes.then(write);
+    writes = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  };
   let notify;
   const channel = {
     on: (_type, _filter, callback) => {
@@ -183,8 +195,8 @@ export async function createEncryptedSyncServer(state, versions = {}, transformE
     auth: { getUser: async () => ({ data: { user: { id: "owner" } }, error: null }) },
     rpc: vi.fn(async (name, args) => {
       if (name === LOAD_E2EE_WORKSPACE_RPC) return { data: [row], error: null };
-      if (name === APPLY_E2EE_MUTATION_RPC) return apply(args);
-      if (name === REPLACE_E2EE_WORKSPACE_RPC) return replace(args);
+      if (name === APPLY_E2EE_MUTATION_RPC) return serialized(() => apply(args));
+      if (name === REPLACE_E2EE_WORKSPACE_RPC) return serialized(() => replace(args));
       throw new Error(`Unexpected RPC: ${name}`);
     }),
   };

@@ -288,4 +288,15 @@ describe("sync audit regressions: repository", () => {
     expect(error).toBeInstanceOf(WorkspaceConflictError);
     expect(error.reason).toBe("replacement");
   });
+
+  it("the synthetic server takes writes sent at the same moment one at a time, like the row lock", async () => {
+    const state = withStudents();
+    const d = await twoDevices(state);
+    const local = await prepare(d, d.first, d.firstBase, editStudent(state, "a", { notes: "Phone" }));
+    const remote = await prepare(d, d.second, d.secondBase, editStudent(state, "b", { notes: "Tablet" }));
+    await Promise.all([submit(d, d.first, local), submit(d, d.second, remote)]);
+    const cloud = await d.device().loadWorkspace(d.session, "owner");
+    expect(cloud.revision).toBe(3);
+    expect(cloud.state.students.map((s) => s.notes)).toEqual(["Phone", "Tablet"]);
+  });
 });
