@@ -1,0 +1,845 @@
+/* Seguimiento › a student, on the phone: the three figures are the tabs; attendance is the month,
+   grades the trend against the group and payments the monthly fees. */
+.student-tracking-sheet {
+  padding: 6px 16px max(24px, env(safe-area-inset-bottom));
+}
+
+.ssh {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ssh-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ssh-who {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ssh-who .student-animal-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+}
+
+.ssh-who-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ssh-name {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font: 800 20px/24px var(--font-sans);
+  color: var(--sumi);
+}
+
+.ssh-name svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  color: var(--sumi-muted);
+}
+
+.ssh-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  font: 600 13px/18px var(--font-sans);
+  color: var(--sumi-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ssh-contact {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--washi);
+  color: var(--sumi);
+}
+
+.ssh-contact svg {
+  width: 18px;
+  height: 18px;
+}
+
+.ssh-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ssh-tile {
+  position: relative;
+  min-height: 64px;
+  padding: 12px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  background: var(--washi);
+  color: var(--sumi);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ssh-tile.on {
+  border-color: var(--sumi);
+  background: var(--kraft);
+}
+
+/* Icon and figure share one line, the dot (when there is one) at its end. */
+.ssh-tile-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ssh-tile-top svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  color: var(--sumi-muted);
+}
+
+.ssh-tile.on .ssh-tile-top svg {
+  color: var(--sumi);
+}
+
+.ssh-tile-top b {
+  min-width: 0;
+  overflow: hidden;
+  font: 800 19px/24px var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ssh-tile.is-bad b {
+  color: var(--bermellon-ink);
+}
+
+.ssh-tile.is-pend b {
+  color: var(--ocre-ink);
+}
+
+/* In the corner, so it takes no width from the figure. */
+.ssh-dot {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--bermellon);
+}
+
+.ssh-dot.is-pend {
+  background: var(--ocre);
+}
+
+.ssh-meter {
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-soft);
+  overflow: hidden;
+}
+
+.ssh-meter i {
+  display: block;
+  height: 100%;
+  background: var(--jade);
+}
+
+.ssh-tile.is-grade .ssh-meter i {
+  background: var(--indigo);
+}
+
+.ssh-tile.is-pend .ssh-meter i {
+  background: var(--ocre);
+}
+
+.ssh-tile.is-bad .ssh-meter i {
+  background: var(--bermellon);
+}
+
+.ssh-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ssh-panel .muted {
+  margin: 0;
+}
+
+.ssh-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  font: 600 13px/18px var(--font-sans);
+  color: var(--sumi-muted);
+}
+
+.ssh-line b {
+  font: 800 15px/20px var(--font-sans);
+  color: var(--sumi);
+}
+
+.ssh-line > * + span::before {
+  content: "·";
+  margin-right: 8px;
+  color: var(--line-control);
+}
+
+.ssh-month {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font: 800 15px/20px var(--font-sans);
+}
+
+.ssh-month-step {
+  width: 44px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--sumi);
+  cursor: pointer;
+}
+
+.ssh-month-step:disabled {
+  color: var(--line-control);
+  cursor: default;
+}
+
+.ssh-month-step svg {
+  width: 20px;
+  height: 20px;
+}
+
+.ssh-cal {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  text-align: center;
+}
+
+.ssh-wd {
+  font: 700 11px/16px var(--font-sans);
+  color: var(--sumi-muted);
+  text-transform: uppercase;
+}
+
+.ssh-day {
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  font: 700 14px/1 var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  color: var(--sumi-subtle);
+}
+
+.ssh-day {
+  position: relative;
+}
+
+.ssh-day.is-outside {
+  opacity: 0.35;
+}
+
+/* Today is a bar under the day, drawn apart so a class's own outline never hides it. */
+.ssh-day.is-today {
+  color: var(--sumi);
+}
+
+.ssh-day.is-today::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: -3px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--bermellon);
+}
+
+.ssh-class {
+  padding: 0;
+  border: 0;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.ssh-class.code-P {
+  background: var(--sumi);
+  color: var(--washi);
+}
+
+.ssh-class.code-A {
+  background: var(--bermellon-soft);
+  color: var(--bermellon-ink);
+  box-shadow: inset 0 0 0 1.5px var(--bermellon-ink);
+}
+
+.ssh-class.code-E,
+.ssh-class.code-U,
+.ssh-class.code-N {
+  background: var(--ocre-soft);
+  color: var(--ocre-ink);
+  box-shadow: inset 0 0 0 1.5px var(--ocre);
+}
+
+.ssh-class.code-C {
+  background: transparent;
+  color: var(--sumi-muted);
+  text-decoration: line-through;
+}
+
+.ssh-class.code-F {
+  background: transparent;
+  color: var(--sumi-muted);
+  outline: 1.5px dashed var(--line-control);
+  outline-offset: -1.5px;
+}
+
+.ssh-class.on {
+  outline: 2px solid var(--jade-strong);
+  outline-offset: 2px;
+}
+
+.ssh-dayline {
+  min-height: 60px;
+  padding: 8px 8px 8px 14px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-radius: 12px;
+  background: var(--kraft);
+}
+
+.ssh-dayline-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font: 500 13px/18px var(--font-sans);
+  color: var(--sumi-muted);
+}
+
+.ssh-dayline-text b {
+  font: 800 15px/20px var(--font-sans);
+  color: var(--sumi);
+}
+
+.ssh-dayline-soon {
+  width: 20px;
+  height: 20px;
+  margin-right: 8px;
+  color: var(--sumi-muted);
+}
+
+.ssh-take {
+  min-height: 44px;
+  padding: 0 8px 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--line-control);
+  border-radius: 10px;
+  background: var(--washi);
+  color: var(--sumi);
+  font: 700 14px/18px var(--font-sans);
+  cursor: pointer;
+}
+
+.ssh-take svg {
+  width: 16px;
+  height: 16px;
+}
+
+.ssh-dayline-word {
+  margin-right: 8px;
+  font: 700 13px/18px var(--font-sans);
+  color: var(--sumi-muted);
+}
+
+.ssh-pa {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--washi);
+}
+
+.ssh-pa button {
+  width: 44px;
+  height: 40px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--sumi-muted);
+  font: 800 15px/1 var(--font-sans);
+  cursor: pointer;
+}
+
+.ssh-pa button.code-P.on {
+  background: var(--sumi);
+  color: var(--washi);
+}
+
+.ssh-pa button.code-A.on {
+  background: var(--bermellon-soft);
+  color: var(--bermellon-ink);
+  box-shadow: inset 0 0 0 1.5px var(--bermellon-ink);
+}
+
+.ssh-pa button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.ssh-delta {
+  height: 24px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--radius-pill);
+  font: 800 13px/16px var(--font-sans);
+}
+
+.ssh-delta-face {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ssh-delta svg {
+  width: 14px;
+  height: 14px;
+}
+
+.ssh-delta.is-up {
+  background: var(--jade-soft);
+  color: var(--jade-strong);
+}
+
+.ssh-delta.is-down {
+  background: var(--bermellon-soft);
+  color: var(--bermellon-ink);
+}
+
+.ssh-trend {
+  display: block;
+  width: 100%;
+  height: auto;
+  font-family: var(--font-sans);
+}
+
+.ssh-trend-axis {
+  stroke: var(--line-soft);
+}
+
+.ssh-trend-group {
+  stroke: var(--line-control);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 5;
+}
+
+.ssh-trend-groupnum,
+.ssh-trend-day {
+  font-size: 11px;
+  font-weight: 700;
+  fill: var(--sumi-muted);
+}
+
+.ssh-trend-line {
+  fill: none;
+  stroke: var(--indigo);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ssh-trend-dot {
+  fill: var(--indigo);
+}
+
+.ssh-trend-missing {
+  fill: var(--surface-raised);
+  stroke: var(--bermellon);
+  stroke-width: 2;
+  stroke-dasharray: 3 2.5;
+}
+
+.ssh-trend-value,
+.ssh-trend-ask {
+  font-size: 13px;
+  font-weight: 800;
+  fill: var(--sumi);
+}
+
+.ssh-trend-ask {
+  fill: var(--bermellon-ink);
+}
+
+.ssh-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.ssh-row {
+  min-height: 52px;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border-top: 1px solid var(--line-soft);
+}
+
+.ssh-date {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.ssh-date small {
+  font: 700 11px/14px var(--font-sans);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--sumi-muted);
+}
+
+.ssh-date b {
+  font: 800 15px/18px var(--font-sans);
+}
+
+.ssh-row-name {
+  min-width: 0;
+  overflow: hidden;
+  font: 600 15px/20px var(--font-sans);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ssh-score {
+  padding-right: 4px;
+  font: 800 17px/20px var(--font-sans);
+  font-variant-numeric: tabular-nums;
+}
+
+.ssh-score.text-bad {
+  color: var(--bermellon-ink);
+}
+
+.ssh-score.is-ok {
+  color: var(--jade-strong);
+}
+
+.ssh-grade {
+  width: 44px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid var(--bermellon);
+  border-radius: 10px;
+  background: var(--bermellon-soft);
+  color: var(--bermellon-ink);
+  cursor: pointer;
+}
+
+.ssh-grade svg {
+  width: 17px;
+  height: 17px;
+}
+
+.ssh-stamps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ssh-stamp {
+  height: 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  background: var(--washi);
+  color: var(--sumi-muted);
+  font: 700 13px/16px var(--font-sans);
+  cursor: pointer;
+}
+
+.ssh-stamp.on {
+  border-color: var(--sumi);
+  background: var(--kraft);
+  color: var(--sumi);
+}
+
+.ssh-stamp-month {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ssh-stamp > svg {
+  width: 20px;
+  height: 20px;
+  color: var(--sumi-muted);
+}
+
+.ssh-stamp > svg.is-ok {
+  color: var(--jade-strong);
+}
+
+.ssh-stamp > svg.is-bad {
+  color: var(--bermellon-ink);
+}
+
+.ssh-ring circle {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 3;
+}
+
+.ssh-ring circle + circle {
+  stroke: var(--ocre);
+  transform: rotate(-90deg);
+  transform-origin: 12px 12px;
+}
+
+.ssh-ring.is-bad circle + circle {
+  stroke: var(--bermellon);
+}
+
+.ssh-fee {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ssh-fee-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ssh-amount {
+  font: 800 40px/44px var(--font-sans);
+  font-variant-numeric: tabular-nums;
+}
+
+.ssh-amount.is-bad {
+  color: var(--bermellon-ink);
+}
+
+.ssh-amount.is-pend {
+  color: var(--ocre-ink);
+}
+
+.ssh-amount.is-ok {
+  color: var(--jade-strong);
+}
+
+.ssh-chip {
+  min-height: 28px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-pill);
+  background: var(--kraft);
+  color: var(--sumi-muted);
+  font: 800 13px/16px var(--font-sans);
+}
+
+.ssh-chip.is-bad {
+  background: var(--bermellon-soft);
+  color: var(--bermellon-ink);
+}
+
+.ssh-chip.is-pend {
+  background: var(--ocre-soft);
+  color: var(--ocre-ink);
+}
+
+.ssh-chip.is-ok {
+  background: var(--jade-soft);
+  color: var(--jade-strong);
+}
+
+.ssh-chip.is-next {
+  background: var(--indigo-soft);
+  color: var(--indigo);
+}
+
+.ssh-fee-group,
+.ssh-fee-of {
+  font: 600 13px/18px var(--font-sans);
+  color: var(--sumi-muted);
+}
+
+.ssh-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--line-soft);
+  overflow: hidden;
+}
+
+.ssh-bar i {
+  display: block;
+  height: 100%;
+  background: var(--jade);
+}
+
+.ssh-move {
+  grid-template-columns: 24px minmax(0, 1fr) auto auto;
+  min-height: 44px;
+}
+
+.ssh-move > svg {
+  width: 20px;
+  height: 20px;
+  color: var(--jade-strong);
+}
+
+.ssh-move .ssh-row-name {
+  font-size: 14px;
+  color: var(--sumi-muted);
+}
+
+.ssh-undo {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--sumi-muted);
+  cursor: pointer;
+}
+
+.ssh-undo svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* The fee's own pay control: the amount (lower it to record an abono) and a full-width button. */
+.ssh-pay .fee-pay {
+  display: flex;
+  width: 100%;
+  gap: 12px;
+}
+
+.ssh-pay .fee-amount {
+  font-size: 22px;
+  line-height: 28px;
+}
+
+.ssh-pay .button {
+  flex: 1;
+  min-height: 52px;
+  font-size: 16px;
+}
+
+.ssh-owed {
+  grid-template-columns: 40px minmax(0, 1fr) auto 18px;
+  padding: 0;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  background: transparent;
+  color: var(--sumi);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ssh-owed > svg {
+  width: 18px;
+  height: 18px;
+  color: var(--sumi-muted);
+}
+
+/* No visible close: the grab bar, the backdrop and Escape close the sheet. A keyboard or screen
+   reader still finds this button, and it shows itself when focused. */
+.ssh-close {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  border: 0;
+  white-space: nowrap;
+}
+
+.ssh-close:focus-visible {
+  position: static;
+  width: auto;
+  height: 44px;
+  padding: 0 16px;
+  overflow: visible;
+  clip: auto;
+  border: 1px solid var(--line-control);
+  border-radius: 10px;
+  background: var(--washi);
+  color: var(--sumi);
+  font: 700 14px/18px var(--font-sans);
+}
+
+.ssh-group .group-badge,
+.ssh-stamp-month .group-badge {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+}
+
+.ssh-group .group-badge svg,
+.ssh-stamp-month .group-badge svg {
+  width: 12px;
+  height: 12px;
+}

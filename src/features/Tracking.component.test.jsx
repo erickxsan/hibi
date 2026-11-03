@@ -3,7 +3,7 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createGroup, createStarterState, createStudent } from "../domain";
+import { createGrade, createGroup, createStarterState, createStudent } from "../domain";
 import { useClassManager } from "../hooks/useClassManager";
 import { I18nProvider } from "../i18n";
 import { LANGUAGE_STORAGE_KEY } from "../i18n/translations";
@@ -267,5 +267,118 @@ describe("Tracking on mobile", () => {
     expect(within(list).getByText("1 student")).toBeInTheDocument();
     expect(within(list).getByText("Sofía Martín")).toBeInTheDocument();
     expect(within(list).queryByText("Diego Soto")).not.toBeInTheDocument();
+  });
+
+  it("opens a student's sheet with the figures as tabs and marks a class from its calendar", async () => {
+    setCompact(true);
+    const user = userEvent.setup();
+    const { openPage, saved } = setup();
+    await user.click(screen.getByRole("button", { name: /Luna López/ }));
+    const sheet = await screen.findByRole("dialog", { name: "Luna López" });
+    // The name shows once (no sheet title, no table) and the tab you came from is open.
+    expect(within(sheet).getAllByText("Luna López")).toHaveLength(1);
+    expect(within(sheet).queryByRole("table")).not.toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: "Attendance: 33% · Low attendance" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(within(sheet).getByRole("button", { name: /^Payments: \$150/ })).toHaveAttribute("aria-pressed", "false");
+    expect(within(sheet).getByText("1 of 3 classes")).toBeInTheDocument();
+    expect(within(sheet).getByText("Group 67%")).toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: "October 19 · Present" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(sheet).getByRole("button", { name: "October 26 · Upcoming" })).toBeInTheDocument();
+
+    await user.click(within(sheet).getByRole("button", { name: "October 12 · Absent" }));
+    await user.click(within(sheet).getByRole("button", { name: "Present" }));
+    await waitFor(() => expect(saved().classLog.find((item) => item.id === "r3").attendance).toBe("P"));
+    expect(await within(sheet).findByRole("button", { name: "Attendance: 67% · Low attendance" })).toBeInTheDocument();
+
+    await user.click(within(sheet).getByRole("button", { name: /View profile/ }));
+    expect(openPage).toHaveBeenCalledWith("community", { type: "open-student", id: "s1" });
+  });
+
+  it("shows a student's grades against the group and opens the class of a missing one", async () => {
+    setCompact(true);
+    const user = userEvent.setup();
+    const state = trackingState();
+    const grade = (id, date, studentId, assessment, score) =>
+      createGrade({ id, date, studentId, assessment, score, maxScore: 10, classSessionKey: `${date}|g:g1|16:00` });
+    state.grades = [
+      grade("gr1", "2026-10-19", "s1", "Quiz", 8),
+      grade("gr2", "2026-10-19", "s2", "Quiz", 9),
+      grade("gr3", "2026-10-12", "s1", "Essay", null),
+    ];
+    const { openPage } = setup(state);
+    await user.click(screen.getByRole("button", { name: /Luna López/ }));
+    const sheet = await screen.findByRole("dialog", { name: "Luna López" });
+    await user.click(within(sheet).getByRole("button", { name: "Grades: 8.0 · Needs a grade" }));
+    expect(within(sheet).getByText("Group 8.5")).toBeInTheDocument();
+    expect(
+      within(sheet).getByRole("img", { name: "Essay: Needs a grade · Quiz: 8.0 · Group 8.5" }),
+    ).toBeInTheDocument();
+    await user.click(within(sheet).getByRole("button", { name: "Grade Essay" }));
+    expect(openPage).toHaveBeenCalledWith("classes", {
+      type: "open-history-class",
+      sessionKey: "2026-10-12|g:g1|16:00",
+    });
+  });
+
+  it("asks before marking a paid class absent, which would remove its payment", async () => {
+    setCompact(true);
+    const user = userEvent.setup();
+    const { saved } = setup();
+    await user.click(screen.getByRole("button", { name: /Diego Soto/ }));
+    const sheet = await screen.findByRole("dialog", { name: "Diego Soto" });
+    await user.click(within(sheet).getByRole("button", { name: "October 5 · Present" }));
+    await user.click(within(sheet).getByRole("button", { name: "Absent" }));
+    const question = await screen.findByRole("alertdialog", { name: "Mark as absent?" });
+    expect(within(question).getByText(/^The \$150(\.00)? paid for this class will be removed\.$/)).toBeInTheDocument();
+    await user.click(within(question).getByRole("button", { name: "Cancel" }));
+    expect(saved()).toBeUndefined();
+    await user.click(within(sheet).getByRole("button", { name: "Absent" }));
+    await user.click(await screen.findByRole("button", { name: "Mark absent" }));
+    await waitFor(() => expect(saved().classLog.find((item) => item.id === "r2").attendance).toBe("A"));
+  });
+
+  it("lists a class debt from before the period under the amount owed", async () => {
+    setCompact(true);
+    const user = userEvent.setup();
+    const state = trackingState();
+    state.classLog.push(row("r0", "2026-09-28", "s1", "P", 0));
+    const { openPage } = setup(state);
+    await user.click(screen.getByRole("button", { name: /Luna López/ }));
+    const sheet = await screen.findByRole("dialog", { name: "Luna López" });
+    await user.click(within(sheet).getByRole("button", { name: /^Payments: \$300/ }));
+    await user.click(within(sheet).getByRole("button", { name: /^Open class · Mon 28 Sep/ }));
+    expect(openPage).toHaveBeenCalledWith("classes", {
+      type: "open-history-class",
+      sessionKey: "2026-09-28|g:g1|16:00",
+    });
+  });
+
+  it("pays and takes back a monthly fee from the student's sheet", async () => {
+    setCompact(true);
+    const user = userEvent.setup();
+    const { saved } = setup();
+    await user.click(screen.getByRole("button", { name: /Sofía Martín/ }));
+    const sheet = await screen.findByRole("dialog", { name: "Sofía Martín" });
+    await user.click(within(sheet).getByRole("button", { name: /^Payments:/ }));
+    expect(within(sheet).getByRole("button", { name: "October · Prepa · Overdue" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(within(sheet).getByRole("button", { name: "November · Prepa · Pending" })).toBeInTheDocument();
+    expect(within(sheet).getByText("Overdue · 5 Oct")).toBeInTheDocument();
+    await user.click(within(sheet).getByRole("button", { name: "Mark paid" }));
+    await waitFor(() =>
+      expect(saved().students.find((student) => student.id === "s3").monthlyPayments).toEqual([
+        expect.objectContaining({ groupId: "g2", period: "2026-10", amount: 1200 }),
+      ]),
+    );
+    expect(await within(sheet).findByText("Paid · today")).toBeInTheDocument();
+    await user.click(within(sheet).getByRole("button", { name: "Undo" }));
+    await waitFor(() =>
+      expect(saved().students.find((student) => student.id === "s3").monthlyPayments ?? []).toEqual([]),
+    );
   });
 });

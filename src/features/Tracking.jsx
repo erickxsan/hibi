@@ -16,6 +16,7 @@ import {
 } from "../components/ui";
 import { StudentAvatar } from "../components/StudentAvatar";
 import { MonthlyFeePay } from "./MonthlyFeePay";
+import { TrackingStudentSheet } from "./TrackingStudentSheet";
 import { ArchivedGroupsScope } from "../components/ArchivedGroupsScope";
 import { useCompactViewport } from "../components/OverlayContext";
 import { useHistoryBackedState } from "../hooks/useHistoryNavigation";
@@ -1119,19 +1120,35 @@ export default function Tracking({
             </div>
           ) : null}
         </BottomSheet>
+        {/* The student's own header replaces the sheet's: the name shows once and opens the profile. */}
         <BottomSheet
           open={Boolean(sheetStudent)}
           onClose={() => setSheet(null)}
           title={sheetStudent?.student.fullName || ""}
-          kicker={periodOptions.find((option) => option.value === period)?.short}
+          showHeader={false}
+          className="student-tracking-sheet"
         >
           {sheetStudent ? (
-            <StudentHistory
+            <TrackingStudentSheet
+              key={`${sheetStudent.student.id}|${range.start}|${range.end}|${scope}`}
               row={sheetStudent}
-              records={trackingRecords(state, derived, range, scope, sheetStudent.student.id)}
+              state={state}
+              derived={derived}
+              range={range}
+              scope={scope}
+              asOf={asOf}
+              liveDate={liveDate}
+              initialTab={tab}
+              thresholds={threshold}
+              scopeKpis={kpis}
               groupsById={groupsById}
-              onClose={() => setSheet(null)}
+              actions={actions}
+              busy={busy}
+              onPay={payMonthly}
+              onUndo={undoMonthly}
               onOpenStudent={() => openPage?.("community", { type: "open-student", id: sheetStudent.student.id })}
+              openPage={openPage}
+              onClose={() => setSheet(null)}
             />
           ) : null}
         </BottomSheet>
