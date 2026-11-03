@@ -605,8 +605,7 @@ export function buildTodayTimeline(state, derived, asOf, nowTime) {
       state: timelineState(session, nowMinutes, next?.key),
       roster,
       notes,
-      alerts: notes.filter((item) => !item.dismissed && item.note.kind !== "upToDate" && item.note.kind !== "customFee")
-        .length,
+      alerts: notes.filter((item) => !item.dismissed && item.note.kind !== "upToDate").length,
       attendance: sessionAttendance(session),
     };
   });

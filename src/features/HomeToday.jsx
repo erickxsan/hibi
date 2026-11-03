@@ -35,8 +35,6 @@ export function noteChip(note, t, locale) {
       return { tone: "st-pend", text: t("Ungraded") };
     case "monthlyPending":
       return { tone: "st-pend", text: t("Monthly fee") };
-    case "customFee":
-      return { tone: "st-ok", text: t("Own fee") };
     default:
       return null;
   }

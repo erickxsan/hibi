@@ -76,6 +76,14 @@ describe("monthly fee note before class", () => {
     });
   });
 
+  it("says nothing about a paid own fee: it is not news under the name", () => {
+    const own = recordMonthlyPayment(
+      { ...monthly, students: [{ ...diego, billingByGroup: { m1: { mode: "customFee", fee: 450 } } }] },
+      { studentId: "diego", groupId: "m1", period: "2026-10", paidAt: "2026-10-15" },
+    );
+    expect(studentClassNote(own, own.students[0], classOn("2026-11-02"))).toEqual({ kind: "upToDate", tone: "" });
+  });
+
   it("still flags last month's fee when it was never paid", () => {
     expect(studentClassNote(monthly, diego, classOn("2026-11-02"))).toEqual({
       kind: "monthlyPending",

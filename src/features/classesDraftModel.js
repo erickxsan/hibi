@@ -241,7 +241,7 @@ export function studentClassNote(
     const charge = monthlyChargeForClass(charges, student.id, groupId, session.classDate);
     if (charge && charge.status !== "paid" && charge.status !== "waived" && charge.dueDate <= today)
       return { kind: "monthlyPending", tone: "pend", period: charge.period };
-    if (charge?.adjusted) return { kind: "customFee", tone: "", fee: charge.fee };
+    // An own fee is not news: it shows where the fee is charged, never as a note under the name.
     return { kind: "upToDate", tone: "" };
   }
   const rows = derivedRows
