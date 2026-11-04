@@ -4,7 +4,7 @@ import { deriveMonthlyCharges, nextPeriod, periodOf } from "../domain/monthlyBil
 import { buildClassWorkspaceSessionsForRange, rosterForClassSession } from "./classesWorkspaceModel";
 import { assignmentsIn, matchesGroup } from "./homeDashboardModel";
 import { studentGroupIdsOf } from "./groupLabels";
-import { trackingKpis, trackingRecords } from "./trackingModel";
+import { trackingKpis, trackingRecords, trackingDerived } from "./trackingModel";
 
 /*
  * Seguimiento's student sheet on the phone: the three figures double as tabs; attendance is a month
@@ -121,7 +121,7 @@ function averageOf(items) {
  */
 export function monthlyStamps(state, asOf, scope, studentId) {
   const current = periodOf(asOf);
-  return deriveMonthlyCharges(state, asOf, { includeArchived: false, through: nextPeriod(current) }).filter(
+  return deriveMonthlyCharges(state, asOf, { through: nextPeriod(current) }).filter(
     (charge) =>
       charge.studentId === studentId &&
       matchesGroup(scope, charge.groupId) &&
@@ -142,7 +142,7 @@ export function defaultChargeId(charges, asOf) {
  */
 export function classDebts(state, derived, { scope, studentId, asOf }) {
   const groups = new Map((state.groups || []).map((group) => [group.id, group]));
-  return (derived?.classLog || [])
+  return (trackingDerived(state, derived, asOf)?.classLog || [])
     .filter(
       (row) =>
         row.studentId === studentId &&

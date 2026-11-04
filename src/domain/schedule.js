@@ -4,6 +4,7 @@ import { normalizeRepeatRule, repeatRuleOccursOn } from "./classRecurrence.js";
 import { memoizeOnState } from "./stateMemo.js";
 import { isBillableAttendance } from "./attendanceBilling.js";
 import { roundMoney } from "./money.js";
+import { normalizeGroupScheduleHistory } from "./groupScheduleHistory.js";
 
 export const DAY_OPTIONS = Object.freeze([
   { value: 1, label: "Monday", short: "Mon" },
@@ -179,10 +180,20 @@ function scheduledOccurrences(state, startDate, endDate) {
 
   for (const group of groups) {
     if (isGroupArchived(group)) continue;
-    for (const slot of group.weeklySchedule || []) {
+    const history = normalizeGroupScheduleHistory(group.scheduleHistory);
+    const slots = new Map(
+      [...(group.weeklySchedule || []), ...history.flatMap((item) => item.weeklySchedule)].map((slot) => [
+        slot.id,
+        slot,
+      ]),
+    );
+    for (const slot of slots.values()) {
       const changes = slotChanges(state, group, slot);
       for (let date = scanStart; date <= scanEnd; date = addDays(date, 1)) {
-        const rule = resolvedSlot(slot, changes, date);
+        const schedule = history.find((item) => date < item.until)?.weeklySchedule || group.weeklySchedule || [];
+        const base = schedule.find((item) => item.id === slot.id);
+        if (!base) continue;
+        const rule = resolvedSlot(base, changes, date);
         if (rule.status === "Cancelled") continue;
         if (dayOfWeekForDate(date) !== Number(rule.dayOfWeek)) continue;
         const exception = exceptionByKey.get(`group:${group.id}:${slot.id}:${date}`);

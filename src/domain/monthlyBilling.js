@@ -24,9 +24,11 @@ import { memoizeOnState } from "./stateMemo.js";
  *   it from a month never rewrites the months before it; before its first start the student pays the group fee.
  *   `joinedOn` is the day they joined, `leftOn` the day they left (removed or deactivated) and `away` the
  *   stretches they were gone and came back: they owe the months whose fee fell due while they were there.
- *   student.monthlyPayments = [{ id, groupId, period: "YYYY-MM", amount, paidAt, partial? }]
+ *   student.monthlyPayments = [{ id, groupId, period: "YYYY-MM", amount, paidAt, partial?, recordedAt?, settledTotal? }]
  *   A month may have several payments (abonos). `partial` marks one that left a balance; a payment
  *   without it settled the month when it was recorded, so later fee changes do not reopen it.
+ *   New receipts keep their recording time for Undo and the agreed total upon settlement. Removing
+ *   a receipt preserves that total on the remaining ones, so missing money cannot stay forgiven.
  *
  * A group without `billing` (or with mode "perClass") keeps the current per-class behavior.
  * Monthly charges are derived; only the payments are stored. Each month covers from its due date
@@ -307,6 +309,10 @@ export function normalizeMonthlyPayments(value) {
       period: String(item?.period || "").trim(),
       amount: roundMoney(toNumber(item?.amount) ?? 0),
       paidAt: isDateOnly(item?.paidAt) ? item.paidAt : "",
+      ...(typeof item?.recordedAt === "string" && Number.isFinite(Date.parse(item.recordedAt))
+        ? { recordedAt: new Date(item.recordedAt).toISOString() }
+        : {}),
+      ...(finite(item?.settledTotal) && item.settledTotal >= 0 ? { settledTotal: roundMoney(item.settledTotal) } : {}),
       ...(item?.partial === true ? { partial: true } : {}),
     }))
     .filter((item) => {
@@ -319,7 +325,15 @@ export function normalizeMonthlyPayments(value) {
         a.period.localeCompare(b.period) ||
         a.groupId.localeCompare(b.groupId) ||
         a.paidAt.localeCompare(b.paidAt) ||
-        a.id.localeCompare(b.id),
+        // New receipts carry their recording time. For older same-day receipts, keep their saved
+        // order: a random UUID cannot tell which payment was received last.
+        (a.recordedAt && b.recordedAt
+          ? a.recordedAt.localeCompare(b.recordedAt)
+          : a.recordedAt
+            ? 1
+            : b.recordedAt
+              ? -1
+              : 0),
     );
 }
 
@@ -393,9 +407,16 @@ export function groupClassDates(state, group, period) {
   if (!group || !isPeriod(period)) return [];
   const start = periodStart(period);
   const end = endOfMonth(start);
-  const visibleState = isGroupArchived(group)
-    ? { ...state, groups: state.groups.map((item) => (item.id === group.id ? { ...item, status: "Active" } : item)) }
-    : state;
+  // Reactivation limits today's agenda, not the calendar of an earlier billing month.
+  const historical = {
+    ...group,
+    status: "Active",
+    scheduleResumeDate: group.scheduleResumeDate > end ? "" : group.scheduleResumeDate,
+  };
+  const unchanged = group.status !== "Inactive" && historical.scheduleResumeDate === group.scheduleResumeDate;
+  const visibleState = unchanged
+    ? state
+    : { ...state, groups: (state.groups || []).map((item) => (item.id === group.id ? historical : item)) };
   const cancelled = new Set(
     (state.classLog || [])
       .filter((row) => row.groupId === group.id && row.classStatus === "Cancelled")
@@ -666,8 +687,12 @@ function firstPeriodFor(state, group, students) {
  */
 function settlement(total, payments) {
   const paid = sumMoney(payments, (item) => item.amount);
-  const settled = payments.length > 0 && (payments.some((item) => !item.partial) || paid >= total);
-  return { paid, settled, balance: settled ? 0 : Math.max(0, roundMoney(total - paid)) };
+  const locked = payments.findLast((item) => finite(item.settledTotal));
+  // Legacy full receipts settled the amount then paid. New ones keep that agreed total explicitly,
+  // so taking back any receipt reopens the actual balance without applying a later fee increase.
+  const agreedTotal = locked ? locked.settledTotal : payments.some((item) => !item.partial) ? paid : total;
+  const settled = payments.length > 0 && paid >= agreedTotal;
+  return { total: agreedTotal, paid, settled, balance: Math.max(0, roundMoney(agreedTotal - paid)) };
 }
 
 /**
@@ -707,7 +732,7 @@ function monthlyCharges(state, asOfDate, { through = periodOf(asOfDate), include
   const students = state.students || [];
   const perClassPaid = new Map();
   for (const row of state.classLog || []) {
-    if (!(row?.amountPaid > 0)) continue;
+    if (!(row?.amountPaid > 0) || !isDateOnly(row.paymentDate) || row.paymentDate > asOfDate) continue;
     const key = `${row.studentId}|${row.groupId}|${periodOf(row.classDate)}`;
     perClassPaid.set(key, roundMoney((perClassPaid.get(key) || 0) + row.amountPaid));
   }
@@ -728,22 +753,25 @@ function monthlyCharges(state, asOfDate, { through = periodOf(asOfDate), include
         const plan = studentMonthlyPlan(state, student, group, period, paidPerClass);
         if (!plan) continue;
         const payments = normalizeMonthlyPayments(student.monthlyPayments).filter(
-          (item) => item.groupId === group.id && item.period === period,
+          (item) => item.groupId === group.id && item.period === period && item.paidAt <= asOfDate,
         );
-        const { paid, settled, balance } = settlement(plan.amount, payments);
+        const { total, paid, settled, balance } = settlement(plan.amount, payments);
         const ownDueDate = studentMonthlyDueDate(state, student, group, period, groupDueDate);
         const dueThere = dueWhileThere(overrideOf(student, group, period), period, ownDueDate);
         // A month they were not there for is not owed, unless it was paid anyway.
         if (!dueThere && !payments.length) continue;
         const dueDate = dueThere || ownDueDate;
-        const last = payments.at(-1);
+        const last = payments.reduce((latest, item) => {
+          if (!latest || (!latest.recordedAt && !item.recordedAt)) return item;
+          return item.recordedAt && (!latest.recordedAt || item.recordedAt >= latest.recordedAt) ? item : latest;
+        }, null);
         charges.push({
           id: `${student.id}|${group.id}|${period}`,
           studentId: student.id,
           groupId: group.id,
           period,
           fee: plan.fee,
-          total: plan.amount,
+          total,
           paid,
           balance,
           amount: settled ? paid : balance,
@@ -752,7 +780,8 @@ function monthlyCharges(state, asOfDate, { through = periodOf(asOfDate), include
           status: settled ? "paid" : plan.amount <= 0 ? "waived" : asOfDate > dueDate ? "overdue" : "pending",
           partial: !settled && paid > 0,
           payments,
-          paidAt: settled ? last.paidAt : "",
+          // Settlement follows receipt dates; Undo follows recording order, even for backdated receipts.
+          paidAt: settled ? payments.at(-1).paidAt : "",
           paymentId: last?.id || "",
           lastPaidAt: last?.paidAt || "",
           adjusted: plan.adjusted,
@@ -779,6 +808,17 @@ export function groupMoneyOnRecord(state, groupId) {
     (student) =>
       normalizeMonthlyPayments(student.monthlyPayments).some((item) => item.groupId === groupId) ||
       isDateOnly(student.billingByGroup?.[groupId]?.leftOn),
+  );
+}
+
+/** Deleting a student must not discard monthly receipts or fees already due, including archived groups. */
+export function studentMoneyOnRecord(state, studentId, asOfDate) {
+  const student = (state.students || []).find((item) => item.id === studentId);
+  return Boolean(
+    normalizeMonthlyPayments(student?.monthlyPayments).length ||
+    deriveMonthlyCharges(state, asOfDate).some(
+      (charge) => charge.studentId === studentId && charge.balance > 0 && charge.dueDate <= asOfDate,
+    ),
   );
 }
 
@@ -858,7 +898,15 @@ export function recordMonthlyPayment(state, { studentId, groupId, period, amount
     amount === undefined || amount === null || amount === "" ? balance.balance : roundMoney(Number(amount));
   const value = Math.min(balance.balance, Number.isFinite(wanted) ? wanted : 0);
   if (!(value > 0)) return state;
-  const payment = { id: createStableId("monthly"), groupId, period, amount: value, paidAt };
+  const payment = {
+    id: createStableId("monthly"),
+    groupId,
+    period,
+    amount: value,
+    paidAt,
+    recordedAt: new Date().toISOString(),
+    ...(value >= balance.balance ? { settledTotal: balance.total } : {}),
+  };
   return withPayments(state, studentId, (payments) => [
     ...payments,
     value < balance.balance ? { ...payment, partial: true } : payment,
@@ -867,7 +915,19 @@ export function recordMonthlyPayment(state, { studentId, groupId, period, amount
 
 /** Removes one recorded payment. */
 export function removeMonthlyPayment(state, { studentId, paymentId }) {
-  return withPayments(state, studentId, (payments) => payments.filter((item) => item.id !== paymentId));
+  return withPayments(state, studentId, (payments) => {
+    const removed = payments.find((item) => item.id === paymentId);
+    if (!removed) return payments;
+    const sameMonth = (item) => item.groupId === removed.groupId && item.period === removed.period;
+    const before = monthlyBalance(state, { studentId, groupId: removed.groupId, period: removed.period });
+    return payments
+      .filter((item) => item.id !== paymentId)
+      .map((item) =>
+        sameMonth(item) && before && (before.settled || finite(removed.settledTotal))
+          ? { ...item, settledTotal: before.total }
+          : item,
+      );
+  });
 }
 
 /**

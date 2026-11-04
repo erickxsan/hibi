@@ -69,7 +69,7 @@ import { ClassHistory } from "./ClassHistory";
 import { NewClassDrawer } from "./NewClassDrawer";
 import { EditClassDrawer } from "./EditClassDrawer";
 import "../i18n/screenTranslations.js";
-import { MonthlyFeePay } from "./MonthlyFeePay";
+import { MonthlyFeePay, MonthlyFeeUndo } from "./MonthlyFeePay";
 import "./classes.css";
 
 // Outside the component, so returning to Clases with the same records reuses the sessions already built.
@@ -233,9 +233,7 @@ function MonthlyPaymentCell({ charge, studentName, today, classDate, onMonthly, 
   const until = formatShortDate(charge.coversTo, locale, { weekday: false });
   const undo =
     charge.lastPaidAt === today ? (
-      <button type="button" className="link-button" disabled={busy} onClick={() => onMonthly.undo(charge)}>
-        {t("Undo")}
-      </button>
+      <MonthlyFeeUndo charge={charge} date={today} onUndo={onMonthly.undo} busy={busy} />
     ) : null;
   if (charge.status === "paid") {
     return (

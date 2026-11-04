@@ -100,6 +100,12 @@ export function attendanceWord(row) {
 }
 
 export function paymentWord(row, derivedRow, locale, t) {
+  if (Number(row?.amountPaid) > 0 && (row.classStatus === "Cancelled" || !isBillableAttendance(row))) {
+    return {
+      text: `${t(row.classStatus === "Cancelled" ? "Review cancelled payment" : "Review no-charge payment")} · ${formatMoney(row.amountPaid, locale)}`,
+      tone: "pend",
+    };
+  }
   if (!row || Number(row.appliedCharge) === 0 || !isBillableAttendance(row)) return { text: "—", tone: "" };
   const outstanding = Number(derivedRow?.outstanding || 0);
   if (outstanding > 0) {

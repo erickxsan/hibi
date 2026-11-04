@@ -6,6 +6,22 @@
   flex: none;
 }
 
+.fee-undo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fee-undo select {
+  max-width: 12rem;
+  font: inherit;
+  color: var(--sumi);
+  background: var(--papel);
+  border: 1px solid var(--line-control);
+  border-radius: 6px;
+  padding: 4px;
+}
+
 .fee-amount {
   position: relative;
   display: inline-flex;
