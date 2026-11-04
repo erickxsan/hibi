@@ -18,6 +18,7 @@ import { isDateOnly, startOfMonth } from "./dates.js";
 import { normalizeRepeatRule } from "./classRecurrence.js";
 import { normalizeDismissedNotes } from "./noteDismissals.js";
 import { groupBadgeFields } from "./groupBadge.js";
+import { groupScheduleSlots, normalizeGroupScheduleHistory } from "./groupScheduleHistory.js";
 import {
   billingIssues,
   normalizeBillingByGroup,
@@ -108,6 +109,20 @@ function withPrefix(validation, prefix) {
   };
 }
 
+function validateWeeklySchedule(errors, value, path = "weeklySchedule") {
+  if (value !== undefined && !Array.isArray(value)) {
+    errors.push(issue(path, "invalid_type", "Weekly schedule must be an array."));
+    return;
+  }
+  (value || []).forEach((slot, index) => {
+    const at = `${path}[${index}]`;
+    requiredText(errors, slot?.id, `${at}.id`, "Schedule slot ID");
+    finiteNumber(errors, slot?.dayOfWeek, `${at}.dayOfWeek`, "Schedule day", { min: 1, max: 7, integer: true });
+    timeOnly(errors, slot?.startTime, `${at}.startTime`, "Schedule time");
+    finiteNumber(errors, slot?.durationHours, `${at}.durationHours`, "Schedule duration", { min: 0 });
+  });
+}
+
 export function validateGroup(group, state = null) {
   const errors = [];
   const warnings = [];
@@ -124,20 +139,14 @@ export function validateGroup(group, state = null) {
     integer: true,
   });
   finiteNumber(errors, group.hourlyRate, "hourlyRate", "Group hourly rate", { min: 0, optional: true });
-  if (group.weeklySchedule !== undefined && !Array.isArray(group.weeklySchedule))
-    errors.push(issue("weeklySchedule", "invalid_type", "Weekly schedule must be an array."));
-  (group.weeklySchedule || []).forEach((slot, index) => {
-    requiredText(errors, slot?.id, `weeklySchedule[${index}].id`, "Schedule slot ID");
-    finiteNumber(errors, slot?.dayOfWeek, `weeklySchedule[${index}].dayOfWeek`, "Schedule day", {
-      min: 1,
-      max: 7,
-      integer: true,
-    });
-    timeOnly(errors, slot?.startTime, `weeklySchedule[${index}].startTime`, "Schedule time");
-    finiteNumber(errors, slot?.durationHours, `weeklySchedule[${index}].durationHours`, "Schedule duration", {
-      min: 0,
-    });
-  });
+  validateWeeklySchedule(errors, group.weeklySchedule);
+  if (group.scheduleHistory !== undefined && !Array.isArray(group.scheduleHistory)) {
+    errors.push(issue("scheduleHistory", "invalid_type", "Schedule history must be an array."));
+  }
+  for (const [index, entry] of (Array.isArray(group.scheduleHistory) ? group.scheduleHistory : []).entries()) {
+    dateOnly(errors, entry?.until, `scheduleHistory[${index}].until`, "Schedule change date");
+    validateWeeklySchedule(errors, entry?.weeklySchedule, `scheduleHistory[${index}].weeklySchedule`);
+  }
   billingIssues(group, "group").forEach(([path, message]) => errors.push(issue(path, "invalid_billing", message)));
   if (state && duplicateIn(state.groups, "name", group.name, group.id)) {
     errors.push(issue("name", "duplicate", "Group name must be unique.", group.name));
@@ -293,9 +302,9 @@ export function validateClassLogRow(row, state = null) {
     );
   }
   if (state && row.scheduleSlotId) {
-    const groupSlotExists = state.groups
-      ?.find((group) => group.id === row.groupId)
-      ?.weeklySchedule?.some((slot) => slot.id === row.scheduleSlotId);
+    const groupSlotExists = groupScheduleSlots(state.groups?.find((group) => group.id === row.groupId)).some(
+      (slot) => slot.id === row.scheduleSlotId,
+    );
     const classScheduleExists = state.classSchedules?.some((schedule) => schedule.id === row.scheduleSlotId);
     if (!groupSlotExists && !classScheduleExists)
       errors.push(
@@ -442,6 +451,9 @@ export function normalizeState(input) {
       status: group?.status ?? "Active",
       archivedAt: normalizeText(group?.archivedAt),
       scheduleResumeDate: normalizeText(group?.scheduleResumeDate),
+      ...(normalizeGroupScheduleHistory(group?.scheduleHistory).length
+        ? { scheduleHistory: normalizeGroupScheduleHistory(group.scheduleHistory) }
+        : {}),
       ...groupBadgeFields(group),
       ...(normalizeGroupBilling(group?.billing) ? { billing: normalizeGroupBilling(group.billing) } : {}),
     })),
@@ -462,7 +474,11 @@ export function normalizeState(input) {
       id: normalizeText(row?.id),
       classDate: normalizeText(row?.classDate),
       studentId: normalizeText(row?.studentId),
-      groupId: normalizeText(row?.groupId) || inferableGroupByStudent.get(normalizeText(row?.studentId)) || "",
+      // An explicit blank is an individual class, even if the student later joins a group.
+      groupId:
+        row?.groupId == null
+          ? inferableGroupByStudent.get(normalizeText(row?.studentId)) || ""
+          : normalizeText(row.groupId),
       startTime: normalizeText(row?.startTime),
       classTitle: normalizeText(row?.classTitle),
       scheduleSlotId: normalizeText(row?.scheduleSlotId),
@@ -599,7 +615,7 @@ function validateScheduleException(item, state) {
     }
   });
   const sourceGroupId = item?.sourceGroupId || item?.groupId;
-  const sourceSlots = state?.groups.find((group) => group.id === sourceGroupId)?.weeklySchedule || [];
+  const sourceSlots = groupScheduleSlots(state?.groups.find((group) => group.id === sourceGroupId));
   const scheduleReferenceExists = (id) =>
     item?.classScheduleId
       ? id === item.classScheduleId && state.classSchedules.some((schedule) => schedule.id === id)
@@ -640,9 +656,9 @@ function validateScheduleChange(item, state) {
   if (
     state &&
     item?.scheduleSlotId &&
-    !state.groups
-      .find((group) => group.id === item.groupId)
-      ?.weeklySchedule?.some((slot) => slot.id === item.scheduleSlotId)
+    !groupScheduleSlots(state.groups.find((group) => group.id === item.groupId)).some(
+      (slot) => slot.id === item.scheduleSlotId,
+    )
   ) {
     errors.push(
       issue(

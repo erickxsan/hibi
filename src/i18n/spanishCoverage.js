@@ -586,6 +586,10 @@ export const SPANISH_COVERAGE = {
   "{p0} {p1} · {p2} selected": "{p0} {p1} · {p2} seleccionados",
   "Students with grades or class history cannot be deleted; deactivate them instead.":
     "Los alumnos con calificaciones o historial de clases no se pueden eliminar; puedes desactivarlos.",
+  "Students with grades, class history, or monthly billing history cannot be deleted; deactivate them instead.":
+    "Los alumnos con calificaciones, clases o historial de mensualidades no se pueden eliminar; puedes desactivarlos.",
+  "Payment to undo": "Pago que quieres deshacer",
+  "Choose a payment": "Elige un pago",
   "Groups with assigned students or monthly fees on record cannot be deleted. Existing class history remains protected.":
     "Los grupos con alumnos asignados o mensualidades registradas no se pueden eliminar. El historial de clases existente permanece protegido.",
   "{p0} / hour": "{p0} / hora",

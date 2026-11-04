@@ -42,6 +42,7 @@ import { isBillableAttendance } from "../domain/attendanceBilling.js";
 import { setGroupArchived, startGroupSchedule } from "../domain/groupArchiving.js";
 import { groupBadgeFields, withGroupBadge } from "../domain/groupBadge.js";
 import { normalizeRepeatRule } from "../domain/classRecurrence.js";
+import { normalizeGroupScheduleHistory, preserveGroupSchedule } from "../domain/groupScheduleHistory.js";
 import { updateDismissedNotes } from "../domain/noteDismissals.js";
 import {
   normalizeBillingByGroup,
@@ -49,6 +50,7 @@ import {
   normalizeMonthlyPayments,
   monthlyBalance,
   groupMoneyOnRecord,
+  studentMoneyOnRecord,
   recordStays,
   resumeGroupBilling,
   setMonthlyPayment,
@@ -114,6 +116,9 @@ export function canonicalGroup(draft) {
     status: draft.status ?? "Active",
     archivedAt: draft.archivedAt ?? "",
     scheduleResumeDate: draft.scheduleResumeDate ?? "",
+    ...(normalizeGroupScheduleHistory(draft.scheduleHistory).length
+      ? { scheduleHistory: normalizeGroupScheduleHistory(draft.scheduleHistory) }
+      : {}),
     ...groupBadgeFields(draft),
     ...(normalizeGroupBilling(draft.billing) ? { billing: normalizeGroupBilling(draft.billing) } : {}),
   };
@@ -129,7 +134,7 @@ export function placeSavedGroup(groups, item, draft, today) {
   if (!existing) return [...groups, startGroupBilling(startGroupSchedule(item, today), today)];
   const saved =
     draft?.scheduleResumeDate === undefined ? { ...item, scheduleResumeDate: existing.scheduleResumeDate || "" } : item;
-  return groups.map((group) => (group.id === item.id ? saved : group));
+  return groups.map((group) => (group.id === item.id ? preserveGroupSchedule(existing, saved, today) : group));
 }
 
 export function canonicalStudent(draft) {
@@ -912,13 +917,14 @@ export function useClassManager({ persistence } = {}) {
 
   const deleteStudent = useCallback(
     (id) => {
-      if (
-        stateRef.current.grades.some((grade) => grade.studentId === id) ||
-        stateRef.current.classLog.some((row) => row.studentId === id)
-      )
-        return notify("Archive this student to preserve grade and payment history.", "error");
-      return commit(
-        (current) => ({
+      return commit((current) => {
+        if (
+          current.grades.some((grade) => grade.studentId === id) ||
+          current.classLog.some((row) => row.studentId === id) ||
+          studentMoneyOnRecord(current, id, operationalDate)
+        )
+          throw new Error("Archive this student to preserve grade and payment history.");
+        return {
           ...current,
           students: current.students.filter((student) => student.id !== id),
           classSchedules: current.classSchedules.filter(
@@ -927,11 +933,10 @@ export function useClassManager({ persistence } = {}) {
           scheduleExceptions: current.scheduleExceptions.filter(
             (item) => item.studentId !== id && !item.participantIds?.includes(id),
           ),
-        }),
-        "Student deleted",
-      );
+        };
+      }, "Student deleted");
     },
-    [commit, notify],
+    [commit, operationalDate],
   );
 
   const upsertGrade = useCallback(

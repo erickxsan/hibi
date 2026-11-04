@@ -12,6 +12,15 @@ import {
   sessionAttendance,
 } from "./homeDashboardModel";
 import { studentGroupIdsOf } from "./groupLabels";
+import { deriveAll } from "../domain/calculations.js";
+import { memoizeOnState } from "../domain/stateMemo.js";
+
+const deriveReport = memoizeOnState(deriveAll, (asOf) => asOf);
+
+/** All report figures use the chosen cutoff, including the student's detail and exports. */
+export function trackingDerived(state, derived, asOf) {
+  return !asOf || derived?.dashboard?.asOfDate === asOf ? derived : deriveReport(state, asOf);
+}
 
 /*
  * Seguimiento: one period and one scope (all, a group or individual classes) feed the KPIs,
@@ -124,13 +133,23 @@ export function inScope(student, scope) {
 
 /** Every active student of the scope with their figures for the range. */
 export function trackingStudents(state, derived, range, scope = "all") {
-  const derivedRows = derived?.classLog || [];
+  const derivedRows = trackingDerived(state, derived, range.end)?.classLog || [];
   const assignments = range.start ? assignmentsIn(state, range.start, range.end, scope) : [];
   const debts = new Map(debtsThrough(state, derivedRows, range.end, scope).map((item) => [item.studentId, item]));
   const payments = range.start ? paymentsBetween(state, derivedRows, range.start, range.end, scope) : [];
-  const charges = deriveMonthlyCharges(state, range.end, { includeArchived: false });
+  const charges = deriveMonthlyCharges(state, range.end);
+  const historicalIds = new Set([
+    ...debts.keys(),
+    ...payments.map((item) => item.studentId),
+    ...derivedRows
+      .filter(
+        (row) => row.classDate >= range.start && row.classDate <= range.end && matchesGroup(scope, row.groupId || ""),
+      )
+      .map((row) => row.studentId),
+    ...assignments.flatMap((item) => item.grades.map((grade) => grade.studentId)),
+  ]);
   return (state.students || [])
-    .filter((student) => student.status !== "Inactive" && inScope(student, scope))
+    .filter((student) => student.status !== "Inactive" && (inScope(student, scope) || historicalIds.has(student.id)))
     .map((student) => {
       const rows = derivedRows
         .filter(
@@ -227,7 +246,7 @@ export function trackingMetric(state, derived, range, scope, tab) {
       }));
     return { metric: "grade", period: range.period, points };
   }
-  const derivedRows = derived?.classLog || [];
+  const derivedRows = trackingDerived(state, derived, range.end)?.classLog || [];
   const points = trackingBuckets(range).map((bucket) => {
     const payments = paymentsBetween(state, derivedRows, bucket.start, bucket.end, scope);
     return { ...bucket, key: bucket.start, payments, value: sumMoney(payments, (item) => item.amount) };
@@ -250,7 +269,8 @@ export function trackingKpis(state, derived, range, scope, students) {
   const previousValues = range.previousStart
     ? gradeValues(assignmentsIn(state, range.previousStart, range.previousEnd, scope))
     : [];
-  const derivedRows = derived?.classLog || [];
+  const derivedRows = trackingDerived(state, derived, range.end)?.classLog || [];
+  const debt = debtSummary(state, derivedRows, range.end, scope);
   const payments = range.start ? paymentsBetween(state, derivedRows, range.start, range.end, scope) : [];
   const previousPayments = range.previousStart
     ? paymentsBetween(state, derivedRows, range.previousStart, range.previousEnd, scope)
@@ -296,13 +316,13 @@ export function trackingKpis(state, derived, range, scope, students) {
       delta: previousCollected ? (collected - previousCollected) / previousCollected : null,
       monthlyCount: payments.filter((item) => item.kind === "monthly").length,
       paymentCount: payments.length,
-      owed: sumMoney(students, (row) => row.owed),
-      overdue: sumMoney(students, (row) => row.overdue),
+      owed: debt.owed,
+      overdue: debt.overdue,
       // Same scope words as Inicio: overdue money of this month and of earlier months, inactive students apart.
       period: periodOf(range.end),
-      overdueThisMonth: sumMoney(students, (row) => row.overdueThisMonth),
-      overdueEarlier: sumMoney(students, (row) => row.overdueEarlier),
-      inactiveOwed: range.end ? debtSummary(state, derivedRows, range.end, scope).inactive.owed : 0,
+      overdueThisMonth: debt.overdueThisMonth,
+      overdueEarlier: debt.overdueEarlier,
+      inactiveOwed: debt.inactive.owed,
       previousStart: range.previousStart,
       previousEnd: range.previousEnd,
       overdueStudents: students.filter((row) => row.overdue > 0),
@@ -316,14 +336,9 @@ export function trackingKpis(state, derived, range, scope, students) {
 /** «Mensualidades · mes» per monthly group of the scope: who paid, who owes and the progress. */
 export function monthlyBlocks(state, asOf, scope = "all") {
   const period = periodOf(asOf);
-  const charges = deriveMonthlyCharges(state, asOf, { includeArchived: false }).filter(
-    (charge) => charge.period === period,
-  );
+  const charges = deriveMonthlyCharges(state, asOf).filter((charge) => charge.period === period);
   return (state.groups || [])
-    .filter(
-      (group) =>
-        group.status !== "Inactive" && isMonthlyGroup(group, period) && (scope === "all" || scope === group.id),
-    )
+    .filter((group) => isMonthlyGroup(group, period) && (scope === "all" || scope === group.id))
     .map((group) => {
       const rows = charges
         .filter((charge) => charge.groupId === group.id)
@@ -362,7 +377,7 @@ export function monthlyBlocks(state, asOf, scope = "all") {
 export function trackingRecords(state, derived, range, scope = "all", studentId = "") {
   const studentsById = new Map((state.students || []).map((student) => [student.id, student]));
   const groupsById = new Map((state.groups || []).map((group) => [group.id, group]));
-  return (derived?.classLog || [])
+  return (trackingDerived(state, derived, range.end)?.classLog || [])
     .filter(
       (row) =>
         row.classDate >= range.start &&

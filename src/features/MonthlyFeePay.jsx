@@ -40,3 +40,41 @@ export function MonthlyFeePay({ charge, studentName, onPay, busy, fullLabel, but
     </span>
   );
 }
+
+/** Older same-day receipts have no recording time. Let the owner choose instead of guessing by UUID. */
+export function MonthlyFeeUndo({ charge, date, onUndo, busy, buttonClassName = "link-button" }) {
+  const { t, locale } = useI18n();
+  const [selected, setSelected] = useState("");
+  if (charge.lastPaidAt !== date) return null;
+  const candidates = (charge.payments || []).filter((item) => item.paidAt === date);
+  const latest = candidates.find((item) => item.id === charge.paymentId);
+  const ambiguous = !latest?.recordedAt && candidates.length > 1;
+  const paymentId = ambiguous ? candidates.find((item) => item.id === selected)?.id || "" : charge.paymentId;
+  return (
+    <span className="fee-undo">
+      {ambiguous ? (
+        <select
+          aria-label={t("Payment to undo")}
+          value={paymentId}
+          disabled={busy}
+          onChange={(event) => setSelected(event.target.value)}
+        >
+          <option value="">{t("Choose a payment")}</option>
+          {candidates.map((item) => (
+            <option key={item.id} value={item.id}>
+              {formatMoney(item.amount, locale)}
+            </option>
+          ))}
+        </select>
+      ) : null}
+      <button
+        type="button"
+        className={buttonClassName}
+        disabled={busy || !paymentId}
+        onClick={() => onUndo({ ...charge, paymentId })}
+      >
+        {t("Undo")}
+      </button>
+    </span>
+  );
+}

@@ -15,6 +15,7 @@ import { useConfirmPrompt } from "./components/ConfirmPrompt";
 import { useI18n } from "./i18n";
 import { deriveAll } from "./domain";
 import { sumMoney } from "./domain/money";
+import { deriveMonthlyCharges } from "./domain/monthlyBilling.js";
 import { isGroupArchived, statisticsStateForGroups } from "./domain/groupArchiving";
 import {
   onboardingStep,
@@ -107,8 +108,14 @@ export default function ClassManagerApplication({
       sumMoney(
         manager.derived.classLog.filter((row) => archivedGroupIds.has(row.groupId)),
         (row) => row.outstanding,
+      ) +
+      sumMoney(
+        deriveMonthlyCharges(manager.state, manager.state.settings.asOfDate).filter(
+          (charge) => archivedGroupIds.has(charge.groupId) && charge.dueDate <= manager.state.settings.asOfDate,
+        ),
+        (charge) => charge.balance,
       ),
-    [manager.derived.classLog, archivedGroupIds],
+    [manager.state, manager.derived.classLog, archivedGroupIds],
   );
   const [includeArchivedGroups, setIncludeArchivedGroups] = useState(false);
   const statisticsState = useMemo(

@@ -16,7 +16,7 @@ import {
 } from "../components/ui";
 import { StudentAvatar } from "../components/StudentAvatar";
 import { useSpotlight } from "../components/useSpotlight";
-import { MonthlyFeePay } from "./MonthlyFeePay";
+import { MonthlyFeePay, MonthlyFeeUndo } from "./MonthlyFeePay";
 import { TrackingStudentSheet } from "./TrackingStudentSheet";
 import { ArchivedGroupsScope } from "../components/ArchivedGroupsScope";
 import { useCompactViewport } from "../components/OverlayContext";
@@ -55,6 +55,7 @@ import {
   trackingRange,
   trackingRecords,
   trackingStudents,
+  trackingDerived,
 } from "./trackingModel";
 import "../i18n/screenTranslations.js";
 import "../components/charts.css";
@@ -196,9 +197,7 @@ function MonthlyBlock({ block, asOf, onPay, onUndo, busy, spotlit }) {
                       ? t("Due today")
                       : t("Due {date}", { date: formatShortDate(charge.dueDate, locale) });
           const undo = paidToday ? (
-            <button type="button" className="mlk" disabled={busy} onClick={() => onUndo(charge)}>
-              {t("Undo")}
-            </button>
+            <MonthlyFeeUndo charge={charge} date={asOf} onUndo={onUndo} busy={busy} buttonClassName="mlk" />
           ) : null;
           return (
             <div className={`mrow ${spotlit("fees", `${charge.studentId}:${charge.groupId}`)}`.trim()} key={charge.id}>
@@ -348,7 +347,7 @@ function StudentHistory({ row, records, groupsById, onClose, onOpenStudent }) {
 
 export default function Tracking({
   state,
-  derived,
+  derived: liveDerived,
   actions = undefined,
   openPage = undefined,
   intent = undefined,
@@ -367,6 +366,7 @@ export default function Tracking({
   const [rangeDraft, setRangeDraft] = useState({ start: "", end: "" });
   const [rangeOpen, setRangeOpen] = useState(false);
   const asOf = period === "custom" ? customRange.end : reportDate || liveDate;
+  const derived = useMemo(() => trackingDerived(state, liveDerived, asOf), [state, liveDerived, asOf]);
   const [tab, setTab] = useState("attendance");
   const [mode, setMode] = useState("summary");
   const [scope, setScope] = useState("all");
@@ -483,12 +483,10 @@ export default function Tracking({
 
   const groupChips = [
     { value: "all", label: t("All groups") },
-    ...(state.groups || [])
-      .filter((group) => group.status !== "Inactive")
-      .map((group) => ({ value: group.id, label: group.name })),
+    ...(state.groups || []).map((group) => ({ value: group.id, label: group.name })),
     ...((state.students || []).some(
       (student) => student.status !== "Inactive" && (student.isIndividual || !(student.groupIds || []).length),
-    )
+    ) || (state.classLog || []).some((row) => !row.groupId)
       ? [{ value: "individual", label: t("Individual (plural)") }]
       : []),
   ];

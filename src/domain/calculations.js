@@ -147,7 +147,7 @@ function chargeForContext(context, row, student, group) {
   // A class a monthly fee covers (even one recorded before the fee started) costs only what was
   // already paid for it, which the fee then discounts.
   if (monthlyFeeCovers(student, context.groupsById.get(row.groupId), row.classDate, { startedOnly: true }))
-    return validPaymentAmount(row);
+    return isDateOnly(row.paymentDate) && row.paymentDate <= context.asOf ? validPaymentAmount(row) : 0;
   if (finiteNumber(row.appliedCharge)) return roundMoney(row.appliedCharge);
   const hours = finiteNumber(row.hours) ? row.hours : context.config.defaultClassHours;
   const rate = finiteNumber(row.appliedHourlyRate) ? row.appliedHourlyRate : rateForContext(context, student, group);
