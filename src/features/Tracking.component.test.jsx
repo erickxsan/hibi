@@ -248,6 +248,69 @@ describe("Tracking on desktop", () => {
   });
 });
 
+describe("Tracking and lost payments", () => {
+  function lostState() {
+    const state = trackingState();
+    state.classLog.push(row("old", "2026-08-03", "s1", "P", 0));
+    state.students[0].lostPayments = [{ kind: "class", classId: "old", lostAt: "2026-10-20" }];
+    state.students[2].lostPayments = [{ kind: "monthly", groupId: "g2", period: "2026-10", lostAt: "2026-10-20" }];
+    return state;
+  }
+  async function openPayments(user) {
+    await user.click(screen.getByRole("tab", { name: "Payments" }));
+  }
+
+  it("shows a debt as owed, with nothing to recover, in a report dated before it was given up", async () => {
+    const user = userEvent.setup();
+    setup(lostState());
+    await openPayments(user);
+    expect(document.querySelector(".tlist-foot")).toHaveTextContent("Lost");
+    // Nobody left to expect money from: no «0 of 0».
+    expect(document.querySelector(".mhd-sum")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Report date" }));
+    const dialog = screen.getByRole("dialog", { name: "Report date" });
+    await user.click(within(dialog).getByRole("combobox", { name: "Report date" }));
+    await user.click(screen.getByRole("button", { name: "Thursday, October 15, 2026" }));
+    await user.click(within(dialog).getByRole("button", { name: "Apply" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect([...document.querySelectorAll(".tlist-foot")].map((item) => item.textContent).join()).not.toContain("Lost");
+    await user.click(screen.getByRole("button", { name: /Luna López/ }));
+    const debts = document.querySelector(".debts");
+    expect(within(debts).queryByRole("button", { name: /^Recover/ })).not.toBeInTheDocument();
+    expect(debts).not.toHaveTextContent("Lost");
+    expect(within(debts).queryByRole("button", { name: /^Mark as lost/ })).not.toBeInTheDocument();
+    // A class paid after that day reads as owed, and must not be paid again with today's date.
+    expect(within(debts).queryByRole("button", { name: /^Mark paid/ })).not.toBeInTheDocument();
+  });
+
+  it("sums months and classes in words, and adds the lost column to the Excel", async () => {
+    const user = userEvent.setup();
+    const state = lostState();
+    state.students[0].groupIds = ["g1", "g2"];
+    state.students[0].lostPayments.push({ kind: "monthly", groupId: "g2", period: "2026-10", lostAt: "2026-10-20" });
+    setup(state);
+    await openPayments(user);
+    await user.click(within(document.querySelector(".tlist")).getAllByRole("button", { name: "View" }).at(-1));
+    expect(await screen.findByText("1 month and 1 class")).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    const blobs = [];
+    URL.createObjectURL = vi.fn((blob) => blobs.push(blob) && "blob:hibi");
+    URL.revokeObjectURL = vi.fn();
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    await user.click(screen.getByRole("button", { name: "Export Excel" }));
+    const sheet = await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.readAsText(blobs[0]);
+    });
+    expect(sheet).toContain("<th>Lost</th>");
+    expect(sheet).toContain("<td>1350</td>");
+    click.mockRestore();
+  });
+});
+
 describe("Tracking on mobile", () => {
   it("puts the title first, keeps the tab order and draws one calendar day per date", async () => {
     setCompact(true);

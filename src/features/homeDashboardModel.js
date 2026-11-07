@@ -1,6 +1,6 @@
 import { roundMoney, sumMoney } from "../domain/money.js";
 import { attendanceBilling } from "../domain/attendanceBilling.js";
-import { addDays, addMonths, endOfMonth, startOfMonth, startOfWeek } from "../domain/dates";
+import { addDays, addMonths, daysInMonth, endOfMonth, startOfMonth, startOfWeek } from "../domain/dates";
 import { generateScheduledOccurrences, resolveHourlyRate } from "../domain/schedule";
 import { coveredByMonthlyFee, deriveMonthlyCharges, monthlyPaymentsBetween, periodOf } from "../domain/monthlyBilling";
 import { allSeen, noteKey } from "../domain/noteDismissals";
@@ -16,6 +16,8 @@ export const HOME_METRICS = Object.freeze(["attendance", "grade", "collections"]
 const DAY_START = 8 * 60;
 /** A class balance is «Pendiente» for a week after the class and «Vencido» after that. */
 export const OVERDUE_AFTER_DAYS = 7;
+/** «Adeudos viejos» start here; the panel can also look further back. */
+export const STALE_DEBT_MONTHS = 3;
 
 export function isOverdueClassDebt(classDate, asOf) {
   return Boolean(classDate) && classDate < addDays(asOf, -OVERDUE_AFTER_DAYS);
@@ -352,8 +354,10 @@ export function debtsThrough(state, derivedRows, asOf, groupFilter = "all") {
     .forEach((row) =>
       add(row.studentId, row.outstanding, isOverdueClassDebt(row.classDate, asOf), periodOf(row.classDate), {
         kind: "class",
+        rowId: row.id,
         date: row.classDate,
         amount: row.outstanding,
+        groupId: row.groupId || "",
       }),
     );
   deriveMonthlyCharges(state, asOf, { includeArchived: false })
@@ -363,6 +367,7 @@ export function debtsThrough(state, derivedRows, asOf, groupFilter = "all") {
       add(charge.studentId, charge.amount, charge.status === "overdue", charge.period, {
         kind: "monthly",
         period: charge.period,
+        date: charge.dueDate,
         amount: charge.amount,
         groupId: charge.groupId,
       }),
@@ -393,6 +398,83 @@ export function debtSummary(state, derivedRows, asOf, groupFilter = "all") {
     overdueStudents: debts.filter((item) => item.overdue > 0).sort((left, right) => right.overdue - left.overdue),
     inactive: { debts: inactive, owed: sumMoney(inactive, (item) => item.amount) },
   };
+}
+
+/**
+ * What the teacher has given up on as of `asOf`, per student, biggest first. Like what is owed it is a
+ * running total, not something that happened in the period being looked at. Never part of what was
+ * collected or what is owed; inactive students count here too.
+ */
+export function lostSummary(state, derivedRows, asOf, groupFilter = "all") {
+  const byStudent = new Map();
+  const add = (studentId, item) => {
+    if (!byStudent.has(studentId)) byStudent.set(studentId, []);
+    byStudent.get(studentId).push(item);
+  };
+  derivedRows
+    .filter((row) => row.lostAmount > 0 && row.classDate <= asOf && matchesGroup(groupFilter, row.groupId || ""))
+    .forEach((row) =>
+      add(row.studentId, {
+        kind: "class",
+        classId: row.id,
+        groupId: row.groupId || "",
+        date: row.classDate,
+        amount: row.lostAmount,
+        lostAt: row.lostAt,
+      }),
+    );
+  deriveMonthlyCharges(state, asOf, { includeArchived: false })
+    .filter((charge) => charge.status === "lost" && matchesGroup(groupFilter, charge.groupId))
+    .forEach((charge) =>
+      add(charge.studentId, {
+        kind: "monthly",
+        groupId: charge.groupId,
+        period: charge.period,
+        date: charge.dueDate,
+        amount: charge.balance,
+        lostAt: charge.lostAt,
+      }),
+    );
+  const students = [...byStudent.entries()]
+    .map(([studentId, items]) => ({
+      studentId,
+      amount: sumMoney(items, (item) => item.amount),
+      items: items.sort((left, right) => left.date.localeCompare(right.date)),
+    }))
+    .sort((left, right) => right.amount - left.amount);
+  return { total: sumMoney(students, (item) => item.amount), students };
+}
+
+/**
+ * Debts overdue for more than `months` months, per student, biggest first: the ones worth asking
+ * «will this ever be paid?». Inactive students count too, since nothing else lists them.
+ */
+export function staleDebts(state, derivedRows, asOf, months = STALE_DEBT_MONTHS, groupFilter = "all") {
+  const day = Number(asOf.slice(8));
+  const first = addMonths(asOf, -months);
+  const cutoff = addDays(first, Math.min(day, daysInMonth(first)) - 1);
+  const students = debtsThrough(state, derivedRows, asOf, groupFilter)
+    .map((debt) => {
+      const items = debt.reasons
+        .filter((reason) => reason.overdue && reason.date < cutoff)
+        .sort((left, right) => left.date.localeCompare(right.date))
+        .map((reason) => ({
+          kind: reason.kind,
+          groupId: reason.groupId,
+          date: reason.date,
+          amount: reason.amount,
+          ...(reason.kind === "class" ? { classId: reason.rowId } : { period: reason.period }),
+        }));
+      return {
+        studentId: debt.studentId,
+        inactive: debt.inactive,
+        amount: sumMoney(items, (item) => item.amount),
+        items,
+      };
+    })
+    .filter((item) => item.items.length)
+    .sort((left, right) => right.amount - left.amount);
+  return { total: sumMoney(students, (item) => item.amount), students };
 }
 
 /** Collections expected for the rest of the month: monthly fees still unpaid plus upcoming per-class charges. */
@@ -751,6 +833,21 @@ function attentionItems(state, derived, asOf) {
       ],
     });
   }
+  const stale = staleDebts(state, derivedRows, asOf);
+  if (stale.total > 0)
+    items.push({
+      kind: "staleDebts",
+      tone: "pend",
+      amount: stale.total,
+      names: stale.students.map((item) => nameOf(item.studentId)).filter(Boolean),
+      action: { type: "stale" },
+      // One per debt, so a debt that grows old brings the alert back after it was marked as seen.
+      seenKeys: stale.students.flatMap((student) =>
+        student.items.map(
+          (item) => `attention:stale:${student.studentId}:${item.classId || `${item.groupId}:${item.period}`}`,
+        ),
+      ),
+    });
   // Inactive students' fees are named apart, with their debts, never among a group's students.
   const inactiveIds = new Set(
     (state.students || []).filter((student) => student.status === "Inactive").map((student) => student.id),

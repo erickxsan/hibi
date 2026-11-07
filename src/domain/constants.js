@@ -60,6 +60,7 @@ export const PAYMENT_STATUSES = Object.freeze({
   FUTURE_PAYMENT_DATE: "Future payment date",
   SCHEDULED: "Scheduled",
   PENDING: "Pending",
+  LOST: "Lost",
   PARTIAL: "Partial",
   OVERPAID: "Overpaid",
   PAID_IN_ADVANCE: "Paid in advance",

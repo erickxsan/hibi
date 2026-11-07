@@ -190,7 +190,7 @@ export function buildClassRecords(state, session, roster, entries, { classStatus
 }
 
 /** Live summary under the roster: «2 presentes · 1 ausente · 2 sin marcar · $150 cobrado hoy». */
-export function classDraftSummary(state, session, roster, entries, monthlyPaidToday = 0) {
+export function classDraftSummary(state, session, roster, entries, monthlyPaidToday = 0, lostClasses = new Map()) {
   const values = roster.map((student) => ({ student, entry: entries[student.id] || {} }));
   const present = values.filter(({ entry }) => entry.attendance === "P").length;
   const absent = values.filter(({ entry }) => entry.attendance === "A").length;
@@ -199,6 +199,8 @@ export function classDraftSummary(state, session, roster, entries, monthlyPaidTo
   for (const { student, entry } of values) {
     if (entry.attendance !== "P" || coveredByMonthlyFee(state, student.id, session?.groupId || "", session?.classDate))
       continue;
+    // A class given up is no longer expected, like the row above this line says.
+    if (lostClasses.has(entry.classId)) continue;
     const charge = classChargeFor(
       state,
       session,
@@ -236,10 +238,12 @@ export function studentClassNote(
 ) {
   const groupId = session?.groupId || "";
   if (groupId && coveredByMonthlyFee(state, student.id, groupId, session.classDate)) {
-    const charges = monthlyCharges || deriveMonthlyCharges(state, session.classDate);
+    // As of the later day: a fee given up after this class is still given up when looking at it now.
+    const charges =
+      monthlyCharges || deriveMonthlyCharges(state, today > session.classDate ? today : session.classDate);
     // The fee that pays for this class, flagged only once it is due: not on the 1st of the month.
     const charge = monthlyChargeForClass(charges, student.id, groupId, session.classDate);
-    if (charge && charge.status !== "paid" && charge.status !== "waived" && charge.dueDate <= today)
+    if (charge && !["paid", "waived", "lost"].includes(charge.status) && charge.dueDate <= today)
       return { kind: "monthlyPending", tone: "pend", period: charge.period };
     // An own fee is not news: it shows where the fee is charged, never as a note under the name.
     return { kind: "upToDate", tone: "" };

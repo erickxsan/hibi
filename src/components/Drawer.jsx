@@ -153,15 +153,21 @@ export function Drawer({
         ),
       ].filter((element) => element.tabIndex >= 0);
       if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
+      // A notice's «Deshacer» lives outside the dialog, and only lasts a few seconds: Tab reaches it too.
+      const cycle = [...focusable, ...document.querySelectorAll(".toast-action")];
+      const active = document.activeElement;
+      const at = cycle.indexOf(active);
+      if (at < 0) {
+        // The notice just closed under the focus.
+        if (panel.contains(active)) return;
         event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
+        cycle[0].focus();
+        return;
       }
+      const leaving = event.shiftKey ? at === 0 || at >= focusable.length : at >= focusable.length - 1;
+      if (!leaving) return;
+      event.preventDefault();
+      cycle[(at + (event.shiftKey ? -1 : 1) + cycle.length) % cycle.length].focus();
     };
     document.addEventListener("keydown", handleKeyDown);
     lockDrawerBackground();

@@ -182,6 +182,82 @@ describe("Community students", () => {
   });
 });
 
+describe("Community debts", () => {
+  function owing() {
+    const state = communityState();
+    state.groups.push(
+      createGroup({
+        id: "g-fee",
+        name: "Prepa",
+        billing: { mode: "monthly", monthlyFee: 800, due: { type: "dayOfMonth", day: 5 }, effectiveFrom: "2026-09" },
+      }),
+      createGroup({
+        id: "g-fee2",
+        name: "Sec",
+        billing: { mode: "monthly", monthlyFee: 500, due: { type: "dayOfMonth", day: 5 }, effectiveFrom: "2026-10" },
+      }),
+    );
+    state.students.push(
+      createStudent({ id: "s9", code: "RO-9", fullName: "Rosa Peña", groupIds: ["g-fee", "g-fee2"], avatarId: "owl" }),
+    );
+    return state;
+  }
+  const rosa = (saved) => saved().students.find((student) => student.id === "s9");
+
+  it("keeps what was typed in the card when a debt is given up or paid", async () => {
+    const user = userEvent.setup();
+    const { saved } = setup(owing());
+    await user.click(screen.getAllByRole("button", { name: "Open Rosa Peña" })[0]);
+    fireEvent.change(screen.getByLabelText("Short notes"), { target: { value: "Paga en efectivo" } });
+    await user.click(screen.getByRole("button", { name: /^Mark as lost: September/ }));
+    await waitFor(() => expect(rosa(saved).lostPayments).toHaveLength(1));
+    expect(screen.getByLabelText("Short notes")).toHaveValue("Paga en efectivo");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(rosa(saved).notes).toBe("Paga en efectivo"));
+    expect(rosa(saved).lostPayments).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
+  });
+
+  it("is clean again once the mark is undone with nothing typed", async () => {
+    const user = userEvent.setup();
+    const { saved } = setup(owing());
+    await user.click(screen.getAllByRole("button", { name: "Open Rosa Peña" })[0]);
+    await user.click(screen.getByRole("button", { name: /^Mark as lost: September/ }));
+    await waitFor(() => expect(rosa(saved).lostPayments).toHaveLength(1));
+    await user.click(screen.getByRole("button", { name: /^Recover: September/ }));
+    await waitFor(() => expect(rosa(saved)).not.toHaveProperty("lostPayments"));
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
+  });
+
+  it("records one payment for a double tap while the cloud answers", async () => {
+    const { saved, persistence } = setup(owing());
+    fireEvent.click(screen.getAllByRole("button", { name: "Open Rosa Peña" })[0]);
+    let finish;
+    persistence.save.mockImplementationOnce(
+      (next) =>
+        new Promise((resolve) => {
+          finish = () => resolve(next);
+        }),
+    );
+    const debts = document.querySelector(".debts");
+    const [pay] = within(debts).getAllByRole("button", { name: /^Mark paid/ });
+    fireEvent.click(pay);
+    fireEvent.click(pay);
+    await waitFor(() => expect(finish).toBeTypeOf("function"));
+    finish();
+    await waitFor(() => expect(rosa(saved).monthlyPayments).toHaveLength(1));
+    expect(persistence.save).toHaveBeenCalledTimes(1);
+  });
+
+  it("names the group of each debt when the student owes in several", async () => {
+    const user = userEvent.setup();
+    setup(owing());
+    await user.click(screen.getAllByRole("button", { name: "Open Rosa Peña" })[0]);
+    expect(screen.getByRole("button", { name: "Mark as lost: October · Prepa" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Mark as lost: October · Sec" })).toBeInTheDocument();
+  });
+});
+
 describe("Community groups", () => {
   it("changes the group's icon and color from its header, and goes back to its initials", async () => {
     const user = userEvent.setup();

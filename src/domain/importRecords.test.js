@@ -127,6 +127,40 @@ describe("additive record imports", () => {
     expect(buildImportPlan(plan.candidate, imported).summary).toMatchObject({ added: 0, conflicts: 0 });
   });
 
+  it("moves a lost mark to the class and group it now belongs to", () => {
+    const current = stateWithRoster();
+    const row = { classDate: "2026-02-12", startTime: "17:00", hours: 1 };
+    current.classLog.push(
+      createClassLogRow({ id: "class-current", studentId: "student-current", groupId: "group-current", ...row }),
+    );
+    const imported = createStarterState();
+    imported.groups.push(createGroup({ id: "group-other", name: "Math" }));
+    imported.students.push(
+      createStudent({
+        id: "student-other",
+        code: "STU-001",
+        fullName: "Ana",
+        groupIds: ["group-other"],
+        lostPayments: [
+          { kind: "class", classId: "class-other", lostAt: "2026-11-05" },
+          { kind: "monthly", groupId: "group-other", period: "2026-05", lostAt: "2026-11-05" },
+        ],
+      }),
+    );
+    imported.classLog.push(
+      createClassLogRow({ id: "class-other", studentId: "student-other", groupId: "group-other", ...row }),
+    );
+    const plan = buildImportPlan(current, imported);
+    const entry = plan.entries.find((item) => item.collection === "students");
+    expect(entry.status).toBe("conflict");
+    const applied = buildImportPlan(current, imported, { [entry.key]: "use-imported" });
+    expect(applied.candidate.classLog.map((item) => item.id)).toEqual(["class-current"]);
+    expect(applied.candidate.students[0].lostPayments).toEqual([
+      { kind: "class", classId: "class-current", lostAt: "2026-11-05" },
+      { kind: "monthly", groupId: "group-current", period: "2026-05", lostAt: "2026-11-05" },
+    ]);
+  });
+
   it("keeps current conflicting information by default", () => {
     const current = stateWithRoster();
     const imported = createStarterState();

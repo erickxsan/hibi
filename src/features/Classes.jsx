@@ -18,6 +18,7 @@ import { StudentAvatar } from "../components/StudentAvatar";
 import { useSpotlight } from "../components/useSpotlight";
 import { useCompactViewport } from "../components/OverlayContext";
 import { useConfirmPrompt } from "../components/ConfirmPrompt";
+import { LostIconButton, useLostPaymentActions } from "./LostPayments";
 import { addDays, startOfWeek, todayDateOnly } from "../domain/dates";
 import { memoizeRecent } from "../domain/stateMemo";
 import { scheduledClassSupportsFutureScope } from "../domain";
@@ -248,6 +249,13 @@ function MonthlyPaymentCell({ charge, studentName, today, classDate, onMonthly, 
       </span>
     );
   }
+  if (charge.status === "lost") {
+    return (
+      <span className="monthly-pay">
+        <span className="st st-lost">{t("{month} lost", { month })}</span>
+      </span>
+    );
+  }
   if (charge.status === "waived") {
     return (
       <span className="monthly-pay">
@@ -302,6 +310,8 @@ function RosterRow({
   classDate,
   onMonthly,
   busy,
+  lostRow = null,
+  onRecover,
 }) {
   const { t } = useI18n();
   const attendance = entry.attendance || "";
@@ -316,6 +326,13 @@ function RosterRow({
         onMonthly={onMonthly}
         busy={busy}
       />
+    );
+  } else if (attendance === "P" && lostRow) {
+    payment = (
+      <span className="lost-class">
+        <span className="st st-lost">{t("Lost (fee)")}</span>
+        <LostIconButton recover name={student.fullName} disabled={busy} onClick={() => onRecover(lostRow)} />
+      </span>
     );
   } else if (attendance === "P") {
     payment = (
@@ -453,6 +470,18 @@ export default function Classes({
   );
   const chargeFor = (studentId) =>
     monthlyChargeForClass(monthlyCharges, studentId, activeSession?.groupId, activeSession?.classDate);
+  const lostActions = useLostPaymentActions(actions);
+  const lostRows = useMemo(
+    () => new Map((derived?.classLog || []).filter((row) => row.lostAmount > 0).map((row) => [row.id, row])),
+    [derived],
+  );
+  const recoverClass = (row) =>
+    lostActions.recover(row.studentId, {
+      kind: "class",
+      classId: row.id,
+      amount: row.lostAmount,
+      lostAt: row.lostAt,
+    });
 
   const remoteDraft = useMemo(() => buildClassDraft(state, activeSession), [activeSession, state]);
   const remoteSignature = useMemo(() => draftSignature(remoteDraft), [remoteDraft]);
@@ -747,6 +776,7 @@ export default function Classes({
           .flatMap((item) => item.payments)
           .filter((payment) => payment.paidAt === currentDate)
           .reduce((sum, payment) => sum + payment.amount, 0),
+        lostRows,
       )
     : null;
   const billing = groupBillingFor(activeGroup, periodOf(activeSession?.classDate));
@@ -987,7 +1017,9 @@ export default function Classes({
                         today={currentDate}
                         classDate={activeSession.classDate}
                         onMonthly={monthlyHandlers}
-                        busy={monthlyBusy}
+                        busy={monthlyBusy || lostActions.busy}
+                        lostRow={lostRows.get(entries[student.id]?.classId) || null}
+                        onRecover={recoverClass}
                       />
                     ))}
                   </div>

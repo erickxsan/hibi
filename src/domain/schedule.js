@@ -4,6 +4,7 @@ import { normalizeRepeatRule, repeatRuleOccursOn } from "./classRecurrence.js";
 import { memoizeOnState } from "./stateMemo.js";
 import { isBillableAttendance } from "./attendanceBilling.js";
 import { roundMoney } from "./money.js";
+import { classLostAt } from "./lostPayments.js";
 
 export const DAY_OPTIONS = Object.freeze([
   { value: 1, label: "Monday", short: "Mon" },
@@ -62,6 +63,8 @@ export function repriceUnpaidClasses(state, previous, student) {
   const defaultHours = state?.settings?.defaultClassHours;
   return classLog.map((row) => {
     if (row.studentId !== student.id || row.classStatus === "Cancelled" || Number(row.amountPaid) > 0) return row;
+    // A debt given up keeps its amount: recovering it brings back what it was.
+    if (classLostAt(student, row.id)) return row;
     const rate = resolveHourlyRate(state, student, row.groupId);
     const oldRates = [
       resolveHourlyRate(state, previous, row.groupId),

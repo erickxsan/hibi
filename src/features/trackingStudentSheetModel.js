@@ -4,7 +4,7 @@ import { deriveMonthlyCharges, nextPeriod, periodOf } from "../domain/monthlyBil
 import { buildClassWorkspaceSessionsForRange, rosterForClassSession } from "./classesWorkspaceModel";
 import { assignmentsIn, matchesGroup } from "./homeDashboardModel";
 import { studentGroupIdsOf } from "./groupLabels";
-import { trackingKpis, trackingRecords } from "./trackingModel";
+import { trackingDerived, trackingKpis, trackingRecords } from "./trackingModel";
 
 /*
  * Seguimiento's student sheet on the phone: the three figures double as tabs; attendance is a month
@@ -116,8 +116,8 @@ function averageOf(items) {
 }
 
 /**
- * The fees shown as stamps: every one still owed and due (none hides behind a cap), then this
- * month's and next month's (paying ahead is allowed), in month order.
+ * The fees shown as stamps: every one still owed and due or given up (none hides behind a cap), then
+ * this month's and next month's (paying ahead is allowed), in month order.
  */
 export function monthlyStamps(state, asOf, scope, studentId) {
   const current = periodOf(asOf);
@@ -125,7 +125,9 @@ export function monthlyStamps(state, asOf, scope, studentId) {
     (charge) =>
       charge.studentId === studentId &&
       matchesGroup(scope, charge.groupId) &&
-      ((["pending", "overdue"].includes(charge.status) && charge.dueDate <= asOf) || charge.period >= current),
+      ((["pending", "overdue"].includes(charge.status) && charge.dueDate <= asOf) ||
+        charge.status === "lost" ||
+        charge.period >= current),
   );
 }
 
@@ -138,16 +140,17 @@ export function defaultChargeId(charges, asOf) {
 
 /**
  * Classes still owed up to the report date, with no lower bound: the same debt the Payments figure
- * counts, so the list never reads «up to date» under an amount owed.
+ * counts, so the list never reads «up to date» under an amount owed. Classes given up stay listed,
+ * since that is where they are recovered.
  */
 export function classDebts(state, derived, { scope, studentId, asOf }) {
   const groups = new Map((state.groups || []).map((group) => [group.id, group]));
-  return (derived?.classLog || [])
+  return (trackingDerived(state, derived, asOf)?.classLog || [])
     .filter(
       (row) =>
         row.studentId === studentId &&
         row.classDate <= asOf &&
-        Number(row.outstanding) > 0 &&
+        (Number(row.outstanding) > 0 || row.lostAmount > 0) &&
         matchesGroup(scope, row.groupId || ""),
     )
     .sort((left, right) => right.classDate.localeCompare(left.classDate))

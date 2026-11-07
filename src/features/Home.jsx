@@ -32,6 +32,7 @@ import { rosterForClassSession } from "./classesWorkspaceModel";
 import { ClassCard, SeenButton, ShowSeenButton, TodayAgenda, TodayTimeline } from "./HomeToday";
 import { metricSummary, MetricCard, MetricExplorer, MetricRows, overdueSplit, thresholds } from "./HomeMetrics";
 import { randomChartView } from "./chartViewsModel";
+import { StaleDebtsPanel, useLostPaymentActions } from "./LostPayments";
 import "../i18n/screenTranslations.js";
 import "./home.css";
 
@@ -86,6 +87,12 @@ function periodTitle(period, asOf, t, locale) {
 function attentionText(item, t, locale, compact) {
   const names = (list) => shortNames(list, locale);
   switch (item.kind) {
+    case "staleDebts":
+      return {
+        lead: t("{amount} over 3 months old", { amount: formatMoney(item.amount, locale) }),
+        rest: t("from {names}.", { names: names(item.names) }),
+        link: t("Review"),
+      };
     case "unrecorded": {
       const session = item.session;
       const date = formatShortDate(session.classDate, locale);
@@ -255,6 +262,8 @@ export default function Home({
   }, [asOf]);
   const [period, setPeriod] = useState("weekly");
   const [explorer, setExplorer] = useState(null);
+  const [staleOpen, setStaleOpen] = useState(false);
+  const lostActions = useLostPaymentActions(actions);
   // Each card shows one of its metric's views, drawn at random on every visit; the detail opens on it.
   const [cardViews, setCardViews] = useState(() => ({
     attendance: randomChartView("attendance"),
@@ -363,6 +372,7 @@ export default function Home({
   // Each alert opens where it can be acted on, with what it named marked for a moment.
   const runAttention = (item) => {
     const spotlight = attentionSpotlight(item);
+    if (item.action.type === "stale") return setStaleOpen(true);
     if (item.action.type === "record") return openClass(item.action.session, spotlight);
     if (item.action.type === "monthly") return openTracking("collections", spotlight);
     if (compact) return openTracking(item.action.metric, spotlight);
@@ -383,6 +393,17 @@ export default function Home({
   // Archived groups stay out of Inicio's figures by default; the chip only appears to say they were let in
   // (from Seguimiento) and to take them out again.
   const scope = archiveScope?.count && archiveScope.included ? <ArchivedGroupsScope scope={archiveScope} /> : null;
+  const stalePanel = (
+    <StaleDebtsPanel
+      open={staleOpen}
+      onClose={() => setStaleOpen(false)}
+      state={today}
+      derived={todayDerived}
+      asOf={asOf}
+      kicker={t("To attend to")}
+      lostActions={lostActions}
+    />
+  );
 
   if (compact) {
     return (
@@ -459,6 +480,7 @@ export default function Home({
             onOpenTracking={openTracking}
           />
         </section>
+        {stalePanel}
       </div>
     );
   }
@@ -592,6 +614,7 @@ export default function Home({
           </div>
         )}
       </section>
+      {stalePanel}
     </div>
   );
 }

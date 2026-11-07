@@ -18,6 +18,14 @@ import { StudentAvatar } from "../components/StudentAvatar";
 import { useSpotlight } from "../components/useSpotlight";
 import { MonthlyFeePay } from "./MonthlyFeePay";
 import { TrackingStudentSheet } from "./TrackingStudentSheet";
+import {
+  LostIconButton,
+  LostPaymentsPanel,
+  StaleDebtsPanel,
+  StudentDebts,
+  useLostPaymentActions,
+} from "./LostPayments";
+import { chargeDebt, studentDebtRows } from "./lostPaymentsModel";
 import { ArchivedGroupsScope } from "../components/ArchivedGroupsScope";
 import { useCompactViewport } from "../components/OverlayContext";
 import { useHistoryBackedState } from "../hooks/useHistoryNavigation";
@@ -53,9 +61,11 @@ import {
   trackingKpis,
   trackingMetric,
   trackingRange,
+  trackingDerived,
   trackingRecords,
   trackingStudents,
 } from "./trackingModel";
+import { staleDebts } from "./homeDashboardModel";
 import "../i18n/screenTranslations.js";
 import "../components/charts.css";
 import "./tracking.css";
@@ -113,6 +123,7 @@ function attendanceWord(row, t) {
 }
 
 function paymentWord(record, t) {
+  if (record.payment === "lost") return { tone: "st-lost", text: t("Lost (fee)") };
   if (record.payment === "paid") return { tone: "st-ok", text: t("Paid") };
   if (record.payment === "pending") return { tone: "st-pend", text: t("Pending") };
   if (record.payment === "covered") return { tone: "st-prog", text: t("Monthly fee") };
@@ -120,7 +131,7 @@ function paymentWord(record, t) {
 }
 
 /** One monthly group under «Mensualidades · octubre»: a line with fee, due date and progress, then dense rows. */
-function MonthlyBlock({ block, asOf, onPay, onUndo, busy, spotlit }) {
+function MonthlyBlock({ block, asOf, onPay, onUndo, onRecover, busy, spotlit }) {
   const { t, locale } = useI18n();
   const month = monthLong(`${block.period}-01`, locale);
   const due = block.billing?.due;
@@ -137,15 +148,17 @@ function MonthlyBlock({ block, asOf, onPay, onUndo, busy, spotlit }) {
       <div className="mhd">
         <h3>{block.group.name}</h3>
         <p>{`${fee} · ${dueText}${dueOn}`}</p>
-        <span className="mhd-sum">
-          <b>{t("{paid} of {total}", { paid: block.paidCount, total: block.total })}</b>
-          <span>
-            {t("paid · {amount} of {expected}", {
-              amount: formatMoney(block.paidAmount, locale),
-              expected: formatMoney(block.expectedAmount, locale),
-            })}
+        {block.expectedAmount > 0 ? (
+          <span className="mhd-sum">
+            {block.total > 0 ? <b>{t("{paid} of {total}", { paid: block.paidCount, total: block.total })}</b> : null}
+            <span>
+              {t("paid · {amount} of {expected}", {
+                amount: formatMoney(block.paidAmount, locale),
+                expected: formatMoney(block.expectedAmount, locale),
+              })}
+            </span>
           </span>
-        </span>
+        ) : null}
         <div
           className="pbar"
           role="progressbar"
@@ -175,26 +188,29 @@ function MonthlyBlock({ block, asOf, onPay, onUndo, busy, spotlit }) {
       <div className="mlist">
         {block.rows.map(({ charge, student }) => {
           const paid = charge.status === "paid";
+          const lost = charge.status === "lost";
           const paidToday = charge.lastPaidAt === asOf;
           const until = formatShortDate(charge.coversTo, locale, { weekday: false });
-          const sub = paid
-            ? paidToday
-              ? t("Paid today · until {date}", { date: until })
-              : `${charge.adjusted ? `${t("Own fee")} · ` : ""}${t("Up to date until {date}", { date: until })}`
-            : charge.partial
-              ? t("Paid {paid} · {left} left", {
-                  paid: formatMoney(charge.paid, locale),
-                  left: formatMoney(charge.balance, locale),
-                })
-              : charge.status === "waived"
-                ? t("Free this month")
-                : charge.status === "overdue"
-                  ? t("Overdue · {date}", { date: formatShortDate(charge.dueDate, locale, { weekday: false }) })
-                  : charge.dueDate === block.dueDate
-                    ? ""
-                    : charge.dueDate === asOf
-                      ? t("Due today")
-                      : t("Due {date}", { date: formatShortDate(charge.dueDate, locale) });
+          const sub = lost
+            ? t("Lost (fee)")
+            : paid
+              ? paidToday
+                ? t("Paid today · until {date}", { date: until })
+                : `${charge.adjusted ? `${t("Own fee")} · ` : ""}${t("Up to date until {date}", { date: until })}`
+              : charge.partial
+                ? t("Paid {paid} · {left} left", {
+                    paid: formatMoney(charge.paid, locale),
+                    left: formatMoney(charge.balance, locale),
+                  })
+                : charge.status === "waived"
+                  ? t("Free this month")
+                  : charge.status === "overdue"
+                    ? t("Overdue · {date}", { date: formatShortDate(charge.dueDate, locale, { weekday: false }) })
+                    : charge.dueDate === block.dueDate
+                      ? ""
+                      : charge.dueDate === asOf
+                        ? t("Due today")
+                        : t("Due {date}", { date: formatShortDate(charge.dueDate, locale) });
           const undo = paidToday ? (
             <button type="button" className="mlk" disabled={busy} onClick={() => onUndo(charge)}>
               {t("Undo")}
@@ -227,7 +243,17 @@ function MonthlyBlock({ block, asOf, onPay, onUndo, busy, spotlit }) {
                     {undo}
                   </span>
                 </>
-              ) : charge.status === "waived" ? null : (
+              ) : charge.status === "waived" ? null : lost ? (
+                <>
+                  <s className="mamt">{formatMoney(charge.balance, locale)}</s>
+                  <LostIconButton
+                    recover
+                    name={`${month}, ${student.fullName}`}
+                    disabled={busy}
+                    onClick={() => onRecover(charge.studentId, chargeDebt(charge))}
+                  />
+                </>
+              ) : (
                 <MonthlyFeePay
                   key={`${charge.id}:${charge.balance}`}
                   charge={charge}
@@ -246,7 +272,7 @@ function MonthlyBlock({ block, asOf, onPay, onUndo, busy, spotlit }) {
 }
 
 /** «Mensualidades · octubre» below the charts: one card holding every monthly group. */
-function MonthlyFees({ blocks, asOf, onPay, onUndo, busy, spotlit = (_kind, _id) => "" }) {
+function MonthlyFees({ blocks, asOf, onPay, onUndo, onRecover, busy, spotlit = (_kind, _id) => "" }) {
   const { t, locale } = useI18n();
   if (!blocks.length) return null;
   return (
@@ -261,6 +287,7 @@ function MonthlyFees({ blocks, asOf, onPay, onUndo, busy, spotlit = (_kind, _id)
           asOf={asOf}
           onPay={onPay}
           onUndo={onUndo}
+          onRecover={onRecover}
           busy={busy}
           spotlit={spotlit}
         />
@@ -270,7 +297,7 @@ function MonthlyFees({ blocks, asOf, onPay, onUndo, busy, spotlit = (_kind, _id)
 }
 
 /** Rows of a student's history inside the range. */
-function StudentHistory({ row, records, groupsById, onClose, onOpenStudent }) {
+function StudentHistory({ row, records, groupsById, onClose, onOpenStudent, debts }) {
   const { t, locale } = useI18n();
   const student = row.student;
   const threshold = 0.8;
@@ -308,7 +335,14 @@ function StudentHistory({ row, records, groupsById, onClose, onOpenStudent }) {
             {row.owed ? formatMoney(row.owed, locale) : "—"}
           </b>
         </div>
+        {row.lost ? (
+          <div>
+            <span>{t("Lost")}</span>
+            <b>{formatMoney(row.lost, locale)}</b>
+          </div>
+        ) : null}
       </div>
+      {debts}
       <div className="hist" role="table" aria-label={t("History of {name}", { name: student.fullName })}>
         <div className="hr th" role="row">
           <span role="columnheader">{t("Date")}</span>
@@ -348,7 +382,7 @@ function StudentHistory({ row, records, groupsById, onClose, onOpenStudent }) {
 
 export default function Tracking({
   state,
-  derived,
+  derived: liveDerived,
   actions = undefined,
   openPage = undefined,
   intent = undefined,
@@ -367,6 +401,7 @@ export default function Tracking({
   const [rangeDraft, setRangeDraft] = useState({ start: "", end: "" });
   const [rangeOpen, setRangeOpen] = useState(false);
   const asOf = period === "custom" ? customRange.end : reportDate || liveDate;
+  const derived = useMemo(() => trackingDerived(state, liveDerived, asOf), [asOf, liveDerived, state]);
   const [tab, setTab] = useState("attendance");
   const [mode, setMode] = useState("summary");
   const [scope, setScope] = useState("all");
@@ -422,6 +457,19 @@ export default function Tracking({
   const blocks = useMemo(
     () => (tab === "payments" ? monthlyBlocks(state, asOf, scope) : []),
     [asOf, scope, state, tab],
+  );
+  const lostActions = useLostPaymentActions(actions);
+  const [lostPanel, setLostPanel] = useState("");
+  // Marks are dated today, so a report of an earlier day could not show the change.
+  const canLose = asOf === liveDate;
+  const debtRows = useMemo(
+    () => (tab === "payments" && studentId ? studentDebtRows(state, derived, { studentId, asOf, scope }) : []),
+    [asOf, derived, scope, state, studentId, tab],
+  );
+  const stale = useMemo(
+    () =>
+      tab === "payments" && canLose ? staleDebts(state, derived?.classLog || [], asOf, undefined, scope) : { total: 0 },
+    [asOf, canLose, derived, scope, state, tab],
   );
   const records = useMemo(
     () =>
@@ -657,6 +705,7 @@ export default function Tracking({
             [t("Paid")]: row.paid,
             [t("Owed")]: row.owed,
             [t("Overdue")]: row.overdue,
+            [t("Lost")]: row.lost,
           }));
     if (!rows.length) return actions?.notify?.("There is nothing to export in this view.", "error");
     downloadExcel(
@@ -693,6 +742,23 @@ export default function Tracking({
   ]
     .filter(Boolean)
     .join(" · ");
+
+  const closeLostPanel = () => setLostPanel("");
+  const panelProps = {
+    onClose: closeLostPanel,
+    state,
+    derived,
+    asOf,
+    scope,
+    kicker: `${t("Tracking")} · ${t("Payments")}`,
+    lostActions,
+  };
+  const lostPanels = (
+    <>
+      <LostPaymentsPanel open={lostPanel === "lost"} {...panelProps} />
+      <StaleDebtsPanel open={lostPanel === "stale"} {...panelProps} />
+    </>
+  );
 
   // The phone's headline figure and its comparison.
   const headlineNote =
@@ -921,6 +987,20 @@ export default function Tracking({
           <b>{hero.value}</b>
           {hero.delta ? <span className={hero.deltaTone}>{hero.delta}</span> : null}
           <small>{hero.line}</small>
+          {tab === "payments" && (kpis.payments.lost > 0 || stale.total > 0) ? (
+            <div className="tracking-hero-links">
+              {kpis.payments.lost > 0 ? (
+                <button type="button" className="lost-link" onClick={() => setLostPanel("lost")}>
+                  {t("Lost {amount}", { amount: formatMoney(kpis.payments.lost, locale) })}
+                </button>
+              ) : null}
+              {stale.total > 0 ? (
+                <button type="button" className="lost-link" onClick={() => setLostPanel("stale")}>
+                  {t("Old {amount}", { amount: formatMoney(stale.total, locale) })}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
         </div>
         <ChartViewPicker
           metric={TAB_METRIC[tab]}
@@ -1060,7 +1140,8 @@ export default function Tracking({
           asOf={asOf}
           onPay={payMonthly}
           onUndo={undoMonthly}
-          busy={busy}
+          onRecover={lostActions.recover}
+          busy={busy || lostActions.busy}
           spotlit={spotlit}
         />
         <Button icon={Download} className="tracking-export" onClick={exportVisible}>
@@ -1178,6 +1259,7 @@ export default function Tracking({
           ) : null}
         </BottomSheet>
         {rangeDrawer}
+        {lostPanels}
       </div>
     );
   }
@@ -1336,6 +1418,17 @@ export default function Tracking({
                 groupsById={groupsById}
                 onClose={() => setStudentId("")}
                 onOpenStudent={() => openPage?.("community", { type: "open-student", id: selectedRow.student.id })}
+                debts={
+                  <StudentDebts
+                    studentId={selectedRow.student.id}
+                    studentName={selectedRow.student.fullName}
+                    rows={debtRows}
+                    liveDate={liveDate}
+                    editable={canLose}
+                    lostActions={lostActions}
+                    busy={busy}
+                  />
+                }
               />
             ) : null}
           </section>
@@ -1386,6 +1479,28 @@ export default function Tracking({
               );
             })}
             {!list.length ? <p className="muted tlist-empty">{t("Nobody in this filter.")}</p> : null}
+            {tab === "payments" && stale.total > 0 ? (
+              <div className="tlist-foot">
+                <span>
+                  {t("Over 3 months")}
+                  <b>{formatMoney(stale.total, locale)}</b>
+                </span>
+                <button type="button" className="link-button" onClick={() => setLostPanel("stale")}>
+                  {t("Review")}
+                </button>
+              </div>
+            ) : null}
+            {tab === "payments" && kpis.payments.lost > 0 ? (
+              <div className="tlist-foot">
+                <span>
+                  {t("Lost")}
+                  <b>{formatMoney(kpis.payments.lost, locale)}</b>
+                </span>
+                <button type="button" className="link-button" onClick={() => setLostPanel("lost")}>
+                  {t("View")}
+                </button>
+              </div>
+            ) : null}
           </aside>
         </div>
       ) : (
@@ -1444,7 +1559,15 @@ export default function Tracking({
           </div>
         </section>
       )}
-      <MonthlyFees blocks={blocks} asOf={asOf} onPay={payMonthly} onUndo={undoMonthly} busy={busy} spotlit={spotlit} />
+      <MonthlyFees
+        blocks={blocks}
+        asOf={asOf}
+        onPay={payMonthly}
+        onUndo={undoMonthly}
+        onRecover={lostActions.recover}
+        busy={busy || lostActions.busy}
+        spotlit={spotlit}
+      />
       <Drawer
         open={dateOpen}
         onClose={() => setDateOpen(false)}
@@ -1480,6 +1603,7 @@ export default function Tracking({
         </Field>
       </Drawer>
       {rangeDrawer}
+      {lostPanels}
     </div>
   );
 }

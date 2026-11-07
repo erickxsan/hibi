@@ -7,6 +7,7 @@ import {
   ChevronRight,
   CircleCheck,
   CirclePlus,
+  CircleSlash,
   Clock,
   Mail,
   PencilLine,
@@ -27,6 +28,9 @@ import { MonthlyFeePay } from "./MonthlyFeePay";
 import { useConfirmPrompt } from "../components/ConfirmPrompt";
 import { comparisonSpan } from "./HomeMetrics";
 import { dayCode, defaultChargeId, studentSheetModel } from "./trackingStudentSheetModel";
+import { LostIconButton, useLostPaymentActions } from "./LostPayments";
+import { chargeDebt } from "./lostPaymentsModel";
+import { isOverdueClassDebt } from "./homeDashboardModel";
 import {
   dayNumber,
   formatDayMonth,
@@ -213,6 +217,9 @@ export function TrackingStudentSheet({
   const [pickedDay, setPickedDay] = useState("");
   const [pickedCharge, setPickedCharge] = useState("");
   const [saving, setSaving] = useState(false);
+  const lostActions = useLostPaymentActions(actions);
+  // Marks are dated today, so a report of an earlier day could not show the change.
+  const canLose = asOf === liveDate;
 
   const firstGroup = groupsById.get(studentGroupIdsOf(student)[0]);
   const phone = student.guardianPhone || student.phone;
@@ -320,6 +327,13 @@ export function TrackingStudentSheet({
         }),
       };
     if (item.status === "waived") return { tone: "", text: t("Free this month") };
+    if (item.status === "lost")
+      return {
+        tone: "",
+        text: t("Lost · {date}", {
+          date: paidToday(item.lostAt) ? t("today") : formatShortDate(item.lostAt, locale, { weekday: false }),
+        }),
+      };
     if (item.status === "overdue")
       return {
         tone: "is-bad",
@@ -339,9 +353,11 @@ export function TrackingStudentSheet({
         ? "Paid (fee)"
         : item.status === "waived"
           ? "Free this month"
-          : item.status === "overdue"
-            ? "Overdue (fee)"
-            : "Pending",
+          : item.status === "lost"
+            ? "Lost (fee)"
+            : item.status === "overdue"
+              ? "Overdue (fee)"
+              : "Pending",
     );
 
   const openClass = (sessionKey) => sessionKey && openPage?.("classes", { type: "open-history-class", sessionKey });
@@ -599,7 +615,7 @@ export function TrackingStudentSheet({
                     <button
                       key={item.id}
                       type="button"
-                      className={`ssh-stamp ${item.id === charge.id ? "on" : ""}`}
+                      className={`ssh-stamp ${item.id === charge.id ? "on" : ""} ${item.status === "lost" ? "is-lost" : ""}`}
                       aria-pressed={item.id === charge.id}
                       aria-label={[capitalize(monthLong(`${item.period}-01`, locale)), group?.name, statusWord(item)]
                         .filter(Boolean)
@@ -610,7 +626,9 @@ export function TrackingStudentSheet({
                         {severalGroups && group ? <GroupBadge group={group} size="tiny" /> : null}
                         {capitalize(monthShort(`${item.period}-01`, locale))}
                       </span>
-                      {item.status === "paid" || item.status === "waived" ? (
+                      {item.status === "lost" ? (
+                        <CircleSlash className="is-lost" aria-hidden="true" />
+                      ) : item.status === "paid" || item.status === "waived" ? (
                         <CircleCheck className={item.status === "paid" ? "is-ok" : ""} aria-hidden="true" />
                       ) : item.paid > 0 ? (
                         <PartRing share={share} tone={item.status === "overdue" ? "is-bad" : "is-pend"} />
@@ -623,7 +641,7 @@ export function TrackingStudentSheet({
               </div>
               <div className="ssh-fee">
                 <div className="ssh-fee-top">
-                  <b className={`ssh-amount ${chargeChip(charge).tone}`}>
+                  <b className={`ssh-amount ${charge.status === "lost" ? "is-lost" : chargeChip(charge).tone}`}>
                     {formatMoney(charge.status === "paid" ? charge.paid : charge.balance, locale)}
                   </b>
                   <span className={`ssh-chip ${chargeChip(charge).tone}`}>{chargeChip(charge).text}</span>
@@ -639,12 +657,28 @@ export function TrackingStudentSheet({
                 >
                   <i style={{ width: `${charge.total > 0 ? Math.round((charge.paid / charge.total) * 100) : 100}%` }} />
                 </div>
-                <span className="ssh-fee-of">
-                  {t("{paid} of {total}", {
-                    paid: formatMoney(charge.paid, locale),
-                    total: formatMoney(charge.total, locale),
-                  })}
-                </span>
+                <div className="ssh-fee-foot">
+                  <span className="ssh-fee-of">
+                    {t("{paid} of {total}", {
+                      paid: formatMoney(charge.paid, locale),
+                      total: formatMoney(charge.total, locale),
+                    })}
+                  </span>
+                  {charge.status === "lost" ? (
+                    <LostIconButton
+                      recover
+                      name={capitalize(monthLong(`${charge.period}-01`, locale))}
+                      disabled={busy || lostActions.busy}
+                      onClick={() => lostActions.recover(student.id, chargeDebt(charge))}
+                    />
+                  ) : charge.status === "overdue" && canLose ? (
+                    <LostIconButton
+                      name={capitalize(monthLong(`${charge.period}-01`, locale))}
+                      disabled={busy || lostActions.busy}
+                      onClick={() => lostActions.lose(student.id, chargeDebt(charge))}
+                    />
+                  ) : null}
+                </div>
               </div>
               {charge.payments.length ? (
                 <div className="ssh-rows">
@@ -672,7 +706,7 @@ export function TrackingStudentSheet({
                   ))}
                 </div>
               ) : null}
-              {charge.status !== "paid" && charge.status !== "waived" ? (
+              {!["paid", "waived", "lost"].includes(charge.status) ? (
                 <div className="ssh-pay">
                   <MonthlyFeePay
                     key={`${charge.id}:${charge.balance}`}
@@ -689,23 +723,51 @@ export function TrackingStudentSheet({
           ) : null}
           {model.classDebts.length ? (
             <div className="ssh-rows">
-              {model.classDebts.map((record) => (
-                <button
-                  type="button"
-                  className="ssh-row ssh-owed"
-                  key={record.row.id}
-                  aria-label={`${t("Open class")} · ${formatShortDate(record.row.classDate, locale)}`}
-                  onClick={() => openClass(record.key)}
-                >
-                  <span className="ssh-date">
-                    <small>{weekdayShort(record.row.classDate, locale)}</small>
-                    <b>{dayNumber(record.row.classDate)}</b>
-                  </span>
-                  <span className="ssh-row-name">{record.className || t("Individual")}</span>
-                  <b className="ssh-score text-bad">{formatMoney(Number(record.row.outstanding), locale)}</b>
-                  <ChevronRight aria-hidden="true" />
-                </button>
-              ))}
+              {model.classDebts.map((record) => {
+                const lost = record.row.lostAmount > 0;
+                const debt = {
+                  kind: "class",
+                  classId: record.row.id,
+                  date: record.row.classDate,
+                  amount: lost ? record.row.lostAmount : Number(record.row.outstanding),
+                  ...(lost ? { lostAt: record.row.lostAt } : {}),
+                };
+                return (
+                  <div className={`ssh-debt ${lost ? "is-lost" : ""}`.trim()} key={record.row.id}>
+                    <button
+                      type="button"
+                      className="ssh-row ssh-owed"
+                      aria-label={`${t("Open class")} · ${formatShortDate(record.row.classDate, locale)}`}
+                      onClick={() => openClass(record.key)}
+                    >
+                      <span className="ssh-date">
+                        <small>{weekdayShort(record.row.classDate, locale)}</small>
+                        <b>{dayNumber(record.row.classDate)}</b>
+                      </span>
+                      <span className="ssh-row-name">
+                        {`${record.className || t("Individual")} · ${monthShort(record.row.classDate, locale)}`}
+                      </span>
+                      <b className="ssh-score text-bad">{formatMoney(debt.amount, locale)}</b>
+                    </button>
+                    {lost ? (
+                      <LostIconButton
+                        recover
+                        name={formatShortDate(record.row.classDate, locale, { weekday: false })}
+                        disabled={busy || lostActions.busy}
+                        onClick={() => lostActions.recover(student.id, debt)}
+                      />
+                    ) : canLose && isOverdueClassDebt(record.row.classDate, asOf) ? (
+                      <LostIconButton
+                        name={formatShortDate(record.row.classDate, locale, { weekday: false })}
+                        disabled={busy || lostActions.busy}
+                        onClick={() => lostActions.lose(student.id, debt)}
+                      />
+                    ) : (
+                      <ChevronRight aria-hidden="true" className="ssh-debt-chevron" />
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ) : null}
           {!charge && !model.classDebts.length ? <p className="muted">{t("Up to date")}</p> : null}

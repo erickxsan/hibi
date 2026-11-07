@@ -17,6 +17,7 @@ import { gradeGroupId } from "./semanticIdentity.js";
 import { isGroupArchived } from "./groupArchiving.js";
 import { generateScheduledOccurrences, resolveHourlyRate } from "./schedule.js";
 import { monthlyFeeCovers } from "./monthlyBilling.js";
+import { classLostAt } from "./lostPayments.js";
 
 function isRecord(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -154,13 +155,25 @@ function chargeForContext(context, row, student, group) {
   return finiteNumber(hours) && finiteNumber(rate) ? roundMoney(hours * rate) : null;
 }
 
-function outstandingForContext(context, row, student, group) {
+// What the class still owes, whether or not the teacher has given up on it.
+function balanceForContext(context, row, student, group) {
   if (!row?.classDate || !student) return null;
   const charge = chargeForContext(context, row, student, group);
   if (row.classDate > context.asOf || row.classStatus === "Cancelled" || charge === 0) return 0;
   if (!finiteNumber(charge)) return null;
   const paid = isDateOnly(row.paymentDate) && row.paymentDate <= context.asOf ? validPaymentAmount(row) : 0;
   return moneyDifference(charge, paid);
+}
+
+// The part of a class's balance that was given up (see lostPayments.js); 0 when it is not lost.
+function lostForContext(context, row, student, group) {
+  if (!classLostAt(student, row?.id, context.asOf)) return 0;
+  const balance = balanceForContext(context, row, student, group);
+  return finiteNumber(balance) && balance > 0 ? balance : 0;
+}
+
+function outstandingForContext(context, row, student, group) {
+  return lostForContext(context, row, student, group) > 0 ? 0 : balanceForContext(context, row, student, group);
 }
 
 function paymentStatusForContext(context, row, student, group) {
@@ -172,6 +185,7 @@ function paymentStatusForContext(context, row, student, group) {
   if (row.classStatus === "Cancelled") return paid > 0 ? PAYMENT_STATUSES.REVIEW_CANCELLED : PAYMENT_STATUSES.CANCELLED;
   if (attendanceBilling(row) === "unmarked") return PAYMENT_STATUSES.ATTENDANCE_NEEDED;
   if (charge === 0) return paid > 0 ? PAYMENT_STATUSES.REVIEW_NO_CHARGE : PAYMENT_STATUSES.NO_CHARGE;
+  if (lostForContext(context, row, student, group) > 0) return PAYMENT_STATUSES.LOST;
   if (paid > 0 && !hasPaymentDate) return PAYMENT_STATUSES.DATE_NEEDED;
   if (hasPaymentDate && paid === 0) return PAYMENT_STATUSES.AMOUNT_NEEDED;
   if (hasPaymentDate && row.paymentDate > context.asOf) return PAYMENT_STATUSES.FUTURE_PAYMENT_DATE;
@@ -260,6 +274,7 @@ export function calculatePaymentStatus(state, row, asOfDate) {
   if (charge === 0) {
     return paid > 0 ? PAYMENT_STATUSES.REVIEW_NO_CHARGE : PAYMENT_STATUSES.NO_CHARGE;
   }
+  if (classLostAt(student, row.id, asOf) && calculateBalance(state, row, asOf) > 0) return PAYMENT_STATUSES.LOST;
   if (paid > 0 && !hasPaymentDate) return PAYMENT_STATUSES.DATE_NEEDED;
   if (hasPaymentDate && paid === 0) return PAYMENT_STATUSES.AMOUNT_NEEDED;
   if (hasPaymentDate && row.paymentDate > asOf) return PAYMENT_STATUSES.FUTURE_PAYMENT_DATE;
@@ -277,6 +292,12 @@ export function calculatePaymentStatus(state, row, asOfDate) {
 export function calculateOutstanding(state, row, asOfDate) {
   const { students } = arrays(state);
   const asOf = resolveAsOf(state, asOfDate);
+  const balance = calculateBalance(state, row, asOf);
+  return balance > 0 && classLostAt(findById(students, row?.studentId), row.id, asOf) ? 0 : balance;
+}
+
+function calculateBalance(state, row, asOf) {
+  const { students } = arrays(state);
   if (!row?.classDate || !row?.studentId || !findById(students, row.studentId)) return null;
 
   const charge = calculateCharge(state, row);
@@ -313,6 +334,8 @@ export function deriveClassLogRow(state, row, asOfDate, suppliedContext) {
     recognizedPaid,
     paymentStatus: paymentStatusForContext(context, row, student, pricingGroup),
     outstanding: outstandingForContext(context, row, student, pricingGroup),
+    lostAmount: lostForContext(context, row, student, pricingGroup),
+    lostAt: classLostAt(student, row?.id, context.asOf),
   };
 }
 

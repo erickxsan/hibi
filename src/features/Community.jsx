@@ -30,6 +30,8 @@ import { isGroupArchived } from "../domain/groupArchiving";
 import { gradeGroupId } from "../domain/semanticIdentity";
 import { periodOf, startGroupBilling } from "../domain/monthlyBilling";
 import { todayDateOnly } from "../domain/dates";
+import { StudentDebts, useLostPaymentActions } from "./LostPayments";
+import { studentDebtRows } from "./lostPaymentsModel";
 import { formatPercent, formatShortDate, monthLong } from "../utils/displayFormat";
 import { normalizeSearchText } from "../utils/searchText";
 import { buildClassWorkspaceSessionsForRange } from "./classesWorkspaceModel";
@@ -94,6 +96,12 @@ const NEW_GROUP_BILLING = Object.freeze({
   hourlyRate: null,
   adjustments: {},
 });
+
+/** The record as it is now, keeping only the fields edited in the draft since `baseline`. */
+function rebaseDraft(draft, baseline, latest) {
+  const edited = Object.keys(draft).filter((key) => draftChanged(draft[key], baseline[key]));
+  return { ...latest, ...Object.fromEntries(edited.map((key) => [key, draft[key]])) };
+}
 
 /** @param {any} [student] */
 function cloneStudent(student = EMPTY_STUDENT) {
@@ -178,6 +186,19 @@ export default function Community({
   const [joinTarget, setJoinTarget] = useState(null);
   const [saving, setSaving] = useState(false);
   const [pendingCode, setPendingCode] = useState("");
+  const lostActions = useLostPaymentActions(actions);
+  // Seguimiento lists only active students: here is where an inactive student's debts can be settled.
+  const debtsOf = (student) => (
+    <StudentDebts
+      studentId={student.id}
+      studentName={student.fullName}
+      rows={studentDebtRows(state, derived, { studentId: student.id, asOf })}
+      liveDate={asOf}
+      editable
+      heading="h3"
+      lostActions={lostActions}
+    />
+  );
   const colsRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const revealDetail = useRef(false);
   const baselines = useRef({ student: null, group: null, billing: null, studentEditor: null, groupEditor: null });
@@ -310,8 +331,13 @@ export default function Community({
       return;
     }
     const next = cloneStudent(selectedStudent);
+    const previous = baselines.current.student;
+    const sameStudent = previous?.id === selectedStudent.id;
     baselines.current.student = next;
-    setStudentDraft(next);
+    // A payment or a lost mark refreshes the record; unsaved edits here survive it.
+    setStudentDraft((current) =>
+      sameStudent && current && draftChanged(current, previous) ? rebaseDraft(current, previous, next) : next,
+    );
   }, [selectedStudent]);
   useEffect(() => {
     if (!focusGroup || isGroupArchived(focusGroup)) {
@@ -468,8 +494,11 @@ export default function Community({
   const saveStudentDetail = () =>
     runSave(async () => {
       if (!studentDraft) return false;
+      // Before saving, so the refreshed record replaces this draft instead of counting as unsaved edits.
+      const previous = baselines.current.student;
+      baselines.current.student = cloneStudent(studentDraft);
       const saved = await actions.upsertStudent(studentDraft);
-      if (saved) baselines.current.student = cloneStudent(studentDraft);
+      if (!saved) baselines.current.student = previous;
       return saved;
     });
   const saveStudentEditor = () =>
@@ -862,6 +891,7 @@ export default function Community({
         onOpenTracking={openTracking}
         saving={saving}
         dirty={studentDirty}
+        debts={debtsOf(selectedStudent)}
       />
     ) : selectedGroup && isGroupArchived(selectedGroup) ? (
       <ArchivedGroupView
@@ -1168,6 +1198,7 @@ export default function Community({
               groupsById={groupsById}
               asOf={asOf}
               onEdit={() => openStudentEditor(sheetStudent)}
+              debts={debtsOf(sheetStudent)}
             />
           ) : null}
         </BottomSheet>

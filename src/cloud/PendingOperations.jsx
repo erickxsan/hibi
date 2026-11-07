@@ -28,6 +28,8 @@ const FIELD_LABELS = {
   groupIds: "Groups",
   isIndividual: "Individual classes",
   customHourlyRate: "Custom hourly rate",
+  monthlyPayments: "Monthly payments",
+  lostPayments: "Lost payments",
   avatarId: "Avatar",
   iconId: "Group icon",
   colorId: "Group color",

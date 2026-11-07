@@ -149,7 +149,8 @@ function remapClassSessionKey(value, groupIds, studentIds) {
 }
 
 // A student's billing is keyed by group: its adjustments and its monthly payments follow the group's final ID.
-function remapStudentBilling(record, groupIds) {
+// Lost marks point at a group or a class, and follow it the same way.
+function remapStudentBilling(record, groupIds, classIds = new Map()) {
   const remapped = { ...record };
   if (record.billingByGroup && typeof record.billingByGroup === "object") {
     remapped.billingByGroup = Object.fromEntries(
@@ -162,11 +163,18 @@ function remapStudentBilling(record, groupIds) {
       groupId: groupIds.get(payment.groupId) || payment.groupId,
     }));
   }
+  if (Array.isArray(record.lostPayments)) {
+    remapped.lostPayments = record.lostPayments.map((mark) => ({
+      ...mark,
+      ...(mark?.groupId ? { groupId: groupIds.get(mark.groupId) || mark.groupId } : {}),
+      ...(mark?.classId ? { classId: classIds.get(mark.classId) || mark.classId } : {}),
+    }));
+  }
   return remapped;
 }
 
 function remapRecord(collection, source, maps) {
-  const { groupIds, studentIds, classScheduleIds, scheduleSlotIds } = maps;
+  const { groupIds, studentIds, classScheduleIds, scheduleSlotIds, classIds } = maps;
   const record = { ...source };
   const sourceGroupId = source.sourceGroupId || source.groupId;
   const remapSlot = (id) => {
@@ -187,7 +195,7 @@ function remapRecord(collection, source, maps) {
   if (Array.isArray(record.groupIds)) {
     record.groupIds = [...new Set(record.groupIds.map((id) => groupIds.get(id) || id))];
   }
-  if (collection === "students") Object.assign(record, remapStudentBilling(record, groupIds));
+  if (collection === "students") Object.assign(record, remapStudentBilling(record, groupIds, classIds));
   if (Array.isArray(record.participantIds)) {
     record.participantIds = [...new Set(record.participantIds.map((id) => studentIds.get(id) || id))];
   }
@@ -237,6 +245,10 @@ export function buildImportPlan(currentInput, importedInput, decisions = {}) {
     classScheduleIds,
     scheduleSlotIds: buildSlotIdMap(current, imported, groupIds),
   };
+  // A class can land on an existing record's ID, and the students' lost marks must follow it there.
+  maps.classIds = buildFinalIdMap("classLog", current.classLog, imported.classLog, (record) =>
+    remapRecord("classLog", record, maps),
+  );
   const context = {
     groupsById: new Map(current.groups.map((item) => [item.id, item])),
     studentsById: new Map(current.students.map((item) => [item.id, item])),

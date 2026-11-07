@@ -101,6 +101,8 @@ export function attendanceWord(row) {
 
 export function paymentWord(row, derivedRow, locale, t) {
   if (!row || Number(row.appliedCharge) === 0 || !isBillableAttendance(row)) return { text: "—", tone: "" };
+  if (derivedRow?.lostAmount > 0)
+    return { text: `${t("Lost (fee)")} ${formatMoney(derivedRow.lostAmount, locale)}`, tone: "" };
   const outstanding = Number(derivedRow?.outstanding || 0);
   if (outstanding > 0) {
     // ✓ – ×: «–» is pending, «×» (not paid) reads as overdue.

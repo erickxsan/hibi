@@ -137,11 +137,11 @@
 
 .ssh-tile-top b {
   min-width: 0;
-  overflow: hidden;
+  /* Never cut a figure: «$4,8…» reads as another amount. */
+  overflow: visible;
   font: 800 19px/24px var(--font-sans);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
 .ssh-tile.is-bad b {

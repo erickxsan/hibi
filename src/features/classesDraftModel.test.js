@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildClassRecords, studentClassNote } from "./classesDraftModel";
+import { buildClassRecords, classDraftSummary, studentClassNote } from "./classesDraftModel";
 import { createStarterState } from "../domain/starterState";
 import { normalizeState } from "../domain/validation";
 import { recordMonthlyPayment } from "../domain/monthlyBilling";
@@ -14,6 +14,16 @@ const row = (classDate, outstanding, attendance = "P") => ({
   classStatus: "Completed",
   attendance,
   outstanding,
+});
+
+describe("a class given up in the summary", () => {
+  it("is not pending money", () => {
+    const money = { settings: { hourlyRate: 100, defaultClassHours: 2 }, students: [], groups: [], classLog: [] };
+    const given = { groupId: "", classDate: "2026-02-12", rows: [{ id: "c1", studentId: "s1", appliedCharge: 250 }] };
+    const entries = { s1: { attendance: "P", paymentState: "Pending", classId: "c1" } };
+    expect(classDraftSummary(money, given, [student], entries).pending).toBeGreaterThan(0);
+    expect(classDraftSummary(money, given, [student], entries, 0, new Map([["c1", {}]])).pending).toBe(0);
+  });
 });
 
 describe("student note before class", () => {

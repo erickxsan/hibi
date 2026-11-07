@@ -71,6 +71,7 @@ function renderClasses(state = classState(), overrides = {}) {
     actions: {
       saveProgress: vi.fn().mockResolvedValue(true),
       upsertClassSchedule: vi.fn().mockResolvedValue(true),
+      recoverPayments: vi.fn().mockResolvedValue(true),
       notify: vi.fn(),
     },
     asOfDate: AS_OF_DATE,
@@ -313,6 +314,44 @@ describe("historical settlement", () => {
     await waitFor(() => expect(view.actions.saveProgress).toHaveBeenCalledOnce());
     const payload = view.actions.saveProgress.mock.calls[0][0];
     expect(payload.classRecords[0]).toMatchObject({ appliedCharge: 175.5, appliedHourlyRate: 100, amountPaid: 175.5 });
+  });
+});
+
+describe("a class given up as lost", () => {
+  it("reads as lost instead of pending, and recovers from the roster", async () => {
+    const user = userEvent.setup();
+    const state = classState();
+    const lostRow = {
+      id: "historic",
+      classDate: AS_OF_DATE,
+      studentId: "s1",
+      groupId: "g1",
+      startTime: "10:00",
+      classStatus: "Completed",
+      attendance: "P",
+      hours: 2,
+      appliedHourlyRate: 100,
+      appliedCharge: 200,
+      amountPaid: 0,
+      paymentState: "Pending",
+    };
+    state.classLog = [lostRow];
+    const session = buildClassWorkspaceSessions(state, AS_OF_DATE).find((item) =>
+      item.rows?.some((row) => row.id === "historic"),
+    );
+    const view = renderClasses(state, {
+      derived: { classLog: [{ ...lostRow, lostAmount: 200, lostAt: "2026-07-14", outstanding: 0 }] },
+      intent: { type: "open-history-class", sessionKey: session.key },
+      clearIntent: vi.fn(),
+    });
+    await user.click(await screen.findByRole("button", { name: "Edit record" }));
+    await screen.findByRole("button", { name: "Save changes" });
+    expect(screen.queryByRole("group", { name: "Payment for Ana" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Recover: Ana" }));
+    await waitFor(() => expect(view.actions.recoverPayments).toHaveBeenCalledOnce());
+    expect(view.actions.recoverPayments.mock.calls[0][0]).toEqual([
+      { studentId: "s1", kind: "class", classId: "historic", lostAt: "2026-07-14" },
+    ]);
   });
 });
 

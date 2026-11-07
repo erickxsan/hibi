@@ -1,6 +1,7 @@
 import { addDays, endOfMonth, isDateOnly } from "./dates.js";
 import { isGroupArchived } from "./groupArchiving.js";
 import { createStableId } from "./ids.js";
+import { feeLostAt, recoverLost } from "./lostPayments.js";
 import { roundMoney, sumMoney } from "./money.js";
 import { dayOfWeekForDate, generateScheduledOccurrences, resolveHourlyRate } from "./schedule.js";
 import { memoizeOnState } from "./stateMemo.js";
@@ -700,7 +701,8 @@ function coverage(state, student, group, period, dueDate) {
  * `total` is what the month costs, `paid` the payments so far and `balance` what is still owed;
  * `amount` is the money the charge stands for now: what was paid once settled, otherwise the balance.
  * Status: "paid" once settled; otherwise "pending" until the due date and "overdue" after it
- * (`partial` when part of it is paid). `coversFrom`–`coversTo` are the days the month pays for.
+ * (`partial` when part of it is paid), or "lost" while the teacher has given up on its balance
+ * (see lostPayments.js). `coversFrom`–`coversTo` are the days the month pays for.
  */
 function monthlyCharges(state, asOfDate, { through = periodOf(asOfDate), includeArchived = true } = {}) {
   const charges = [];
@@ -737,6 +739,7 @@ function monthlyCharges(state, asOfDate, { through = periodOf(asOfDate), include
         if (!dueThere && !payments.length) continue;
         const dueDate = dueThere || ownDueDate;
         const last = payments.at(-1);
+        const lostAt = settled || plan.amount <= 0 ? "" : feeLostAt(student, group.id, period, asOfDate);
         charges.push({
           id: `${student.id}|${group.id}|${period}`,
           studentId: student.id,
@@ -749,7 +752,16 @@ function monthlyCharges(state, asOfDate, { through = periodOf(asOfDate), include
           amount: settled ? paid : balance,
           dueDate,
           groupDueDate,
-          status: settled ? "paid" : plan.amount <= 0 ? "waived" : asOfDate > dueDate ? "overdue" : "pending",
+          status: settled
+            ? "paid"
+            : plan.amount <= 0
+              ? "waived"
+              : lostAt
+                ? "lost"
+                : asOfDate > dueDate
+                  ? "overdue"
+                  : "pending",
+          ...(lostAt ? { lostAt } : {}),
           partial: !settled && paid > 0,
           payments,
           paidAt: settled ? last.paidAt : "",
@@ -771,13 +783,14 @@ function monthlyCharges(state, asOfDate, { through = periodOf(asOfDate), include
 }
 
 /**
- * True when deleting a group would lose money on record: a monthly payment made for it, or a
- * student who left it and may still owe its fees. Such a group is archived instead.
+ * True when deleting a group would lose money on record: a monthly payment made for it, a fee given
+ * up in it, or a student who left it and may still owe its fees. Such a group is archived instead.
  */
 export function groupMoneyOnRecord(state, groupId) {
   return (state.students || []).some(
     (student) =>
       normalizeMonthlyPayments(student.monthlyPayments).some((item) => item.groupId === groupId) ||
+      (student.lostPayments || []).some((item) => item?.groupId === groupId) ||
       isDateOnly(student.billingByGroup?.[groupId]?.leftOn),
   );
 }
@@ -851,15 +864,17 @@ function withPayments(state, studentId, change) {
  * Records a payment for one month: the whole balance by default, or part of it (an abono). It never
  * goes over what is still owed, and one that leaves a balance is stored as partial.
  */
-export function recordMonthlyPayment(state, { studentId, groupId, period, amount = undefined, paidAt }) {
+export function recordMonthlyPayment(state, { studentId, groupId, period, amount = undefined, paidAt, id = "" }) {
   const balance = monthlyBalance(state, { studentId, groupId, period });
   if (!balance || balance.settled || !isDateOnly(paidAt)) return state;
   const wanted =
     amount === undefined || amount === null || amount === "" ? balance.balance : roundMoney(Number(amount));
   const value = Math.min(balance.balance, Number.isFinite(wanted) ? wanted : 0);
   if (!(value > 0)) return state;
-  const payment = { id: createStableId("monthly"), groupId, period, amount: value, paidAt };
-  return withPayments(state, studentId, (payments) => [
+  const payment = { id: id || createStableId("monthly"), groupId, period, amount: value, paidAt };
+  // Money coming in means the fee is no longer given up.
+  const recovered = recoverLost(state, [{ studentId, kind: "monthly", groupId, period }]);
+  return withPayments(recovered, studentId, (payments) => [
     ...payments,
     value < balance.balance ? { ...payment, partial: true } : payment,
   ]);
@@ -871,11 +886,11 @@ export function removeMonthlyPayment(state, { studentId, paymentId }) {
 }
 
 /**
- * Marks one month as paid (its balance, or `amount` as an abono) or takes back a payment: the one
- * given by `paymentId`, otherwise all of that month's. Returns the next workspace state.
+ * Marks one month as paid (its balance, or `amount` as an abono, under `paymentId` when given) or takes
+ * back a payment: the one given by `paymentId`, otherwise all of that month's. Returns the next state.
  */
 export function setMonthlyPayment(state, { studentId, groupId, period, amount, paid = true, paidAt, paymentId = "" }) {
-  if (paid) return recordMonthlyPayment(state, { studentId, groupId, period, amount, paidAt });
+  if (paid) return recordMonthlyPayment(state, { studentId, groupId, period, amount, paidAt, id: paymentId });
   if (paymentId) return removeMonthlyPayment(state, { studentId, paymentId });
   return withPayments(state, studentId, (payments) =>
     payments.filter((item) => !(item.groupId === groupId && item.period === period)),

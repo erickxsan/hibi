@@ -94,6 +94,16 @@ export function studentMonth(state, derived, student, asOf, { groupId = "", char
     owedRows.some((row) => isOverdueClassDebt(row.classDate, asOf)) ||
     monthlyDue.some((charge) => charge.status === "overdue");
   const oldestDebt = owedRows.map((row) => row.classDate).sort()[0] || "";
+  const lost = roundMoney(
+    sumMoney(derivedRows, (row) => row.lostAmount || 0) +
+      sumMoney(
+        (charges || deriveMonthlyCharges(state, asOf, { includeArchived: false })).filter(
+          (charge) =>
+            charge.studentId === student.id && (!groupId || charge.groupId === groupId) && charge.status === "lost",
+        ),
+        (charge) => charge.balance,
+      ),
+  );
   const attendance = counted.length ? (counted.length - absences) / counted.length : null;
   const threshold = finite(state.settings?.lowAttendanceThreshold) ? state.settings.lowAttendanceThreshold : 0.8;
   let flag = { kind: "ok", tone: "" };
@@ -117,6 +127,7 @@ export function studentMonth(state, derived, student, asOf, { groupId = "", char
     owed,
     overdue,
     oldestDebt,
+    lost,
     flag,
   };
 }

@@ -8,12 +8,13 @@ import "./monthlyFeePay.css";
  * lowered to record an abono, so the same button settles the month or records part of it.
  * Callers key it by the balance, so a new balance starts a fresh amount.
  */
-export function MonthlyFeePay({ charge, studentName, onPay, busy, fullLabel, buttonClassName = "mbtn" }) {
+export function MonthlyFeePay({ charge, studentName, onPay, busy, fullLabel, buttonClassName = "mbtn", name = "" }) {
   const { t, locale } = useI18n();
   const [text, setText] = useState(String(charge.balance));
   const typed = text === "" ? 0 : Number(text);
   const amount = Number.isFinite(typed) ? Math.min(typed, charge.balance) : 0;
   const pay = () => amount > 0 && !busy && onPay(charge, amount);
+  const label = amount >= charge.balance ? fullLabel : t("Record {amount}", { amount: formatMoney(amount, locale) });
   return (
     <span className="fee-pay">
       <label className="fee-amount">
@@ -34,8 +35,14 @@ export function MonthlyFeePay({ charge, studentName, onPay, busy, fullLabel, but
           }}
         />
       </label>
-      <button type="button" className={buttonClassName} disabled={busy || !(amount > 0)} onClick={pay}>
-        {amount >= charge.balance ? fullLabel : t("Record {amount}", { amount: formatMoney(amount, locale) })}
+      <button
+        type="button"
+        className={buttonClassName}
+        aria-label={name ? `${label}: ${name}` : undefined}
+        disabled={busy || !(amount > 0)}
+        onClick={pay}
+      >
+        {label}
       </button>
     </span>
   );

@@ -4,7 +4,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { Drawer, MultiSelect, Select, Tabs } from "./ui";
+import { Drawer, MultiSelect, Select, Tabs, ToastRegion } from "./ui";
 
 describe("interactive UI primitives", () => {
   it("changes tabs and exposes the selected state", async () => {
@@ -25,6 +25,59 @@ describe("interactive UI primitives", () => {
     expect(screen.getByRole("tab", { name: "Students" })).toHaveAttribute("aria-selected", "true");
     await user.click(screen.getByRole("tab", { name: "Groups" }));
     expect(onChange).toHaveBeenCalledWith("groups");
+  });
+
+  it("closes a notice and runs its action from its button", async () => {
+    const user = userEvent.setup();
+    const run = vi.fn();
+    const onDismiss = vi.fn();
+    render(
+      <ToastRegion
+        toasts={[{ id: "t1", message: "Mayo lost", action: { label: "Undo", run } }]}
+        onDismiss={onDismiss}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+    expect(onDismiss).toHaveBeenCalledWith("t1");
+    expect(run).toHaveBeenCalledOnce();
+  });
+
+  it("lets Tab reach a notice's action from a drawer, and come back when it closes", async () => {
+    const user = userEvent.setup();
+    const toast = (
+      <div className="toast-region">
+        <button type="button" className="toast-action">
+          Undo
+        </button>
+      </div>
+    );
+    const drawer = (
+      <Drawer open onClose={vi.fn()} title="Lost" footer={<button type="button">Done</button>}>
+        <input aria-label="Amount" />
+      </Drawer>
+    );
+    const { rerender } = render(
+      <>
+        {drawer}
+        {toast}
+      </>,
+    );
+    const close = screen.getByRole("button", { name: "Close" });
+    const done = screen.getByRole("button", { name: "Done" });
+    const undo = screen.getByRole("button", { name: "Undo" });
+    done.focus();
+    await user.tab();
+    expect(undo).toHaveFocus();
+    await user.tab();
+    expect(close).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(undo).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(done).toHaveFocus();
+    undo.focus();
+    rerender(<>{drawer}</>);
+    await user.tab();
+    expect(close).toHaveFocus();
   });
 
   it("keeps keyboard focus inside a drawer and restores it after Escape", async () => {

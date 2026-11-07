@@ -231,6 +231,18 @@ export function ToastRegion({ toasts, onDismiss }) {
         <div className={`toast toast-${toast.tone || "success"}`} key={toast.id}>
           {toast.tone === "error" ? <AlertCircle aria-hidden="true" /> : <HibiStamp size={32} />}
           <span>{uiT(toast.message)}</span>
+          {toast.action ? (
+            <button
+              type="button"
+              className="toast-action"
+              onClick={() => {
+                onDismiss(toast.id);
+                toast.action.run();
+              }}
+            >
+              {uiT(toast.action.label)}
+            </button>
+          ) : null}
           <IconButton label={uiT("Dismiss notification")} icon={X} onClick={() => onDismiss(toast.id)} />
         </div>
       ))}

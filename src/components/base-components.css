@@ -2251,6 +2251,24 @@
 .toast > span {
   flex: 1;
 }
+.toast-action {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: 700 13px/18px var(--font-sans);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+@media (pointer: coarse) {
+  .toast-action {
+    min-width: 40px;
+    min-height: 40px;
+    padding-inline: 8px;
+  }
+}
 .toast-error {
   background: var(--danger-fill);
   color: var(--on-accent);

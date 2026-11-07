@@ -7,11 +7,21 @@ import {
   assignmentsIn,
   debtSummary,
   debtsThrough,
+  lostSummary,
   matchesGroup,
   paymentsBetween,
   sessionAttendance,
 } from "./homeDashboardModel";
 import { studentGroupIdsOf } from "./groupLabels";
+import { deriveAll } from "../domain/calculations.js";
+import { memoizeOnState } from "../domain/stateMemo.js";
+
+const deriveReport = memoizeOnState(deriveAll, (asOf) => asOf);
+
+/** All report figures use the chosen cutoff, including the student's detail and exports. */
+export function trackingDerived(state, derived, asOf) {
+  return !asOf || derived?.dashboard?.asOfDate === asOf ? derived : deriveReport(state, asOf);
+}
 
 /*
  * Seguimiento: one period and one scope (all, a group or individual classes) feed the KPIs,
@@ -124,11 +134,14 @@ export function inScope(student, scope) {
 
 /** Every active student of the scope with their figures for the range. */
 export function trackingStudents(state, derived, range, scope = "all") {
-  const derivedRows = derived?.classLog || [];
+  const derivedRows = trackingDerived(state, derived, range.end)?.classLog || [];
   const assignments = range.start ? assignmentsIn(state, range.start, range.end, scope) : [];
   const debts = new Map(debtsThrough(state, derivedRows, range.end, scope).map((item) => [item.studentId, item]));
   const payments = range.start ? paymentsBetween(state, derivedRows, range.start, range.end, scope) : [];
   const charges = deriveMonthlyCharges(state, range.end, { includeArchived: false });
+  const lost = new Map(
+    lostSummary(state, derivedRows, range.end, scope).students.map((item) => [item.studentId, item]),
+  );
   return (state.students || [])
     .filter((student) => student.status !== "Inactive" && inScope(student, scope))
     .map((student) => {
@@ -174,6 +187,7 @@ export function trackingStudents(state, derived, range, scope = "all") {
         overdueEarlier: debt?.overdueEarlier || 0,
         reasons: debt?.reasons || [],
         monthlyDue,
+        lost: lost.get(student.id)?.amount || 0,
       };
     });
 }
@@ -250,11 +264,12 @@ export function trackingKpis(state, derived, range, scope, students) {
   const previousValues = range.previousStart
     ? gradeValues(assignmentsIn(state, range.previousStart, range.previousEnd, scope))
     : [];
-  const derivedRows = derived?.classLog || [];
+  const derivedRows = trackingDerived(state, derived, range.end)?.classLog || [];
   const payments = range.start ? paymentsBetween(state, derivedRows, range.start, range.end, scope) : [];
   const previousPayments = range.previousStart
     ? paymentsBetween(state, derivedRows, range.previousStart, range.previousEnd, scope)
     : [];
+  const lost = range.end ? lostSummary(state, derivedRows, range.end, scope) : { total: 0 };
   const charged = derivedRows.filter(
     (row) =>
       row.classStatus === "Completed" &&
@@ -307,7 +322,8 @@ export function trackingKpis(state, derived, range, scope, students) {
       previousEnd: range.previousEnd,
       overdueStudents: students.filter((row) => row.overdue > 0),
       pendingStudents: students.filter((row) => row.owed > 0 && !row.overdue),
-      paidClasses: charged.filter((row) => !(Number(row.outstanding) > 0)).length,
+      lost: lost.total,
+      paidClasses: charged.filter((row) => !(Number(row.outstanding) > 0) && !(row.lostAmount > 0)).length,
       unpaidClasses: charged.filter((row) => Number(row.outstanding) > 0).length,
     },
   };
@@ -333,8 +349,11 @@ export function monthlyBlocks(state, asOf, scope = "all") {
         }))
         .filter((item) => item.student)
         .sort((left, right) => (left.charge.status === "paid" ? 0 : 1) - (right.charge.status === "paid" ? 0 : 1));
-      const counted = rows.filter((item) => item.charge.status !== "waived");
+      // A fee given up is no longer expected, so the bar can still fill.
+      const counted = rows.filter((item) => !["waived", "lost"].includes(item.charge.status));
       const paid = counted.filter((item) => item.charge.status === "paid");
+      // What was paid of a fee given up stays collected: the month still shows that money.
+      const collected = rows.filter((item) => item.charge.status === "lost");
       // Abonos count toward the progress; a month settled for less than its fee expects what was paid.
       const perClass = (state.students || []).filter(
         (student) =>
@@ -350,8 +369,10 @@ export function monthlyBlocks(state, asOf, scope = "all") {
         rows,
         paidCount: paid.length,
         total: counted.length,
-        paidAmount: sumMoney(counted, (item) => item.charge.paid),
-        expectedAmount: sumMoney(counted, (item) => item.charge.paid + item.charge.balance),
+        paidAmount: sumMoney([...counted, ...collected], (item) => item.charge.paid),
+        expectedAmount:
+          sumMoney(counted, (item) => item.charge.paid + item.charge.balance) +
+          sumMoney(collected, (item) => item.charge.paid),
         perClass,
       };
     })
@@ -362,7 +383,7 @@ export function monthlyBlocks(state, asOf, scope = "all") {
 export function trackingRecords(state, derived, range, scope = "all", studentId = "") {
   const studentsById = new Map((state.students || []).map((student) => [student.id, student]));
   const groupsById = new Map((state.groups || []).map((group) => [group.id, group]));
-  return (derived?.classLog || [])
+  return (trackingDerived(state, derived, range.end)?.classLog || [])
     .filter(
       (row) =>
         row.classDate >= range.start &&
@@ -400,13 +421,15 @@ export function trackingRecords(state, derived, range, scope = "all", studentId 
         payment:
           row.classStatus === "Cancelled" || !isBillableAttendance(row)
             ? "none"
-            : Number(row.outstanding) > 0
-              ? "pending"
-              : Number(row.amountPaid) > 0
-                ? "paid"
-                : Number(row.charge) === 0
-                  ? "covered"
-                  : "none",
+            : row.lostAmount > 0
+              ? "lost"
+              : Number(row.outstanding) > 0
+                ? "pending"
+                : Number(row.amountPaid) > 0
+                  ? "paid"
+                  : Number(row.charge) === 0
+                    ? "covered"
+                    : "none",
       };
     });
 }

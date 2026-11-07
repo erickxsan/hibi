@@ -67,6 +67,7 @@ function attendanceWord(row, t) {
 
 function paymentWord(row, t) {
   if (row.classStatus === "Cancelled" || !isBillableAttendance(row)) return null;
+  if (row.lostAmount > 0) return { tone: "st-lost", text: t("Lost (fee)") };
   if (Number(row.outstanding) > 0) return { tone: "st-pend", text: t("Pending") };
   if (Number(row.amountPaid) > 0) return { tone: "st-ok", text: t("Paid") };
   if (Number(row.charge) === 0) return { tone: "st-prog", text: t("Monthly fee") };
@@ -107,6 +108,12 @@ function MonthFigures({ month, t, locale, compact = false }) {
         <b>{compact && !month.owed ? t("Up to date") : formatMoney(month.owed || month.paid, locale)}</b>
         <span className={`st ${paymentsNote.tone} ${compact ? "is-plain" : ""}`}>{paymentsNote.text}</span>
       </div>
+      {month.lost ? (
+        <div className="fig">
+          <span>{t("Lost")}</span>
+          <b>{formatMoney(month.lost, locale)}</b>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -125,6 +132,7 @@ export function StudentDetail({
   onOpenTracking,
   saving,
   dirty,
+  debts = null,
 }) {
   const { t, locale } = useI18n();
   const inactive = student.status === "Inactive";
@@ -150,6 +158,7 @@ export function StudentDetail({
         <h3 className="overline">{t("This month")}</h3>
         <MonthFigures month={month} t={t} locale={locale} />
       </div>
+      {debts ? <div className="blk">{debts}</div> : null}
       <div className="blk">
         <div className="blk-head">
           <h3 className="overline">{t("Latest classes")}</h3>
@@ -259,7 +268,7 @@ export function StudentDetail({
 }
 
 /** Mobile sheet: the month, the P/A of this month's classes, the latest classes and quick contact. */
-export function StudentSheet({ student, month, recent, groupsById, asOf, onEdit }) {
+export function StudentSheet({ student, month, recent, groupsById, asOf, onEdit, debts = null }) {
   const { t, locale } = useI18n();
   const email = student.studentEmail;
   const phone = student.guardianPhone || student.phone;
@@ -274,6 +283,7 @@ export function StudentSheet({ student, month, recent, groupsById, asOf, onEdit 
         </div>
       </div>
       <MonthFigures month={month} t={t} locale={locale} compact />
+      {debts}
       {month.sequence.length ? (
         <div>
           <h3 className="overline">{t("Classes of {month}", { month: monthLong(asOf, locale) })}</h3>

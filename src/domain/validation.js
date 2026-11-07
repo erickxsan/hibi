@@ -24,6 +24,7 @@ import {
   normalizeGroupBilling,
   normalizeMonthlyPayments,
 } from "./monthlyBilling.js";
+import { lostPaymentsIssues, normalizeLostPayments } from "./lostPayments.js";
 
 function isRecord(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -163,6 +164,7 @@ export function validateStudent(student, state = null) {
   if (student.isIndividual !== undefined && typeof student.isIndividual !== "boolean")
     errors.push(issue("isIndividual", "invalid_type", "Individual enrollment must be true or false."));
   finiteNumber(errors, student.customHourlyRate, "customHourlyRate", "Custom hourly rate", { min: 0, optional: true });
+  lostPaymentsIssues(student).forEach(([path, message]) => errors.push(issue(path, "invalid_lost_payment", message)));
   billingIssues(student, "student").forEach(([path, message]) => errors.push(issue(path, "invalid_billing", message)));
   const seenGroups = new Set();
   const legacyGroups = student.groupId ? [student.groupId] : [];
@@ -359,9 +361,11 @@ function normalizeGroupIds(student) {
 function optionalStudentBilling(student) {
   const billingByGroup = normalizeBillingByGroup(student?.billingByGroup);
   const monthlyPayments = normalizeMonthlyPayments(student?.monthlyPayments);
+  const lostPayments = normalizeLostPayments(student?.lostPayments);
   return {
     ...(billingByGroup ? { billingByGroup } : {}),
     ...(monthlyPayments.length ? { monthlyPayments } : {}),
+    ...(lostPayments.length ? { lostPayments } : {}),
   };
 }
 

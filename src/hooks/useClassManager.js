@@ -26,6 +26,9 @@ import {
   startOfMonth,
   STORAGE_KEY,
   todayDateOnly,
+  calculateCharge,
+  calculateOutstanding,
+  createStableId,
   validateClassLogRow,
   validateClassSchedule,
   validateGrade,
@@ -43,6 +46,7 @@ import { setGroupArchived, startGroupSchedule } from "../domain/groupArchiving.j
 import { groupBadgeFields, withGroupBadge } from "../domain/groupBadge.js";
 import { normalizeRepeatRule } from "../domain/classRecurrence.js";
 import { updateDismissedNotes } from "../domain/noteDismissals.js";
+import { markLost, normalizeLostPayments, recoverLost } from "../domain/lostPayments.js";
 import {
   normalizeBillingByGroup,
   normalizeGroupBilling,
@@ -50,6 +54,7 @@ import {
   monthlyBalance,
   groupMoneyOnRecord,
   recordStays,
+  removeMonthlyPayment,
   resumeGroupBilling,
   setMonthlyPayment,
   startGroupBilling,
@@ -132,6 +137,16 @@ export function placeSavedGroup(groups, item, draft, today) {
   return groups.map((group) => (group.id === item.id ? saved : group));
 }
 
+// Payments and lost marks change on their own, from other screens: a draft only holds an old copy.
+function withLiveMoney(item, student) {
+  const { monthlyPayments: _payments, lostPayments: _marks, ...rest } = item;
+  return {
+    ...rest,
+    ...(student.monthlyPayments?.length ? { monthlyPayments: student.monthlyPayments } : {}),
+    ...(student.lostPayments?.length ? { lostPayments: student.lostPayments } : {}),
+  };
+}
+
 export function canonicalStudent(draft) {
   return {
     id: draft.id,
@@ -157,6 +172,9 @@ export function canonicalStudent(draft) {
       : {}),
     ...(normalizeMonthlyPayments(draft.monthlyPayments).length
       ? { monthlyPayments: normalizeMonthlyPayments(draft.monthlyPayments) }
+      : {}),
+    ...(normalizeLostPayments(draft.lostPayments).length
+      ? { lostPayments: normalizeLostPayments(draft.lostPayments) }
       : {}),
   };
 }
@@ -400,10 +418,11 @@ export function useClassManager({ persistence } = {}) {
   }, []);
 
   const notify = useCallback(
-    (message, tone = "success") => {
+    (message, tone = "success", action = null) => {
       const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      setToasts((current) => [...current.slice(-2), { id, tone, message }]);
-      const timer = setTimeout(() => dismissToast(id), 3600);
+      setToasts((current) => [...current.slice(-2), { id, tone, message, ...(action ? { action } : {}) }]);
+      // A notice with something to do stays long enough to do it.
+      const timer = setTimeout(() => dismissToast(id), action ? 8000 : 3600);
       timers.current.set(id, timer);
     },
     [dismissToast],
@@ -876,17 +895,17 @@ export function useClassManager({ persistence } = {}) {
         return false;
       }
       return commit(
-        (current) => ({
-          ...current,
-          students: current.students.some((student) => student.id === item.id)
-            ? current.students.map((student) => (student.id === item.id ? item : student))
-            : [...current.students, item],
-          classLog: repriceUnpaidClasses(
-            current,
-            current.students.find((student) => student.id === item.id),
-            item,
-          ),
-        }),
+        (current) => {
+          const live = current.students.find((student) => student.id === item.id);
+          const saved = live ? withLiveMoney(item, live) : item;
+          return {
+            ...current,
+            students: live
+              ? current.students.map((student) => (student.id === item.id ? saved : student))
+              : [...current.students, item],
+            classLog: repriceUnpaidClasses(current, live, saved),
+          };
+        },
         draft.id ? "Student updated" : "Student added",
       );
     },
@@ -1101,6 +1120,73 @@ export function useClassManager({ persistence } = {}) {
       );
     },
     [commit, operationalDate],
+  );
+
+  // Pays a fee from the student's list of debts, where the row leaves right away: the notice brings it back.
+  const payFee = useCallback(
+    async ({ studentId, groupId, period }, amount, message) => {
+      const paymentId = createStableId("monthly");
+      const fee = { studentId, groupId, period };
+      const paid = (current) =>
+        setMonthlyPayment(current, { ...fee, amount, paid: true, paymentId, paidAt: operationalDate });
+      if (!(await commit(paid))) return false;
+      notify(message, "success", {
+        label: "Undo",
+        run: () => commit((current) => removeMonthlyPayment(current, { studentId, paymentId })),
+      });
+      return true;
+    },
+    [commit, notify, operationalDate],
+  );
+
+  // Gives up on debts, or takes that back; either way the notice offers to undo it.
+  const giveUpPayments = useCallback(
+    async (items, message) => {
+      if (!items.length || !(await commit((current) => markLost(current, items, operationalDate)))) return false;
+      notify(message, "success", { label: "Undo", run: () => commit((current) => recoverLost(current, items)) });
+      return true;
+    },
+    [commit, notify, operationalDate],
+  );
+
+  const recoverPayments = useCallback(
+    async (items, message) => {
+      if (!items.length || !(await commit((current) => recoverLost(current, items)))) return false;
+      // Undoing restores each mark with the day it was first given up.
+      notify(message, "success", {
+        label: "Undo",
+        run: () => commit((current) => markLost(current, items, operationalDate)),
+      });
+      return true;
+    },
+    [commit, notify, operationalDate],
+  );
+
+  // Pays a class's whole charge from the student's list of debts.
+  const markClassPaid = useCallback(
+    async (classId, message) => {
+      const row = (stateRef.current.classLog || []).find((item) => item.id === classId);
+      // A class settled in the meantime keeps the day its money really came in.
+      if (!row || !(calculateOutstanding(stateRef.current, row, operationalDate) > 0)) return false;
+      const { amountPaid, paymentDate, paymentMethod, paymentState } = row;
+      const change = (fields) => (current) => ({
+        ...current,
+        classLog: current.classLog.map((item) => (item.id === classId ? { ...item, ...fields } : item)),
+      });
+      const paid = {
+        amountPaid: calculateCharge(stateRef.current, row),
+        paymentDate: operationalDate,
+        paymentMethod: paymentMethod || "Cash",
+        paymentState: "Paid",
+      };
+      if (!(await commit(change(paid)))) return false;
+      notify(message, "success", {
+        label: "Undo",
+        run: () => commit(change({ amountPaid, paymentDate, paymentMethod, paymentState })),
+      });
+      return true;
+    },
+    [commit, notify, operationalDate],
   );
 
   // Saves a group and its per-student billing adjustments in one change.
@@ -1473,6 +1559,10 @@ export function useClassManager({ persistence } = {}) {
       saveProgress,
       upsertClassSchedule,
       setMonthlyPaid,
+      payFee,
+      giveUpPayments,
+      recoverPayments,
+      markClassPaid,
       saveGroupBilling,
       editScheduledClass,
       removeScheduledClass,
@@ -1530,6 +1620,10 @@ export function useClassManager({ persistence } = {}) {
       upsertClassLog,
       upsertClassSchedule,
       setMonthlyPaid,
+      payFee,
+      giveUpPayments,
+      recoverPayments,
+      markClassPaid,
       saveGroupBilling,
       upsertGrade,
       upsertGroup,

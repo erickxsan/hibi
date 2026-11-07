@@ -605,6 +605,12 @@ button.sync-pill {
 .st-done {
   color: var(--indigo);
 }
+.st-lost {
+  color: var(--sumi-muted);
+}
+.st-lost::before {
+  background: var(--sumi-subtle);
+}
 .st-prog {
   color: var(--sumi-muted);
 }
