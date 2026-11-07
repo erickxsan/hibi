@@ -360,7 +360,8 @@ export function debtsThrough(state, derivedRows, asOf, groupFilter = "all") {
         groupId: row.groupId || "",
       }),
     );
-  deriveMonthlyCharges(state, asOf, { includeArchived: false })
+  // Report scope is already expressed by the groups in state, including the archive toggle.
+  deriveMonthlyCharges(state, asOf)
     .filter((charge) => ["pending", "overdue"].includes(charge.status) && charge.dueDate <= asOf)
     .filter((charge) => matchesGroup(groupFilter, charge.groupId))
     .forEach((charge) =>
@@ -423,7 +424,7 @@ export function lostSummary(state, derivedRows, asOf, groupFilter = "all") {
         lostAt: row.lostAt,
       }),
     );
-  deriveMonthlyCharges(state, asOf, { includeArchived: false })
+  deriveMonthlyCharges(state, asOf)
     .filter((charge) => charge.status === "lost" && matchesGroup(groupFilter, charge.groupId))
     .forEach((charge) =>
       add(charge.studentId, {
@@ -484,7 +485,7 @@ export function monthProjection(state, derivedRows, asOf) {
   const collected = sumMoney(paymentsBetween(state, derivedRows, start, asOf), (item) => item.amount);
   const period = periodOf(asOf);
   const monthlyDue = sumMoney(
-    deriveMonthlyCharges(state, asOf, { includeArchived: false }).filter(
+    deriveMonthlyCharges(state, asOf).filter(
       (charge) => charge.period === period && ["pending", "overdue"].includes(charge.status),
     ),
     (charge) => charge.amount,

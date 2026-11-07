@@ -16,7 +16,7 @@ import {
 } from "../components/ui";
 import { StudentAvatar } from "../components/StudentAvatar";
 import { useSpotlight } from "../components/useSpotlight";
-import { MonthlyFeePay } from "./MonthlyFeePay";
+import { MonthlyFeePay, MonthlyFeeUndo } from "./MonthlyFeePay";
 import { TrackingStudentSheet } from "./TrackingStudentSheet";
 import {
   LostIconButton,
@@ -61,9 +61,9 @@ import {
   trackingKpis,
   trackingMetric,
   trackingRange,
-  trackingDerived,
   trackingRecords,
   trackingStudents,
+  trackingDerived,
 } from "./trackingModel";
 import { staleDebts } from "./homeDashboardModel";
 import "../i18n/screenTranslations.js";
@@ -131,7 +131,7 @@ function paymentWord(record, t) {
 }
 
 /** One monthly group under «Mensualidades · octubre»: a line with fee, due date and progress, then dense rows. */
-function MonthlyBlock({ block, asOf, onPay, onUndo, onRecover, busy, spotlit }) {
+function MonthlyBlock({ block, asOf, editable, onPay, onUndo, onRecover, busy, spotlit }) {
   const { t, locale } = useI18n();
   const month = monthLong(`${block.period}-01`, locale);
   const due = block.billing?.due;
@@ -189,7 +189,7 @@ function MonthlyBlock({ block, asOf, onPay, onUndo, onRecover, busy, spotlit }) 
         {block.rows.map(({ charge, student }) => {
           const paid = charge.status === "paid";
           const lost = charge.status === "lost";
-          const paidToday = charge.lastPaidAt === asOf;
+          const paidToday = editable && charge.lastPaidAt === asOf;
           const until = formatShortDate(charge.coversTo, locale, { weekday: false });
           const sub = lost
             ? t("Lost (fee)")
@@ -212,9 +212,7 @@ function MonthlyBlock({ block, asOf, onPay, onUndo, onRecover, busy, spotlit }) 
                         ? t("Due today")
                         : t("Due {date}", { date: formatShortDate(charge.dueDate, locale) });
           const undo = paidToday ? (
-            <button type="button" className="mlk" disabled={busy} onClick={() => onUndo(charge)}>
-              {t("Undo")}
-            </button>
+            <MonthlyFeeUndo charge={charge} date={asOf} onUndo={onUndo} busy={busy} buttonClassName="mlk" />
           ) : null;
           return (
             <div className={`mrow ${spotlit("fees", `${charge.studentId}:${charge.groupId}`)}`.trim()} key={charge.id}>
@@ -253,6 +251,8 @@ function MonthlyBlock({ block, asOf, onPay, onUndo, onRecover, busy, spotlit }) 
                     onClick={() => onRecover(charge.studentId, chargeDebt(charge))}
                   />
                 </>
+              ) : !editable ? (
+                <span className="mamt">{formatMoney(charge.balance, locale)}</span>
               ) : (
                 <MonthlyFeePay
                   key={`${charge.id}:${charge.balance}`}
@@ -272,7 +272,7 @@ function MonthlyBlock({ block, asOf, onPay, onUndo, onRecover, busy, spotlit }) 
 }
 
 /** «Mensualidades · octubre» below the charts: one card holding every monthly group. */
-function MonthlyFees({ blocks, asOf, onPay, onUndo, onRecover, busy, spotlit = (_kind, _id) => "" }) {
+function MonthlyFees({ blocks, asOf, editable, onPay, onUndo, onRecover, busy, spotlit = (_kind, _id) => "" }) {
   const { t, locale } = useI18n();
   if (!blocks.length) return null;
   return (
@@ -285,6 +285,7 @@ function MonthlyFees({ blocks, asOf, onPay, onUndo, onRecover, busy, spotlit = (
           key={block.group.id}
           block={block}
           asOf={asOf}
+          editable={editable}
           onPay={onPay}
           onUndo={onUndo}
           onRecover={onRecover}
@@ -460,7 +461,7 @@ export default function Tracking({
   );
   const lostActions = useLostPaymentActions(actions);
   const [lostPanel, setLostPanel] = useState("");
-  // Marks are dated today, so a report of an earlier day could not show the change.
+  // Payments and marks are dated today, so a report of an earlier day could not show the change.
   const canLose = asOf === liveDate;
   const debtRows = useMemo(
     () => (tab === "payments" && studentId ? studentDebtRows(state, derived, { studentId, asOf, scope }) : []),
@@ -531,15 +532,18 @@ export default function Tracking({
 
   const groupChips = [
     { value: "all", label: t("All groups") },
-    ...(state.groups || [])
-      .filter((group) => group.status !== "Inactive")
-      .map((group) => ({ value: group.id, label: group.name })),
+    ...(state.groups || []).map((group) => ({ value: group.id, label: group.name })),
     ...((state.students || []).some(
       (student) => student.status !== "Inactive" && (student.isIndividual || !(student.groupIds || []).length),
-    )
+    ) || (state.classLog || []).some((row) => !row.groupId)
       ? [{ value: "individual", label: t("Individual (plural)") }]
       : []),
   ];
+  // Turning archived groups off can take away the group being looked at.
+  const scopeAvailable = groupChips.some((item) => item.value === scope);
+  useEffect(() => {
+    if (!scopeAvailable) setScope("all");
+  }, [scopeAvailable]);
   const periodOptions = [
     {
       value: "month",
@@ -1138,6 +1142,7 @@ export default function Tracking({
         <MonthlyFees
           blocks={blocks}
           asOf={asOf}
+          editable={canLose}
           onPay={payMonthly}
           onUndo={undoMonthly}
           onRecover={lostActions.recover}
@@ -1562,6 +1567,7 @@ export default function Tracking({
       <MonthlyFees
         blocks={blocks}
         asOf={asOf}
+        editable={canLose}
         onPay={payMonthly}
         onUndo={undoMonthly}
         onRecover={lostActions.recover}

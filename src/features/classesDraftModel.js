@@ -126,9 +126,9 @@ export function classChargeFor(state, session, studentId, existing = null) {
 
 /**
  * Class records ready for saveProgress. Only present students carry the per-class charge and the payment
- * chosen. Absent students carry a $0 charge. Students covered by a monthly fee and unmarked students carry
- * a $0 charge too, but a payment already recorded for them is kept: a per-class payment made before the
- * group turned monthly still counts toward that month's fee.
+ * chosen. Cancellation, absence, monthly coverage and unmarked attendance carry a $0 charge, but never
+ * erase money already received. A per-class payment made before the group turned monthly still counts
+ * toward that month's fee; cancelled/absent payments can be reviewed separately.
  */
 export function buildClassRecords(state, session, roster, entries, { classStatus = "Completed", today }) {
   return roster.map((student) => {
@@ -144,15 +144,26 @@ export function buildClassRecords(state, session, roster, entries, { classStatus
     // Nothing to charge now, but whatever was already paid for the class stays recorded.
     const kept = unmarked || (monthly && !free);
     const charge = free || kept ? 0 : classChargeFor(state, session, student.id, existing);
-    const payment = free || kept ? "" : entry.paymentTouched ? entry.paymentState : existing?.paymentState || "";
+    const paymentEdited = !free && !kept && entry.paymentTouched;
+    const received = existing?.amountPaid ?? 0;
+    const payment =
+      free || kept
+        ? ""
+        : paymentEdited
+          ? entry.paymentState
+          : received > 0
+            ? received >= charge
+              ? "Paid"
+              : "Pending"
+            : existing?.paymentState || "";
+    // Correcting attendance or grades never rewrites a partial/overpaid receipt. Only an explicit
+    // payment choice can change it; returning an absent student to present also restores its status.
     const amountPaid =
-      payment === "Paid"
+      paymentEdited && payment === "Paid"
         ? charge
-        : payment === "Pending" || payment === "Unpaid"
+        : paymentEdited && (payment === "Pending" || payment === "Unpaid")
           ? 0
-          : free
-            ? 0
-            : (existing?.amountPaid ?? 0);
+          : received;
     return {
       ...existing,
       id: existing?.id,
@@ -169,21 +180,17 @@ export function buildClassRecords(state, session, roster, entries, { classStatus
       appliedCharge: charge,
       amountPaid,
       paymentDate:
-        payment === "Paid"
+        paymentEdited && payment === "Paid"
           ? existing?.paymentDate || today
-          : payment
+          : paymentEdited && payment
             ? null
-            : free
-              ? null
-              : existing?.paymentDate || null,
+            : existing?.paymentDate || null,
       paymentMethod:
-        payment === "Paid"
+        paymentEdited && payment === "Paid"
           ? existing?.paymentMethod || "Cash"
-          : payment
+          : paymentEdited && payment
             ? ""
-            : free
-              ? ""
-              : existing?.paymentMethod || "",
+            : existing?.paymentMethod || "",
       paymentState: payment || (free || kept ? "" : "Pending"),
     };
   });

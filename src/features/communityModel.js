@@ -80,7 +80,7 @@ export function studentMonth(state, derived, student, asOf, { groupId = "", char
     (item) => item.amount,
   );
   const owedRows = derivedRows.filter((row) => row.classDate <= asOf && finite(row.outstanding) && row.outstanding > 0);
-  const monthlyDue = (charges || deriveMonthlyCharges(state, asOf, { includeArchived: false })).filter(
+  const monthlyDue = (charges || deriveMonthlyCharges(state, asOf)).filter(
     (charge) =>
       charge.studentId === student.id &&
       (!groupId || charge.groupId === groupId) &&
@@ -97,7 +97,7 @@ export function studentMonth(state, derived, student, asOf, { groupId = "", char
   const lost = roundMoney(
     sumMoney(derivedRows, (row) => row.lostAmount || 0) +
       sumMoney(
-        (charges || deriveMonthlyCharges(state, asOf, { includeArchived: false })).filter(
+        (charges || deriveMonthlyCharges(state, asOf)).filter(
           (charge) =>
             charge.studentId === student.id && (!groupId || charge.groupId === groupId) && charge.status === "lost",
         ),
@@ -134,7 +134,7 @@ export function studentMonth(state, derived, student, asOf, { groupId = "", char
 
 /** Every student's month at once, sharing the monthly charges. */
 export function studentMonths(state, derived, asOf, students = state.students || []) {
-  const charges = deriveMonthlyCharges(state, asOf, { includeArchived: false });
+  const charges = deriveMonthlyCharges(state, asOf);
   return new Map(students.map((student) => [student.id, studentMonth(state, derived, student, asOf, { charges })]));
 }
 

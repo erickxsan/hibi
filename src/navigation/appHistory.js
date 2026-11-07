@@ -267,6 +267,23 @@ export function pushOverlayHistory(overlayId) {
   );
 }
 
+/**
+ * Runs `callback` once the Back of an overlay that is closing has landed. That Back is asynchronous:
+ * a tab or view opened before it lands gets its new history entry undone by it. The timer covers an
+ * overlay that had no entry of its own to go back from.
+ */
+export function afterOverlayCloses(callback) {
+  let unsubscribe = () => {};
+  let timer = 0;
+  const finish = () => {
+    window.clearTimeout(timer);
+    unsubscribe();
+    callback();
+  };
+  unsubscribe = subscribeToAppHistory({ onPop: finish });
+  timer = window.setTimeout(finish, 500);
+}
+
 export function isTopHistoryOverlay(overlayId) {
   const overlays = metadataFromBrowser()?.overlays ?? [];
   return overlays.at(-1) === overlayId;

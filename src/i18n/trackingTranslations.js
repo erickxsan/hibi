@@ -125,6 +125,7 @@ export const TRACKING_TRANSLATIONS = Object.freeze({
   "{amount} paid toward {month}": "Abono de {amount} a {month}",
   "Monthly payments": "Pagos de mensualidad",
   "Lost payments": "Pagos perdidos",
+  "Schedule history": "Historial de horarios",
   "{amount} over 3 months old": "{amount} con más de 3 meses",
   "from {names}.": "de {names}.",
   "Due today": "Vence hoy",

@@ -34,6 +34,7 @@ const FIELD_LABELS = {
   iconId: "Group icon",
   colorId: "Group color",
   schedule: "Schedule",
+  scheduleHistory: "Schedule history",
   classDate: "Class date",
   startTime: "Start time",
   hours: "Hours",

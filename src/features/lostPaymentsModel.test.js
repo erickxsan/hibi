@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { deriveAll } from "../domain/calculations.js";
+import { archivedGroupsOwed, deriveMonthlyCharges, monthlyBalance } from "../domain/monthlyBilling.js";
 import { markLost } from "../domain/lostPayments.js";
 import { studentClassNote } from "./classesDraftModel";
 import { studentMonth } from "./communityModel";
@@ -144,6 +145,79 @@ describe("what a lost debt does to the figures", () => {
     const state = markLost(base, [{ ...MAY, period: "2026-11" }], AS_OF);
     const block = monthlyBlocks(state, AS_OF)[0];
     expect(block).toMatchObject({ paidCount: 0, total: 0, paidAmount: 300, expectedAmount: 300 });
+  });
+
+  it("reads a fee of an archived group like what is owed: listed as lost, not expected any more", () => {
+    const state = markLost(workspace(), [MAY], AS_OF);
+    state.groups = state.groups.map((group) =>
+      group.id === "g-month" ? { ...group, status: "Inactive", archivedAt: "2026-10-01" } : group,
+    );
+    const archived = new Set(["g-month"]);
+    const rows = derive(state).classLog;
+    expect(lostSummary(state, rows, AS_OF).students[0]).toMatchObject({ studentId: "luna", amount: 800 });
+    expect(studentDebtRows(state, derive(state), { studentId: "luna", asOf: AS_OF }).some((row) => row.lost)).toBe(
+      true,
+    );
+    const before = workspace();
+    before.groups = state.groups;
+    const owedBefore = archivedGroupsOwed(before, derive(before).classLog, archived);
+    expect(archivedGroupsOwed(state, rows, archived)).toBe(owedBefore - 800);
+  });
+
+  it("owes in a past report a fee paid after that day, and a mark only counts from its day", () => {
+    const base = workspace();
+    base.students[0].monthlyPayments = [
+      { id: "late", groupId: "g-month", period: "2026-05", amount: 800, paidAt: "2026-11-02" },
+    ];
+    const debts = (state, asOf) =>
+      studentDebtRows(state, derive(state), { studentId: "luna", asOf }).filter((row) => row.period === "2026-05");
+    expect(debts(base, AS_OF)).toEqual([]);
+    expect(debts(base, "2026-10-20")).toMatchObject([{ amount: 800, lost: false }]);
+    const lost = markLost(workspace(), [MAY], AS_OF);
+    expect(debts(lost, AS_OF)).toMatchObject([{ lost: true }]);
+    expect(debts(lost, "2026-10-20")).toMatchObject([{ lost: false, canLose: true }]);
+  });
+
+  it("lists a student who left the group when all that remains there is lost", () => {
+    const base = workspace();
+    base.students[0] = {
+      ...base.students[0],
+      groupIds: [],
+      billingByGroup: { "g-month": { leftOn: "2026-06-01" } },
+    };
+    const state = markLost(base, [MAY], AS_OF);
+    const derived = derive(state);
+    const range = trackingRange(AS_OF, "all", state, "");
+    const students = trackingStudents(state, derived, range, "g-month");
+    expect(students.find((item) => item.student.id === "luna")).toMatchObject({ lost: 800 });
+  });
+
+  it("agrees with the balance on per-class money that has no date", () => {
+    const base = workspace();
+    base.classLog = [
+      row("undated", "luna", "2026-05-06", { groupId: "g-month", appliedCharge: 0, amountPaid: 300, paymentDate: "" }),
+    ];
+    const charge = deriveMonthlyCharges(base, AS_OF).find(
+      (item) => item.studentId === "luna" && item.period === "2026-05",
+    );
+    expect(charge.balance).toBe(
+      monthlyBalance(base, { studentId: "luna", groupId: "g-month", period: "2026-05" }).balance,
+    );
+  });
+
+  it("says «Mensualidad», not «Pagado», for a covered class paid after the report's day", () => {
+    const base = workspace();
+    base.classLog = [
+      row("covered", "luna", "2026-10-06", {
+        groupId: "g-month",
+        appliedCharge: 0,
+        amountPaid: 100,
+        paymentDate: "2026-11-02",
+      }),
+    ];
+    const range = trackingRange("2026-10-20", "all", base, "");
+    const record = trackingRecords(base, derive(base), range).find((item) => item.row.id === "covered");
+    expect(record.payment).toBe("covered");
   });
 
   it("names lost classes in the breakdown and counts them as neither owed nor collected", () => {

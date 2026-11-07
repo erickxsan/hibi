@@ -218,7 +218,7 @@ export function TrackingStudentSheet({
   const [pickedCharge, setPickedCharge] = useState("");
   const [saving, setSaving] = useState(false);
   const lostActions = useLostPaymentActions(actions);
-  // Marks are dated today, so a report of an earlier day could not show the change.
+  // Payments and marks are dated today, so a report of an earlier day could not show the change.
   const canLose = asOf === liveDate;
 
   const firstGroup = groupsById.get(studentGroupIdsOf(student)[0]);
@@ -691,7 +691,7 @@ export function TrackingStudentSheet({
                           : formatShortDate(payment.paidAt, locale, { weekday: false })}
                       </span>
                       <b className="ssh-score is-ok">{formatMoney(payment.amount, locale)}</b>
-                      {paidToday(payment.paidAt) ? (
+                      {canLose && paidToday(payment.paidAt) ? (
                         <button
                           type="button"
                           className="ssh-undo"
@@ -706,7 +706,7 @@ export function TrackingStudentSheet({
                   ))}
                 </div>
               ) : null}
-              {!["paid", "waived", "lost"].includes(charge.status) ? (
+              {canLose && !["paid", "waived", "lost"].includes(charge.status) ? (
                 <div className="ssh-pay">
                   <MonthlyFeePay
                     key={`${charge.id}:${charge.balance}`}

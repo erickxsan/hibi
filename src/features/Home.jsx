@@ -340,16 +340,17 @@ export default function Home({
     [context, metrics],
   );
   const groupChips = useMemo(() => {
-    const active = (state.groups || []).filter((group) => group.status !== "Inactive");
-    const hasIndividual = (state.students || []).some(
-      (student) => student.status !== "Inactive" && (student.isIndividual || !(student.groupIds || []).length),
-    );
+    const active = state.groups || [];
+    const hasIndividual =
+      (state.students || []).some(
+        (student) => student.status !== "Inactive" && (student.isIndividual || !(student.groupIds || []).length),
+      ) || (state.classLog || []).some((row) => !row.groupId);
     return [
       { value: "all", label: t("All groups") },
       ...active.map((group) => ({ value: group.id, label: group.name })),
       ...(hasIndividual ? [{ value: "individual", label: t("Individual") }] : []),
     ];
-  }, [state.groups, state.students, t]);
+  }, [state.groups, state.students, state.classLog, t]);
 
   useEffect(() => {
     if (!intent) return;

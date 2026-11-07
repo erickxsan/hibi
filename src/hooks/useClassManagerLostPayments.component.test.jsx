@@ -150,6 +150,40 @@ describe("giving up on debts through the manager", () => {
   });
 });
 
+describe("deleting a student", () => {
+  it("says no without marking the sync as failed", async () => {
+    const { manager } = setup();
+    await act(async () => {
+      expect(await manager().actions.deleteStudent("diego")).toBe(false);
+    });
+    expect(manager().syncStatus).toBe("saved");
+    expect(manager().state.students).toHaveLength(2);
+    expect(manager().toasts.at(-1)).toMatchObject({ tone: "error" });
+  });
+
+  it("lets go of a student added by mistake today, whose first fee fell due today", async () => {
+    const state = workspace();
+    state.groups[0].billing.due.day = 21;
+    state.students.push(
+      createStudent({
+        id: "error",
+        code: "E-1",
+        fullName: "Por Error",
+        groupIds: ["g-month"],
+        billingByGroup: { "g-month": { joinedOn: AS_OF } },
+      }),
+    );
+    expect(deriveMonthlyCharges(state, AS_OF).some((item) => item.studentId === "error" && item.balance > 0)).toBe(
+      true,
+    );
+    const { manager, student } = setup(state);
+    await act(async () => {
+      expect(await manager().actions.deleteStudent("error")).toBe(true);
+    });
+    expect(student("error")).toBeUndefined();
+  });
+});
+
 describe("saving a student around payments and marks", () => {
   it("keeps the marks through the student's canonical form and a save", async () => {
     const state = markLost(workspace(), [FEE], "2026-10-10");

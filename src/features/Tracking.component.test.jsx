@@ -3,7 +3,7 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createGrade, createGroup, createStarterState, createStudent } from "../domain";
+import { createGrade, createGroup, createStarterState, createStudent, deriveAll } from "../domain";
 import { useClassManager } from "../hooks/useClassManager";
 import { I18nProvider } from "../i18n";
 import { LANGUAGE_STORAGE_KEY } from "../i18n/translations";
@@ -281,6 +281,9 @@ describe("Tracking and lost payments", () => {
     expect(within(debts).queryByRole("button", { name: /^Mark as lost/ })).not.toBeInTheDocument();
     // A class paid after that day reads as owed, and must not be paid again with today's date.
     expect(within(debts).queryByRole("button", { name: /^Mark paid/ })).not.toBeInTheDocument();
+    // Nor from the month's block: today's payment would not show here, and could be recorded twice.
+    expect(document.querySelector(".mens .fee-pay")).toBeNull();
+    expect(document.querySelector(".mens")).toHaveTextContent("$1,200");
   });
 
   it("sums months and classes in words, and adds the lost column to the Excel", async () => {
@@ -308,6 +311,72 @@ describe("Tracking and lost payments", () => {
     expect(sheet).toContain("<th>Lost</th>");
     expect(sheet).toContain("<td>1350</td>");
     click.mockRestore();
+  });
+});
+
+describe("Tracking when the group being looked at goes away", () => {
+  it("falls back to all groups", async () => {
+    const user = userEvent.setup();
+    const full = trackingState();
+    const derived = deriveAll(full, AS_OF);
+    const view = (state) => (
+      <I18nProvider>
+        <Tracking state={state} derived={deriveAll(state, AS_OF)} actions={{}} />
+      </I18nProvider>
+    );
+    expect(derived.classLog.length).toBeGreaterThan(0);
+    const { rerender } = render(view(full));
+    await user.click(screen.getByRole("combobox", { name: "Filter by group" }));
+    await user.click(screen.getByRole("option", { name: "Prepa" }));
+    const without = { ...full, groups: full.groups.filter((group) => group.id !== "g2") };
+    rerender(view(without));
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "Filter by group" })).toHaveTextContent("All groups"),
+    );
+  });
+});
+
+describe("Tracking's student sheet in a past report", () => {
+  async function pickOctober12(user) {
+    await user.click(screen.getByRole("button", { name: "Payments" }));
+    await user.click(screen.getByRole("combobox", { name: "Report period" }));
+    await user.click(screen.getByRole("option", { name: "Range…" }));
+    const drawer = screen.getByRole("dialog", { name: "Custom range" });
+    await waitFor(() => expect(within(drawer).getByRole("combobox", { name: "From" })).toBeEnabled());
+    await user.click(within(drawer).getByRole("combobox", { name: "From" }));
+    await user.click(screen.getByRole("button", { name: "Monday, October 12, 2026" }));
+    await user.click(within(drawer).getByRole("combobox", { name: "To" }));
+    await user.click(screen.getByRole("button", { name: "Monday, October 12, 2026" }));
+    await user.click(within(drawer).getByRole("button", { name: "Apply" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  }
+
+  it("offers no payment, which would be dated today and not show here", async () => {
+    setCompact(true);
+    const user = userEvent.setup();
+    setup();
+    await pickOctober12(user);
+    await user.click(screen.getByRole("button", { name: /Sofía Martín/ }));
+    const sheet = await screen.findByRole("dialog");
+    await user.click(within(sheet).getByRole("button", { name: /^Payments:/ }));
+    expect(document.querySelector(".ssh-fee")).not.toBeNull();
+    expect(document.querySelector(".ssh-pay")).toBeNull();
+  });
+
+  it("shows the debt as owed and offers neither ⊘ nor ↶", async () => {
+    setCompact(true);
+    const user = userEvent.setup();
+    const state = trackingState();
+    state.classLog.push(row("old", "2026-08-03", "s1", "P", 0));
+    state.students[0].lostPayments = [{ kind: "class", classId: "old", lostAt: "2026-10-20" }];
+    setup(state);
+    await pickOctober12(user);
+    await user.click(screen.getByRole("button", { name: /Luna López/ }));
+    const sheet = await screen.findByRole("dialog");
+    await user.click(within(sheet).getByRole("button", { name: /^Payments:/ }));
+    expect(document.querySelector(".ssh-debt.is-lost")).toBeNull();
+    expect(document.querySelector(".ssh-debt")).not.toBeNull();
+    expect(within(sheet).queryByRole("button", { name: /^(Mark as lost|Recover)/ })).not.toBeInTheDocument();
   });
 });
 

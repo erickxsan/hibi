@@ -70,7 +70,7 @@ import { ClassHistory } from "./ClassHistory";
 import { NewClassDrawer } from "./NewClassDrawer";
 import { EditClassDrawer } from "./EditClassDrawer";
 import "../i18n/screenTranslations.js";
-import { MonthlyFeePay } from "./MonthlyFeePay";
+import { MonthlyFeePay, MonthlyFeeUndo } from "./MonthlyFeePay";
 import "./classes.css";
 
 // Outside the component, so returning to Clases with the same records reuses the sessions already built.
@@ -234,9 +234,7 @@ function MonthlyPaymentCell({ charge, studentName, today, classDate, onMonthly, 
   const until = formatShortDate(charge.coversTo, locale, { weekday: false });
   const undo =
     charge.lastPaidAt === today ? (
-      <button type="button" className="link-button" disabled={busy} onClick={() => onMonthly.undo(charge)}>
-        {t("Undo")}
-      </button>
+      <MonthlyFeeUndo charge={charge} date={today} onUndo={onMonthly.undo} busy={busy} />
     ) : null;
   if (charge.status === "paid") {
     return (
@@ -423,6 +421,8 @@ export default function Classes({
   const [selectedKey, setSelectedKey] = useState("");
   const [weekStart, setWeekStart] = useState(() => startOfWeek(currentDate));
   const [selectedDay, setSelectedDay] = useState(currentDate);
+  const [historyKey, setHistoryKey] = useState("");
+  const clearHistoryKey = useCallback(() => setHistoryKey(""), []);
   const [agendaOpen, setAgendaOpen] = useState(false);
   const [newClassOpen, setNewClassOpen] = useState(false);
   const [editingSession, setEditingSession] = useState(null);
@@ -554,6 +554,8 @@ export default function Classes({
   useEffect(() => {
     if (intent === "class-history" || intent === "add-grades") changeTab("history", { replace: true });
     if (intent?.type === "open-history-class" && typeof intent.sessionKey === "string") {
+      // The intent is cleared below, before the history tab mounts.
+      setHistoryKey(intent.sessionKey);
       changeTab("history", { replace: true });
     }
     if (intent?.type === "open-class" && typeof intent.sessionKey === "string") {
@@ -1132,7 +1134,8 @@ export default function Classes({
           derived={derived}
           sessions={sessions}
           currentDate={currentDate}
-          initialKey={intent?.type === "open-history-class" ? intent.sessionKey : ""}
+          initialKey={historyKey}
+          onInitialKeyOpened={clearHistoryKey}
           onEdit={openFromOtherTab}
           onOpenTracking={(intentValue) => openPage?.("grades", intentValue)}
         />

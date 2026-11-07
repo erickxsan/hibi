@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useI18n } from "../i18n/index.jsx";
 import { Button, EmptyState, SearchInput, Select } from "../components/ui";
@@ -44,12 +44,15 @@ function attendanceRatio(sessions) {
   return rows.length ? rows.filter((row) => row.attendance !== "A").length / rows.length : null;
 }
 
+const WEEK_MS = 7 * 86_400_000;
+
 export function ClassHistory({
   state,
   derived = undefined,
   sessions,
   currentDate,
   initialKey = "",
+  onInitialKeyOpened = undefined,
   onEdit,
   onOpenTracking,
 }) {
@@ -57,10 +60,30 @@ export function ClassHistory({
   const compact = useCompactViewport();
   const [owner, setOwner] = useState("");
   const [search, setSearch] = useState("");
-  const [openKey, setOpenKey] = useState(initialKey);
+  const [openKey, setOpenKey] = useState("");
   const [weeks, setWeeks] = useState(WEEKS_PER_PAGE);
   const [sheetSession, setSheetSession] = useState(null);
   const derivedRows = derived?.classLog || [];
+  // Another screen asked for one class: it opens the way a tap on its row would, once.
+  const revealOpenRow = useRef(false);
+  const openRow = useCallback((node) => {
+    if (!node || !revealOpenRow.current) return;
+    revealOpenRow.current = false;
+    node.scrollIntoView?.({ block: "center" });
+  }, []);
+  useEffect(() => {
+    if (!initialKey) return;
+    const asked = sessions.find((session) => session.key === initialKey) || null;
+    if (compact) setSheetSession(asked);
+    else {
+      revealOpenRow.current = true;
+      setOpenKey(initialKey);
+      // An older class may sit beyond the weeks on show; every listed week has classes, so this reaches it.
+      const weeksAgo = asked ? Math.ceil((Date.parse(currentDate) - Date.parse(asked.classDate)) / WEEK_MS) + 1 : 0;
+      setWeeks((current) => Math.max(current, weeksAgo));
+    }
+    onInitialKeyOpened?.();
+  }, [compact, currentDate, initialKey, onInitialKeyOpened, sessions]);
   const history = useMemo(
     () =>
       sessions
@@ -190,7 +213,11 @@ export function ClassHistory({
                 ? `${assessment.name}${assessment.average !== null ? ` · ${t("average {value}", { value: formatScore(assessment.average, locale) })}` : ""}`
                 : "";
               return (
-                <div className={`history-row ${open ? "is-open" : ""}`} key={session.key}>
+                <div
+                  className={`history-row ${open ? "is-open" : ""}`}
+                  key={session.key}
+                  ref={open ? openRow : undefined}
+                >
                   <button
                     type="button"
                     className="history-row-button"

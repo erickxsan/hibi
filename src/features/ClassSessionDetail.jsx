@@ -3,6 +3,7 @@ import { isBillableAttendance } from "../domain/attendanceBilling.js";
 import { BottomSheet, Button, ListRow } from "../components/ui";
 import { StudentAvatar } from "../components/StudentAvatar";
 import { formatLongDate, formatMoney, formatScore, formatTime } from "../utils/displayFormat";
+import { afterOverlayCloses } from "../navigation/appHistory";
 import { rosterForClassSession } from "./classesWorkspaceModel";
 
 function firstName(name = "") {
@@ -99,7 +100,18 @@ export function attendanceWord(row) {
     : { key: "Present", tone: "ok" };
 }
 
+/** Money kept on a class that charges nothing: it stays there for the teacher to review. */
+function paymentToReview(row) {
+  return Number(row?.amountPaid) > 0 && (row.classStatus === "Cancelled" || !isBillableAttendance(row));
+}
+
 export function paymentWord(row, derivedRow, locale, t) {
+  if (paymentToReview(row)) {
+    return {
+      text: `${t(row.classStatus === "Cancelled" ? "Review cancelled payment" : "Review no-charge payment")} · ${formatMoney(row.amountPaid, locale)}`,
+      tone: "pend",
+    };
+  }
   if (!row || Number(row.appliedCharge) === 0 || !isBillableAttendance(row)) return { text: "—", tone: "" };
   if (derivedRow?.lostAmount > 0)
     return { text: `${t("Lost (fee)")} ${formatMoney(derivedRow.lostAmount, locale)}`, tone: "" };
@@ -142,12 +154,14 @@ export function SessionDetailSheet({ open, onClose, state, session, derivedRows 
               avatar={<StudentAvatar avatarId={student.avatarId} name={student.fullName} decorative />}
               name={student.fullName}
               context={
-                recorded
-                  ? `${t(attendance.key)}${row?.attendance === "P" ? ` · ${owes ? t("payment pending") : pay.text === "—" ? "" : t("paid")}` : ""}`.replace(
-                      / · $/,
-                      "",
-                    )
-                  : t("Unmarked")
+                recorded && paymentToReview(row)
+                  ? `${t(attendance.key)} · ${pay.text}`
+                  : recorded
+                    ? `${t(attendance.key)}${row?.attendance === "P" ? ` · ${owes ? t("payment pending") : pay.text === "—" ? "" : t("paid")}` : ""}`.replace(
+                        / · $/,
+                        "",
+                      )
+                    : t("Unmarked")
               }
               contextTone={attendance.tone === "bad" ? "bad" : owes ? "pend" : ""}
               value={
@@ -165,8 +179,8 @@ export function SessionDetailSheet({ open, onClose, state, session, derivedRows 
       </div>
       <Button
         onClick={() => {
+          afterOverlayCloses(() => onEdit(session));
           onClose();
-          onEdit(session);
         }}
       >
         {t(recorded ? "Edit record" : session.statusLabel === "Pending" ? "Record class" : "Open class")}

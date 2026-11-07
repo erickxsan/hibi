@@ -317,6 +317,100 @@ describe("historical settlement", () => {
   });
 });
 
+describe("a class opened from another screen on a phone", () => {
+  it("opens its sheet, and «Edit record» reaches the roster after the sheet's Back lands", async () => {
+    const user = userEvent.setup();
+    const originalMatchMedia = window.matchMedia;
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: vi.fn().mockImplementation((query) => ({
+        matches: true,
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    });
+    try {
+      const state = classState();
+      state.classLog = [
+        {
+          id: "historic",
+          classDate: AS_OF_DATE,
+          studentId: "s1",
+          groupId: "g1",
+          startTime: "10:00",
+          classStatus: "Completed",
+          attendance: "P",
+          hours: 2,
+          appliedHourlyRate: 100,
+          appliedCharge: 200,
+          amountPaid: 0,
+          paymentState: "Pending",
+        },
+      ];
+      const session = buildClassWorkspaceSessions(state, AS_OF_DATE).find((item) =>
+        item.rows?.some((row) => row.id === "historic"),
+      );
+      renderClasses(state, {
+        intent: { type: "open-history-class", sessionKey: session.key },
+        clearIntent: vi.fn(),
+      });
+      const sheet = await screen.findByRole("dialog");
+      await user.click(within(sheet).getByRole("button", { name: "Edit record" }));
+      await screen.findByRole("group", { name: "Attendance for Ana" });
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    } finally {
+      Object.defineProperty(window, "matchMedia", { configurable: true, value: originalMatchMedia });
+    }
+  });
+});
+
+describe("money kept on a class that charges nothing", () => {
+  it("shows in the phone's sheet", async () => {
+    const originalMatchMedia = window.matchMedia;
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: vi.fn().mockImplementation((query) => ({
+        matches: true,
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    });
+    try {
+      const state = classState();
+      state.classLog = [
+        {
+          id: "kept",
+          classDate: AS_OF_DATE,
+          studentId: "s1",
+          groupId: "g1",
+          startTime: "10:00",
+          classStatus: "Completed",
+          attendance: "A",
+          hours: 2,
+          appliedHourlyRate: 100,
+          appliedCharge: 0,
+          amountPaid: 200,
+          paymentDate: AS_OF_DATE,
+          paymentState: "Paid",
+        },
+      ];
+      const session = buildClassWorkspaceSessions(state, AS_OF_DATE).find((item) =>
+        item.rows?.some((row) => row.id === "kept"),
+      );
+      renderClasses(state, {
+        intent: { type: "open-history-class", sessionKey: session.key },
+        clearIntent: vi.fn(),
+      });
+      const sheet = await screen.findByRole("dialog");
+      expect(within(sheet).getByText(/Review no-charge payment · \$200/)).toBeInTheDocument();
+    } finally {
+      Object.defineProperty(window, "matchMedia", { configurable: true, value: originalMatchMedia });
+    }
+  });
+});
+
 describe("a class given up as lost", () => {
   it("reads as lost instead of pending, and recovers from the roster", async () => {
     const user = userEvent.setup();

@@ -1,5 +1,6 @@
 import { importState, serializeState } from "./storage.js";
 import { workspaceEntityIdentity } from "./semanticIdentity.js";
+import { groupScheduleSlots } from "./groupScheduleHistory.js";
 
 export const IMPORT_COLLECTIONS = [
   "groups",
@@ -127,10 +128,10 @@ function buildSlotIdMap(current, imported, groupIdMap) {
   const currentGroups = new Map(current.groups.map((group) => [group.id, group]));
   for (const sourceGroup of imported.groups) {
     const finalGroup = currentGroups.get(groupIdMap.get(sourceGroup.id));
-    const targetSlots = finalGroup?.weeklySchedule || sourceGroup.weeklySchedule || [];
+    const targetSlots = groupScheduleSlots(finalGroup || sourceGroup);
     const byId = new Map(targetSlots.map((slot) => [slot.id, slot]));
     const byBusinessKey = new Map(targetSlots.map((slot) => [slotBusinessKey(slot), slot]));
-    for (const slot of sourceGroup.weeklySchedule || []) {
+    for (const slot of groupScheduleSlots(sourceGroup)) {
       const existing = byId.get(slot.id) || byBusinessKey.get(slotBusinessKey(slot));
       result.set(slotKey(sourceGroup.id, slot.id), existing?.id || slot.id);
     }
@@ -206,6 +207,15 @@ function remapRecord(collection, source, maps) {
       ...slot,
       id: scheduleSlotIds.get(slotKey(source.id, slot.id)) || slot.id,
     }));
+    if (Array.isArray(record.scheduleHistory)) {
+      record.scheduleHistory = record.scheduleHistory.map((entry) => ({
+        ...entry,
+        weeklySchedule: entry.weeklySchedule.map((slot) => ({
+          ...slot,
+          id: scheduleSlotIds.get(slotKey(source.id, slot.id)) || slot.id,
+        })),
+      }));
+    }
   }
   if (Array.isArray(record.daysOfWeek)) record.daysOfWeek = [...record.daysOfWeek];
   return record;

@@ -121,7 +121,7 @@ function averageOf(items) {
  */
 export function monthlyStamps(state, asOf, scope, studentId) {
   const current = periodOf(asOf);
-  return deriveMonthlyCharges(state, asOf, { includeArchived: false, through: nextPeriod(current) }).filter(
+  return deriveMonthlyCharges(state, asOf, { through: nextPeriod(current) }).filter(
     (charge) =>
       charge.studentId === studentId &&
       matchesGroup(scope, charge.groupId) &&

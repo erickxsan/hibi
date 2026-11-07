@@ -598,7 +598,7 @@ export function collectionsUpcoming(scope) {
     );
     day.total = roundMoney(day.monthly + day.classes);
   };
-  deriveMonthlyCharges(state, asOf, { through: periodOf(end), includeArchived: false })
+  deriveMonthlyCharges(state, asOf, { through: periodOf(end) })
     .filter(
       (charge) =>
         charge.status === "pending" &&
@@ -677,7 +677,7 @@ export function paymentPunctuality(scope) {
         days: daysBetween(row.classDate, row.paymentDate),
       }),
     );
-  deriveMonthlyCharges(state, asOf, { includeArchived: false })
+  deriveMonthlyCharges(state, asOf)
     .filter(
       (charge) =>
         charge.status === "paid" && charge.paidAt && charge.paidAt <= asOf && matchesGroup(group, charge.groupId),

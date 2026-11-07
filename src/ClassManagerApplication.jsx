@@ -14,7 +14,7 @@ import { createNavigationPass, discardChangesRequest, replayableHistoryMove } fr
 import { useConfirmPrompt } from "./components/ConfirmPrompt";
 import { useI18n } from "./i18n";
 import { deriveAll } from "./domain";
-import { sumMoney } from "./domain/money";
+import { archivedGroupsOwed } from "./domain/monthlyBilling.js";
 import { isGroupArchived, statisticsStateForGroups } from "./domain/groupArchiving";
 import {
   onboardingStep,
@@ -103,12 +103,8 @@ export default function ClassManagerApplication({
     [manager.state.groups],
   );
   const archivedPendingBalance = useMemo(
-    () =>
-      sumMoney(
-        manager.derived.classLog.filter((row) => archivedGroupIds.has(row.groupId)),
-        (row) => row.outstanding,
-      ),
-    [manager.derived.classLog, archivedGroupIds],
+    () => archivedGroupsOwed(manager.state, manager.derived.classLog, archivedGroupIds),
+    [manager.state, manager.derived.classLog, archivedGroupIds],
   );
   const [includeArchivedGroups, setIncludeArchivedGroups] = useState(false);
   const statisticsState = useMemo(

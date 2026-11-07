@@ -173,6 +173,30 @@ test.describe("pagos perdidos en teléfono", () => {
     timezoneId: "America/Mexico_City",
   });
 
+  test("una clase perdida se abre desde la hoja del alumno y dice Perdida en Clases", async ({ page }) => {
+    await seed(page);
+    await page.goto("/progress");
+    await page.getByText("Pagos", { exact: true }).first().click();
+    await page.getByText("Diego Mora", { exact: true }).first().click();
+    await page.locator(".ssh-debt .lost-icon").click();
+    await expect(page.locator(".ssh-debt.is-lost")).toHaveCount(1);
+    await page.locator(".ssh-debt .ssh-row").click();
+
+    // The sheet of that class, then the roster: closing the sheet must not undo the move.
+    await page.getByRole("dialog").getByRole("button", { name: "Editar registro" }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    const lost = page.locator(".lost-class");
+    await expect(lost).toContainText("Perdida");
+    const box = await lost.locator(".lost-icon").boundingBox();
+    expect(box.width).toBeGreaterThanOrEqual(40);
+    expect(box.x + box.width).toBeLessThanOrEqual(390);
+    await expect(page.getByRole("group", { name: "Pago de Diego Mora" })).toHaveCount(0);
+
+    await lost.locator(".lost-icon").click();
+    await expect(page.locator(".lost-class")).toHaveCount(0);
+    await expect(page.getByRole("group", { name: /Diego Mora/ }).first()).toBeVisible();
+  });
+
   test("la hoja del alumno usa el ícono y Perdidos abre por mes", async ({ page }) => {
     await seed(page);
     await page.goto("/progress");

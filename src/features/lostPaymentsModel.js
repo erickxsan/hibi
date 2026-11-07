@@ -28,7 +28,7 @@ export function chargeDebt(charge) {
  */
 export function studentDebtRows(state, derived, { studentId, asOf, scope = "all" }) {
   const groupNames = new Map((state.groups || []).map((group) => [group.id, group.name]));
-  const fees = deriveMonthlyCharges(state, asOf, { includeArchived: false })
+  const fees = deriveMonthlyCharges(state, asOf)
     .filter(
       (charge) =>
         charge.studentId === studentId &&
