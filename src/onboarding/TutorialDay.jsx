@@ -81,6 +81,7 @@ export default function TutorialDay({ compact, onDone }) {
   const { t: uiT } = useI18n();
   const locale = getUiLocale();
   const headingRef = useRef(null);
+  const actionsRef = useRef(null);
   const [step, setStep] = useState(0);
   const [seen, setSeen] = useState(() => new Set());
   const [days, setDays] = useState([]);
@@ -348,8 +349,18 @@ export default function TutorialDay({ compact, onDone }) {
     </div>
   );
   const buttons = (
-    <div className="tt-day-actions">
-      {step > 0 ? <Button onClick={() => setStep(step - 1)}>{uiT("Back")}</Button> : null}
+    <div className="tt-day-actions" ref={actionsRef}>
+      {step > 0 ? (
+        <Button
+          onClick={() => {
+            // Back on the first moment disappears; keep the keyboard on «Next» instead of losing it.
+            if (step === 1) /** @type {HTMLElement | null} */ (actionsRef.current?.lastElementChild)?.focus();
+            setStep(step - 1);
+          }}
+        >
+          {uiT("Back")}
+        </Button>
+      ) : null}
       <Button variant="primary" onClick={() => (last ? onDone() : setStep(step + 1))}>
         {last ? uiT("Your turn") : uiT("Next")}
       </Button>

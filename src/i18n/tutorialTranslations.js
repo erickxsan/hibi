@@ -39,6 +39,7 @@ export const TUTORIAL_TRANSLATIONS = Object.freeze({
   "No classes yet": "Aún sin clases",
   "Mark the days and the agenda fills up": "Marca los días y la agenda se llena",
   "Today · {range}": "Hoy · {range}",
+  "Today · {time}": "Hoy · {time}",
   "{count} present (count)": "{count} presente",
   "{count} present": "{count} presentes",
   "{count} absent (count)": "{count} ausente",

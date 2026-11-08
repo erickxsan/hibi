@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check } from "lucide-react";
 import { Button, Field, Input, Segmented } from "../components/ui";
@@ -9,7 +9,7 @@ import { getUiLocale, useI18n } from "../i18n";
 import {
   canSaveOnboardingDraft,
   formatOnboardingDate,
-  initialOnboardingDraft,
+  INITIAL_ONBOARDING_DRAFT,
   ONBOARDING_DAYS,
   onboardingGroupPayload,
   TUTORIAL_DUE,
@@ -17,7 +17,7 @@ import {
 } from "./onboardingModel";
 import TutorialDay from "./TutorialDay";
 import TutorialPractice from "./TutorialPractice";
-import { SAMPLE_PRICE, TutorialCat } from "./tutorialShared";
+import { TutorialCat } from "./tutorialShared";
 import "../i18n/screenTranslations.js";
 import "./onboarding.css";
 
@@ -87,7 +87,9 @@ function GroupSetup({ state, actions, onCreated, onLater }) {
   const { t: uiT } = useI18n();
   const locale = getUiLocale();
   const headingRef = useFocusOnMount();
-  const [draft, setDraft] = useState(() => initialOnboardingDraft(state));
+  const hintId = useId();
+  const [draft, setDraft] = useState(INITIAL_ONBOARDING_DRAFT);
+  const [savedId, setSavedId] = useState("");
   const [busy, setBusy] = useState(false);
   const asOf = state.settings.asOfDate || todayDateOnly();
   const monthly = draft.billingMode === "monthly";
@@ -118,10 +120,10 @@ function GroupSetup({ state, actions, onCreated, onLater }) {
     event.preventDefault();
     if (!canSaveOnboardingDraft(draft)) return;
     run(async () => {
-      const id = await actions.saveOnboardingGroup(onboardingGroupPayload(draft, state, asOf));
+      // When the group was saved but closing the tutorial failed, trying again only closes it.
+      const id = savedId || (await actions.saveOnboardingGroup(onboardingGroupPayload(draft, state.settings, asOf)));
       if (!id) return;
-      // If closing the tutorial fails, a second try updates this same group.
-      setDraft((current) => ({ ...current, id }));
+      setSavedId(id);
       if (await actions.dismissOnboarding()) onCreated();
     });
   };
@@ -174,18 +176,30 @@ function GroupSetup({ state, actions, onCreated, onLater }) {
           </fieldset>
           <div className="tt-form-row">
             <Field label={uiT("Time")}>
-              <Input type="time" value={draft.time} onChange={(event) => edit({ time: event.target.value })} />
+              <Input
+                type="time"
+                durationMinutes={(Number(state.settings.defaultClassHours) || 1) * 60}
+                value={draft.time}
+                onChange={(event) => edit({ time: event.target.value })}
+              />
             </Field>
-            <Field label={monthly ? uiT("Monthly fee") : uiT("Price per hour")} hint={monthly ? dueHint : undefined}>
+            <Field label={monthly ? uiT("Monthly fee") : uiT("Price per hour")}>
+              {/* Left empty, a per-class group charges the general rate, so that is what the field shows. */}
               <Input
                 inputMode="decimal"
                 autoComplete="off"
-                placeholder={formatMoney(monthly ? SAMPLE_PRICE * 4 : SAMPLE_PRICE, locale)}
+                placeholder={monthly ? undefined : formatMoney(Number(state.settings.hourlyRate) || 0, locale)}
+                aria-describedby={monthly ? hintId : undefined}
                 value={draft.price}
                 onChange={(event) => edit({ price: event.target.value.replace(/[^\d.]/g, "") })}
               />
             </Field>
           </div>
+          {monthly ? (
+            <p className="tt-muted" id={hintId}>
+              {dueHint}
+            </p>
+          ) : null}
           <Segmented
             label={uiT("Billing mode")}
             value={draft.billingMode}

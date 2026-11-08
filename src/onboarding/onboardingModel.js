@@ -1,4 +1,4 @@
-import { firstBillingPeriod, normalizeGroupBilling } from "../domain/monthlyBilling";
+import { firstBillingPeriod } from "../domain/monthlyBilling";
 
 export const ONBOARDING_VERSION = 2;
 
@@ -81,42 +81,17 @@ function minutesOf(time) {
 }
 
 /**
- * The tutorial's group form. A setup interrupted after its group was saved (a reload, or a setup left
- * by an earlier tutorial) comes back filled in, so saving again updates that group instead of adding one.
+ * The tutorial's group form always starts blank: a group left by an earlier setup is never edited
+ * from here, because this short form would overwrite everything it does not show.
  */
-export function initialOnboardingDraft(state) {
-  const group = state.groups.find((item) => item.id === state.settings.onboardingGroupId);
-  const slots = group?.weeklySchedule || [];
-  const monthly = group?.billing?.mode === "monthly";
-  let price = "";
-  if (monthly) price = String(group.billing.monthlyFee ?? "");
-  else if (Number.isFinite(group?.hourlyRate)) price = String(group.hourlyRate);
-  return {
-    id: group?.id || "",
-    name: group?.name || "",
-    days: slots.length ? [...new Set(slots.map((slot) => Number(slot.dayOfWeek)))] : [2, 4],
-    time: slots[0]?.startTime || "17:30",
-    billingMode: monthly ? "monthly" : "perClass",
-    price,
-  };
-}
-
-/** One class per chosen day, all at the form's time, in weekday order. A resumed group keeps its slots. */
-export function draftSchedule(draft, state) {
-  const previous = state.groups.find((group) => group.id === draft.id)?.weeklySchedule || [];
-  const duration = Number(state.settings.defaultClassHours) || 1;
-  return [...new Set(draft.days.map(Number))]
-    .sort((a, b) => a - b)
-    .map((dayOfWeek) => {
-      const kept = previous.find((slot) => Number(slot.dayOfWeek) === dayOfWeek);
-      return {
-        id: kept?.id || `onboarding-slot-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${dayOfWeek}`}`,
-        dayOfWeek,
-        startTime: draft.time,
-        durationHours: Number(kept?.durationHours) || duration,
-      };
-    });
-}
+/** @type {Readonly<{ name: string, days: readonly number[], time: string, billingMode: "perClass" | "monthly", price: string }>} */
+export const INITIAL_ONBOARDING_DRAFT = Object.freeze({
+  name: "",
+  days: Object.freeze([2, 4]),
+  time: "17:30",
+  billingMode: "perClass",
+  price: "",
+});
 
 /** A name, a day and a time are enough. An empty per-class price is the general rate; a monthly fee needs one. */
 export function canSaveOnboardingDraft(draft) {
@@ -125,33 +100,33 @@ export function canSaveOnboardingDraft(draft) {
   return Boolean(draft.name.trim() && draft.days.length && minutesOf(draft.time) !== null && priceOk);
 }
 
-/** What the form saves through `saveOnboardingGroup`. */
-export function onboardingGroupPayload(draft, state, asOf) {
+/** The new group the form saves through `saveOnboardingGroup`: one class per chosen day, all at the same time. */
+export function onboardingGroupPayload(draft, settings, asOf) {
   const monthly = draft.billingMode === "monthly";
   const price = String(draft.price ?? "").trim();
-  const weeklySchedule = draftSchedule(draft, state);
-  const previous = state.groups.find((group) => group.id === draft.id);
-  // A fee is never born overdue: once day 5 has passed, billing starts next month. Saving a resumed
-  // setup again keeps the billing start it was created with.
-  const savedBilling = normalizeGroupBilling(previous?.billing);
-  const keptStart = savedBilling?.mode === "monthly" && savedBilling.effectiveFrom ? savedBilling : null;
-  const billingStart = firstBillingPeriod({ mode: "monthly", due: TUTORIAL_DUE }, asOf);
+  const weeklySchedule = [...new Set(draft.days.map(Number))]
+    .sort((a, b) => a - b)
+    .map((dayOfWeek) => ({
+      id: `onboarding-slot-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${dayOfWeek}`}`,
+      dayOfWeek,
+      startTime: draft.time,
+      durationHours: Number(settings.defaultClassHours) || 1,
+    }));
   return {
-    id: draft.id || undefined,
     name: draft.name.trim(),
-    subject: previous?.subject || "",
+    subject: "",
     schedule: weeklySchedule.map((slot) => `${dayLabel(slot.dayOfWeek)} · ${slot.startTime}`).join("; "),
     weeklySchedule,
     plannedSessionsPerMonth: Math.max(4, weeklySchedule.length * 4),
     // The general rate stays in Settings; only a different price becomes the group's own.
-    hourlyRate: !monthly && price !== "" && Number(price) !== Number(state.settings.hourlyRate) ? Number(price) : null,
+    hourlyRate: !monthly && price !== "" && Number(price) !== Number(settings.hourlyRate) ? Number(price) : null,
+    // A fee is never born overdue: once day 5 has passed, billing starts next month.
     billing: monthly
       ? {
           mode: "monthly",
           monthlyFee: Number(price),
           due: { ...TUTORIAL_DUE },
-          effectiveFrom: keptStart?.effectiveFrom || billingStart,
-          ...(keptStart?.coveredFrom ? { coveredFrom: keptStart.coveredFrom } : {}),
+          effectiveFrom: firstBillingPeriod({ mode: "monthly", due: TUTORIAL_DUE }, asOf),
         }
       : undefined,
   };

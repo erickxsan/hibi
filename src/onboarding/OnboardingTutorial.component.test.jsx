@@ -55,6 +55,11 @@ describe("OnboardingTutorial", () => {
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
     expect(heading("See who needs help")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Go to 11:00 a.m." }));
+    // «Back» disappears on the first moment, so the keyboard lands on «Next».
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(heading("Your day, at a glance")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Next" })).toHaveFocus();
+    fireEvent.click(screen.getByRole("button", { name: "Go to 11:00 a.m." }));
     expect(heading("A group builds your agenda")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Go to 10:00 p.m." }));
     fireEvent.click(screen.getByRole("button", { name: "Your turn" }));
@@ -110,6 +115,8 @@ describe("OnboardingTutorial", () => {
     expect(create).toBeDisabled();
     expect(screen.getByRole("button", { name: "Tuesday" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "Thursday" })).toHaveAttribute("aria-pressed", "true");
+    // Left empty, the price is the general rate, and the field says so.
+    expect(screen.getByRole("textbox", { name: "Price per hour" })).toHaveAttribute("placeholder", "$250");
     await user.type(screen.getByRole("textbox", { name: "Group name" }), "Advanced English");
     await user.click(screen.getByRole("button", { name: "Thursday" }));
     await user.click(screen.getByRole("button", { name: "Friday" }));
@@ -152,6 +159,23 @@ describe("OnboardingTutorial", () => {
       monthlyFee: 1200,
       effectiveFrom: "2026-11",
     });
+  });
+
+  it("when closing fails after the group was saved, trying again only closes the tutorial", async () => {
+    const user = userEvent.setup();
+    const { actions, onClose } = renderTutorial();
+    actions.dismissOnboarding.mockResolvedValueOnce(false);
+    await user.click(screen.getByRole("button", { name: "Skip" }));
+    await user.click(screen.getByRole("button", { name: "Skip to creating my group" }));
+    await user.type(screen.getByRole("textbox", { name: "Group name" }), "Physics");
+    await user.click(screen.getByRole("button", { name: "Create my agenda" }));
+    await waitFor(() => expect(actions.dismissOnboarding).toHaveBeenCalledTimes(1));
+    expect(heading("Your first group")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Create my agenda" }));
+    await waitFor(() => expect(actions.dismissOnboarding).toHaveBeenCalledTimes(2));
+    expect(actions.saveOnboardingGroup).toHaveBeenCalledTimes(1);
+    expect(heading("Now you know how to teach with Hibi")).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it("closes with «Not now» without creating anything, and keeps the form when saving fails", async () => {

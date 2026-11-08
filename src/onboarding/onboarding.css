@@ -591,6 +591,7 @@ body.onboarding-open {
 }
 .tt-stop span {
   opacity: 0.8;
+  white-space: nowrap;
 }
 .tt-track-cat {
   position: absolute;
@@ -1484,7 +1485,7 @@ p.tt-guide-foot {
   padding: 0 10px;
 }
 .tt-root.is-compact .tt-track {
-  width: calc(100% - 40px);
+  width: calc(100% - 64px);
   max-width: 520px;
   height: 112px;
   margin: 0 auto;
@@ -1600,8 +1601,9 @@ p.tt-guide-foot {
   padding: 22px 18px;
 }
 @media (max-width: 380px) {
-  .tt-root.is-compact .tt-stop span {
-    font-size: 10px;
+  /* Six times do not fit side by side: only the current one is written (each stop keeps its label). */
+  .tt-root.is-compact .tt-stop:not([aria-current]) span {
+    visibility: hidden;
   }
   .tt-form-row {
     grid-template-columns: minmax(0, 1fr);

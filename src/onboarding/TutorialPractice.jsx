@@ -4,8 +4,7 @@ import { AttendanceChoice, Button, PaymentChoice, Segmented } from "../component
 import { HibiLogo } from "../components/BrandMark";
 import { StudentAvatar } from "../components/StudentAvatar";
 import { getUiLocale, useI18n } from "../i18n";
-import { todayDateOnly } from "../domain/dates";
-import { formatLongDate, formatMoney, formatTime, formatTimeRange } from "../utils/displayFormat";
+import { formatMoney, formatTime, formatTimeRange } from "../utils/displayFormat";
 import { ONBOARDING_DAYS } from "./onboardingModel";
 import { SAMPLE_PRICE, SAMPLE_STUDENTS, TapPaw, TutorialCat } from "./tutorialShared";
 
@@ -44,7 +43,7 @@ function screenFor(step) {
  * teacher's own tap. As `backdrop` it only shows Community behind the group form.
  */
 export default function TutorialPractice({ compact, backdrop = false, onFinish }) {
-  const { t: uiT } = useI18n();
+  const { t: uiT, language } = useI18n();
   const locale = getUiLocale();
   const timers = useRef([]);
   const headingRef = useRef(null);
@@ -110,8 +109,8 @@ export default function TutorialPractice({ compact, backdrop = false, onFinish }
   const spotNav = step === 5 ? "tracking" : step === 6 ? "community" : "";
   const guide = backdrop ? null : GUIDES[step];
   const progress = [1, 2, 3, 4, 5, 5, 6][step - 1];
-  // Today's date, as Home shows it, at a made-up 3:20 p. m. (the class starts at 5:30).
-  const today = `${formatLongDate(todayDateOnly(), locale)} · ${formatTime("15:20", locale)}`;
+  // A made-up Thursday afternoon: the sample group meets on Tuesdays and Thursdays at 5:30.
+  const today = uiT("Today · {time}", { time: formatTime("15:20", locale) });
   const presentText = uiT(present.length === 1 ? "{count} present (count)" : "{count} present", {
     count: present.length,
   });
@@ -122,7 +121,7 @@ export default function TutorialPractice({ compact, backdrop = false, onFinish }
     const content = (
       <>
         <Icon aria-hidden="true" size={short ? 23 : 21} strokeWidth={1.8} />
-        <span>{uiT(short && item.mobileLabel ? item.mobileLabel : item.label)}</span>
+        <span>{uiT(short && item.mobileLabel && language === "es" ? item.mobileLabel : item.label)}</span>
       </>
     );
     const className = `${short ? "tt-tab-item" : "tt-nav-item"} ${active ? "is-active" : ""}`.trim();

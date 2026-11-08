@@ -2,9 +2,8 @@ import { describe, expect, it } from "vitest";
 import { createStarterState } from "../domain";
 import {
   canSaveOnboardingDraft,
-  draftSchedule,
   formatOnboardingDate,
-  initialOnboardingDraft,
+  INITIAL_ONBOARDING_DRAFT,
   nextDateForDay,
   nextOnboardingStudentCodes,
   onboardingGroupPayload,
@@ -90,38 +89,18 @@ describe("onboarding model", () => {
     expect(removeOnboardingStudents(state, "g1", [])).toBe(state);
   });
 
-  it("starts the group form on Tuesday and Thursday at 5:30 p. m., or from the group a setup left", () => {
-    const state = createStarterState();
-    expect(initialOnboardingDraft(state)).toEqual({
-      id: "",
+  it("starts the group form blank, on Tuesday and Thursday at 5:30 p. m.", () => {
+    expect(INITIAL_ONBOARDING_DRAFT).toEqual({
       name: "",
       days: [2, 4],
       time: "17:30",
       billingMode: "perClass",
       price: "",
     });
-    state.groups.push({
-      id: "g1",
-      name: "Inglés B1",
-      weeklySchedule: [
-        { id: "s1", dayOfWeek: 1, startTime: "09:00", durationHours: 1.5 },
-        { id: "s2", dayOfWeek: 3, startTime: "09:00", durationHours: 1.5 },
-      ],
-      billing: { mode: "monthly", monthlyFee: 900 },
-    });
-    state.settings.onboardingGroupId = "g1";
-    expect(initialOnboardingDraft(state)).toEqual({
-      id: "g1",
-      name: "Inglés B1",
-      days: [1, 3],
-      time: "09:00",
-      billingMode: "monthly",
-      price: "900",
-    });
   });
 
   it("asks only for a name, a day and a time; a monthly fee also needs its amount", () => {
-    const draft = { id: "", name: "Inglés", days: [2], time: "17:30", billingMode: "perClass", price: "" };
+    const draft = { name: "Inglés", days: [2], time: "17:30", billingMode: "perClass", price: "" };
     expect(canSaveOnboardingDraft(draft)).toBe(true);
     expect(canSaveOnboardingDraft({ ...draft, name: "  " })).toBe(false);
     expect(canSaveOnboardingDraft({ ...draft, days: [] })).toBe(false);
@@ -132,29 +111,19 @@ describe("onboarding model", () => {
     expect(canSaveOnboardingDraft({ ...draft, billingMode: "monthly", price: "1200" })).toBe(true);
   });
 
-  it("saves one class per day at the form's time and keeps the slots of a resumed group", () => {
-    const state = createStarterState();
-    state.settings.defaultClassHours = 2;
-    state.groups.push({
-      id: "g1",
-      weeklySchedule: [{ id: "kept", dayOfWeek: 4, startTime: "09:00", durationHours: 1 }],
-    });
-    const slots = draftSchedule({ id: "g1", days: [4, 2, 4], time: "17:30" }, state);
-    expect(slots.map(({ dayOfWeek, startTime, durationHours }) => [dayOfWeek, startTime, durationHours])).toEqual([
-      [2, "17:30", 2],
-      [4, "17:30", 1],
-    ]);
-    expect(slots[1].id).toBe("kept");
-    expect(slots[0].id).toMatch(/^onboarding-slot-/);
-  });
-
   it("builds the group: the general rate unless another price is typed, a monthly fee due on day 5", () => {
-    const state = createStarterState();
-    state.settings.hourlyRate = 250;
-    const draft = { id: "", name: " Inglés B1 ", days: [2, 4], time: "17:30", billingMode: "perClass", price: "" };
-    const perClass = onboardingGroupPayload(draft, state, "2026-11-07");
+    const settings = { ...createStarterState().settings, hourlyRate: 250, defaultClassHours: 2 };
+    const draft = { name: " Inglés B1 ", days: [4, 2, 4], time: "17:30", billingMode: "perClass", price: "" };
+    const perClass = onboardingGroupPayload(draft, settings, "2026-11-07");
+    expect(
+      perClass.weeklySchedule.map(({ dayOfWeek, startTime, durationHours }) => [dayOfWeek, startTime, durationHours]),
+    ).toEqual([
+      [2, "17:30", 2],
+      [4, "17:30", 2],
+    ]);
+    expect(perClass.weeklySchedule[0].id).toMatch(/^onboarding-slot-/);
+    expect(perClass).not.toHaveProperty("id");
     expect(perClass).toMatchObject({
-      id: undefined,
       name: "Inglés B1",
       subject: "",
       schedule: "Tuesday · 17:30; Thursday · 17:30",
@@ -162,10 +131,10 @@ describe("onboarding model", () => {
       hourlyRate: null,
       billing: undefined,
     });
-    expect(onboardingGroupPayload({ ...draft, price: "250" }, state, "2026-11-07").hourlyRate).toBeNull();
-    expect(onboardingGroupPayload({ ...draft, price: "300" }, state, "2026-11-07").hourlyRate).toBe(300);
+    expect(onboardingGroupPayload({ ...draft, price: "250" }, settings, "2026-11-07").hourlyRate).toBeNull();
+    expect(onboardingGroupPayload({ ...draft, price: "300" }, settings, "2026-11-07").hourlyRate).toBe(300);
     // After day 5 the first fee is next month's, so it is never born overdue.
-    const monthly = onboardingGroupPayload({ ...draft, billingMode: "monthly", price: "1200" }, state, "2026-11-07");
+    const monthly = onboardingGroupPayload({ ...draft, billingMode: "monthly", price: "1200" }, settings, "2026-11-07");
     expect(monthly.hourlyRate).toBeNull();
     expect(monthly.billing).toEqual({
       mode: "monthly",
@@ -174,29 +143,8 @@ describe("onboarding model", () => {
       effectiveFrom: "2026-12",
     });
     expect(
-      onboardingGroupPayload({ ...draft, billingMode: "monthly", price: "1200" }, state, "2026-11-03").billing
+      onboardingGroupPayload({ ...draft, billingMode: "monthly", price: "1200" }, settings, "2026-11-03").billing
         .effectiveFrom,
     ).toBe("2026-11");
-  });
-
-  it("keeps the billing start and subject of a group saved again from a resumed setup", () => {
-    const state = createStarterState();
-    state.groups.push({
-      id: "g1",
-      name: "Inglés B1",
-      subject: "Inglés",
-      weeklySchedule: [],
-      billing: {
-        mode: "monthly",
-        monthlyFee: 900,
-        due: { type: "dayOfMonth", day: 5 },
-        effectiveFrom: "2026-10",
-        coveredFrom: "2026-10-20",
-      },
-    });
-    const draft = { id: "g1", name: "Inglés B1", days: [1], time: "09:00", billingMode: "monthly", price: "950" };
-    const payload = onboardingGroupPayload(draft, state, "2026-11-07");
-    expect(payload).toMatchObject({ id: "g1", subject: "Inglés" });
-    expect(payload.billing).toMatchObject({ monthlyFee: 950, effectiveFrom: "2026-10", coveredFrom: "2026-10-20" });
   });
 });
