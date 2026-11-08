@@ -1,6 +1,7 @@
 import { canonicalBytes } from "./canonical.js";
 import { decodeUtf8, fromBase64Url, toBase64Url } from "./encoding.js";
 import { WorkspaceCryptoError } from "./workspaceCrypto.js";
+import { createDeviceDatabase } from "../utils/deviceDatabase.js";
 
 const DATABASE_NAME = "hibi-workspace-keys-v1";
 const DATABASE_VERSION = 2;
@@ -24,28 +25,20 @@ function transactionDone(transaction) {
 }
 
 export function createDeviceKeyStore(indexedDb = globalThis.indexedDB, cryptoApi = globalThis.crypto) {
-  let databasePromise;
-
-  function openDatabase() {
-    if (!indexedDb?.open) return Promise.resolve(null);
-    if (databasePromise) return databasePromise;
-    databasePromise = new Promise((resolve, reject) => {
-      const request = indexedDb.open(DATABASE_NAME, DATABASE_VERSION);
-      request.onupgradeneeded = () => {
-        const database = request.result;
-        if (!database.objectStoreNames.contains(KEY_STORE))
-          database.createObjectStore(KEY_STORE, { keyPath: "ownerId" });
-        if (!database.objectStoreNames.contains(WRAPPER_STORE))
-          database.createObjectStore(WRAPPER_STORE, { keyPath: "ownerId" });
-        if (!database.objectStoreNames.contains(INTEGRITY_STORE))
-          database.createObjectStore(INTEGRITY_STORE, { keyPath: "ownerId" });
-      };
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error || new Error("Device key storage is unavailable."));
-      request.onblocked = () => reject(new Error("Close other Hibi tabs before changing remembered-device access."));
-    });
-    return databasePromise;
-  }
+  const connection = createDeviceDatabase(indexedDb, {
+    name: DATABASE_NAME,
+    version: DATABASE_VERSION,
+    unavailableMessage: "Device key storage is unavailable.",
+    blockedMessage: "Close other Hibi tabs before changing remembered-device access.",
+    upgrade(database) {
+      if (!database.objectStoreNames.contains(KEY_STORE)) database.createObjectStore(KEY_STORE, { keyPath: "ownerId" });
+      if (!database.objectStoreNames.contains(WRAPPER_STORE))
+        database.createObjectStore(WRAPPER_STORE, { keyPath: "ownerId" });
+      if (!database.objectStoreNames.contains(INTEGRITY_STORE))
+        database.createObjectStore(INTEGRITY_STORE, { keyPath: "ownerId" });
+    },
+  });
+  const openDatabase = connection.open;
 
   async function remember({ ownerId, workspaceCryptoId, masterKey, keyVersion = 1 }) {
     const database = await openDatabase();
@@ -137,7 +130,8 @@ export function createDeviceKeyStore(indexedDb = globalThis.indexedDB, cryptoApi
       };
       await writeDone;
       return masterKey;
-    } catch {
+    } catch (error) {
+      if (connection.isConnectionError(error)) throw error;
       return null;
     }
   }
@@ -250,7 +244,14 @@ export function createDeviceKeyStore(indexedDb = globalThis.indexedDB, cryptoApi
     await done;
   }
 
-  return { remember, unlock, describe, writeIntegrity, readIntegrity, forget };
+  return {
+    remember: connection.retry(remember),
+    unlock: connection.retry(unlock),
+    describe: connection.retry(describe),
+    writeIntegrity: connection.retry(writeIntegrity),
+    readIntegrity: connection.retry(readIntegrity),
+    forget: connection.retry(forget),
+  };
 }
 
 export const deviceKeyStore = createDeviceKeyStore();

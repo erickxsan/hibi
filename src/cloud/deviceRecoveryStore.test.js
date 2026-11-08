@@ -1,9 +1,80 @@
-import { describe, expect, it } from "vitest";
-import { IDBFactory } from "fake-indexeddb";
+import { describe, expect, it, vi } from "vitest";
+import { IDBFactory, forceCloseDatabase } from "fake-indexeddb";
 import { createStarterState } from "../domain/index.js";
 import { createDeviceRecoveryStore, workspaceCounts } from "./deviceRecoveryStore.js";
 
 describe("device recovery store", () => {
+  it("reopens after an unexpected close and preserves concurrent queued changes and their encryption key", async () => {
+    const factory = new IDBFactory();
+    let database;
+    const indexedDb = {
+      open: vi.fn((...args) => {
+        const request = factory.open(...args);
+        request.addEventListener("success", () => (database = request.result));
+        return request;
+      }),
+    };
+    const store = createDeviceRecoveryStore(indexedDb, globalThis.crypto);
+    const workspace = { state: createStarterState(), revision: 1 };
+    await store.stageMutation({ ownerId: "owner", workspace, mutation: { operationId: "before" } });
+    forceCloseDatabase(database);
+    await Promise.all(
+      ["after-a", "after-b"].map((operationId) =>
+        store.stageMutation({ ownerId: "owner", workspace, mutation: { operationId } }),
+      ),
+    );
+    expect(indexedDb.open).toHaveBeenCalledTimes(2);
+    const reopened = createDeviceRecoveryStore(factory, globalThis.crypto);
+    const mutations = await reopened.listMutations("owner");
+    expect(mutations.map((item) => item.id)).toEqual(["before", "after-a", "after-b"]);
+    expect(mutations.every((item) => JSON.stringify(item.workspace.state) === JSON.stringify(workspace.state))).toBe(
+      true,
+    );
+    await expect(reopened.loadWorkspaceCache("owner")).resolves.toMatchObject(workspace);
+    await expect(reopened.list("owner")).resolves.toHaveLength(1);
+  });
+
+  it("retries the same change once when the connection closes during encryption, without duplicating the queue", async () => {
+    const factory = new IDBFactory();
+    let database;
+    let closeDuringEncryption = false;
+    const indexedDb = {
+      open: vi.fn((...args) => {
+        const request = factory.open(...args);
+        request.addEventListener("success", () => (database = request.result));
+        return request;
+      }),
+    };
+    const cryptoApi = {
+      getRandomValues: globalThis.crypto.getRandomValues.bind(globalThis.crypto),
+      subtle: {
+        generateKey: globalThis.crypto.subtle.generateKey.bind(globalThis.crypto.subtle),
+        decrypt: globalThis.crypto.subtle.decrypt.bind(globalThis.crypto.subtle),
+        encrypt(...args) {
+          if (closeDuringEncryption) {
+            closeDuringEncryption = false;
+            database.close(); // A normal close deliberately emits no close event.
+          }
+          return globalThis.crypto.subtle.encrypt(...args);
+        },
+      },
+    };
+    const store = createDeviceRecoveryStore(indexedDb, cryptoApi);
+    const workspace = { state: createStarterState(), revision: 1 };
+    await store.stageMutation({ ownerId: "owner", workspace, mutation: { operationId: "before" } });
+    closeDuringEncryption = true;
+    workspace.state = { ...workspace.state, settings: { ...workspace.state.settings, hourlyRate: 321 } };
+    await store.stageMutation({ ownerId: "owner", workspace, mutation: { operationId: "after" } });
+    expect(indexedDb.open).toHaveBeenCalledTimes(2);
+    const reopened = createDeviceRecoveryStore(factory, globalThis.crypto);
+    const mutations = await reopened.listMutations("owner");
+    expect(mutations.map((item) => item.id)).toEqual(["before", "after"]);
+    expect(mutations[1].workspace.state.settings.hourlyRate).toBe(321);
+    await expect(reopened.loadWorkspaceCache("owner")).resolves.toMatchObject(workspace);
+    const [backup] = await reopened.list("owner");
+    await expect(reopened.load("owner", backup.id)).resolves.toMatchObject({ state: workspace.state });
+  });
+
   it("uses the committed account key when independent instances initialize concurrently", async () => {
     const indexedDb = new IDBFactory();
     let generated = 0;

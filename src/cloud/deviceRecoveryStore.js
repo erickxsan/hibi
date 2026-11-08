@@ -1,4 +1,5 @@
 import { canonicalWorkspaceState } from "./canonicalWorkspaceState.js";
+import { createDeviceDatabase } from "../utils/deviceDatabase.js";
 
 const DATABASE_NAME = "hibi-device-recovery-v1";
 const RECOVERY_STORE = "workspace-copies";
@@ -62,31 +63,24 @@ function publicMetadata(copy) {
 }
 
 export function createDeviceRecoveryStore(indexedDb = globalThis.indexedDB, cryptoApi = globalThis.crypto) {
-  let databasePromise = null;
   const keyPromises = new Map();
-
-  function openDatabase() {
-    if (!indexedDb?.open) return Promise.resolve(null);
-    if (databasePromise) return databasePromise;
-    databasePromise = new Promise((resolve, reject) => {
-      const request = indexedDb.open(DATABASE_NAME, DATABASE_VERSION);
-      request.onupgradeneeded = () => {
-        const database = request.result;
-        if (!database.objectStoreNames.contains(RECOVERY_STORE))
-          database.createObjectStore(RECOVERY_STORE, { keyPath: "id" });
-        if (!database.objectStoreNames.contains(CACHE_STORE))
-          database.createObjectStore(CACHE_STORE, { keyPath: "ownerId" });
-        if (!database.objectStoreNames.contains(OUTBOX_STORE))
-          database.createObjectStore(OUTBOX_STORE, { keyPath: "id" });
-        if (!database.objectStoreNames.contains(KEY_STORE))
-          database.createObjectStore(KEY_STORE, { keyPath: "ownerId" });
-      };
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error || new Error("Device recovery storage is unavailable."));
-      request.onblocked = () => reject(new Error("Device recovery storage upgrade was blocked."));
-    });
-    return databasePromise;
-  }
+  const connection = createDeviceDatabase(indexedDb, {
+    name: DATABASE_NAME,
+    version: DATABASE_VERSION,
+    unavailableMessage: "Device recovery storage is unavailable.",
+    blockedMessage: "Device recovery storage upgrade was blocked.",
+    onInvalidate: () => keyPromises.clear(),
+    upgrade(database) {
+      if (!database.objectStoreNames.contains(RECOVERY_STORE))
+        database.createObjectStore(RECOVERY_STORE, { keyPath: "id" });
+      if (!database.objectStoreNames.contains(CACHE_STORE))
+        database.createObjectStore(CACHE_STORE, { keyPath: "ownerId" });
+      if (!database.objectStoreNames.contains(OUTBOX_STORE))
+        database.createObjectStore(OUTBOX_STORE, { keyPath: "id" });
+      if (!database.objectStoreNames.contains(KEY_STORE)) database.createObjectStore(KEY_STORE, { keyPath: "ownerId" });
+    },
+  });
+  const openDatabase = connection.open;
 
   async function encryptionKey(database, ownerId) {
     if (!cryptoApi?.subtle || !cryptoApi?.getRandomValues)
@@ -124,7 +118,7 @@ export function createDeviceRecoveryStore(indexedDb = globalThis.indexedDB, cryp
     try {
       return await keyPromise;
     } catch (error) {
-      keyPromises.delete(ownerId);
+      if (keyPromises.get(ownerId) === keyPromise) keyPromises.delete(ownerId);
       throw error;
     }
   }
@@ -472,19 +466,19 @@ export function createDeviceRecoveryStore(indexedDb = globalThis.indexedDB, cryp
   }
 
   return {
-    capture,
-    list,
-    load,
-    cacheWorkspace,
-    loadWorkspaceCache,
-    stageMutation,
-    listMutations,
-    markMutationConflict,
-    completeMutation,
-    clearMutations,
-    replaceMutation,
-    rewriteMutations,
-    purgeAccount,
+    capture: connection.retry(capture),
+    list: connection.retry(list),
+    load: connection.retry(load),
+    cacheWorkspace: connection.retry(cacheWorkspace),
+    loadWorkspaceCache: connection.retry(loadWorkspaceCache),
+    stageMutation: connection.retry(stageMutation),
+    listMutations: connection.retry(listMutations),
+    markMutationConflict: connection.retry(markMutationConflict),
+    completeMutation: connection.retry(completeMutation),
+    clearMutations: connection.retry(clearMutations),
+    replaceMutation: connection.retry(replaceMutation),
+    rewriteMutations: connection.retry(rewriteMutations),
+    purgeAccount: connection.retry(purgeAccount),
   };
 }
 
