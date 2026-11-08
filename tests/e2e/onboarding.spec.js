@@ -3,123 +3,126 @@ import { expect, test } from "@playwright/test";
 // The assertions use the Spanish copy; do not depend on the machine language.
 test.use({ locale: "es-MX" });
 
-async function checkTour(page, testInfo) {
-  for (const [index, section] of ["home", "community", "classes", "tracking", "settings"].entries()) {
-    const card = page.locator(".onboarding-context-callout");
-    const next = card.locator(".onboarding-tour-next");
-    await expect(next).toBeEnabled();
-    await expect(page.locator('[data-onboarding-tour="' + section + '"]')).toBeVisible();
-    await expect(card.getByRole("progressbar")).toHaveAttribute("aria-valuenow", String(index + 1));
-    await expect(page.locator(".onboarding-tour-highlight")).toBeVisible();
-    await expect(page.getByRole("dialog")).toHaveCount(1);
-    await expect(page.locator(".onboarding-tour-controller")).toHaveCount(0);
-    await expect(card.locator(".onboarding-tour-next")).toHaveCount(1);
-    if (index === 1) await expect(card.locator(".onboarding-tour-focus")).toContainText("Tu grupo");
-    const geometry = await page.evaluate(() => {
-      const bounds = globalThis.document.querySelector(".onboarding-context-callout").getBoundingClientRect();
-      const target = globalThis.document.querySelector(".onboarding-tour-highlight").getBoundingClientRect();
-      return {
-        x: bounds.x,
-        y: bounds.y,
-        right: bounds.right,
-        bottom: bounds.bottom,
-        separate:
-          bounds.top >= target.bottom ||
-          bounds.bottom <= target.top ||
-          bounds.left >= target.right ||
-          bounds.right <= target.left,
-        width: globalThis.innerWidth,
-        height: globalThis.innerHeight,
-        documentWidth: globalThis.document.documentElement.scrollWidth,
-      };
-    });
-    expect(geometry.x).toBeGreaterThanOrEqual(0);
-    expect(geometry.y).toBeGreaterThanOrEqual(0);
-    expect(geometry.right).toBeLessThanOrEqual(geometry.width);
-    expect(geometry.bottom).toBeLessThanOrEqual(geometry.height);
-    expect(geometry.documentWidth).toBeLessThanOrEqual(geometry.width);
-    expect(geometry.separate).toBe(true);
-    await expect(card.locator("img")).toHaveJSProperty("complete", true);
-    await expect(card.locator("img")).not.toHaveJSProperty("naturalWidth", 0);
-    await page.screenshot({ path: testInfo.outputPath(section + ".png"), animations: "disabled" });
-    if (index === 1) {
-      await card.getByRole("button", { name: "Atrás" }).click();
-      await expect(card.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "1");
-      await expect(next).toBeEnabled();
-      await next.click();
-      await expect(card.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "2");
-      await expect(next).toBeEnabled();
-    }
-    await next.click();
-  }
-  const done = page.getByRole("dialog", { name: "¡Todo listo!" });
-  await expect(done).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath("done.png"), animations: "disabled" });
-  await done.getByRole("button", { name: "Cerrar" }).click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+const DAY_TITLES = [
+  "Tu día, de un vistazo",
+  "Un grupo arma tu agenda",
+  "Pasa lista en segundos",
+  "Cobra sin llevar la cuenta",
+  "Ve quién necesita ayuda",
+  "Y descansa",
+];
+
+async function expectNoSideScroll(page) {
+  const overflow = await page.evaluate(() => globalThis.document.documentElement.scrollWidth - globalThis.innerWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
 }
 
-test("sets up, resumes, saves the schedule and students, and completes the guided tour", async ({ page }, testInfo) => {
-  test.setTimeout(60_000);
+/** Walks the six moments of the day; each one waits for the click, and its button is always in reach. */
+async function walkTheDay(tutorial, page, testInfo) {
+  for (const [index, title] of DAY_TITLES.entries()) {
+    await expect(tutorial.getByRole("heading", { level: 1, name: title })).toBeVisible();
+    const next = tutorial.getByRole("button", { name: index === DAY_TITLES.length - 1 ? "Ahora tú" : "Siguiente" });
+    await expect(next).toBeInViewport();
+    await expectNoSideScroll(page);
+    await page.screenshot({ path: testInfo.outputPath(`day-${index}.png`), animations: "disabled" });
+    await next.click();
+  }
+}
+
+/** The practice class: open it, take the roll, record a payment, save it, then Tracking and Community. */
+async function practiceAClass(tutorial, page, testInfo) {
+  const guide = tutorial.getByRole("region", { name: "Guía" });
+  const step = async (name) => {
+    await expect(guide).toBeInViewport();
+    await expectNoSideScroll(page);
+    await page.screenshot({ path: testInfo.outputPath(`practice-${name}.png`), animations: "disabled" });
+  };
+  await expect(guide).toContainText("Te toca: abre tu clase");
+  await step("home");
+  await tutorial.getByRole("button", { name: "Registrar clase" }).click();
+  await expect(guide).toContainText("0 de 4 alumnos");
+  await step("roll");
+  const marks = {
+    "Emilio Castro": "Presente",
+    "Iker Morales": "Presente",
+    "Renata Ortiz": "Ausente",
+    "Ximena Flores": "Presente",
+  };
+  for (const [student, mark] of Object.entries(marks)) {
+    await tutorial
+      .getByRole("group", { name: `Asistencia de ${student}` })
+      .getByRole("button", { name: mark })
+      .click();
+  }
+  await expect(guide).toContainText("Registra un pago");
+  await tutorial
+    .getByRole("group", { name: "Pago de Emilio Castro" })
+    .getByRole("button", { name: "Pagado", exact: true })
+    .click();
+  await expect(guide).toContainText("Guárdala");
+  await step("save");
+  await tutorial.getByRole("button", { name: "Guardar clase" }).click();
+  await expect(guide).toContainText("Ya quedó en Inicio");
+  await expect(tutorial.getByText("3 presentes y $280 cobrados.")).toBeVisible();
+  await tutorial.getByRole("button", { name: "Seguimiento" }).click();
+  await expect(guide).toContainText("Todo se acomodó solo");
+  await step("tracking");
+  await tutorial.getByRole("button", { name: "Comunidad" }).click();
+  await expect(guide).toContainText("Cada grupo, en una ficha");
+  await step("community");
+  await tutorial.getByRole("button", { name: "Ahora lo mío" }).click();
+}
+
+test("watches a day, practices a class, creates the first group and lands in Home", async ({ page }, testInfo) => {
+  test.setTimeout(90_000);
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
   await expect(page).toHaveTitle(/hibi/);
-  await page.getByRole("button", { name: "Empezar", exact: true }).click();
-  await page.getByLabel("Nombre del grupo").fill("Inglés B1");
-  await page.getByRole("textbox", { name: "Materia", exact: true }).fill("Inglés");
-  // Duration is free: −/+ in 15-minute steps, from the default 2 h down to 1 h.
-  const duration = page.getByRole("group", { name: "Duración del día de clase 1" });
-  for (let step = 0; step < 4; step += 1) await duration.getByRole("button", { name: "Menos tiempo" }).click();
-  await expect(duration.getByRole("textbox")).toHaveValue(/^1:00/);
-  await page.getByRole("button", { name: "Añadir otro día" }).click();
-  await page.getByRole("combobox", { name: "Día", exact: true }).nth(1).click();
-  await page.getByRole("option", { name: "Miércoles", exact: true }).click();
-  await page.getByRole("heading", { name: "Crea tu primer grupo" }).click();
+  const tutorial = page.getByRole("dialog", { name: "Tutorial de bienvenida" });
+  await expect(tutorial.getByRole("heading", { level: 1, name: DAY_TITLES[0] })).toBeVisible();
+  // Nothing moves on by itself: the moment plays its example and waits for the click.
+  await page.waitForTimeout(7000);
+  await expect(tutorial.getByRole("heading", { level: 1, name: DAY_TITLES[0] })).toBeVisible();
+  await walkTheDay(tutorial, page, testInfo);
+  await tutorial.getByRole("button", { name: "Dar mi clase de práctica" }).click();
+  await practiceAClass(tutorial, page, testInfo);
+
+  await expect(tutorial.getByRole("heading", { name: "Tu primer grupo" })).toBeVisible();
+  await tutorial.getByLabel("Nombre del grupo").fill("Inglés B1");
   await page.screenshot({ path: testInfo.outputPath("group.png"), animations: "disabled" });
-  await page.getByRole("button", { name: "Guardar y continuar" }).click();
-  await expect(page.getByRole("heading", { name: "Añade a tus alumnos" })).toBeVisible();
-  await page.getByRole("button", { name: "Continuar después" }).click();
+  await tutorial.getByRole("button", { name: "Crear mi agenda" }).click();
+  await expect(tutorial.getByRole("heading", { name: "Ya sabes dar clase en Hibi" })).toBeVisible();
+  await tutorial.getByRole("button", { name: "Entrar a mi Hibi" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await page.reload();
-  await expect(page.getByRole("heading", { name: "Añade a tus alumnos" })).toBeVisible();
-  await page.getByLabel("Alumno 1", { exact: true }).fill("Ada de prueba");
-  await page.getByRole("button", { name: "Añadir otro alumno" }).click();
-  await page.getByLabel("Alumno 2", { exact: true }).fill("Lin de prueba");
-  await page.getByRole("button", { name: "Guardar y continuar" }).click();
-  await expect(page.getByRole("heading", { name: "Tu agenda recurrente está lista" })).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath("agenda.png"), animations: "disabled" });
-  await page.getByRole("button", { name: "Conocer Hibi" }).click();
-  await page.locator(".onboarding-tour-back").click();
-  await expect(page.getByRole("heading", { name: "Tu agenda recurrente está lista" })).toBeVisible();
-  await page.getByRole("button", { name: "Conocer Hibi" }).click();
-  await checkTour(page, testInfo);
+  await expect(page).toHaveURL(/\/$/);
+
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("minimal-class-manager:v1")));
   expect(saved.groups).toHaveLength(1);
-  expect(saved.groups[0].weeklySchedule).toHaveLength(2);
-  expect(saved.students).toHaveLength(2);
+  expect(saved.groups[0].name).toBe("Inglés B1");
+  expect(saved.groups[0].weeklySchedule.map((slot) => [slot.dayOfWeek, slot.startTime])).toEqual([
+    [2, "17:30"],
+    [4, "17:30"],
+  ]);
+  expect(saved.students).toHaveLength(0);
   expect(saved.settings.onboardingVersion).toBe(2);
-  expect(saved.groups[0].weeklySchedule.map((slot) => slot.durationHours)).toEqual([1, 1]);
   // The new group's schedule starts today, so earlier weekdays never show up as unrecorded classes.
   const now = new Date();
   const today = [now.getFullYear(), now.getMonth() + 1, now.getDate()].map((part) => String(part).padStart(2, "0"));
   expect(saved.groups[0].scheduleResumeDate).toBe(today.join("-"));
+
   await page.reload();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await page.getByRole("button", { name: /^Tutorial de bienvenida/ }).click();
-  await page.getByRole("button", { name: "Iniciar recorrido" }).click();
-  const card = page.locator(".onboarding-context-callout");
-  await expect(card.locator(".onboarding-tour-next")).toBeEnabled();
-  await expect(card.getByRole("button", { name: "Atrás" })).toHaveCount(0);
-  await page.keyboard.press("Escape");
-  await expect(card).toHaveCount(0);
   await page.goto("/settings");
   await page.getByRole("button", { name: /^Tutorial de bienvenida/ }).click();
-  await page.getByRole("button", { name: "Configuración guiada", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Crea tu primer grupo" })).toBeVisible();
-  await expect(page.getByLabel("Nombre del grupo")).toHaveValue("");
-  await page.getByRole("button", { name: "Continuar después" }).click();
+  await page.getByRole("button", { name: "Iniciar recorrido" }).click();
+  await expect(tutorial.getByRole("heading", { level: 1, name: DAY_TITLES[0] })).toBeVisible();
+  await tutorial.getByRole("button", { name: "Saltar" }).click();
+  await tutorial.getByRole("button", { name: "Saltar a crear mi grupo" }).click();
+  await tutorial.getByRole("button", { name: "Ahora no" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
+  const replayed = await page.evaluate(() => JSON.parse(localStorage.getItem("minimal-class-manager:v1")));
+  expect(replayed.groups).toHaveLength(1);
   expect(errors).toEqual([]);
 });
 
@@ -146,26 +149,25 @@ for (const viewport of [
 ]) {
   test.describe("tutorial at " + viewport.width + "px", () => {
     test.use({ viewport });
-    test("keeps setup and every tour step readable and reachable", async ({ page }, testInfo) => {
-      test.setTimeout(60_000);
+    test("keeps every moment, practice step and the group form readable and reachable", async ({ page }, testInfo) => {
+      test.setTimeout(90_000);
       const errors = [];
       page.on("pageerror", (error) => errors.push(error.message));
       await page.goto("/");
-      await page.getByRole("button", { name: "Empezar", exact: true }).click();
-      await page.getByLabel("Nombre del grupo").fill("Grupo de prueba");
-      await page.getByRole("textbox", { name: "Materia", exact: true }).fill("Inglés");
-      await page.getByRole("heading", { name: "Crea tu primer grupo" }).click();
-      const dialogWidths = await page.getByRole("dialog").evaluate((dialog) => ({
-        content: dialog.scrollWidth,
-        available: dialog.clientWidth,
-      }));
-      expect(dialogWidths.content).toBeLessThanOrEqual(dialogWidths.available);
+      const tutorial = page.getByRole("dialog", { name: "Tutorial de bienvenida" });
+      await walkTheDay(tutorial, page, testInfo);
+      await tutorial.getByRole("button", { name: "Dar mi clase de práctica" }).click();
+      await practiceAClass(tutorial, page, testInfo);
+      const form = tutorial.locator("form");
+      await form.getByLabel("Nombre del grupo").fill("Grupo de prueba");
+      const widths = await form.evaluate((node) => ({ content: node.scrollWidth, available: node.clientWidth }));
+      expect(widths.content).toBeLessThanOrEqual(widths.available);
+      await expect(form.getByRole("button", { name: "Crear mi agenda" })).toBeInViewport();
       await page.screenshot({ path: testInfo.outputPath("group.png"), animations: "disabled" });
-      await page.getByRole("button", { name: "Guardar y continuar" }).click();
-      await page.getByLabel("Alumno 1", { exact: true }).fill("Alumno de prueba");
-      await page.getByRole("button", { name: "Guardar y continuar" }).click();
-      await page.getByRole("button", { name: "Conocer Hibi" }).click();
-      await checkTour(page, testInfo);
+      await form.getByRole("button", { name: "Crear mi agenda" }).click();
+      await expect(tutorial.getByRole("button", { name: "Entrar a mi Hibi" })).toBeInViewport();
+      await tutorial.getByRole("button", { name: "Entrar a mi Hibi" }).click();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
       expect(errors).toEqual([]);
     });
   });

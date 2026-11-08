@@ -150,9 +150,8 @@ describe("Settings privacy actions", () => {
 
     openSection("Welcome tutorial");
     await user.click(screen.getByRole("button", { name: "Start tour" }));
-    expect(onOpenOnboarding).toHaveBeenLastCalledWith("tour");
-    await user.click(screen.getByRole("button", { name: "Guided setup" }));
-    expect(onOpenOnboarding).toHaveBeenLastCalledWith("setup");
+    expect(onOpenOnboarding).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: "Guided setup" })).not.toBeInTheDocument();
   });
 
   it("labels reset as recoverable and requires the RESET phrase", async () => {

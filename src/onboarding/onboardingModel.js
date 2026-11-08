@@ -1,52 +1,9 @@
-export const ONBOARDING_VERSION = 2;
-export const ONBOARDING_STEPS = 9;
-export const ONBOARDING_SETUP_STEPS = 4;
-export const ONBOARDING_TOUR_START_STEP = 5;
-export const ONBOARDING_MAX_STUDENTS = 40;
+import { firstBillingPeriod, normalizeGroupBilling } from "../domain/monthlyBilling";
 
-// Each step points at the most specific target available. When the setup group
-// is known, Community highlights that group instead of the whole directory.
-export const ONBOARDING_TOUR = Object.freeze({
-  5: {
-    page: "home",
-    selector: '[data-onboarding-tour="home"]',
-    title: "Your day starts here",
-    description: "See today’s classes and open each session from here.",
-    label: "Home",
-    focus: "nextClass",
-  },
-  6: {
-    page: "community",
-    selector: '[data-onboarding-tour="community"]',
-    groupSelector: (groupId) => `[data-onboarding-group=${JSON.stringify(String(groupId))}]`,
-    title: "Your groups and students",
-    description: "Open a group to manage its members, schedule, and contact directory.",
-    label: "Community",
-    focus: "group",
-  },
-  7: {
-    page: "classes",
-    selector: '[data-onboarding-tour="classes"]',
-    title: "Your class agenda",
-    description: "Open a class to record attendance, payments, notes, and grades.",
-    label: "Classes",
-    focus: "nextClass",
-  },
-  8: {
-    page: "grades",
-    selector: '[data-onboarding-tour="tracking"]',
-    title: "See their progress",
-    description: "Compare attendance, grades, and payments without reviewing students one by one.",
-    label: "Tracking",
-  },
-  9: {
-    page: "settings",
-    selector: '[data-onboarding-tour="settings"]',
-    title: "Make Hibi your own",
-    description: "You can reopen this tour and manage backups and security here.",
-    label: "Settings",
-  },
-});
+export const ONBOARDING_VERSION = 2;
+
+// The tutorial's monthly fee falls due on day 5; the teacher can change it later in Community.
+export const TUTORIAL_DUE = Object.freeze({ type: "dayOfMonth", day: 5 });
 
 export const ONBOARDING_DAYS = Object.freeze([
   { value: 1, label: "Monday", shortLabel: "Mon" },
@@ -58,38 +15,19 @@ export const ONBOARDING_DAYS = Object.freeze([
   { value: 7, label: "Sunday", shortLabel: "Sun" },
 ]);
 
-export function onboardingStep(settings = {}) {
+// A setup left half done (any saved step past the first) starts the tutorial again.
+function savedStep(settings = {}) {
   const value = Number(settings.onboardingStep);
-  if (!Number.isFinite(value)) return 1;
-  if (Number(settings.onboardingVersion) === 1 && value >= 4) return ONBOARDING_TOUR_START_STEP;
-  return Math.min(ONBOARDING_STEPS, Math.max(1, Math.trunc(value)));
+  return Number.isFinite(value) ? Math.trunc(value) : 1;
 }
 
 export function shouldAutoStartOnboarding(state) {
   if (Number(state?.settings?.onboardingVersion) >= ONBOARDING_VERSION) return false;
   if (Number(state?.settings?.onboardingVersion) === 1) return true;
-  if (onboardingStep(state?.settings) > 1) return true;
+  if (savedStep(state?.settings) > 1) return true;
   return [state?.groups, state?.students, state?.grades, state?.classLog, state?.classSchedules].every(
     (collection) => !Array.isArray(collection) || collection.length === 0,
   );
-}
-
-// Setup paused with "Continue later" (or an interrupted replay) resumes at its
-// saved form step; otherwise a guided setup starts at the group form.
-export function setupResumeStep(settings = {}) {
-  const step = onboardingStep(settings);
-  if (step < 2 || step >= ONBOARDING_TOUR_START_STEP) return null;
-  const unfinished = Number(settings.onboardingVersion) < ONBOARDING_VERSION;
-  return unfinished || settings.onboardingGroupId ? step : null;
-}
-
-export function normalizeStudentNames(rows) {
-  return (Array.isArray(rows) ? rows : []).map((name) => String(name || "").trim()).filter(Boolean);
-}
-
-// A pasted class list arrives as one name per line (or per spreadsheet cell).
-export function splitPastedStudentNames(text) {
-  return normalizeStudentNames(String(text || "").split(/\r?\n|\t/));
 }
 
 export function nextOnboardingStudentCodes(students, count) {
@@ -142,43 +80,81 @@ function minutesOf(time) {
   return match ? Number(match[1]) * 60 + Number(match[2]) : null;
 }
 
-export function scheduleIssue(slots) {
-  const rows = Array.isArray(slots) ? slots : [];
-  if (!rows.length) return "Add at least one class day.";
-  if (rows.some((slot) => minutesOf(slot.startTime) === null)) return "Choose a time for each class day.";
-  const keys = rows.map((slot) => `${slot.dayOfWeek}|${slot.startTime}`);
-  if (new Set(keys).size !== keys.length) return "Each class day and time must be unique.";
-  const overlaps = rows.some((slot, index) =>
-    rows.slice(index + 1).some((other) => {
-      if (Number(other.dayOfWeek) !== Number(slot.dayOfWeek)) return false;
-      const start = minutesOf(slot.startTime);
-      const otherStart = minutesOf(other.startTime);
-      return (
-        start < otherStart + Number(other.durationHours) * 60 && otherStart < start + Number(slot.durationHours) * 60
-      );
-    }),
-  );
-  return overlaps ? "Classes on the same day can’t overlap." : "";
-}
-
-// The group form's fields in screen order: submit focuses the first invalid one.
-export const GROUP_FORM_FIELDS = Object.freeze(["name", "subject", "schedule", "price"]);
-
-/** Errors of the tutorial's group form by field; an empty string means the field is valid. */
-export function groupDraftErrors(draft) {
-  const price = String((draft.billingMode === "monthly" ? draft.monthlyFee : draft.rate) ?? "").trim();
+/**
+ * The tutorial's group form. A setup interrupted after its group was saved (a reload, or a setup left
+ * by an earlier tutorial) comes back filled in, so saving again updates that group instead of adding one.
+ */
+export function initialOnboardingDraft(state) {
+  const group = state.groups.find((item) => item.id === state.settings.onboardingGroupId);
+  const slots = group?.weeklySchedule || [];
+  const monthly = group?.billing?.mode === "monthly";
+  let price = "";
+  if (monthly) price = String(group.billing.monthlyFee ?? "");
+  else if (Number.isFinite(group?.hourlyRate)) price = String(group.hourlyRate);
   return {
-    name: String(draft.name || "").trim() ? "" : "Enter a group name.",
-    subject: String(draft.subject || "").trim() ? "" : "Enter a subject.",
-    schedule: scheduleIssue(draft.weeklySchedule),
-    price: price !== "" && Number(price) >= 0 ? "" : "Enter a price.",
+    id: group?.id || "",
+    name: group?.name || "",
+    days: slots.length ? [...new Set(slots.map((slot) => Number(slot.dayOfWeek)))] : [2, 4],
+    time: slots[0]?.startTime || "17:30",
+    billingMode: monthly ? "monthly" : "perClass",
+    price,
   };
 }
 
-/** Clears the errors of the fields that became valid; fields still invalid keep theirs until submit. */
-export function clearFixedErrors(errors, nextErrors) {
-  const fixed = Object.keys(errors).filter((key) => errors[key] && Object.hasOwn(nextErrors, key) && !nextErrors[key]);
-  return fixed.length ? { ...errors, ...Object.fromEntries(fixed.map((key) => [key, ""])) } : errors;
+/** One class per chosen day, all at the form's time, in weekday order. A resumed group keeps its slots. */
+export function draftSchedule(draft, state) {
+  const previous = state.groups.find((group) => group.id === draft.id)?.weeklySchedule || [];
+  const duration = Number(state.settings.defaultClassHours) || 1;
+  return [...new Set(draft.days.map(Number))]
+    .sort((a, b) => a - b)
+    .map((dayOfWeek) => {
+      const kept = previous.find((slot) => Number(slot.dayOfWeek) === dayOfWeek);
+      return {
+        id: kept?.id || `onboarding-slot-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${dayOfWeek}`}`,
+        dayOfWeek,
+        startTime: draft.time,
+        durationHours: Number(kept?.durationHours) || duration,
+      };
+    });
+}
+
+/** A name, a day and a time are enough. An empty per-class price is the general rate; a monthly fee needs one. */
+export function canSaveOnboardingDraft(draft) {
+  const price = String(draft.price ?? "").trim();
+  const priceOk = draft.billingMode === "monthly" ? Number(price) > 0 : price === "" || Number(price) >= 0;
+  return Boolean(draft.name.trim() && draft.days.length && minutesOf(draft.time) !== null && priceOk);
+}
+
+/** What the form saves through `saveOnboardingGroup`. */
+export function onboardingGroupPayload(draft, state, asOf) {
+  const monthly = draft.billingMode === "monthly";
+  const price = String(draft.price ?? "").trim();
+  const weeklySchedule = draftSchedule(draft, state);
+  const previous = state.groups.find((group) => group.id === draft.id);
+  // A fee is never born overdue: once day 5 has passed, billing starts next month. Saving a resumed
+  // setup again keeps the billing start it was created with.
+  const savedBilling = normalizeGroupBilling(previous?.billing);
+  const keptStart = savedBilling?.mode === "monthly" && savedBilling.effectiveFrom ? savedBilling : null;
+  const billingStart = firstBillingPeriod({ mode: "monthly", due: TUTORIAL_DUE }, asOf);
+  return {
+    id: draft.id || undefined,
+    name: draft.name.trim(),
+    subject: previous?.subject || "",
+    schedule: weeklySchedule.map((slot) => `${dayLabel(slot.dayOfWeek)} · ${slot.startTime}`).join("; "),
+    weeklySchedule,
+    plannedSessionsPerMonth: Math.max(4, weeklySchedule.length * 4),
+    // The general rate stays in Settings; only a different price becomes the group's own.
+    hourlyRate: !monthly && price !== "" && Number(price) !== Number(state.settings.hourlyRate) ? Number(price) : null,
+    billing: monthly
+      ? {
+          mode: "monthly",
+          monthlyFee: Number(price),
+          due: { ...TUTORIAL_DUE },
+          effectiveFrom: keptStart?.effectiveFrom || billingStart,
+          ...(keptStart?.coveredFrom ? { coveredFrom: keptStart.coveredFrom } : {}),
+        }
+      : undefined,
+  };
 }
 
 function isoDate(date) {
@@ -218,10 +194,6 @@ export function upcomingClasses(slots, count, fromDate = new Date()) {
     .slice(0, count);
 }
 
-export function nextClassForSchedule(slots, fromDate = new Date()) {
-  return upcomingClasses(slots, 1, fromDate)[0] || null;
-}
-
 export function formatOnboardingDate(isoValue, locale) {
   const [year, month, day] = String(isoValue).split("-").map(Number);
   if (!year || !month || !day) return String(isoValue || "");
@@ -232,12 +204,4 @@ export function formatOnboardingDate(isoValue, locale) {
 
 export function dayLabel(dayOfWeek) {
   return ONBOARDING_DAYS.find((day) => day.value === Number(dayOfWeek))?.label || "Monday";
-}
-
-export function dayShortLabel(dayOfWeek) {
-  return ONBOARDING_DAYS.find((day) => day.value === Number(dayOfWeek))?.shortLabel || "Mon";
-}
-
-export function tourStep(step) {
-  return ONBOARDING_TOUR[Number(step)] || null;
 }

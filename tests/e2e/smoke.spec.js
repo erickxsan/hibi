@@ -5,10 +5,13 @@ test.beforeEach(async ({ page }) => {
   await page.evaluate(() => localStorage.clear());
   await page.reload();
 
-  const welcomeDialog = page.getByRole("dialog", { name: "Hi, teacher! This is Hibi" });
-  await expect(welcomeDialog).toBeVisible();
-  await welcomeDialog.getByRole("button", { name: "Explore on my own" }).click();
-  await expect(welcomeDialog).toBeHidden();
+  // A new workspace opens the welcome tutorial; leave it without creating a group.
+  const tutorial = page.getByRole("dialog", { name: "Welcome tutorial" });
+  await expect(tutorial).toBeVisible();
+  await tutorial.getByRole("button", { name: "Skip", exact: true }).click();
+  await tutorial.getByRole("button", { name: "Skip to creating my group" }).click();
+  await tutorial.getByRole("button", { name: "Not now" }).click();
+  await expect(tutorial).toBeHidden();
 });
 
 test("loads the local workspace and preserves a student interaction", async ({ page }) => {

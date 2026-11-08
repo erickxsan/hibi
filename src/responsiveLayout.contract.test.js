@@ -29,7 +29,7 @@ describe("mobile responsive layout contracts", () => {
     expect(settings).toMatch(/@media \(max-width: 780px\)[\s\S]*\.settings-detail\s*\{\s*padding-left:\s*0/);
     expect(auth).toMatch(/@media \(max-width: 700px\)[\s\S]*\.auth-mascot\s*\{\s*display:\s*none/);
     expect(onboarding).toMatch(
-      /@media \(max-width: 600px\)[\s\S]*\.onboarding-field-grid\s*\{\s*grid-template-columns:\s*1fr/,
+      /@media \(max-width: 380px\)[\s\S]*\.tt-form-row\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\)/,
     );
   });
 

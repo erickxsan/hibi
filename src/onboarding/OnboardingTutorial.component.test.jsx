@@ -1,296 +1,195 @@
 // @vitest-environment jsdom
 
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { createStarterState } from "../domain";
 import { I18nProvider } from "../i18n";
 import OnboardingTutorial from "./OnboardingTutorial";
 
-function renderTutorial({ initialStep = 1, withTargets = true, mode, prepareState } = {}) {
-  localStorage.setItem("hibi:language:v1", "en");
-  if (withTargets) {
-    for (const page of ["home", "community", "classes", "tracking", "settings"]) {
-      const target = document.createElement("section");
-      target.dataset.onboardingTour = page;
-      target.getBoundingClientRect = () => ({ left: 220, top: 100, right: 760, bottom: 260, width: 540, height: 160 });
-      document.body.append(target);
-    }
-  }
+function renderTutorial({ language = "en", saveGroup = async () => "group-1" } = {}) {
+  localStorage.setItem("hibi:language:v1", language);
+  const shell = document.createElement("div");
+  shell.className = "hibi-shell";
+  document.body.append(shell);
   const state = createStarterState();
-  prepareState?.(state);
-  const savedStudent = {
-    id: "student-1",
-    code: "HIBI-001",
-    fullName: "Ada Lovelace",
-    avatarId: "cat",
-    groupIds: ["group-1"],
-  };
+  state.settings.hourlyRate = 250;
   const actions = {
-    setOnboardingStep: vi.fn(async () => true),
+    saveOnboardingGroup: vi.fn(saveGroup),
     dismissOnboarding: vi.fn(async () => true),
-    saveOnboardingGroup: vi.fn(async () => "group-1"),
-    saveOnboardingStudents: vi.fn(async () => [savedStudent]),
   };
-  const onComplete = vi.fn();
-  const onDismiss = vi.fn();
-  render(
+  const onClose = vi.fn();
+  const view = render(
     <I18nProvider>
-      <OnboardingTutorial
-        open
-        state={state}
-        actions={actions}
-        initialStep={initialStep}
-        mode={mode}
-        onDismiss={onDismiss}
-        onComplete={onComplete}
-      />
+      <OnboardingTutorial state={state} actions={actions} onClose={onClose} />
     </I18nProvider>,
   );
-  return { actions, onComplete, onDismiss };
+  return { actions, onClose, shell, view };
 }
 
+const heading = (name) => screen.getByRole("heading", { level: 1, name });
+
 describe("OnboardingTutorial", () => {
-  it("creates a recurring multi-day workspace and continues into the contextual tour", async () => {
+  it("tells the day in six moments that only move on with the teacher's click", () => {
+    vi.useRealTimers();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    renderTutorial();
+    expect(heading("Your day, at a glance")).toBeInTheDocument();
+    // The moment acts out its own example (two notices get seen) but never moves on by itself.
+    act(() => vi.advanceTimersByTime(30_000));
+    expect(heading("Your day, at a glance")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Diego got 6.0 in Practice 9" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "1 Physics fee overdue" })).toHaveAttribute("aria-pressed", "false");
+
+    const titles = [
+      "A group builds your agenda",
+      "Take attendance in seconds",
+      "Get paid without keeping count",
+      "See who needs help",
+      "And rest",
+    ];
+    for (const title of titles) {
+      fireEvent.click(screen.getByRole("button", { name: "Next" }));
+      expect(heading(title)).toBeInTheDocument();
+    }
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(heading("See who needs help")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Go to 11:00 a.m." }));
+    expect(heading("A group builds your agenda")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Go to 10:00 p.m." }));
+    fireEvent.click(screen.getByRole("button", { name: "Your turn" }));
+    expect(heading("Now you teach it")).toBeInTheDocument();
+  });
+
+  it("practices a class with sample students, one tap at a time, without saving anything", async () => {
     const user = userEvent.setup();
-    const { actions, onComplete } = renderTutorial();
+    const { actions } = renderTutorial();
+    await user.click(screen.getByRole("button", { name: "Skip" }));
+    await user.click(screen.getByRole("button", { name: "Teach my practice class" }));
+    const guide = screen.getByRole("region", { name: "Guide" });
+    expect(guide).toHaveTextContent("Your turn: open your class");
 
-    expect(screen.getByRole("dialog", { name: "Hi, teacher! This is Hibi" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Start" }));
-    expect(actions.setOnboardingStep).toHaveBeenCalledWith(2);
+    await user.click(screen.getByRole("button", { name: "Record class" }));
+    expect(heading("Classes")).toBeInTheDocument();
+    expect(guide).toHaveTextContent("0 of 4 students");
+    expect(screen.getByRole("button", { name: "Save class" })).toBeDisabled();
+    const marks = { "Emilio Castro": "Present", "Iker Morales": "Present", "Renata Ortiz": "Absent" };
+    for (const [student, mark] of Object.entries(marks)) {
+      await user.click(within(screen.getByRole("group", { name: `Attendance for ${student}` })).getByLabelText(mark));
+    }
+    expect(screen.getByText("— absent · not charged")).toBeInTheDocument();
+    await user.click(
+      within(screen.getByRole("group", { name: "Attendance for Ximena Flores" })).getByLabelText("Present"),
+    );
+    await waitFor(() => expect(screen.getByRole("region", { name: "Guide" })).toHaveTextContent("Record a payment"));
 
-    await user.type(screen.getByRole("textbox", { name: /Group name/ }), "Advanced English");
-    await user.type(screen.getByRole("textbox", { name: /Subject/ }), "English");
-    await user.click(screen.getByRole("button", { name: "Add another day" }));
-    const preview = screen.getByText("Upcoming classes").closest(".onboarding-schedule-preview");
-    expect(within(preview).getAllByRole("listitem")).toHaveLength(3);
-    expect(preview).toHaveTextContent("2 per week · 8 a month");
-    await user.click(screen.getByRole("button", { name: "Save and continue" }));
-    await waitFor(() => expect(actions.saveOnboardingGroup).toHaveBeenCalledTimes(1));
+    await user.click(within(screen.getByRole("group", { name: "Payment for Emilio Castro" })).getByLabelText("Paid"));
+    await waitFor(() => expect(screen.getByRole("region", { name: "Guide" })).toHaveTextContent("Save it"));
+    expect(screen.getByText("$280 collected today")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Save class" }));
+    expect(await screen.findByText("Class result", {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.getByText("3 present and $280 collected.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Tracking" }));
+    expect(heading("Tracking")).toBeInTheDocument();
+    expect(screen.getByText("Paid $280")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Community" }));
+    expect(heading("Community")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Now mine" }));
+    expect(heading("Your first group")).toBeInTheDocument();
+    expect(actions.saveOnboardingGroup).not.toHaveBeenCalled();
+    expect(actions.dismissOnboarding).not.toHaveBeenCalled();
+  });
+
+  it("creates the first real group, marks the tutorial done and leaves the teacher in Home", async () => {
+    const user = userEvent.setup();
+    const { actions, onClose } = renderTutorial();
+    await user.click(screen.getByRole("button", { name: "Skip" }));
+    await user.click(screen.getByRole("button", { name: "Skip to creating my group" }));
+    const create = screen.getByRole("button", { name: "Create my agenda" });
+    expect(create).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Tuesday" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Thursday" })).toHaveAttribute("aria-pressed", "true");
+    await user.type(screen.getByRole("textbox", { name: "Group name" }), "Advanced English");
+    await user.click(screen.getByRole("button", { name: "Thursday" }));
+    await user.click(screen.getByRole("button", { name: "Friday" }));
+    await user.type(screen.getByRole("textbox", { name: "Price per hour" }), "300");
+    await user.click(create);
+
+    await waitFor(() => expect(actions.dismissOnboarding).toHaveBeenCalledTimes(1));
     expect(actions.saveOnboardingGroup).toHaveBeenCalledWith(
       expect.objectContaining({
         name: "Advanced English",
-        subject: "English",
-        plannedSessionsPerMonth: 8,
-        weeklySchedule: expect.arrayContaining([
-          expect.objectContaining({ dayOfWeek: 1 }),
-          expect.objectContaining({ dayOfWeek: 2 }),
-        ]),
+        hourlyRate: 300,
+        billing: undefined,
+        weeklySchedule: [
+          expect.objectContaining({ dayOfWeek: 2, startTime: "17:30" }),
+          expect.objectContaining({ dayOfWeek: 5, startTime: "17:30" }),
+        ],
       }),
     );
-
-    await user.type(screen.getByRole("textbox", { name: "Student 1" }), "Ada Lovelace");
-    await user.click(screen.getByRole("button", { name: "Save and continue" }));
-    await waitFor(() => expect(actions.saveOnboardingStudents).toHaveBeenCalledTimes(1));
-    expect(actions.saveOnboardingStudents).toHaveBeenCalledWith(
-      "group-1",
-      expect.arrayContaining([expect.objectContaining({ fullName: "Ada Lovelace" })]),
-      [],
-    );
-
-    expect(screen.getByRole("heading", { name: "Your recurring agenda is ready" })).toBeInTheDocument();
-    expect(screen.getAllByRole("article")).toHaveLength(2);
-    expect(screen.getAllByText("Next class")).toHaveLength(1);
-    await user.click(screen.getByRole("button", { name: "Meet Hibi" }));
-    expect(await screen.findByRole("dialog", { name: "Home tour" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Back" })).toBeEnabled();
-
-    for (let step = 0; step < 4; step += 1) {
-      await waitFor(() => expect(screen.getByRole("button", { name: "Next" })).toBeEnabled());
-      expect(screen.getAllByRole("button", { name: "Next" })).toHaveLength(1);
-      await user.click(screen.getByRole("button", { name: "Next" }));
-    }
-    await waitFor(() => expect(screen.getByRole("button", { name: "Finish tour" })).toBeEnabled());
-    expect(actions.setOnboardingStep).toHaveBeenLastCalledWith(9);
-    await user.click(screen.getByRole("button", { name: "Finish tour" }));
-    await waitFor(() => expect(actions.dismissOnboarding).toHaveBeenCalledTimes(1));
-    expect(await screen.findByRole("dialog", { name: "You’re all set!" })).toBeInTheDocument();
-    expect(onComplete).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "Open my next class" }));
-    expect(onComplete).toHaveBeenCalledWith("classes");
+    expect(heading("Now you know how to teach with Hibi")).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Enter my Hibi" }));
+    expect(onClose).toHaveBeenCalledWith("home");
   });
 
-  it("defers setup at the current step without marking the tutorial complete", async () => {
+  it("asks for the amount of a monthly fee and explains when it is first due", async () => {
     const user = userEvent.setup();
-    const { actions, onDismiss, onComplete } = renderTutorial({ initialStep: 3 });
-    await user.click(screen.getByRole("button", { name: "Continue later" }));
-    await waitFor(() => expect(onDismiss).toHaveBeenCalledTimes(1));
-    expect(actions.setOnboardingStep).toHaveBeenCalledWith(3);
-    expect(actions.dismissOnboarding).not.toHaveBeenCalled();
-    expect(onComplete).not.toHaveBeenCalled();
-  });
-
-  it("keeps an exit available while a tour destination is loading", async () => {
-    const user = userEvent.setup();
-    const { actions } = renderTutorial({ initialStep: 5, withTargets: false });
-    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
-    expect(screen.getByRole("status")).toHaveTextContent("Opening this section");
-    await user.click(screen.getByRole("button", { name: "Skip tour" }));
-    expect(actions.dismissOnboarding).toHaveBeenCalledTimes(1);
-  });
-
-  it("keeps replayed tours out of setup and closes them with Escape without saving", async () => {
-    const user = userEvent.setup();
-    const { actions, onDismiss, onComplete } = renderTutorial({
-      initialStep: 5,
-      mode: "tour",
-      prepareState: (state) => {
-        state.settings.onboardingVersion = 2;
-      },
-    });
-    expect(screen.queryByRole("button", { name: "Back" })).not.toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole("button", { name: "Next" })).toBeEnabled());
-    await user.click(screen.getByRole("button", { name: "Next" }));
-    expect(actions.setOnboardingStep).not.toHaveBeenCalled();
-    await user.keyboard("{Escape}");
-    await waitFor(() => expect(onDismiss).toHaveBeenCalledTimes(1));
-    expect(actions.dismissOnboarding).not.toHaveBeenCalled();
-    expect(onComplete).not.toHaveBeenCalled();
-  });
-
-  it("pauses a first-run tour with Escape and can return to the agenda review", async () => {
-    const user = userEvent.setup();
-    const { actions, onDismiss } = renderTutorial({ initialStep: 5 });
-    await user.click(screen.getByRole("button", { name: "Back" }));
-    expect(await screen.findByRole("heading", { name: "Your recurring agenda is ready" })).toBeInTheDocument();
-    expect(actions.setOnboardingStep).toHaveBeenLastCalledWith(4);
-    await user.click(screen.getByRole("button", { name: "Meet Hibi" }));
-    await screen.findByRole("dialog", { name: "Home tour" });
-    await user.keyboard("{Escape}");
-    await waitFor(() => expect(onDismiss).toHaveBeenCalledTimes(1));
-    expect(actions.setOnboardingStep).toHaveBeenLastCalledWith(5);
-    expect(actions.dismissOnboarding).not.toHaveBeenCalled();
-  });
-
-  it("explains schedule conflicts next to the class days", async () => {
-    const user = userEvent.setup();
-    const { actions } = renderTutorial({ initialStep: 2 });
-    await user.type(screen.getByRole("textbox", { name: /Group name/ }), "Advanced English");
-    await user.type(screen.getByRole("textbox", { name: /Subject/ }), "English");
-    await user.click(screen.getByRole("button", { name: "Add another day" }));
-    await user.click(screen.getAllByRole("combobox", { name: "Day" })[1]);
-    await user.click(screen.getByRole("option", { name: "Monday" }));
-    await user.click(screen.getAllByRole("combobox", { name: "Time" })[1]);
-    await user.click(screen.getByRole("button", { name: /^10:00/ }));
-    await user.click(screen.getByRole("button", { name: "30 minutes" }));
-    expect(screen.getByText("Classes on the same day can’t overlap.")).toBeInTheDocument();
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Save and continue" }));
-    expect(screen.getByRole("alert")).toHaveTextContent("Classes on the same day can’t overlap.");
-    expect(actions.saveOnboardingGroup).not.toHaveBeenCalled();
-  });
-
-  it("marks required fields, focuses the first invalid one and clears each error once it is fixed", async () => {
-    const user = userEvent.setup();
-    const { actions } = renderTutorial({ initialStep: 2 });
-    const name = screen.getByRole("textbox", { name: /Group name/ });
-    const subject = screen.getByRole("textbox", { name: /Subject/ });
-    const price = screen.getByRole("textbox", { name: "Price per hour" });
-    expect(subject).toHaveAttribute("aria-required", "true");
-    expect(subject.closest(".field").querySelector(".field-label .req")).toHaveTextContent("*");
-
-    await user.clear(price);
-    await user.click(screen.getByRole("button", { name: "Save and continue" }));
-    await waitFor(() => expect(name).toHaveFocus());
-    expect(actions.saveOnboardingGroup).not.toHaveBeenCalled();
-    expect(name).toHaveAttribute("aria-invalid", "true");
-    expect(subject).toHaveAttribute("aria-invalid", "true");
-    expect(price).toHaveAttribute("aria-invalid", "true");
-    const priceError = document.getElementById(price.getAttribute("aria-describedby"));
-    expect(priceError).toHaveTextContent("Enter a price.");
-    expect(priceError).toHaveClass("field-error");
-    expect(priceError).toHaveAttribute("role", "alert");
-
-    await user.type(name, "Advanced English");
-    expect(screen.queryByText("Enter a group name.")).not.toBeInTheDocument();
-    expect(name).not.toHaveAttribute("aria-invalid");
-    expect(screen.getByText("Enter a subject.")).toBeInTheDocument();
-    await user.type(subject, "English");
-    expect(screen.queryByText("Enter a subject.")).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Save and continue" }));
-    await waitFor(() => expect(price).toHaveFocus());
-    await user.type(price, "200");
-    expect(screen.queryByText("Enter a price.")).not.toBeInTheDocument();
-    expect(price).not.toHaveAttribute("aria-invalid");
-    expect(document.getElementById(price.getAttribute("aria-describedby"))).toHaveTextContent(
-      "You can adjust it per student later",
-    );
-    await user.click(screen.getByRole("button", { name: "Save and continue" }));
+    const { actions } = renderTutorial();
+    await user.click(screen.getByRole("button", { name: "Skip" }));
+    await user.click(screen.getByRole("button", { name: "Skip to creating my group" }));
+    await user.type(screen.getByRole("textbox", { name: "Group name" }), "Physics");
+    await user.click(screen.getByRole("button", { name: "Monthly fee" }));
+    expect(screen.getByRole("button", { name: "Create my agenda" })).toBeDisabled();
+    // 21 October is past day 5, so the first fee is November's.
+    expect(screen.getByText(/Billing starts in November/)).toBeInTheDocument();
+    await user.type(screen.getByRole("textbox", { name: "Monthly fee" }), "1200");
+    await user.click(screen.getByRole("button", { name: "Create my agenda" }));
     await waitFor(() => expect(actions.saveOnboardingGroup).toHaveBeenCalledTimes(1));
+    expect(actions.saveOnboardingGroup.mock.calls[0][0].billing).toMatchObject({
+      mode: "monthly",
+      monthlyFee: 1200,
+      effectiveFrom: "2026-11",
+    });
   });
 
-  it("suggests a monthly fee and starts billing next month once day 5 has passed", async () => {
+  it("closes with «Not now» without creating anything, and keeps the form when saving fails", async () => {
     const user = userEvent.setup();
-    const { actions } = renderTutorial({
-      initialStep: 2,
-      prepareState: (state) => {
-        state.settings.asOfDate = "2026-10-22";
-        state.settings.hourlyRate = 200;
-        state.settings.defaultClassHours = 1;
-      },
-    });
-    await user.type(screen.getByRole("textbox", { name: /Group name/ }), "Inglés A1");
-    await user.type(screen.getByRole("textbox", { name: /Subject/ }), "Inglés");
-    await user.click(screen.getByRole("button", { name: "Monthly" }));
-    // Mondays at $200 an hour: November 2026 has five of them.
-    const fee = screen.getByRole("textbox", { name: "Monthly fee" });
-    expect(fee).toHaveValue("1000");
-    const hint = document.getElementById(fee.getAttribute("aria-describedby"));
-    expect(hint).toHaveTextContent("Suggested $1,000 (5 classes × $200).");
-    expect(hint).toHaveTextContent("Billing starts in November and is due on day 5 of each month");
+    const failing = renderTutorial({ saveGroup: async () => false });
+    await user.click(screen.getByRole("button", { name: "Skip" }));
+    await user.click(screen.getByRole("button", { name: "Skip to creating my group" }));
+    await user.type(screen.getByRole("textbox", { name: "Group name" }), "Taken name");
+    await user.click(screen.getByRole("button", { name: "Create my agenda" }));
+    await waitFor(() => expect(failing.actions.saveOnboardingGroup).toHaveBeenCalledTimes(1));
+    expect(failing.actions.dismissOnboarding).not.toHaveBeenCalled();
+    expect(heading("Your first group")).toBeInTheDocument();
 
-    await user.clear(fee);
-    await user.type(fee, "900");
-    await user.click(screen.getByRole("button", { name: "Per class" }));
-    await user.click(screen.getByRole("button", { name: "Monthly" }));
-    expect(screen.getByRole("textbox", { name: "Monthly fee" })).toHaveValue("900");
-
-    await user.click(screen.getByRole("button", { name: "Save and continue" }));
-    await waitFor(() => expect(actions.saveOnboardingGroup).toHaveBeenCalledTimes(1));
-    expect(actions.saveOnboardingGroup).toHaveBeenCalledWith(
-      expect.objectContaining({
-        billing: { mode: "monthly", monthlyFee: 900, due: { type: "dayOfMonth", day: 5 }, effectiveFrom: "2026-11" },
-      }),
-    );
+    await user.click(screen.getByRole("button", { name: "Not now" }));
+    await waitFor(() => expect(failing.onClose).toHaveBeenCalledWith());
+    expect(failing.actions.dismissOnboarding).toHaveBeenCalledTimes(1);
   });
 
-  it("builds the roster from a pasted list and Enter, and removes saved students", async () => {
+  it("keeps the app behind inert while it is open", () => {
+    const { shell, view } = renderTutorial();
+    expect(screen.getByRole("dialog", { name: "Welcome tutorial" })).toHaveAttribute("aria-modal", "true");
+    expect(shell).toHaveAttribute("inert");
+    expect(document.body).toHaveClass("onboarding-open");
+    view.unmount();
+    expect(shell).not.toHaveAttribute("inert");
+    expect(document.body).not.toHaveClass("onboarding-open");
+  });
+
+  it("speaks Spanish", async () => {
     const user = userEvent.setup();
-    const { actions } = renderTutorial({
-      initialStep: 3,
-      prepareState: (state) => {
-        state.groups.push({ id: "group-1", name: "Advanced English", subject: "English", weeklySchedule: [] });
-        state.students.push({ id: "student-9", code: "HIBI-009", fullName: "Grace Hopper", groupIds: ["group-1"] });
-        state.settings.onboardingGroupId = "group-1";
-      },
-    });
-    await user.click(screen.getByRole("button", { name: "Add another student" }));
-    await user.click(screen.getByRole("button", { name: "Remove student 1" }));
-    expect(screen.queryByDisplayValue("Grace Hopper")).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole("textbox", { name: "Student 1" }));
-    await user.paste("Ada Lovelace\nAlan Turing\n\nKatherine Johnson");
-    expect(screen.getByRole("textbox", { name: "Student 1" })).toHaveValue("Ada Lovelace");
-    expect(screen.getByRole("textbox", { name: "Student 3" })).toHaveValue("Katherine Johnson");
-
-    await user.keyboard("{Enter}");
-    const added = screen.getByRole("textbox", { name: "Student 4" });
-    expect(added).toHaveFocus();
-    await user.keyboard("Mary Jackson{Enter}");
-    await user.keyboard("{Enter}");
-    await screen.findByRole("heading", { name: "Your recurring agenda is ready" });
-    expect(actions.saveOnboardingStudents).toHaveBeenCalledTimes(1);
-    expect(actions.saveOnboardingStudents).toHaveBeenCalledWith(
-      "group-1",
-      [
-        expect.objectContaining({ fullName: "Ada Lovelace" }),
-        expect.objectContaining({ fullName: "Alan Turing" }),
-        expect.objectContaining({ fullName: "Katherine Johnson" }),
-        expect.objectContaining({ fullName: "Mary Jackson" }),
-        expect.objectContaining({ fullName: "" }),
-      ],
-      ["student-9"],
-    );
+    renderTutorial({ language: "es" });
+    expect(screen.getByRole("dialog", { name: "Tutorial de bienvenida" })).toBeInTheDocument();
+    expect(heading("Tu día, de un vistazo")).toBeInTheDocument();
+    expect(screen.getByText("7:30 a. m. · Inicio")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Saltar" }));
+    expect(heading("Ahora dalo tú")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Dar mi clase de práctica" }));
+    expect(screen.getByRole("region", { name: "Guía" })).toHaveTextContent("Te toca: abre tu clase");
+    expect(screen.getByText("Práctica · nada se guarda")).toBeInTheDocument();
   });
 });

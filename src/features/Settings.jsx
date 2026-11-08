@@ -56,7 +56,6 @@ import { draftChanged, useUnsavedChanges } from "../hooks/useUnsavedChanges";
 import { LanguageToggle, useI18n } from "../i18n";
 import { NEW_PASSWORD_GUIDANCE, getNewPasswordWarning } from "../crypto/passwords.js";
 import { getHibiSoundsEnabled, playHibiSound, setHibiSoundsEnabled } from "../utils/hibiSounds";
-import { setupResumeStep } from "../onboarding/onboardingModel";
 import { useAppearance } from "../theme/appearance";
 
 // «Apariencia» is a per-device preference (localStorage), not part of the synced settings.
@@ -342,7 +341,6 @@ export default function Settings({
   const ownRatesText = ownRateSentences(effects, locale)
     .map((sentence) => uiT(sentence.key, sentence.values))
     .join(" ");
-  const resumeStep = setupResumeStep(state.settings);
   const [section, setSection] = useState("classes");
   const [mobileSheet, setMobileSheet] = useState("");
   const sheetField = MOBILE_FIELDS[mobileSheet];
@@ -1534,11 +1532,8 @@ export default function Settings({
       <h2>{uiT("Welcome tutorial")}</h2>
       <p>{uiT("Revisit Hibi’s main features or set up another group with guidance.")}</p>
       <div className="settings-tour-actions">
-        <Button icon={Sparkles} onClick={() => onOpenOnboarding("tour")}>
+        <Button icon={Sparkles} onClick={() => onOpenOnboarding()}>
           {uiT("Start tour")}
-        </Button>
-        <Button icon={UsersRound} onClick={() => onOpenOnboarding("setup")}>
-          {resumeStep ? uiT("Resume guided setup") : uiT("Guided setup")}
         </Button>
       </div>
       <div className="settings-note">
@@ -1611,7 +1606,7 @@ export default function Settings({
             id: "tutorial",
             icon: Sparkles,
             title: uiT("Welcome tutorial"),
-            summary: resumeStep ? uiT("Guided setup in progress") : uiT("Tour and guided setup"),
+            summary: uiT("Tour and guided setup"),
             content: tutorial,
           },
         ]

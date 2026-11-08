@@ -16,12 +16,7 @@ import { useI18n } from "./i18n";
 import { deriveAll } from "./domain";
 import { archivedGroupsOwed } from "./domain/monthlyBilling.js";
 import { isGroupArchived, statisticsStateForGroups } from "./domain/groupArchiving";
-import {
-  onboardingStep,
-  ONBOARDING_TOUR_START_STEP,
-  setupResumeStep,
-  shouldAutoStartOnboarding,
-} from "./onboarding/onboardingModel";
+import { shouldAutoStartOnboarding } from "./onboarding/onboardingModel";
 import "./i18n/screenTranslations.js";
 const NAV_ITEMS = [
   { id: "home", label: "Home", href: "/", icon: HomeIcon },
@@ -138,12 +133,7 @@ export default function ClassManagerApplication({
   );
   const [intent, setIntent] = useState(null);
   const [signingOut, setSigningOut] = useState(false);
-  const [onboarding, setOnboarding] = useState(() => ({
-    open: shouldAutoStartOnboarding(manager.state),
-    runId: 0,
-    mode: "full",
-    step: onboardingStep(manager.state.settings),
-  }));
+  const [onboarding, setOnboarding] = useState(() => ({ open: shouldAutoStartOnboarding(manager.state), runId: 0 }));
   const navigationBlockers = useRef(new Set());
   const registerNavigationBlocker = useCallback((blocker) => {
     if (typeof blocker !== "function") return () => {};
@@ -203,17 +193,15 @@ export default function ClassManagerApplication({
     [navigate, runNavigation],
   );
   const clearIntent = useCallback(() => setIntent(null), []);
-  // Settings can replay the tour alone or reopen the guided setup where it was left.
+  // Settings can replay the tutorial; it opens over Home, where its last button leaves the teacher.
   const openOnboarding = useCallback(
-    (requestedMode) =>
+    () =>
       runNavigation(() => {
         if (!navigate("home")) return;
-        const mode = requestedMode === "setup" ? "setup" : "tour";
         setIntent(null);
-        const step = mode === "setup" ? setupResumeStep(manager.state.settings) || 2 : ONBOARDING_TOUR_START_STEP;
-        setOnboarding((current) => ({ open: true, runId: current.runId + 1, mode, step }));
+        setOnboarding((current) => ({ open: true, runId: current.runId + 1 }));
       }),
-    [manager.state.settings, navigate, runNavigation],
+    [navigate, runNavigation],
   );
   const closeOnboarding = useCallback(
     (nextPage) => {
@@ -222,13 +210,6 @@ export default function ClassManagerApplication({
         if (nextPage && navigate(nextPage)) setIntent(null);
       });
     },
-    [navigate, runNavigation],
-  );
-  const navigateOnboarding = useCallback(
-    (nextPage) =>
-      runNavigation(() => {
-        if (navigate(nextPage, { replace: true })) setIntent(null);
-      }),
     [navigate, runNavigation],
   );
   const canReload =
@@ -380,15 +361,9 @@ export default function ClassManagerApplication({
           <Suspense fallback={<PageFallback />}>
             <OnboardingTutorial
               key={onboarding.runId}
-              open={onboarding.open}
               state={manager.state}
               actions={manager.actions}
-              initialStep={onboarding.step}
-              mode={onboarding.mode === "tour" ? "tour" : "full"}
-              onStepChange={(step) => setOnboarding((current) => ({ ...current, step }))}
-              onNavigate={navigateOnboarding}
-              onDismiss={() => closeOnboarding()}
-              onComplete={closeOnboarding}
+              onClose={closeOnboarding}
             />
           </Suspense>
         </ErrorBoundary>
