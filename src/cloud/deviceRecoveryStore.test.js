@@ -4,6 +4,48 @@ import { createStarterState } from "../domain/index.js";
 import { createDeviceRecoveryStore, workspaceCounts } from "./deviceRecoveryStore.js";
 
 describe("device recovery store", () => {
+  it("reports an aborted save without an unhandled rejection and recovers the next save atomically", async () => {
+    const factory = new IDBFactory();
+    let abortNextWrite = false;
+    const indexedDb = {
+      open: vi.fn((...args) => {
+        const request = factory.open(...args);
+        request.addEventListener("success", () => {
+          const database = request.result;
+          const transaction = database.transaction.bind(database);
+          database.transaction = (...args) => {
+            const tx = transaction(...args);
+            if (abortNextWrite && args[1] === "readwrite") {
+              abortNextWrite = false;
+              queueMicrotask(() => {
+                tx.abort();
+                database.close();
+              });
+            }
+            return tx;
+          };
+        });
+        return request;
+      }),
+    };
+    const store = createDeviceRecoveryStore(indexedDb, globalThis.crypto);
+    const workspace = { state: createStarterState(), revision: 1 };
+    await store.stageMutation({ ownerId: "owner", workspace, mutation: { operationId: "before" } });
+    abortNextWrite = true;
+    const changed = {
+      ...workspace,
+      state: { ...workspace.state, settings: { ...workspace.state.settings, hourlyRate: 321 } },
+    };
+    await expect(
+      store.stageMutation({ ownerId: "owner", workspace: changed, mutation: { operationId: "aborted" } }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(indexedDb.open).toHaveBeenCalledTimes(1); // An ambiguous abort is not automatically replayed.
+    await expect(store.loadWorkspaceCache("owner")).resolves.toMatchObject(workspace);
+    await store.stageMutation({ ownerId: "owner", workspace: changed, mutation: { operationId: "after" } });
+    expect((await store.listMutations("owner")).map((item) => item.id)).toEqual(["before", "after"]);
+    await expect(store.loadWorkspaceCache("owner")).resolves.toMatchObject(changed);
+  });
+
   it("reopens after an unexpected close and preserves concurrent queued changes and their encryption key", async () => {
     const factory = new IDBFactory();
     let database;
@@ -34,46 +76,57 @@ describe("device recovery store", () => {
     await expect(reopened.list("owner")).resolves.toHaveLength(1);
   });
 
-  it("retries the same change once when the connection closes during encryption, without duplicating the queue", async () => {
-    const factory = new IDBFactory();
-    let database;
-    let closeDuringEncryption = false;
-    const indexedDb = {
-      open: vi.fn((...args) => {
-        const request = factory.open(...args);
-        request.addEventListener("success", () => (database = request.result));
-        return request;
-      }),
-    };
-    const cryptoApi = {
-      getRandomValues: globalThis.crypto.getRandomValues.bind(globalThis.crypto),
-      subtle: {
-        generateKey: globalThis.crypto.subtle.generateKey.bind(globalThis.crypto.subtle),
-        decrypt: globalThis.crypto.subtle.decrypt.bind(globalThis.crypto.subtle),
-        encrypt(...args) {
-          if (closeDuringEncryption) {
-            closeDuringEncryption = false;
-            database.close(); // A normal close deliberately emits no close event.
-          }
-          return globalThis.crypto.subtle.encrypt(...args);
+  it.each(["closed", "recreated"])(
+    "recovers a database %s during encryption and persists the change once",
+    async (mode) => {
+      const factory = new IDBFactory();
+      let database;
+      let closeDuringEncryption = false;
+      const indexedDb = {
+        open: vi.fn((...args) => {
+          const request = factory.open(...args);
+          request.addEventListener("success", () => (database = request.result));
+          return request;
+        }),
+      };
+      const cryptoApi = {
+        getRandomValues: globalThis.crypto.getRandomValues.bind(globalThis.crypto),
+        subtle: {
+          generateKey: globalThis.crypto.subtle.generateKey.bind(globalThis.crypto.subtle),
+          decrypt: globalThis.crypto.subtle.decrypt.bind(globalThis.crypto.subtle),
+          async encrypt(...args) {
+            if (closeDuringEncryption) {
+              closeDuringEncryption = false;
+              database.close(); // A normal close deliberately emits no close event.
+              if (mode === "recreated") {
+                await new Promise((resolve, reject) => {
+                  const request = factory.deleteDatabase(database.name);
+                  request.onsuccess = resolve;
+                  request.onerror = () => reject(request.error);
+                });
+              }
+            }
+            return globalThis.crypto.subtle.encrypt(...args);
+          },
         },
-      },
-    };
-    const store = createDeviceRecoveryStore(indexedDb, cryptoApi);
-    const workspace = { state: createStarterState(), revision: 1 };
-    await store.stageMutation({ ownerId: "owner", workspace, mutation: { operationId: "before" } });
-    closeDuringEncryption = true;
-    workspace.state = { ...workspace.state, settings: { ...workspace.state.settings, hourlyRate: 321 } };
-    await store.stageMutation({ ownerId: "owner", workspace, mutation: { operationId: "after" } });
-    expect(indexedDb.open).toHaveBeenCalledTimes(2);
-    const reopened = createDeviceRecoveryStore(factory, globalThis.crypto);
-    const mutations = await reopened.listMutations("owner");
-    expect(mutations.map((item) => item.id)).toEqual(["before", "after"]);
-    expect(mutations[1].workspace.state.settings.hourlyRate).toBe(321);
-    await expect(reopened.loadWorkspaceCache("owner")).resolves.toMatchObject(workspace);
-    const [backup] = await reopened.list("owner");
-    await expect(reopened.load("owner", backup.id)).resolves.toMatchObject({ state: workspace.state });
-  });
+      };
+      const store = createDeviceRecoveryStore(indexedDb, cryptoApi);
+      const workspace = { state: createStarterState(), revision: 1 };
+      await store.stageMutation({ ownerId: "owner", workspace, mutation: { operationId: "before" } });
+      closeDuringEncryption = true;
+      workspace.state = { ...workspace.state, settings: { ...workspace.state.settings, hourlyRate: 321 } };
+      await store.stageMutation({ ownerId: "owner", workspace, mutation: { operationId: "after" } });
+      expect(indexedDb.open).toHaveBeenCalledTimes(2);
+      const reopened = createDeviceRecoveryStore(factory, globalThis.crypto);
+      const mutations = await reopened.listMutations("owner");
+      // Explicit deletion removes old records; the new payload must still have a persisted, matching key.
+      expect(mutations.map((item) => item.id)).toEqual(mode === "recreated" ? ["after"] : ["before", "after"]);
+      expect(mutations.at(-1).workspace.state.settings.hourlyRate).toBe(321);
+      await expect(reopened.loadWorkspaceCache("owner")).resolves.toMatchObject(workspace);
+      const [backup] = await reopened.list("owner");
+      await expect(reopened.load("owner", backup.id)).resolves.toMatchObject({ state: workspace.state });
+    },
+  );
 
   it("uses the committed account key when independent instances initialize concurrently", async () => {
     const indexedDb = new IDBFactory();

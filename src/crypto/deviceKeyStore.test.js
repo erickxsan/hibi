@@ -1,9 +1,47 @@
 import { IDBFactory, forceCloseDatabase } from "fake-indexeddb";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createDeviceKeyStore } from "./deviceKeyStore.js";
 import { generateAccountMasterKey, generateWorkspaceCryptoId } from "./workspaceCrypto.js";
 
 describe("remembered-device AMK storage", () => {
+  it("reports an aborted write without an unhandled rejection and keeps the remembered key usable", async () => {
+    const factory = new IDBFactory();
+    let abortNextWrite = false;
+    const indexedDb = {
+      open: vi.fn((...args) => {
+        const request = factory.open(...args);
+        request.addEventListener("success", () => {
+          const database = request.result;
+          const transaction = database.transaction.bind(database);
+          database.transaction = (...args) => {
+            const tx = transaction(...args);
+            if (abortNextWrite && args[1] === "readwrite") {
+              abortNextWrite = false;
+              queueMicrotask(() => {
+                tx.abort();
+                database.close();
+              });
+            }
+            return tx;
+          };
+        });
+        return request;
+      }),
+    };
+    const store = createDeviceKeyStore(indexedDb, globalThis.crypto);
+    const account = { ownerId: "owner", workspaceCryptoId: generateWorkspaceCryptoId() };
+    const masterKey = generateAccountMasterKey();
+    await store.remember({ ...account, masterKey });
+    await store.writeIntegrity({ ...account, revision: 7, root: "verified-root" });
+    abortNextWrite = true;
+    await expect(store.remember({ ...account, masterKey: generateAccountMasterKey() })).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    expect(indexedDb.open).toHaveBeenCalledTimes(1);
+    await expect(store.unlock(account)).resolves.toEqual(masterKey);
+    await expect(store.readIntegrity(account)).resolves.toEqual({ revision: 7, root: "verified-root" });
+  });
+
   for (const phase of ["idle", "encrypt", "decrypt"]) {
     it(`recovers a connection closed during ${phase} without replacing keys or losing integrity witnesses`, async () => {
       const factory = new IDBFactory();

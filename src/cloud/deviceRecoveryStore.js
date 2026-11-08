@@ -50,11 +50,14 @@ function requestResult(request) {
 }
 
 function transactionDone(transaction) {
-  return new Promise((resolve, reject) => {
+  const done = new Promise((resolve, reject) => {
     transaction.oncomplete = () => resolve();
     transaction.onabort = () => reject(transaction.error || new Error("Device recovery transaction was aborted."));
     transaction.onerror = () => reject(transaction.error || new Error("Device recovery transaction failed."));
   });
+  // A failed request can reject before its caller reaches await done.
+  void done.catch(() => {});
+  return done;
 }
 
 function publicMetadata(copy) {
