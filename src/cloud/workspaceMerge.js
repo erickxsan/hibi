@@ -239,7 +239,9 @@ function isList(value) {
 /**
  * Three-way merge of a list keyed by `keyOf`: additions from both sides are kept and a removal on one
  * side removes the element unless the other side changed it. `yields(before, after)` says when a
- * change is too small to keep an element the other side removed.
+ * change is too small to keep an element the other side removed, and also when both sides hold the
+ * same element: changed on both, but only in that way, it is no collision and the remote one stays
+ * (the local one with prefer "local").
  * @param {(before: any, after: any) => boolean} [yields]
  */
 function mergeKeyed(base, local, remote, keyOf, prefer, yields = () => false) {
@@ -256,6 +258,7 @@ function mergeKeyed(base, local, remote, keyOf, prefer, yields = () => false) {
     if (sameValue(baseItem, localItem)) item = remoteItem;
     else if (sameValue(baseItem, remoteItem) || sameValue(localItem, remoteItem)) item = localItem;
     else if (removed) item = undefined;
+    else if (yields(localItem, remoteItem)) item = prefer === "local" ? localItem : remoteItem;
     else {
       collisions.push(key);
       item = prefer === "local" ? localItem : remoteItem;
@@ -270,8 +273,10 @@ function monthOf(payment) {
   return `${payment?.groupId}|${payment?.period}`;
 }
 
-// Undo rewrites `settledTotal` and `partial` on the receipts left in its month. That bookkeeping
-// alone never keeps a receipt the other device took back.
+// Undo rewrites `settledTotal` and `partial` on the receipts left in its month, and a merge that
+// settles a month rewrites them on its last receipt. That bookkeeping alone never keeps a receipt the
+// other device took back, and two copies of one receipt that differ only in it are the same receipt
+// (merging an operation again over its own result is no conflict).
 function onlyBookkeeping(before, after) {
   if (!before || !after) return false;
   const { settledTotal: _beforeTotal, partial: _beforePartial, ...beforeRest } = before;

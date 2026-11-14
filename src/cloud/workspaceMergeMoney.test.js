@@ -220,6 +220,16 @@ describe("money rules a merge by element cannot see (audit B3)", () => {
     ]);
   });
 
+  it("2b. merges the same operation again over its own result without a conflict (idempotent)", () => {
+    // Audit of the fixes, finding 4: the settled receipt differs from this device's only in its bookkeeping.
+    const local = pay(start, "2026-10", { id: "l", amount: 500 });
+    const remote = pay(start, "2026-10", { id: "r", amount: 500 });
+    const once = merge(local, remote);
+    expect(once.conflicts).toEqual([]);
+    expect(studentOf(once.state).monthlyPayments).toContainEqual(expect.objectContaining({ settledTotal: 1000 }));
+    for (const prefer of ["none", "local"]) expect(merge(local, once.state, prefer)).toEqual(once);
+  });
+
   it("3. ends a fee paid on one device and marked lost on the other as paid, without the mark, like one device", () => {
     const local = pay(start, "2026-10", { id: "oct" });
     const remote = lose(start, "2026-10");
@@ -372,7 +382,9 @@ describe("random offline sessions on two devices (audit B3)", () => {
       const action = random(5);
       const id = `${prefix}-${(tick += 1)}`;
       if (action <= 1) {
-        const amount = action === 0 ? undefined : [100, 250, 400, 600, 900][random(5)];
+        // Half the balance seen: two devices doing it settle the month only once merged.
+        const half = Math.round((balanceOf(state, period, studentId)?.balance || 0) / 2) || 500;
+        const amount = action === 0 ? undefined : [100, 250, 400, 600, 900, half][random(6)];
         return at(() => recordMonthlyPayment(state, { studentId, groupId: "g", period, amount, paidAt: AS_OF, id }));
       }
       if (action === 2) {
@@ -395,6 +407,8 @@ describe("random offline sessions on two devices (audit B3)", () => {
       const remote = run(base, `r${round}`, 1 + random(4));
       for (const prefer of ["none", "local"]) {
         const { state, conflicts } = merge(local, remote, prefer, base);
+        // Merging the same operation again over a conflict-free result changes nothing (idempotent).
+        if (!conflicts.length) expect(merge(local, state, prefer, base)).toEqual({ state, conflicts: [] });
         for (const studentId of STUDENTS)
           for (const period of PERIODS) {
             const { paid, total } = balanceOf(state, period, studentId);
