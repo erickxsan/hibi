@@ -514,6 +514,20 @@ function paysMonthly(student, group, period) {
   return !(joinedPeriod && period < joinedPeriod);
 }
 
+/**
+ * The first month, `from` or later, in which a student may start paying a group per class. A month
+ * already lived (through `asOf`'s) in which they paid the group monthly keeps its fee: its classes
+ * were recorded as covered and the fee may be paid, so turning it per class would forgive the fee or
+ * charge the month twice. The same rule keeps a group's lived monthly months (see applyFromOptions).
+ */
+export function perClassStart(student, group, asOf, from) {
+  const period = periodOf(asOf);
+  let start = from;
+  for (let month = from; isPeriod(month) && month <= period; month = nextPeriod(month))
+    if (paysMonthly(student, group, month)) start = nextPeriod(month);
+  return start;
+}
+
 // Per-class money already paid in a month for classes a monthly fee now covers: it counts toward the fee.
 function paidPerClassIn(state, student, group, period) {
   return sumMoney(

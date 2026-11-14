@@ -243,9 +243,10 @@ describe("monthly billing editor", () => {
     draft.adjustments = { s1: { mode: "perClass" }, s3: { mode: "customFee", fee: 1000 } };
     const { billing, overrides } = billingChanges(group, roster, draft, AS_OF);
     expect(billing).toMatchObject({ mode: "monthly", effectiveFrom: "2026-10", due: { type: "nthClass", nth: 3 } });
-    // Adjustments apply from this month: earlier months keep what each student paid.
+    // Adjustments apply from this month: earlier months keep what each student paid. October was
+    // already lived with the fee, so per class starts in November.
     expect(overrides).toEqual({
-      s1: { mode: "perClass", effectiveFrom: "2026-10" },
+      s1: { mode: "perClass", effectiveFrom: "2026-11" },
       s3: { mode: "customFee", fee: 1000, effectiveFrom: "2026-10", joinedOn: "2026-10-10", firstMonthAmount: 600 },
     });
     expect(monthlyTotal(state, group, roster, draft)).toEqual({ total: 2200, monthly: 2, perClass: 1 });
@@ -270,7 +271,7 @@ describe("monthly billing editor", () => {
     expect(overrides).toEqual({
       s1: { mode: "group", due: { type: "nthClass", nth: 2 }, effectiveFrom: "2026-10" },
       s2: { mode: "customFee", fee: 900, due: { type: "dayOfMonth", day: 15 }, effectiveFrom: "2026-10" },
-      s3: { mode: "perClass", effectiveFrom: "2026-10" },
+      s3: { mode: "perClass", effectiveFrom: "2026-11" },
     });
     const saved = roster.map((student) => ({ ...student, billingByGroup: { g1: overrides[student.id] } }));
     expect(billingDraftFor(group, saved).adjustments.s1).toEqual({

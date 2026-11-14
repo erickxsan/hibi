@@ -351,6 +351,43 @@ describe("Community groups", () => {
     expect(saved().groups.find((g) => g.id === "g1").billing.due).toEqual({ type: "dayOfMonth", day: 5 });
   });
 
+  it("says a switch to per class starts next month, after the month already billed monthly", async () => {
+    const user = userEvent.setup();
+    const state = communityState();
+    state.groups[0].billing = {
+      mode: "monthly",
+      monthlyFee: 900,
+      due: { type: "dayOfMonth", day: 5 },
+      effectiveFrom: "2026-10",
+    };
+    const { saved } = setup(state);
+    await user.click(screen.getByRole("tab", { name: "Groups" }));
+    await user.click(screen.getByRole("button", { name: "Open Primaria 5A" }));
+    await user.click(screen.getByRole("combobox", { name: "Adjust for a student" }));
+    await user.click(screen.getByRole("option", { name: "Diego Soto" }));
+    await user.click(screen.getByRole("combobox", { name: "How Diego Soto pays" }));
+    await user.click(screen.getByRole("option", { name: "Per class" }));
+    // October was lived with the fee: only the per-class switch waits, so the general line is gone.
+    expect(screen.getByText("$150 per class attended from November")).toBeInTheDocument();
+    expect(screen.queryByText(/Student changes apply from/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole("combobox", { name: "Adjust for a student" }));
+    await user.click(screen.getByRole("option", { name: "Luna López" }));
+    expect(
+      screen.getByText("Student changes apply from October; earlier months stay as they were."),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() =>
+      expect(saved().students.find((s) => s.id === "s2").billingByGroup).toEqual({
+        g1: { mode: "perClass", effectiveFrom: "2026-11" },
+      }),
+    );
+    expect(saved().students.find((s) => s.id === "s1").billingByGroup).toEqual({
+      g1: { mode: "customFee", fee: 900, effectiveFrom: "2026-10" },
+    });
+    // Saved: nothing is pending, so the row no longer names a month.
+    expect(await screen.findByText("$150 per class attended")).toBeInTheDocument();
+  });
+
   it("asks before archiving, then shows the archived history and reactivates", async () => {
     const user = userEvent.setup();
     const { saved } = setup();
@@ -484,6 +521,37 @@ describe("Community on a phone", () => {
     await user.click(within(group).getByRole("button", { name: /Forma de cobro/ }));
     await waitFor(() => expect(screen.getAllByRole("dialog")).toHaveLength(2));
     expect(within(billing()).getByRole("button", { name: "Por clase" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("says in the billing sheet when a student's switch to per class starts", async () => {
+    setCompact(true);
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, "es");
+    const user = userEvent.setup();
+    const state = communityState();
+    state.groups[0].billing = {
+      mode: "monthly",
+      monthlyFee: 900,
+      due: { type: "dayOfMonth", day: 5 },
+      effectiveFrom: "2026-10",
+    };
+    const { saved } = setup(state);
+    await user.click(screen.getByRole("button", { name: "Grupos" }));
+    await user.click(screen.getByRole("button", { name: "Abrir Primaria 5A" }));
+    const group = await screen.findByRole("dialog", { name: "Primaria 5A" });
+    await user.click(within(group).getByRole("button", { name: /Forma de cobro/ }));
+    await waitFor(() => expect(screen.getAllByRole("dialog")).toHaveLength(2));
+    const billing = () => screen.getAllByRole("dialog").at(-1);
+    await user.click(within(billing()).getByRole("combobox", { name: "Ajustar a un alumno" }));
+    await user.click(screen.getByRole("option", { name: "Diego Soto" }));
+    await user.click(within(billing()).getByRole("combobox", { name: "Cómo paga Diego Soto" }));
+    await user.click(screen.getByRole("option", { name: "Por clase" }));
+    expect(within(billing()).getByText("$150 por clase asistida desde noviembre")).toBeInTheDocument();
+    await user.click(within(billing()).getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() =>
+      expect(saved().students.find((s) => s.id === "s2").billingByGroup).toEqual({
+        g1: { mode: "perClass", effectiveFrom: "2026-11" },
+      }),
+    );
   });
 });
 

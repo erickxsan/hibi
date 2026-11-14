@@ -15,6 +15,7 @@ import {
   nextPeriod,
   normalizeBillingByGroup,
   normalizeGroupBilling,
+  perClassStart,
   periodOf,
   studentMonthlyPlan,
   suggestedMonthlyFee,
@@ -394,6 +395,8 @@ export function applyFromOptions(group, draft, asOf) {
  * Turns the billing draft into the saved group and the per-student overrides for saveGroupBilling.
  * An existing group's change applies from `applyFrom` (see applyFromFor): earlier months keep the
  * arrangement they had. A new group starts this month (startGroupBilling may move it to the next).
+ * `starts` is the month each student's change applies from: adjustmentStart, or later for a switch
+ * to per class, which never turns a month they already lived paying monthly (see perClassStart).
  */
 export function billingChanges(group, members, draft, asOf, applyFrom = draft?.applyFrom ?? null) {
   const billing = group?.id
@@ -402,8 +405,9 @@ export function billingChanges(group, members, draft, asOf, applyFrom = draft?.a
       ? { ...draftTerm(draft), effectiveFrom: periodOf(asOf) }
       : { mode: "perClass" };
   const overrides = {};
+  const starts = {};
   // Per class from some month on: the adjustments stay for the monthly months before it.
-  if (draft.mode !== "monthly") return { billing, overrides };
+  if (draft.mode !== "monthly") return { billing, overrides, starts };
   const from = adjustmentStart(group, draft, asOf, applyFrom);
   members.forEach((student) => {
     const current = normalizeBillingByGroup(student.billingByGroup)?.[group?.id] || null;
@@ -420,14 +424,16 @@ export function billingChanges(group, members, draft, asOf, applyFrom = draft?.a
     const termKey = ({ mode, fee, due }) => JSON.stringify(adjustmentFor({ mode, fee, due }) || { mode: "group" });
     // Unchanged (including a change already planned for a later month): nothing to save.
     if (termKey(latest) === termKey(term)) return;
-    overrides[student.id] = changeStudentAdjustment(current, term, from);
+    starts[student.id] = term.mode === "perClass" ? perClassStart(student, group, asOf, from) : from;
+    overrides[student.id] = changeStudentAdjustment(current, term, starts[student.id]);
   });
-  return { billing, overrides };
+  return { billing, overrides, starts };
 }
 
 /**
  * The month a change to students' adjustments applies from: the group's «Aplica desde» when its
  * arrangement changes too, otherwise this month. Earlier months keep the adjustment they had.
+ * A switch to per class may start later (see perClassStart).
  */
 export function adjustmentStart(group, draft, asOf, applyFrom = draft?.applyFrom ?? null) {
   if (!group?.id || !billingTermChanged(group, draft)) return periodOf(asOf);

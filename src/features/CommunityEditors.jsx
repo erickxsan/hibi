@@ -427,11 +427,12 @@ export function BillingFields({ draft, setDraft, group, members = [], state, asO
       return { ...current, adjustments };
     });
   const start = chooseStart && group?.id ? startChoice(state, group, members, draft, asOf) : null;
-  // Changing how a student pays never rewrites the months before it applies.
-  const adjustmentsFrom =
-    chooseStart && monthly && group?.id && Object.keys(billingChanges(group, members, draft, asOf).overrides).length
-      ? adjustmentStart(group, draft, asOf)
-      : "";
+  // Changing how a student pays never rewrites the months before it applies. A switch to per class
+  // may start later than the other changes: its row says when.
+  const pending = chooseStart && monthly && group?.id ? billingChanges(group, members, draft, asOf).starts : {};
+  const changesFrom = Object.keys(pending).length ? adjustmentStart(group, draft, asOf) : "";
+  const adjustmentsFrom = Object.values(pending).includes(changesFrom) ? changesFrom : "";
+  const perClassFrom = (id) => (pending[id] && pending[id] !== changesFrom ? pending[id] : "");
   return (
     <div className="field-rows billing-fields">
       <FieldRow label={t("Billing")}>
@@ -551,15 +552,22 @@ export function BillingFields({ draft, setDraft, group, members = [], state, asO
                         />
                       ) : adjustment.mode === "perClass" ? (
                         <span className="field-row-hint">
-                          {t("{amount} per class attended", {
-                            amount: formatMoney(
-                              // Their own rate, when they have one, prices their classes instead of the group's.
-                              Number.isFinite(student.customHourlyRate)
-                                ? Math.round(hours * student.customHourlyRate * 100) / 100
-                                : perClass,
-                              locale,
-                            ),
-                          })}
+                          {t(
+                            perClassFrom(id)
+                              ? "{amount} per class attended from {month}"
+                              : "{amount} per class attended",
+                            {
+                              amount: formatMoney(
+                                // Their own rate, when they have one, prices their classes instead of the group's.
+                                Number.isFinite(student.customHourlyRate)
+                                  ? Math.round(hours * student.customHourlyRate * 100) / 100
+                                  : perClass,
+                                locale,
+                              ),
+                              // A month they already paid monthly keeps its fee: per class starts after it.
+                              month: perClassFrom(id) ? monthLong(`${perClassFrom(id)}-01`, locale) : "",
+                            },
+                          )}
                         </span>
                       ) : null}
                       {/* Monthly payers may fall due on their own day or class instead of the group's. */}

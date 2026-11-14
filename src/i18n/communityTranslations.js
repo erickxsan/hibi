@@ -157,6 +157,7 @@ export const COMMUNITY_TRANSLATIONS = Object.freeze({
   "Class {name} pays at": "Clase en que paga {name}",
   "Fee for {name}": "Cuota de {name}",
   "{amount} per class attended": "{amount} por clase asistida",
+  "{amount} per class attended from {month}": "{amount} por clase asistida desde {month}",
   "Remove adjustment for {name}": "Quitar el ajuste de {name}",
   "Adjust for a student": "Ajustar a un alumno",
   "+ Adjust for a student": "+ Ajustar a un alumno",
