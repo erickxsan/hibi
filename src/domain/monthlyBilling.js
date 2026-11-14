@@ -1,3 +1,4 @@
+import { attendanceBilling } from "./attendanceBilling.js";
 import { addDays, endOfMonth, isDateOnly } from "./dates.js";
 import { isGroupArchived } from "./groupArchiving.js";
 import { createStableId } from "./ids.js";
@@ -515,16 +516,41 @@ function paysMonthly(student, group, period) {
 }
 
 /**
+ * True when the records show a student lived `period` paying a group monthly, so turning that month
+ * per class would forgive part of it or charge it twice: a receipt or a lost mark of its fee, money
+ * paid on one of their classes that month (the fee credits it), or a class they came to, which was
+ * stored at $0 because the fee covered it and would stay $0 per class. A class they missed or whose
+ * attendance is not taken costs nothing either way, and a cancelled one did not happen. Classes of a
+ * month whose fee the teacher set to nothing (`firstMonthAmount` 0, a $0 fee) were free already:
+ * per class keeps them so and only prices the classes still to come.
+ */
+function livedMonthly(state, student, group, period) {
+  const ofMonth = (item) => item?.groupId === group.id && item.period === period;
+  if (normalizeMonthlyPayments(student.monthlyPayments).some(ofMonth)) return true;
+  if (normalizeLostPayments(student.lostPayments).some((mark) => mark.kind === "monthly" && ofMonth(mark))) return true;
+  const classes = (state?.classLog || []).filter(
+    (row) => row?.studentId === student.id && row.groupId === group.id && periodOf(row.classDate) === period,
+  );
+  if (classes.some((row) => row.amountPaid > 0)) return true;
+  const came = classes.some((row) => row.classStatus !== "Cancelled" && attendanceBilling(row) === "billable");
+  return came && (studentMonthlyPlan(state, student, group, period, 0)?.amount || 0) > 0;
+}
+
+/**
  * The first month, `from` or later, in which a student may start paying a group per class. A month
  * already lived (through `asOf`'s) in which they paid the group monthly keeps its fee: its classes
  * were recorded as covered and the fee may be paid, so turning it per class would forgive the fee or
  * charge the month twice. The same rule keeps a group's lived monthly months (see applyFromOptions).
+ * With the workspace (`state`), a month counts as lived only when the records show it (see
+ * livedMonthly): someone added this month and set per class before anything was recorded starts
+ * now, since joining always stamps the month monthly. Without it, every month they paid monthly.
  */
-export function perClassStart(student, group, asOf, from) {
+export function perClassStart(student, group, asOf, from, state = null) {
   const period = periodOf(asOf);
   let start = from;
   for (let month = from; isPeriod(month) && month <= period; month = nextPeriod(month))
-    if (paysMonthly(student, group, month)) start = nextPeriod(month);
+    if (paysMonthly(student, group, month) && (!state || livedMonthly(state, student, group, month)))
+      start = nextPeriod(month);
   return start;
 }
 

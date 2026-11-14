@@ -88,6 +88,28 @@ function backdatableState() {
   return state;
 }
 
+// Monthly since October; Bea was added on October 20 with a full first month and has no class yet.
+function newcomerState() {
+  const state = communityState();
+  state.groups[0].billing = {
+    mode: "monthly",
+    monthlyFee: 900,
+    due: { type: "dayOfMonth", day: 5 },
+    effectiveFrom: "2026-10",
+  };
+  state.students.push(
+    createStudent({
+      id: "s5",
+      code: "BEA-5",
+      fullName: "Bea Ruiz",
+      groupIds: ["g1"],
+      avatarId: "cat",
+      billingByGroup: { g1: { mode: "group", joinedOn: "2026-10-20", firstMonthAmount: 900 } },
+    }),
+  );
+  return state;
+}
+
 function Harness({ persistence, compactView = false }) {
   const manager = useClassManager({ persistence });
   return (
@@ -395,6 +417,30 @@ describe("Community groups", () => {
     expect(await screen.findByText("$150 per class attended")).toBeInTheDocument();
   });
 
+  it("lets a student added this month with nothing recorded pay per class from this month", async () => {
+    const user = userEvent.setup();
+    const { saved } = setup(newcomerState());
+    await user.click(screen.getByRole("tab", { name: "Groups" }));
+    await user.click(screen.getByRole("button", { name: "Open Primaria 5A" }));
+    await user.click(screen.getByRole("combobox", { name: "Adjust for a student" }));
+    await user.click(screen.getByRole("option", { name: "Bea Ruiz" }));
+    await user.click(screen.getByRole("combobox", { name: "How Bea Ruiz pays" }));
+    await user.click(screen.getByRole("option", { name: "Per class" }));
+    // Joining stamped October with a full first month, but nothing shows she lived it paying monthly.
+    expect(screen.getByText("$150 per class attended")).toBeInTheDocument();
+    expect(screen.queryByText(/per class attended from/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Student changes apply from October; earlier months stay as they were."),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() =>
+      expect(saved().students.find((s) => s.id === "s5").billingByGroup).toEqual({
+        g1: { mode: "perClass", effectiveFrom: "2026-10", joinedOn: "2026-10-20", firstMonthAmount: 900 },
+      }),
+    );
+    expect(await screen.findByText("$150 per class attended")).toBeInTheDocument();
+  });
+
   it("says what a backdated monthly start costs and saves who joined after it began", async () => {
     const user = userEvent.setup();
     const { saved } = setup(backdatableState());
@@ -591,6 +637,32 @@ describe("Community on a phone", () => {
     await waitFor(() =>
       expect(saved().students.find((s) => s.id === "s2").billingByGroup).toEqual({
         g1: { mode: "perClass", effectiveFrom: "2026-11" },
+      }),
+    );
+  });
+
+  it("lets a student added this month pay per class from this month in the billing sheet", async () => {
+    setCompact(true);
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, "es");
+    const user = userEvent.setup();
+    const { saved } = setup(newcomerState());
+    await user.click(screen.getByRole("button", { name: "Grupos" }));
+    await user.click(screen.getByRole("button", { name: "Abrir Primaria 5A" }));
+    const group = await screen.findByRole("dialog", { name: "Primaria 5A" });
+    await user.click(within(group).getByRole("button", { name: /Forma de cobro/ }));
+    await waitFor(() => expect(screen.getAllByRole("dialog")).toHaveLength(2));
+    const billing = () => screen.getAllByRole("dialog").at(-1);
+    await user.click(within(billing()).getByRole("combobox", { name: "Ajustar a un alumno" }));
+    await user.click(screen.getByRole("option", { name: "Bea Ruiz" }));
+    await user.click(within(billing()).getByRole("combobox", { name: "Cómo paga Bea Ruiz" }));
+    await user.click(screen.getByRole("option", { name: "Por clase" }));
+    expect(within(billing()).getByText("$150 por clase asistida")).toBeInTheDocument();
+    expect(within(billing()).queryByText(/por clase asistida desde/)).not.toBeInTheDocument();
+    await user.click(within(billing()).getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() =>
+      expect(saved().students.find((s) => s.id === "s5").billingByGroup.g1).toMatchObject({
+        mode: "perClass",
+        effectiveFrom: "2026-10",
       }),
     );
   });

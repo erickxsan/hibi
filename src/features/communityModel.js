@@ -402,7 +402,8 @@ export function applyFromOptions(group, draft, asOf, state = null) {
  * An existing group's change applies from `applyFrom` (see applyFromFor): earlier months keep the
  * arrangement they had. A new group starts this month (startGroupBilling may move it to the next).
  * `starts` is the month each student's change applies from: adjustmentStart, or later for a switch
- * to per class, which never turns a month they already lived paying monthly (see perClassStart).
+ * to per class, which never turns a month they already lived paying monthly (see perClassStart; with
+ * the workspace, only months the records show lived that way count).
  * With the workspace (`state`), a start before the group is on record moves to its first month, and
  * a backdated start saves the join date of each student it would otherwise bill for months before
  * they were in the group (see backdatedJoins); each override stays the student's whole entry.
@@ -437,7 +438,7 @@ export function billingChanges(group, members, draft, asOf, applyFrom = draft?.a
     const termKey = ({ mode, fee, due }) => JSON.stringify(adjustmentFor({ mode, fee, due }) || { mode: "group" });
     // Unchanged (including a change already planned for a later month): nothing to save.
     if (termKey(latest) === termKey(term)) return;
-    starts[student.id] = term.mode === "perClass" ? perClassStart(student, group, asOf, from) : from;
+    starts[student.id] = term.mode === "perClass" ? perClassStart(student, group, asOf, from, state) : from;
     overrides[student.id] = changeStudentAdjustment(current, term, starts[student.id]);
   });
   if (state && group?.id) {

@@ -463,8 +463,15 @@ export function BillingFields({ draft, setDraft, group, members = [], state, asO
     [chooseStart, group, members, draft, asOf, state],
   );
   // Changing how a student pays never rewrites the months before it applies. A switch to per class
-  // may start later than the other changes: its row says when.
-  const pending = chooseStart && monthly && group?.id ? billingChanges(group, members, draft, asOf).starts : {};
+  // may start later than the other changes: its row says when. With the workspace, as saving does
+  // (the records decide whether this month was already lived monthly, see perClassStart).
+  const pending = useMemo(
+    () =>
+      chooseStart && monthly && group?.id
+        ? billingChanges(group, members, draft, asOf, draft.applyFrom ?? null, state).starts
+        : {},
+    [chooseStart, monthly, group, members, draft, asOf, state],
+  );
   const changesFrom = Object.keys(pending).length ? adjustmentStart(group, draft, asOf) : "";
   const adjustmentsFrom = Object.values(pending).includes(changesFrom) ? changesFrom : "";
   const perClassFrom = (id) => (pending[id] && pending[id] !== changesFrom ? pending[id] : "");
