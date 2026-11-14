@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "../i18n/index.jsx";
 import { LANGUAGE_STORAGE_KEY } from "../i18n/translations.js";
-import { createStarterState, createStudent } from "../domain/index.js";
+import { createClassLogRow, createStarterState, createStudent } from "../domain/index.js";
 import { describeOperation } from "./workspaceMerge.js";
 import { PendingOperations } from "./PendingOperations.jsx";
 
@@ -111,5 +111,50 @@ describe("pending operation review", () => {
     expect(within(row).getByText("Pagó por transferencia")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Keep this device's version" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("no longer fits the current cloud records");
+  });
+
+  it("compares a class saved on two devices with the cloud's row of that class", () => {
+    const row = (id, marks) =>
+      createClassLogRow({
+        id,
+        studentId: "a",
+        classDate: "2026-11-12",
+        startTime: "16:00",
+        attendance: "P",
+        appliedCharge: 200,
+        amountPaid: 0,
+        paymentState: "Pending",
+        ...marks,
+      });
+    const tablet = { operationId: "op-4", previousState: base, state: { ...base, classLog: [row("tab", {})] } };
+    const phone = { ...base, classLog: [row("pho", { amountPaid: 200, paymentState: "Paid" })] };
+    renderPanel(
+      {
+        connectionStatus: "connected",
+        resolvePendingOperation: vi.fn(),
+        retrySync: vi.fn(),
+        pendingOperations: [
+          {
+            id: "op-4",
+            status: "conflict",
+            createdAt: "2026-11-12T22:00:00.000Z",
+            mutation: tablet,
+            review: describeOperation(tablet, phone),
+          },
+        ],
+      },
+      "es",
+    );
+    expect(
+      screen.getByText(
+        "Otro dispositivo guardó esta misma clase para este alumno. Conserva los valores de este dispositivo o los de la nube: solo queda un registro.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Este dispositivo agregó este registro.")).not.toBeInTheDocument();
+    const paid = screen.getByRole("row", { name: /Monto pagado/ });
+    expect(paid).toHaveClass("is-conflict");
+    expect(within(paid).getByText("0")).toBeInTheDocument();
+    expect(within(paid).getByText("200")).toBeInTheDocument();
+    expect(screen.queryByRole("row", { name: /Asistencia/ })).not.toBeInTheDocument();
   });
 });

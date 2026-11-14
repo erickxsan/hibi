@@ -1497,6 +1497,10 @@ const EXPLICIT_TRANSLATIONS = Object.freeze({
     "Este dispositivo editó este registro, pero otro dispositivo lo eliminó.",
   "This device deleted this record.": "Este dispositivo eliminó este registro.",
   "This device added this record.": "Este dispositivo agregó este registro.",
+  "Another device saved this same class for this student. Keep this device's values or the cloud's: only one record stays.":
+    "Otro dispositivo guardó esta misma clase para este alumno. Conserva los valores de este dispositivo o los de la nube: solo queda un registro.",
+  "This class was just saved with different marks. Review it before saving again.":
+    "Esta clase se acaba de guardar con otros datos. Revísala antes de volver a guardar.",
   "Keep this device's version to replace the highlighted cloud values. Discard it to keep the cloud version; nothing else is removed.":
     "Conserva la versión de este dispositivo para reemplazar los valores resaltados de la nube. Descártala para conservar la versión de la nube; no se elimina nada más.",
   "Keep this device's version": "Conservar la versión de este dispositivo",

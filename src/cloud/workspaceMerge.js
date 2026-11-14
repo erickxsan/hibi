@@ -1,5 +1,6 @@
 import { canonicalStringify } from "../crypto/canonical.js";
 import { settingsDataVersion } from "../domain/dataVersion.js";
+import { isBlankTwin, TWIN_COLLECTIONS, twinKey } from "../domain/recordTwins.js";
 
 // Field-level synchronization for the decrypted workspace. The server only sees
 // opaque envelopes, so every combination happens here, after authentication.
@@ -229,6 +230,100 @@ function conflict(collection, entityId, kind, fields = []) {
   return { collection, entityId: String(entityId), kind, fields };
 }
 
+function withoutId(record) {
+  const { id: _id, ...fields } = record || {};
+  return fields;
+}
+
+/**
+ * Twin records (domain/recordTwins.js): this operation saved a class, or a grade, that the cloud already
+ * holds under another id, because the two devices had not seen each other's save. Keeping both would show
+ * one and count both, so the operation's record is folded into the cloud's and only the cloud's id stays.
+ * Identical records, or a side with nothing recorded yet, fold silently; different values on both sides
+ * are a "duplicate" conflict on the fields that differ (prefer "local" applies this device's values).
+ * An edit of a record the cloud no longer has lands on its twin when there is one: an earlier fold of
+ * this device's own record, or a duplicate another device cleaned up.
+ * Only twins this operation could not see are folded: duplicates already stored on either side stay.
+ */
+function foldTwins(collection, { base, local, remote, result, vanished, prefer, conflicts, renamed }) {
+  const baseItems = byId(base?.[collection]);
+  const remoteItems = byId(remote?.[collection]);
+  const residentKey = (id) => {
+    if (!remoteItems.has(id) || !result.has(id)) return null;
+    const key = twinKey(collection, result.get(id));
+    return key && key === twinKey(collection, remoteItems.get(id)) ? key : null;
+  };
+  // Cloud records at their cloud identity, first in cloud order; `unseen` only those this operation did not know.
+  const residents = new Map();
+  const unseen = new Map();
+  for (const item of remote?.[collection] || []) {
+    const id = String(item.id);
+    const key = residentKey(id);
+    if (!key) continue;
+    if (!residents.has(key)) residents.set(key, id);
+    if (!unseen.has(key) && twinKey(collection, baseItems.get(id)) !== key) unseen.set(key, id);
+  }
+  const fold = (id, twinId, merged, fields, forced = false) => {
+    result.delete(id);
+    result.set(twinId, merged);
+    renamed.set(id, twinId);
+    if (fields.length || forced) conflicts.push({ ...conflict(collection, id, "duplicate", fields), twinId });
+  };
+
+  // Records this operation added, or moved onto another class.
+  for (const item of local?.[collection] || []) {
+    const id = String(item.id);
+    if (!result.has(id) || residentKey(id)) continue;
+    const mine = result.get(id);
+    const twinId = unseen.get(twinKey(collection, mine));
+    if (!twinId) continue;
+    const theirs = result.get(twinId);
+    // Moving a cloud record away deletes it there: always a decision.
+    const moved = remoteItems.has(id);
+    if (sameValue(withoutId(mine), withoutId(theirs)) || isBlankTwin(collection, mine)) {
+      fold(id, twinId, theirs, [], moved);
+    } else if (isBlankTwin(collection, theirs)) {
+      fold(id, twinId, { id: theirs.id, ...withoutId(mine) }, [], moved);
+    } else {
+      const merged = mergeFields({}, withoutId(mine), withoutId(theirs), { prefer });
+      fold(id, twinId, { id: theirs.id, ...merged.value }, merged.conflicts, moved);
+    }
+  }
+
+  // Records this operation edited that the cloud no longer has.
+  for (const { id, baseItem, localItem } of vanished) {
+    const twinId = residents.get(twinKey(collection, localItem));
+    if (!twinId) {
+      conflicts.push(conflict(collection, id, "edit-delete"));
+      if (prefer === "local") result.set(id, localItem);
+      continue;
+    }
+    const merged = mergeFields(withoutId(baseItem), withoutId(localItem), withoutId(result.get(twinId)), { prefer });
+    fold(id, twinId, { id: result.get(twinId).id, ...merged.value }, merged.conflicts);
+  }
+}
+
+// Lost-payment marks name class ids: a mark on a folded record follows it to the record that stays.
+function followRenamedClasses(students, renamed) {
+  if (!renamed.size) return students;
+  return students.map((student) => {
+    if (!student?.lostPayments?.some((mark) => mark?.kind === "class" && renamed.has(String(mark.classId))))
+      return student;
+    const seen = new Set();
+    const lostPayments = student.lostPayments.flatMap((mark) => {
+      const next =
+        mark?.kind === "class" && renamed.has(String(mark.classId))
+          ? { ...mark, classId: renamed.get(String(mark.classId)) }
+          : mark;
+      const key = next?.kind === "class" ? `class|${next.classId}` : null;
+      if (key && seen.has(key)) return [];
+      if (key) seen.add(key);
+      return [next];
+    });
+    return { ...student, lostPayments };
+  });
+}
+
 /**
  * Three-way merge of one queued operation (base -> local) onto the newest state.
  * Only fields changed by the operation are applied. A field changed to different
@@ -263,12 +358,15 @@ export function mergeWorkspaceStates({ base, local, remote, prefer = "none" }) {
   if (settingsConflicts.length) conflicts.push(conflict("settings", "__settings__", "field", settingsConflicts));
   state.settings = settings.value;
 
+  const renamedClasses = new Map();
   for (const collection of SYNC_COLLECTIONS) {
     const baseItems = byId(base?.[collection]);
     const localItems = byId(local?.[collection]);
     const remoteList = remote?.[collection] || [];
     const remoteItems = byId(remoteList);
     const result = new Map();
+    const twins = TWIN_COLLECTIONS.includes(collection);
+    const vanished = [];
     for (const id of new Set([...baseItems.keys(), ...localItems.keys(), ...remoteItems.keys()])) {
       const inBase = baseItems.has(id);
       const inLocal = localItems.has(id);
@@ -300,6 +398,11 @@ export function mergeWorkspaceStates({ base, local, remote, prefer = "none" }) {
         continue;
       }
       if (!inRemote) {
+        if (twins) {
+          // Decided with the twins below: the edit may belong to a record that survived elsewhere.
+          vanished.push({ id, baseItem, localItem });
+          continue;
+        }
         conflicts.push(conflict(collection, id, "edit-delete"));
         if (prefer === "local") result.set(id, localItem);
         continue;
@@ -307,6 +410,10 @@ export function mergeWorkspaceStates({ base, local, remote, prefer = "none" }) {
       const merged = mergeFields(baseItem, localItem, remoteItem, { prefer });
       if (merged.conflicts.length) conflicts.push(conflict(collection, id, "field", merged.conflicts));
       result.set(id, merged.value);
+    }
+    if (twins) {
+      const renamed = collection === "classLog" ? renamedClasses : new Map();
+      foldTwins(collection, { base, local, remote, result, vanished, prefer, conflicts, renamed });
     }
     const ordered = [];
     for (const item of remoteList) {
@@ -319,6 +426,7 @@ export function mergeWorkspaceStates({ base, local, remote, prefer = "none" }) {
     }
     state = { ...state, [collection]: ordered };
   }
+  if (renamedClasses.size) state.students = followRenamedClasses(state.students || [], renamedClasses);
 
   return { state, conflicts };
 }
@@ -355,19 +463,22 @@ export function describeOperation(mutation, remoteState) {
     const entityId = key.slice(separator + 1);
     const before = recordFor(base, collection, entityId);
     const after = recordFor(local, collection, entityId);
-    const cloud = remoteState ? recordFor(remoteState, collection, entityId) : undefined;
+    const entityConflict = conflictFields.get(key);
+    // A twin conflict compares this device's record with the cloud's record of the same class.
+    const twin =
+      remoteState && entityConflict?.twinId ? recordFor(remoteState, collection, entityConflict.twinId) : null;
+    const cloud = remoteState ? (twin ?? recordFor(remoteState, collection, entityId)) : undefined;
     const kind = !before ? "create" : !after ? "delete" : "edit";
-    const fields = orderedKeys(before, after)
+    const fields = orderedKeys(before, after, twin)
       .filter((field) => field !== "id" && !(collection === "settings" && field === DATA_VERSION_FIELD))
-      .filter((field) => !sameValue(before?.[field], after?.[field]))
+      .filter((field) => (twin ? !sameValue(twin[field], after?.[field]) : !sameValue(before?.[field], after?.[field])))
       .map((field) => ({
         field,
         before: before?.[field],
         local: after?.[field],
         cloud: cloud === undefined ? undefined : cloud?.[field],
-        conflict: Boolean(conflictFields.get(key)?.fields.includes(field)),
+        conflict: Boolean(entityConflict?.fields.includes(field)),
       }));
-    const entityConflict = conflictFields.get(key);
     return {
       collection,
       entityId,

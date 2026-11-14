@@ -51,6 +51,7 @@ import { normalizeRepeatRule } from "../domain/classRecurrence.js";
 import { normalizeGroupScheduleHistory, preserveGroupSchedule } from "../domain/groupScheduleHistory.js";
 import { updateDismissedNotes } from "../domain/noteDismissals.js";
 import { markLost, normalizeLostPayments, recoverLost } from "../domain/lostPayments.js";
+import { adoptStoredTwins } from "../domain/recordTwins.js";
 import {
   normalizeBillingByGroup,
   normalizeGroupBilling,
@@ -347,7 +348,14 @@ export async function persistRecipe({ baseState, recipe, adapter, replace = fals
     // Full backup replacement is intentionally never merged automatically.
     if (replace || importMetadata || !error?.latestState || typeof adapter?.save !== "function") throw error;
     const latest = canonicalize(error.latestState).state;
-    const rebased = recipe(latest);
+    let rebased;
+    try {
+      rebased = recipe(latest);
+    } catch (refused) {
+      // The newest records already hold this class with other marks: show them and let the person decide.
+      if (refused?.code === "duplicate_record") refused.latestState = latest;
+      throw refused;
+    }
     const retried = await adapter.save(rebased, latest);
     return {
       state: retried?.state ?? retried ?? rebased,
@@ -1123,10 +1131,11 @@ export function useClassManager({ persistence } = {}) {
       }
       const studentCount = new Set(classItems.map((item) => item.studentId)).size;
       return commit(
+        // A class another tab or device saved meanwhile is edited, never added a second time (domain/recordTwins.js).
         (latest) => ({
           ...latest,
-          classLog: upsertManyById(latest.classLog, classItems),
-          grades: upsertManyById(latest.grades, gradeItems),
+          classLog: upsertManyById(latest.classLog, adoptStoredTwins("classLog", latest.classLog, classItems)),
+          grades: upsertManyById(latest.grades, adoptStoredTwins("grades", latest.grades, gradeItems)),
         }),
         `Progress saved for ${studentCount} student${studentCount === 1 ? "" : "s"}`,
       );

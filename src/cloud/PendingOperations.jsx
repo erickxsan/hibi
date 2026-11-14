@@ -142,6 +142,8 @@ export function PendingOperations({ persistence }) {
 
   // Rows to compare: for a deletion, only what the other device edited.
   const rowsFor = (change) => {
+    // The same class saved on two devices: compare this device's record with the cloud's.
+    if (change.conflict === "duplicate") return change.fields;
     if (change.kind === "create") return [];
     if (change.kind === "delete") {
       if (!change.cloud) return [];
@@ -222,7 +224,13 @@ export function PendingOperations({ persistence }) {
                   <h3>
                     {t(COLLECTION_LABELS[change.collection] || "Other record")}: {recordLabel(entry, change, names)}
                   </h3>
-                  {change.conflict === "delete-edit" ? (
+                  {change.conflict === "duplicate" ? (
+                    <p className="pending-conflict-note">
+                      {t(
+                        "Another device saved this same class for this student. Keep this device's values or the cloud's: only one record stays.",
+                      )}
+                    </p>
+                  ) : change.conflict === "delete-edit" ? (
                     <p className="pending-conflict-note">
                       {t("This device deleted this record, but another device edited it.")}
                     </p>
