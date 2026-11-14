@@ -2,6 +2,7 @@ import { useState } from "react";
 import { AlertTriangle, CloudOff, RefreshCw } from "lucide-react";
 import { useI18n } from "../i18n/index.jsx";
 import { Button } from "../components/ui";
+import { formatMoney, formatMonthYear } from "../utils/displayFormat.js";
 import "./cloud.css";
 
 const COLLECTION_LABELS = {
@@ -30,6 +31,7 @@ const FIELD_LABELS = {
   customHourlyRate: "Custom hourly rate",
   monthlyPayments: "Monthly payments",
   lostPayments: "Lost payments",
+  billingByGroup: "Billing",
   avatarId: "Avatar",
   iconId: "Group icon",
   colorId: "Group color",
@@ -74,6 +76,10 @@ const FIELD_LABELS = {
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
+// A student's money is shown one element per line (the review narrows it to the elements involved).
+const MONEY_FIELDS = new Set(["monthlyPayments", "lostPayments", "billingByGroup"]);
+const ADJUSTMENT_LABELS = { group: "Group fee", perClass: "Per class" };
+
 function recordFor(state, collection, entityId) {
   if (!state) return null;
   if (collection === "settings") return state.settings || null;
@@ -87,6 +93,13 @@ function namesById(entry) {
     for (const group of state?.groups || []) names.set(String(group.id), group.name);
   }
   return names;
+}
+
+function classDatesById(entry) {
+  const dates = new Map();
+  for (const state of [entry.mutation?.previousState, entry.mutation?.state])
+    for (const row of state?.classLog || []) dates.set(String(row.id), row.classDate);
+  return dates;
 }
 
 export function PendingOperations({ persistence }) {
@@ -112,8 +125,58 @@ export function PendingOperations({ persistence }) {
     ).format(date);
   };
 
-  const formatValue = (value, names) => {
+  const monthOf = (period) => formatMonthYear(`${period}-01`, locale) || String(period);
+  // Inside a sentence Spanish writes the month in lowercase («desde noviembre 2026»).
+  const monthInText = (period) => {
+    const text = monthOf(period);
+    return String(locale).toLowerCase().startsWith("es") ? text.toLowerCase() : text;
+  };
+
+  // «Octubre 2026 · Grupo · $1,000 · 13 nov 2026», one receipt, debt or group per line.
+  const formatMoneyValue = (field, value, names, classDates) => {
+    if (field === "monthlyPayments")
+      return (Array.isArray(value) ? value : [])
+        .map((item) =>
+          [
+            monthOf(item.period),
+            names.get(String(item.groupId)),
+            formatMoney(item.amount, locale),
+            formatDate(item.paidAt),
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        )
+        .join("\n");
+    if (field === "lostPayments")
+      return (Array.isArray(value) ? value : [])
+        .map((mark) =>
+          mark.kind === "class"
+            ? [t("Class"), classDates.get(String(mark.classId)) ? formatDate(classDates.get(String(mark.classId))) : ""]
+                .filter(Boolean)
+                .join(" · ")
+            : [monthOf(mark.period), names.get(String(mark.groupId))].filter(Boolean).join(" · "),
+        )
+        .join("\n");
+    return Object.entries(value || {})
+      .map(([groupId, override]) => {
+        const parts = [
+          override.mode === "customFee"
+            ? t("Other fee {amount}", { amount: formatMoney(override.fee, locale) })
+            : t(ADJUSTMENT_LABELS[override.mode] || "Group fee"),
+        ];
+        if (override.effectiveFrom) parts.push(t("from {month}", { month: monthInText(override.effectiveFrom) }));
+        if (override.joinedOn) parts.push(t("joined {date}", { date: formatDate(override.joinedOn) }));
+        if (override.leftOn) parts.push(t("left {date}", { date: formatDate(override.leftOn) }));
+        for (const stretch of override.away || [])
+          parts.push(t("away {from} – {to}", { from: formatDate(stretch.from), to: formatDate(stretch.to) }));
+        return `${names.get(String(groupId)) || t("Unnamed group")}: ${parts.join(" · ")}`;
+      })
+      .join("\n");
+  };
+
+  const formatValue = (value, names, field = "", classDates = new Map()) => {
     if (value === undefined || value === null || value === "") return "—";
+    if (MONEY_FIELDS.has(field) && typeof value === "object") return formatMoneyValue(field, value, names, classDates);
     if (typeof value === "boolean") return value ? t("Yes") : t("No");
     if (typeof value === "number") return new Intl.NumberFormat(locale).format(value);
     if (Array.isArray(value))
@@ -154,10 +217,10 @@ export function PendingOperations({ persistence }) {
     return change.fields;
   };
 
-  const sideValue = (record, value, names) => {
+  const sideValue = (record, value, names, field, classDates) => {
     if (record === null) return t("Deleted");
     if (record === undefined) return t("Not available");
-    return formatValue(value, names);
+    return formatValue(value, names, field, classDates);
   };
 
   const resolve = async (id, choice) => {
@@ -213,6 +276,7 @@ export function PendingOperations({ persistence }) {
       <ul className="pending-operations-list">
         {conflicts.map((entry) => {
           const names = namesById(entry);
+          const classDates = classDatesById(entry);
           const changes = entry.review?.changes || [];
           return (
             <li key={entry.id} className="pending-conflict">
@@ -255,19 +319,30 @@ export function PendingOperations({ persistence }) {
                           </tr>
                         </thead>
                         <tbody>
-                          {rowsFor(change).map((field) => (
-                            <tr key={field.field} className={field.conflict ? "is-conflict" : undefined}>
-                              <th scope="row">
-                                {t(FIELD_LABELS[field.field] || field.field)}
-                                {field.conflict ? (
-                                  <span className="pending-conflict-badge">{t("Different values")}</span>
-                                ) : null}
-                              </th>
-                              <td>{change.before === null ? "—" : formatValue(field.before, names)}</td>
-                              <td>{sideValue(change.local, field.local, names)}</td>
-                              <td>{sideValue(change.cloud, field.cloud, names)}</td>
-                            </tr>
-                          ))}
+                          {rowsFor(change).map((field) => {
+                            const list = MONEY_FIELDS.has(field.field) ? "is-list" : undefined;
+                            return (
+                              <tr key={field.field} className={field.conflict ? "is-conflict" : undefined}>
+                                <th scope="row">
+                                  {t(FIELD_LABELS[field.field] || field.field)}
+                                  {field.conflict ? (
+                                    <span className="pending-conflict-badge">{t("Different values")}</span>
+                                  ) : null}
+                                </th>
+                                <td className={list}>
+                                  {change.before === null
+                                    ? "—"
+                                    : formatValue(field.before, names, field.field, classDates)}
+                                </td>
+                                <td className={list}>
+                                  {sideValue(change.local, field.local, names, field.field, classDates)}
+                                </td>
+                                <td className={list}>
+                                  {sideValue(change.cloud, field.cloud, names, field.field, classDates)}
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>

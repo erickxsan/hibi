@@ -1486,6 +1486,12 @@ const EXPLICIT_TRANSLATIONS = Object.freeze({
   "Retry synchronization": "Reintentar sincronización",
   "Saved on this device": "Guardado en este dispositivo",
   "Different values": "Valores distintos",
+  // Pagos de un alumno en la revisión: un pago, adeudo o grupo por línea.
+  "Other fee {amount}": "Otra cuota {amount}",
+  "from {month}": "desde {month}",
+  "joined {date}": "entró el {date}",
+  "left {date}": "salió el {date}",
+  "away {from} – {to}": "fuera del {from} al {to}",
   "1 change is saved on this device and will sync when the connection returns.":
     "1 cambio está guardado en este dispositivo y se sincronizará cuando vuelva la conexión.",
   "1 change needs your review": "1 cambio necesita tu revisión",

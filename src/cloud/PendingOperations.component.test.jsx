@@ -3,7 +3,9 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "../i18n/index.jsx";
 import { LANGUAGE_STORAGE_KEY } from "../i18n/translations.js";
-import { createClassLogRow, createStarterState, createStudent } from "../domain/index.js";
+// The review renders inside ClassManagerApplication, which registers the screens' Spanish copy.
+import "../i18n/screenTranslations.js";
+import { createClassLogRow, createGroup, createStarterState, createStudent } from "../domain/index.js";
 import { describeOperation } from "./workspaceMerge.js";
 import { PendingOperations } from "./PendingOperations.jsx";
 
@@ -156,5 +158,89 @@ describe("pending operation review", () => {
     expect(within(paid).getByText("0")).toBeInTheDocument();
     expect(within(paid).getByText("200")).toBeInTheDocument();
     expect(screen.queryByRole("row", { name: /Asistencia/ })).not.toBeInTheDocument();
+  });
+
+  it("names the month both devices paid, one receipt per line, and leaves the other months out", () => {
+    const receipt = (id, period, paidAt) => ({ id, groupId: "g", period, amount: 1000, paidAt, settledTotal: 1000 });
+    const start = { ...base, groups: [createGroup({ id: "g", name: "Inglés" })] };
+    const withReceipts = (...receipts) => ({
+      ...start,
+      students: [{ ...start.students[0], monthlyPayments: receipts }],
+    });
+    const tablet = {
+      operationId: "op-5",
+      previousState: start,
+      state: withReceipts(receipt("tab", "2026-10", "2026-11-13")),
+    };
+    const phone = withReceipts(receipt("sep", "2026-09", "2026-11-12"), receipt("pho", "2026-10", "2026-11-12"));
+    renderPanel(
+      {
+        connectionStatus: "connected",
+        resolvePendingOperation: vi.fn(),
+        retrySync: vi.fn(),
+        pendingOperations: [
+          {
+            id: "op-5",
+            status: "conflict",
+            createdAt: "2026-11-13T22:00:00.000Z",
+            mutation: tablet,
+            review: describeOperation(tablet, phone),
+          },
+        ],
+      },
+      "es",
+    );
+    const row = screen.getByRole("row", { name: /Pagos de mensualidad/ });
+    expect(row).toHaveClass("is-conflict");
+    const [, local, cloud] = within(row).getAllByRole("cell");
+    expect(local).toHaveTextContent(/^Octubre 2026 · Inglés · \$1,000 · 13 nov 2026$/);
+    expect(cloud).toHaveTextContent(/^Octubre 2026 · Inglés · \$1,000 · 12 nov 2026$/);
+    expect(row).not.toHaveTextContent("Septiembre");
+    expect(row).not.toHaveTextContent("[object Object]");
+  });
+
+  it("reads lost marks and a group's billing in words", () => {
+    const start = {
+      ...base,
+      groups: [createGroup({ id: "g", name: "Inglés" })],
+      classLog: [createClassLogRow({ id: "c1", studentId: "a", classDate: "2026-11-12", startTime: "16:00" })],
+    };
+    const ana = (changes) => ({ ...start, students: [{ ...start.students[0], ...changes }] });
+    const tablet = {
+      operationId: "op-6",
+      previousState: start,
+      state: ana({
+        lostPayments: [
+          { kind: "class", classId: "c1", lostAt: "2026-11-13" },
+          { kind: "monthly", groupId: "g", period: "2026-10", lostAt: "2026-11-13" },
+        ],
+        billingByGroup: { g: { mode: "customFee", fee: 800, effectiveFrom: "2026-11" } },
+      }),
+    };
+    const phone = ana({ billingByGroup: { g: { mode: "perClass", effectiveFrom: "2026-11", leftOn: "2026-11-10" } } });
+    renderPanel(
+      {
+        connectionStatus: "connected",
+        resolvePendingOperation: vi.fn(),
+        retrySync: vi.fn(),
+        pendingOperations: [
+          {
+            id: "op-6",
+            status: "conflict",
+            createdAt: "2026-11-13T22:00:00.000Z",
+            mutation: tablet,
+            review: describeOperation(tablet, phone),
+          },
+        ],
+      },
+      "es",
+    );
+    const [, marks] = within(screen.getByRole("row", { name: /Pagos perdidos/ })).getAllByRole("cell");
+    expect(marks.textContent).toBe("Clase · 12 nov 2026\nOctubre 2026 · Inglés");
+    const billing = screen.getByRole("row", { name: /Forma de cobro/ });
+    expect(billing).toHaveClass("is-conflict");
+    const [, local, cloud] = within(billing).getAllByRole("cell");
+    expect(local).toHaveTextContent("Inglés: Otra cuota $800 · desde noviembre 2026");
+    expect(cloud).toHaveTextContent("Inglés: Por clase · desde noviembre 2026 · salió el 10 nov 2026");
   });
 });
