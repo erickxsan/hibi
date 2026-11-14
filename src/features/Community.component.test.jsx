@@ -81,6 +81,13 @@ function communityState() {
   return state;
 }
 
+// Luna also came on Monday, September 7 (unpaid); Diego's first class is October 5.
+function backdatableState() {
+  const state = communityState();
+  state.classLog = [row("r0", "2026-09-07", "s1", "P", 0), ...state.classLog];
+  return state;
+}
+
 function Harness({ persistence, compactView = false }) {
   const manager = useClassManager({ persistence });
   return (
@@ -388,6 +395,40 @@ describe("Community groups", () => {
     expect(await screen.findByText("$150 per class attended")).toBeInTheDocument();
   });
 
+  it("says what a backdated monthly start costs and saves who joined after it began", async () => {
+    const user = userEvent.setup();
+    const { saved } = setup(backdatableState());
+    await user.click(screen.getByRole("tab", { name: "Groups" }));
+    await user.click(screen.getByRole("button", { name: "Open Primaria 5A" }));
+    await user.click(screen.getByRole("button", { name: "Monthly" }));
+    fireEvent.change(screen.getByLabelText("Monthly fee per student"), { target: { value: "1200" } });
+    await user.click(screen.getByRole("combobox", { name: "Applies from" }));
+    // The group's first class is September 7: no earlier month is offered.
+    expect(screen.queryByRole("option", { name: "August" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("option", { name: "September" }));
+    // Luna: September and October; Diego joined October 5: October less the $450 he paid per class.
+    expect(
+      screen.getByText(
+        "3 fees are created already overdue ($3,150) and unpaid classes in those months ($300) stop being charged.",
+      ),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() =>
+      expect(saved().groups.find((g) => g.id === "g1").billing).toMatchObject({
+        mode: "monthly",
+        effectiveFrom: "2026-09",
+      }),
+    );
+    expect(saved().students.find((s) => s.id === "s1").billingByGroup).toEqual({
+      g1: { mode: "group", joinedOn: "2026-09-07" },
+    });
+    expect(saved().students.find((s) => s.id === "s2").billingByGroup).toEqual({
+      g1: { mode: "group", joinedOn: "2026-10-05" },
+    });
+    // Rubén is archived with nothing on record: reactivating him decides.
+    expect(saved().students.find((s) => s.id === "s4").billingByGroup).toBeUndefined();
+  });
+
   it("asks before archiving, then shows the archived history and reactivates", async () => {
     const user = userEvent.setup();
     const { saved } = setup();
@@ -552,6 +593,44 @@ describe("Community on a phone", () => {
         g1: { mode: "perClass", effectiveFrom: "2026-11" },
       }),
     );
+  });
+
+  it("says in the billing sheet what a backdated monthly start costs, only while it is backdated", async () => {
+    setCompact(true);
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, "es");
+    const user = userEvent.setup();
+    const { saved } = setup(backdatableState());
+    await user.click(screen.getByRole("button", { name: "Grupos" }));
+    await user.click(screen.getByRole("button", { name: "Abrir Primaria 5A" }));
+    const group = await screen.findByRole("dialog", { name: "Primaria 5A" });
+    await user.click(within(group).getByRole("button", { name: /Forma de cobro/ }));
+    await waitFor(() => expect(screen.getAllByRole("dialog")).toHaveLength(2));
+    const billing = () => screen.getAllByRole("dialog").at(-1);
+    await user.click(within(billing()).getByRole("button", { name: "Mensual" }));
+    fireEvent.change(within(billing()).getByLabelText("Cuota mensual por alumno"), { target: { value: "1200" } });
+    const sentence = /cuotas ya vencidas/;
+    expect(within(billing()).queryByText(sentence)).not.toBeInTheDocument();
+    await user.click(within(billing()).getByRole("combobox", { name: "Aplica desde" }));
+    expect(screen.queryByRole("option", { name: "Agosto" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("option", { name: "Septiembre" }));
+    expect(
+      within(billing()).getByText(
+        "Se crean 3 cuotas ya vencidas ($3,150) y las clases sin pagar de esos meses ($300) dejan de cobrarse.",
+      ),
+    ).toBeInTheDocument();
+    // This month instead: the usual list of what each one owes, and no backdated sentence.
+    await user.click(within(billing()).getByRole("combobox", { name: "Aplica desde" }));
+    await user.click(screen.getByRole("option", { name: /\(este mes\)/ }));
+    expect(within(billing()).queryByText(sentence)).not.toBeInTheDocument();
+    await user.click(within(billing()).getByRole("combobox", { name: "Aplica desde" }));
+    await user.click(screen.getByRole("option", { name: "Septiembre" }));
+    await user.click(within(billing()).getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() =>
+      expect(saved().students.find((s) => s.id === "s2").billingByGroup).toEqual({
+        g1: { mode: "group", joinedOn: "2026-10-05" },
+      }),
+    );
+    expect(saved().groups.find((g) => g.id === "g1").billing.effectiveFrom).toBe("2026-09");
   });
 });
 

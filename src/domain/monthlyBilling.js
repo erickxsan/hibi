@@ -629,6 +629,102 @@ function lastDayOnRecord(student, groupId, classLog, date) {
 }
 
 /**
+ * The first day the records show a student in a group: their first class there, or the first day
+ * of the first month whose fee they paid there or the teacher gave up on. "" when nothing shows it.
+ */
+function firstDayOnRecord(student, groupId, classLog) {
+  let first = "";
+  const seen = (day) => {
+    if (isDateOnly(day) && (!first || day < first)) first = day;
+  };
+  for (const row of classLog || []) if (row?.studentId === student.id && row.groupId === groupId) seen(row.classDate);
+  const months = [
+    ...normalizeMonthlyPayments(student.monthlyPayments),
+    ...normalizeLostPayments(student.lostPayments).filter((mark) => mark.kind === "monthly"),
+  ];
+  for (const item of months) if (item.groupId === groupId) seen(periodStart(item.period));
+  return first;
+}
+
+/**
+ * The first month (YYYY-MM) a group is on record, never after `asOf`'s: its first class, the day its
+ * schedule started (`scheduleResumeDate`, set when it is created), a day its schedule changed, the
+ * start of a billing term or a student's join date there. A group that came back from being archived
+ * for whole months starts again in the month it came back: the archived months were not lived.
+ * With nothing on record, `asOf`'s month.
+ */
+export function groupFirstPeriod(state, group, asOf) {
+  const period = periodOf(asOf);
+  if (!group?.id || !period) return period;
+  let first = period;
+  const seen = (month) => {
+    if (isPeriod(month) && month < first) first = month;
+  };
+  for (const row of state?.classLog || []) if (row?.groupId === group.id) seen(periodOf(row.classDate));
+  seen(periodOf(group.scheduleResumeDate));
+  for (const item of Array.isArray(group.scheduleHistory) ? group.scheduleHistory : []) seen(periodOf(item?.until));
+  for (const term of billingTerms(group)) seen(term.effectiveFrom);
+  for (const student of state?.students || []) seen(periodOf(student?.billingByGroup?.[group.id]?.joinedOn));
+  // Reactivation moves `scheduleResumeDate` to the day it came back (`archivedAt` stays).
+  const archived = periodOf(group.archivedAt);
+  const back = periodOf(group.scheduleResumeDate);
+  if (archived && back && nextPeriod(archived) < back && back > first) first = back > period ? period : back;
+  return first;
+}
+
+/**
+ * The join dates to save when a change to a group's billing (`before` → `after`) makes months before
+ * `asOf`'s monthly that were not (a backdated «Aplica desde»). A student added while the group billed
+ * per class has no `joinedOn`, so they would owe those months as if they had always been there.
+ * Each student of the group without one (members, deactivated members and those who left with a
+ * date) gets the first day the records show them there (see firstDayOnRecord) or, with nothing on
+ * record, today, as joining does; a deactivated member with nothing on record keeps none, so
+ * reactivating them decides (see recordStays). A month they already owed stays owed, and a date is
+ * only saved when it keeps them out of a backdated month. `overrides` are the entries the same save
+ * stores, by student id (their adjustments decide whether they pay monthly).
+ * @returns {Record<string, string>} joinedOn by student id
+ */
+export function backdatedJoins(state, before, after, asOf, overrides = {}) {
+  const period = periodOf(asOf);
+  const id = after?.id;
+  const start = billingTerms(after).find((term) => term.mode === "monthly")?.effectiveFrom;
+  if (!id || !period || !isPeriod(start)) return {};
+  let first = "";
+  for (let month = start; month < period; month = nextPeriod(month))
+    if (isMonthlyGroup(after, month) && !isMonthlyGroup(before, month)) {
+      first = month;
+      break;
+    }
+  if (!first) return {};
+  const wasMonthlyFrom = billingTerms(before).find((term) => term.mode === "monthly")?.effectiveFrom || "";
+  /** @type {Record<string, string>} */
+  const joins = {};
+  for (const student of state?.students || []) {
+    const stay = student.billingByGroup?.[id];
+    const member = studentGroupIds(student).includes(id);
+    if ((!member && !isDateOnly(stay?.leftOn)) || isDateOnly(stay?.joinedOn)) continue;
+    let joinedOn = firstDayOnRecord(student, id, state.classLog);
+    if (!joinedOn && member && student.status === "Inactive" && !isDateOnly(stay?.leftOn)) continue;
+    if (!joinedOn || joinedOn > asOf) joinedOn = asOf;
+    // Months the old arrangement already billed them keep their fee.
+    let owed = "";
+    for (let month = wasMonthlyFrom; isPeriod(month) && month <= period && !owed; month = nextPeriod(month))
+      if (paysMonthly(student, before, month)) owed = month;
+    if (owed && owed < first) continue;
+    if (owed && periodStart(owed) < joinedOn) joinedOn = periodStart(owed);
+    if (joinedOn <= periodStart(first)) continue;
+    // Only when the new arrangement would bill them a month before it.
+    const entry = Object.hasOwn(overrides, student.id) ? overrides[student.id] : stay;
+    const saved = { ...student, billingByGroup: { ...(student.billingByGroup || {}), [id]: entry } };
+    let billed = false;
+    for (let month = first; month <= periodOf(joinedOn) && !billed; month = nextPeriod(month))
+      billed = paysMonthly(saved, after, month);
+    if (billed) joins[student.id] = joinedOn;
+  }
+  return joins;
+}
+
+/**
  * The student after being saved with `previous` as their earlier record (none when new), with the
  * days they joined, left or came back to each group with a monthly fee, so they owe only the months
  * they were there. Joining stamps `joinedOn` (a first-month choice is kept); leaving the group or

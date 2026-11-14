@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Plus, Trash2, X } from "lucide-react";
 import { useI18n } from "../i18n/index.jsx";
 import {
@@ -23,6 +24,7 @@ import {
   adjustmentStart,
   applyFromFor,
   applyFromOptions,
+  backdatedEffects,
   billingChanges,
   billingTermChanged,
   feeSuggestion,
@@ -359,7 +361,8 @@ function monthOption(month, asOf, locale, t) {
 
 /**
  * «Aplica desde»: shown once the arrangement is monthly or changes. The hint says what happens to the
- * months around the chosen one; switching to monthly in this month lists what each student owes.
+ * months around the chosen one; switching to monthly in this month lists what each student owes, and
+ * a start in a past month that was not monthly says what it does to the money owed (`effects`).
  */
 function startChoice(state, group, members, draft, asOf) {
   const latest = groupBillingFor(group);
@@ -371,6 +374,7 @@ function startChoice(state, group, members, draft, asOf) {
   const wasMonthly = groupBillingFor(group, from)?.mode === "monthly";
   const values = { month: from };
   let hint = "";
+  let effects = null;
   if (!monthly) {
     hint = "Monthly fees end in {last}; per-class charges start in {month}.";
     values.last = periodOf(addDays(`${from}-01`, -1));
@@ -384,17 +388,44 @@ function startChoice(state, group, members, draft, asOf) {
   } else if (from === period) {
     hint = "The {month} fee is created and what they already paid per class is discounted:";
   } else if (from < period) {
-    hint = "Monthly fees from {month} on are created; what was already paid per class those months is discounted.";
+    // Backdated: fees born overdue and the unpaid classes they now cover, from what saving would store.
+    effects = backdatedEffects(state, group, members, draft, asOf);
   } else {
     hint = "Monthly fees start in {month}; until then classes are charged per class.";
   }
   return {
     from,
-    options: applyFromOptions(group, draft, asOf),
+    options: applyFromOptions(group, draft, asOf, state),
     hint,
     values,
+    effects,
     credits: monthly && !wasMonthly && from === period ? switchCredits(state, group, members, draft, asOf, from) : [],
   };
+}
+
+// One sentence with the figures of a start in a past month: fees born overdue and unpaid classes it forgives.
+function backdatedHint({ count, total, stopped }, locale, t) {
+  const values = { count, total: formatMoney(total, locale), debt: formatMoney(stopped, locale) };
+  if (!count)
+    return t(
+      stopped
+        ? "No fee is created overdue; unpaid classes in those months ({debt}) stop being charged."
+        : "No fee is created overdue.",
+      values,
+    );
+  if (!stopped)
+    return t(
+      count === 1
+        ? "1 fee is created already overdue ({total})."
+        : "{count} fees are created already overdue ({total}).",
+      values,
+    );
+  return t(
+    count === 1
+      ? "1 fee is created already overdue ({total}) and unpaid classes in those months ({debt}) stop being charged."
+      : "{count} fees are created already overdue ({total}) and unpaid classes in those months ({debt}) stop being charged.",
+    values,
+  );
 }
 
 /**
@@ -426,7 +457,11 @@ export function BillingFields({ draft, setDraft, group, members = [], state, asO
       else delete adjustments[id];
       return { ...current, adjustments };
     });
-  const start = chooseStart && group?.id ? startChoice(state, group, members, draft, asOf) : null;
+  // A backdated start derives the group's fees twice (before and after): only when the inputs change.
+  const start = useMemo(
+    () => (chooseStart && group?.id ? startChoice(state, group, members, draft, asOf) : null),
+    [chooseStart, group, members, draft, asOf, state],
+  );
   // Changing how a student pays never rewrites the months before it applies. A switch to per class
   // may start later than the other changes: its row says when.
   const pending = chooseStart && monthly && group?.id ? billingChanges(group, members, draft, asOf).starts : {};
@@ -647,7 +682,9 @@ export function BillingFields({ draft, setDraft, group, members = [], state, asO
                 </option>
               ))}
             </Select>
-            {start.hint ? (
+            {start.effects ? (
+              <span className="field-row-hint">{backdatedHint(start.effects, locale, t)}</span>
+            ) : start.hint ? (
               <span className="field-row-hint">
                 {t(
                   start.hint,
