@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useEncryptedWorkspace } from "./useEncryptedWorkspace.js";
 import { WorkspaceConflictError } from "./workspaceRepository.js";
 import { useClassManager } from "../hooks/useClassManager.js";
-import { createStarterState } from "../domain/index.js";
+import { createStarterState, DATA_VERSION } from "../domain/index.js";
 
 const mocks = vi.hoisted(() => ({
   store: {},
@@ -416,5 +416,54 @@ describe("encrypted offline queue", () => {
     await waitFor(() => expect(result.current.syncStatus).toBe("error"));
     expect(queue).toHaveLength(1);
     expect(result.current.syncMessage).not.toContain("retry automatically");
+  });
+
+  describe("records written by a newer Hibi", () => {
+    const newer = {
+      ...workspace,
+      revision: 2,
+      state: { ...workspace.state, settings: { ...workspace.state.settings, dataVersion: DATA_VERSION + 1 } },
+    };
+
+    it("keeps queued edits on the device, shows the records and refuses new saves", async () => {
+      queue = [entry("offline", "a")];
+      mocks.repository.loadWorkspace.mockResolvedValue(newer);
+      mocks.repository.prepareMutation = vi.fn();
+      const cloud = renderHook(() => useEncryptedWorkspace(user, session, security));
+      await waitFor(() =>
+        expect(cloud.result.current.syncMessage).toBe("Reload Hibi to sync the changes saved on this device."),
+      );
+      expect(cloud.result.current.workspace).toBe(newer);
+      expect(cloud.result.current.syncStatus).toBe("pending");
+      expect(mocks.repository.applyMutation).not.toHaveBeenCalled();
+      expect(mocks.store.completeMutation).not.toHaveBeenCalled();
+      expect(mocks.store.markMutationConflict).not.toHaveBeenCalled();
+      expect(queue.map((item) => item.id)).toEqual(["offline"]);
+
+      const manager = renderHook(() => useClassManager({ persistence: cloud.result.current.persistence }));
+      expect(manager.result.current.needsNewerVersion).toBe(true);
+      await act(async () => {
+        expect(await manager.result.current.actions.setNotesDismissed(["owes:a:2026-10-01"])).toBe(false);
+      });
+      expect(mocks.repository.prepareMutation).not.toHaveBeenCalled();
+      expect(manager.result.current.toasts).toEqual([]);
+    });
+
+    it("stops the manager from saving when they arrive live", async () => {
+      mocks.repository.prepareMutation = vi.fn();
+      const cloud = renderHook(() => useEncryptedWorkspace(user, session, security));
+      await waitFor(() => expect(cloud.result.current.syncStatus).toBe("saved"));
+      const manager = renderHook(() => useClassManager({ persistence: cloud.result.current.persistence }));
+      expect(manager.result.current.needsNewerVersion).toBe(false);
+      const [, onChange] = mocks.repository.subscribe.mock.calls[0];
+      await act(async () => {
+        await onChange(newer);
+      });
+      expect(manager.result.current.needsNewerVersion).toBe(true);
+      await act(async () => {
+        expect(await manager.result.current.actions.setNotesDismissed(["owes:a:2026-10-01"])).toBe(false);
+      });
+      expect(mocks.repository.prepareMutation).not.toHaveBeenCalled();
+    });
   });
 });

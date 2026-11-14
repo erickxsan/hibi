@@ -70,6 +70,13 @@ const EXPLICIT_TRANSLATIONS = Object.freeze({
   "Your saved records are still available. Try opening the view again.":
     "Tus registros guardados siguen disponibles. Intenta abrir la vista de nuevo.",
   "Reload application": "Recargar aplicación",
+  "A new version of Hibi is available": "Hay una versión nueva de Hibi",
+  "Reload to keep saving your changes.": "Recarga para seguir guardando tus cambios.",
+  "A new version of Hibi is available. Reload to keep saving.":
+    "Hay una versión nueva de Hibi. Recarga para seguir guardando.",
+  "Reload Hibi to sync the changes saved on this device.":
+    "Recarga Hibi para sincronizar los cambios guardados en este dispositivo.",
+  Reload: "Recargar",
   "Resolve or export pending changes before reloading.": "Resuelve o exporta los cambios pendientes antes de recargar.",
   "The tutorial could not be opened": "No se pudo abrir el tutorial",
   "Reload Hibi to try again.": "Recarga Hibi para intentarlo de nuevo.",

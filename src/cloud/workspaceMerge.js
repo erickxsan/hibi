@@ -1,4 +1,5 @@
 import { canonicalStringify } from "../crypto/canonical.js";
+import { settingsDataVersion } from "../domain/dataVersion.js";
 
 // Field-level synchronization for the decrypted workspace. The server only sees
 // opaque envelopes, so every combination happens here, after authentication.
@@ -27,6 +28,10 @@ const PREFERENCE_SETTINGS = new Set([
   "onboardingVersion",
   "onboardingGroupId",
 ]);
+
+// The newest build that wrote the workspace (domain/dataVersion.js). It only ever goes up: concurrent
+// values merge to the highest, never to a conflict, and it is not an edit a person reviews.
+const DATA_VERSION_FIELD = "dataVersion";
 
 // Unordered ID lists. Additions and removals from both sides can be combined.
 const SET_FIELDS = new Set(["groupIds", "participantIds", "daysOfWeek"]);
@@ -59,6 +64,11 @@ function byId(items) {
 
 function settingsValue(state) {
   return { version: state?.version, settings: state?.settings };
+}
+
+function settingsContent(state) {
+  const { [DATA_VERSION_FIELD]: _stamp, ...settings } = state?.settings || {};
+  return { version: state?.version, settings };
 }
 
 export function indexOrderKeys(state) {
@@ -116,7 +126,9 @@ export function diffWorkspaceStates(previous, next, previousKeys = indexOrderKey
   const settings = !sameValue(settingsValue(previous), settingsValue(next));
   const collections = {};
   const positions = {};
-  const entityKeys = settings ? [SETTINGS_ENTITY_KEY] : [];
+  // Stamping the data version alone rewrites the settings record but is not the user's edit.
+  const entityKeys =
+    settings && !sameValue(settingsContent(previous), settingsContent(next)) ? [SETTINGS_ENTITY_KEY] : [];
   let changeCount = settings ? 1 : 0;
   for (const collection of SYNC_COLLECTIONS) {
     const before = byId(previous?.[collection]);
@@ -240,7 +252,15 @@ export function mergeWorkspaceStates({ base, local, remote, prefer = "none" }) {
     prefer,
     preferences: PREFERENCE_SETTINGS,
   });
-  if (settings.conflicts.length) conflicts.push(conflict("settings", "__settings__", "field", settings.conflicts));
+  const dataVersion = Math.max(
+    settingsDataVersion(base?.settings),
+    settingsDataVersion(local?.settings),
+    settingsDataVersion(remote?.settings),
+  );
+  if (dataVersion) settings.value[DATA_VERSION_FIELD] = dataVersion;
+  else delete settings.value[DATA_VERSION_FIELD];
+  const settingsConflicts = settings.conflicts.filter((field) => field !== DATA_VERSION_FIELD);
+  if (settingsConflicts.length) conflicts.push(conflict("settings", "__settings__", "field", settingsConflicts));
   state.settings = settings.value;
 
   for (const collection of SYNC_COLLECTIONS) {
@@ -338,7 +358,8 @@ export function describeOperation(mutation, remoteState) {
     const cloud = remoteState ? recordFor(remoteState, collection, entityId) : undefined;
     const kind = !before ? "create" : !after ? "delete" : "edit";
     const fields = orderedKeys(before, after)
-      .filter((field) => field !== "id" && !sameValue(before?.[field], after?.[field]))
+      .filter((field) => field !== "id" && !(collection === "settings" && field === DATA_VERSION_FIELD))
+      .filter((field) => !sameValue(before?.[field], after?.[field]))
       .map((field) => ({
         field,
         before: before?.[field],

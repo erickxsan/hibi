@@ -17,6 +17,7 @@ import {
 import { isDateOnly, startOfMonth } from "./dates.js";
 import { normalizeRepeatRule } from "./classRecurrence.js";
 import { normalizeDismissedNotes } from "./noteDismissals.js";
+import { settingsDataVersion } from "./dataVersion.js";
 import { groupBadgeFields } from "./groupBadge.js";
 import { groupScheduleSlots, normalizeGroupScheduleHistory } from "./groupScheduleHistory.js";
 import {
@@ -378,6 +379,12 @@ function optionalStudentBilling(student) {
   };
 }
 
+// Kept as written, even when higher than this build's: that is how an older tab learns it must not save.
+function optionalDataVersion(settings) {
+  const dataVersion = settingsDataVersion(settings);
+  return dataVersion ? { dataVersion } : {};
+}
+
 function optionalDismissedNotes(value) {
   const dismissedNotes = normalizeDismissedNotes(value);
   return Object.keys(dismissedNotes).length ? { dismissedNotes } : {};
@@ -432,6 +439,7 @@ export function normalizeState(input) {
       onboardingStep: normalizeNumber(sourceSettings.onboardingStep, DEFAULT_SETTINGS.onboardingStep),
       onboardingGroupId: normalizeText(sourceSettings.onboardingGroupId ?? DEFAULT_SETTINGS.onboardingGroupId),
       ...optionalDismissedNotes(sourceSettings.dismissedNotes),
+      ...optionalDataVersion(sourceSettings),
     },
     groups: (Array.isArray(source.groups) ? source.groups : []).map((group) => ({
       id: normalizeText(group?.id),
@@ -760,6 +768,11 @@ export function validateState(input) {
       min: 1,
       max: 9,
       integer: true,
+    });
+    finiteNumber(errors, input.settings.dataVersion, "settings.dataVersion", "Data version", {
+      min: 1,
+      integer: true,
+      optional: true,
     });
   }
 

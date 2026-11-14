@@ -3,9 +3,11 @@ import { BarChart3, CalendarDays, Home as HomeIcon, Settings as SettingsIcon, Us
 import { AccountMenu } from "./auth/AccountMenu";
 import { AppShell } from "./components/AppShell";
 import { ToastRegion } from "./components/ui";
+import { NewVersionDialog, reloadPage } from "./components/NewVersionDialog";
 import { PendingOperations } from "./cloud/PendingOperations";
 import { RecoveryKeyReminder } from "./cloud/RecoveryKeyReminder";
 import { useIdlePrefetch } from "./navigation/idlePrefetch";
+import { useNewDeployAvailable } from "./navigation/deployedVersion";
 import { preloadableLazy } from "./navigation/preloadableLazy";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { useClassManager } from "./hooks/useClassManager";
@@ -55,6 +57,15 @@ function Home(props) {
   );
 }
 
+// Offered when the published site moved on while this tab stayed open; it stays until reloaded or dismissed.
+const NEW_DEPLOY_TOAST = Object.freeze({
+  id: "new-deploy",
+  tone: "info",
+  silent: true,
+  message: "A new version of Hibi is available",
+  action: Object.freeze({ label: "Reload", run: reloadPage }),
+});
+
 const PAYMENT_OVERVIEW_INTENT = Object.freeze({
   type: "open-tracking",
   tab: "payments",
@@ -93,6 +104,18 @@ export default function ClassManagerApplication({
   useI18n();
   useIdlePrefetch(SECTION_LOADERS);
   const manager = useClassManager({ persistence });
+  const newDeployAvailable = useNewDeployAvailable();
+  const [newDeployDismissed, setNewDeployDismissed] = useState(false);
+  const showNewDeploy = newDeployAvailable && !newDeployDismissed && !manager.needsNewerVersion;
+  const toasts = useMemo(
+    () => (showNewDeploy ? [...manager.toasts, NEW_DEPLOY_TOAST] : manager.toasts),
+    [manager.toasts, showNewDeploy],
+  );
+  const { dismissToast } = manager;
+  const handleDismissToast = useCallback(
+    (id) => (id === NEW_DEPLOY_TOAST.id ? setNewDeployDismissed(true) : dismissToast(id)),
+    [dismissToast],
+  );
   const archivedGroupIds = useMemo(
     () => new Set(manager.state.groups.filter(isGroupArchived).map((group) => group.id)),
     [manager.state.groups],
@@ -356,7 +379,7 @@ export default function ClassManagerApplication({
           <Suspense fallback={<PageFallback />}>{pageContent}</Suspense>
         </ErrorBoundary>
       </AppShell>
-      {onboarding.open ? (
+      {onboarding.open && !manager.needsNewerVersion ? (
         <ErrorBoundary key={onboarding.runId} fallback={null} onError={handleOnboardingLoadFailure}>
           <Suspense fallback={<PageFallback />}>
             <OnboardingTutorial
@@ -369,7 +392,8 @@ export default function ClassManagerApplication({
         </ErrorBoundary>
       ) : null}
       {leavePrompt}
-      <ToastRegion toasts={manager.toasts} onDismiss={manager.dismissToast} />
+      <ToastRegion toasts={toasts} onDismiss={handleDismissToast} />
+      {manager.needsNewerVersion ? <NewVersionDialog /> : null}
     </>
   );
 }

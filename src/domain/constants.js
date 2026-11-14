@@ -1,4 +1,11 @@
 export const SCHEMA_VERSION = 1;
+// Version of the record format this build reads and writes in full, stored as `settings.dataVersion`.
+// SCHEMA_VERSION stays 1 (backups, the server contract and older builds reject any other value); this
+// number is what lets a tab left open across a deploy notice that a newer Hibi has written the workspace.
+// A build that finds a higher number stops saving, because normalizeState drops the fields it does not
+// know and a save would upload the record without them.
+// BUMP IT whenever a persisted field is added to any record or to the settings, or a field changes meaning.
+export const DATA_VERSION = 1;
 export const MAX_BACKUP_BYTES = 5 * 1024 * 1024;
 
 export const STORAGE_KEY = "minimal-class-manager:v1";

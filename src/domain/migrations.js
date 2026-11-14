@@ -22,7 +22,9 @@ export function isExactLegacyDemoState(state) {
 
 export function migrateLegacyDemoToStarterState(state) {
   const normalized = normalizeState(state);
-  const migrated = normalizeState(createStarterState({ settings: normalized.settings }));
+  // The legacy settings are kept exactly, including the absence of a data version.
+  const settings = { ...normalized.settings, dataVersion: normalized.settings.dataVersion };
+  const migrated = normalizeState(createStarterState({ settings }));
   assertValidState(migrated);
   return migrated;
 }
