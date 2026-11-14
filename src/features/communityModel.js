@@ -22,6 +22,7 @@ import {
   periodOf,
   studentMonthlyPlan,
   suggestedMonthlyFee,
+  switchToPerClass,
 } from "../domain/monthlyBilling";
 import { buildClassWorkspaceSessionsForRange } from "./classesWorkspaceModel";
 import { debtsThrough, isOverdueClassDebt } from "./homeDashboardModel";
@@ -439,7 +440,11 @@ export function billingChanges(group, members, draft, asOf, applyFrom = draft?.a
     // Unchanged (including a change already planned for a later month): nothing to save.
     if (termKey(latest) === termKey(term)) return;
     starts[student.id] = term.mode === "perClass" ? perClassStart(student, group, asOf, from, state) : from;
-    overrides[student.id] = changeStudentAdjustment(current, term, starts[student.id]);
+    // Per class keeps per class the months a backdated start in the same save would make monthly.
+    overrides[student.id] =
+      term.mode === "perClass"
+        ? switchToPerClass(student, group, { ...group, billing }, starts[student.id])
+        : changeStudentAdjustment(current, term, starts[student.id]);
   });
   if (state && group?.id) {
     const joins = backdatedJoins(state, group, { ...group, billing }, asOf, overrides);

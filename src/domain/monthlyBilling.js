@@ -554,6 +554,29 @@ export function perClassStart(student, group, asOf, from, state = null) {
   return start;
 }
 
+/**
+ * The student's override in a group after switching them to per class from `start` (see
+ * perClassStart) in the save that changes the group's billing from `before` to `after`. A month
+ * before `start` that the new arrangement makes monthly for them and the stored one did not (a
+ * backdated «Aplica desde») stays per class for them: they were paying it per class and are going
+ * per class. The months they lived paying monthly keep the adjustment they had.
+ */
+export function switchToPerClass(student, before, after, start) {
+  const current = normalizeBillingByGroup(student?.billingByGroup)?.[after?.id] || null;
+  const perClass = { mode: "perClass" };
+  const first = billingTerms(after).find((term) => term.mode === "monthly")?.effectiveFrom || "";
+  let override = current;
+  let changed = false;
+  for (let month = first; isPeriod(month) && month < start; month = nextPeriod(month)) {
+    const stays = paysMonthly(student, after, month) && !paysMonthly(student, before, month);
+    if (!stays && !changed) continue;
+    // From the first such month on, each month gets its term again (adjacent equal terms merge).
+    override = changeStudentAdjustment(override, stays ? perClass : adjustmentFor(current, month) || {}, month);
+    changed = true;
+  }
+  return changeStudentAdjustment(override, perClass, start);
+}
+
 // Per-class money already paid in a month for classes a monthly fee now covers: it counts toward the fee.
 function paidPerClassIn(state, student, group, period) {
   return sumMoney(

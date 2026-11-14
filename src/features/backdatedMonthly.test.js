@@ -275,6 +275,49 @@ describe("a backdated start never bills a student before they joined", () => {
     expect(saveBilling(early, monthlyFrom("2026-06")).overrides).toEqual({});
   });
 
+  it("keeps per class the months a student switched to per class in the same save did not pay monthly", () => {
+    // Audit of the fixes, finding 3. Monthly since September, Ana and Beto since August 3: August was
+    // per class ($1,800 unpaid each). September and October are paid; November's classes are recorded.
+    let state = recordClasses(
+      fixture({ group: { billing: { ...MONTHLY, effectiveFrom: "2026-09" } } }),
+      "2026-08-03",
+      TODAY,
+    );
+    for (const studentId of ["ana", "beto"])
+      for (const period of ["2026-09", "2026-10"])
+        state = recordMonthlyPayment(state, { studentId, groupId: "g", period, paidAt: `${period}-05` });
+    const august = (current) =>
+      sumMoney(
+        deriveAll(current, TODAY).classLog.filter((row) => row.studentId === "ana" && row.classDate < "2026-09-01"),
+        (row) => row.outstanding || 0,
+      );
+    expect(august(state)).toBe(1800);
+    const before = feesOf(state, "ana");
+    // One save: «Aplica desde» back to August and Ana per class.
+    const saved = saveBilling(state, (draft) => ({ ...draft, applyFrom: "2026-08", adjustments: { ana: PER_CLASS } }));
+    // Before the fix: { perClass from December, joinedOn: "2026-08-03" }, a $1,000 August fee and August at $0.
+    expect(saved.overrides.ana).toEqual({
+      mode: "perClass",
+      effectiveFrom: "2026-12",
+      history: [
+        { mode: "perClass", effectiveFrom: "2026-08" },
+        { mode: "group", effectiveFrom: "2026-09" },
+      ],
+    });
+    expect(feesOf(saved.state, "ana")).toEqual(before);
+    expect(august(saved.state)).toBe(1800);
+    // Beto, who keeps the group fee, gets the backdated August as before.
+    expect(saved.overrides.beto).toEqual({ mode: "group", joinedOn: "2026-08-03" });
+    expect(feesOf(saved.state, "beto")[0]).toBe("2026-08:overdue:1000");
+    // December is per class for Ana.
+    const december = recordClasses(saved.state, "2026-12-01", "2026-12-07");
+    expect(
+      deriveAll(december, "2026-12-07")
+        .classLog.filter((row) => row.studentId === "ana" && row.classDate >= "2026-12-01")
+        .map((row) => row.outstanding),
+    ).toEqual([200, 200]);
+  });
+
   it("composes with adjustments changed in the same save and with per class", () => {
     const state = recordClasses(fixture(), "2026-08-03", TODAY, (date) =>
       date >= "2026-10-22" ? ["ana", "beto"] : ["ana"],
