@@ -1,7 +1,7 @@
 import { addDays, endOfMonth, isDateOnly } from "./dates.js";
 import { isGroupArchived } from "./groupArchiving.js";
 import { createStableId } from "./ids.js";
-import { feeLostAt, recoverLost } from "./lostPayments.js";
+import { feeLostAt, normalizeLostPayments, recoverLost } from "./lostPayments.js";
 import { roundMoney, sumMoney } from "./money.js";
 import { dayOfWeekForDate, generateScheduledOccurrences, resolveHourlyRate } from "./schedule.js";
 import { memoizeOnState } from "./stateMemo.js";
@@ -607,12 +607,37 @@ function activeGroupIds(student) {
 }
 
 /**
+ * The last day before `date` the records show a student in a group: their last class there, the day
+ * they joined it or came back to it, or the end of the last month whose fee they paid there or the
+ * teacher gave up on. "" when nothing shows they were ever part of it.
+ */
+function lastDayOnRecord(student, groupId, classLog, date) {
+  let last = "";
+  const seen = (day) => {
+    if (isDateOnly(day) && day < date && day > last) last = day;
+  };
+  for (const row of classLog || []) if (row?.studentId === student.id && row.groupId === groupId) seen(row.classDate);
+  const stay = student.billingByGroup?.[groupId];
+  seen(stay?.joinedOn);
+  for (const stretch of Array.isArray(stay?.away) ? stay.away : []) seen(stretch?.to);
+  const months = [
+    ...normalizeMonthlyPayments(student.monthlyPayments),
+    ...normalizeLostPayments(student.lostPayments).filter((mark) => mark.kind === "monthly"),
+  ];
+  for (const item of months) if (item.groupId === groupId) seen(endOfMonth(periodStart(item.period)));
+  return last;
+}
+
+/**
  * The student after being saved with `previous` as their earlier record (none when new), with the
  * days they joined, left or came back to each group with a monthly fee, so they owe only the months
  * they were there. Joining stamps `joinedOn` (a first-month choice is kept); leaving the group or
  * being deactivated stamps `leftOn`; coming back turns that into an `away` stretch.
+ * A student reactivated without `leftOn` (deactivated while the group billed per class, or before
+ * `leftOn` existed) was away since the last day `classLog` and their payments show them there; with
+ * nothing on record, they join the monthly billing today.
  */
-export function recordStays(previous, student, groups, date) {
+export function recordStays(previous, student, groups, date, classLog = []) {
   if (!isDateOnly(date)) return student;
   const monthly = (id) => isMonthlyGroup((groups || []).find((group) => group.id === id));
   const before = new Set(activeGroupIds(previous));
@@ -624,16 +649,21 @@ export function recordStays(previous, student, groups, date) {
   for (const id of after) {
     if (before.has(id) || !monthly(id)) continue;
     const override = current[id] || { mode: "group" };
+    const away = Array.isArray(override.away) ? override.away : [];
     if (isDateOnly(override.leftOn)) {
       const { leftOn, ...rest } = override;
-      const away =
-        leftOn < date
-          ? [...(Array.isArray(override.away) ? override.away : []), { from: leftOn, to: date }]
-          : override.away;
-      billingByGroup[id] = { ...rest, ...(away?.length ? { away } : {}) };
-    } else if (!wasMember.has(id) && !isDateOnly(override.joinedOn))
+      const stays = leftOn < date ? [...away, { from: leftOn, to: date }] : away;
+      billingByGroup[id] = { ...rest, ...(stays.length ? { away: stays } : {}) };
+    } else if (!wasMember.has(id)) {
+      if (isDateOnly(override.joinedOn)) continue;
       billingByGroup[id] = { ...override, joinedOn: date };
-    else continue;
+    } else {
+      // Their saved record: the one being saved may come from a screen that does not carry the payments.
+      const last = lastDayOnRecord(previous, id, classLog, date);
+      if (last) billingByGroup[id] = { ...override, away: [...away, { from: last, to: date }] };
+      else if (!isDateOnly(override.joinedOn)) billingByGroup[id] = { ...override, joinedOn: date };
+      else continue;
+    }
     changed = true;
   }
   for (const id of before) {

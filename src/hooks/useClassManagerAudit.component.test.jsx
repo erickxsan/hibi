@@ -253,6 +253,63 @@ describe("leaving and coming back through the live manager", () => {
       vi.useRealTimers();
     }
   });
+
+  it("does not bill the months away to a student deactivated while the group billed per class", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 2, 20, 9));
+    try {
+      const initial = createStarterState();
+      const group = createGroup({
+        id: "g",
+        name: "Grupo",
+        weeklySchedule: [{ id: "thu", dayOfWeek: 4, startTime: "16:00", durationHours: 1 }],
+        scheduleResumeDate: "2026-01-01",
+      });
+      initial.groups = [group];
+      initial.students = [createStudent({ id: "ana", code: "ANA", fullName: "Ana Ruiz", groupIds: ["g"] })];
+      initial.classLog = [
+        createClassLogRow({ studentId: "ana", groupId: "g", classDate: "2026-03-19", hours: 1, attendance: "P" }),
+      ];
+      const persistence = { initialState: initial, mode: "cloud", save: vi.fn(async (state) => state) };
+      const hook = renderHook(() => useClassManager({ persistence }));
+      const travel = async (date) => {
+        vi.setSystemTime(date);
+        await act(async () => document.dispatchEvent(new Event("visibilitychange")));
+      };
+      const fees = (asOf) =>
+        deriveMonthlyCharges(hook.result.current.state, asOf).map(
+          (charge) => `${charge.period}:${charge.status}:${charge.dueDate}`,
+        );
+
+      await act(async () => {
+        await hook.result.current.actions.archiveStudent("ana");
+      });
+      // September: the group bills monthly from September on.
+      await travel(new Date(2026, 8, 1, 9));
+      const saved = hook.result.current.state.groups[0];
+      await act(async () => {
+        await hook.result.current.actions.saveGroupBilling({
+          ...saved,
+          billing: { mode: "monthly", monthlyFee: 1000, due: { type: "dayOfMonth", day: 5 }, effectiveFrom: "2026-09" },
+        });
+      });
+      expect(fees("2026-11-13")).toEqual([]);
+
+      // 13 Nov: reactivated as Community does. September and October are not billed.
+      await travel(new Date(2026, 10, 13, 9));
+      const ana = hook.result.current.state.students.find((student) => student.id === "ana");
+      await act(async () => {
+        await hook.result.current.actions.upsertStudent({ ...ana, status: "Active" });
+      });
+      expect(fees("2026-11-13")).toEqual(["2026-11:pending:2026-11-13"]);
+      expect(hook.result.current.state.students[0].billingByGroup).toEqual({
+        g: { mode: "group", away: [{ from: "2026-03-19", to: "2026-11-13" }] },
+      });
+      hook.unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("deleting a monthly group through the live manager", () => {

@@ -814,6 +814,7 @@ export function useClassManager({ persistence } = {}) {
               },
               stateRef.current.groups,
               operationalDate,
+              stateRef.current.classLog,
             ),
           ),
         );
@@ -907,7 +908,7 @@ export function useClassManager({ persistence } = {}) {
   const upsertStudent = useCallback(
     (draft) => {
       const previous = draft.id ? stateRef.current.students.find((student) => student.id === draft.id) : null;
-      const joined = recordStays(previous, draft, stateRef.current.groups, operationalDate);
+      const joined = recordStays(previous, draft, stateRef.current.groups, operationalDate, stateRef.current.classLog);
       const item = applyGeneratedId(createStudent, canonicalStudent(joined));
       const validation = validateStudent(item, stateRef.current);
       if (!validation.valid) {

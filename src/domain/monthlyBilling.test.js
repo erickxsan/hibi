@@ -602,6 +602,128 @@ describe("joining and leaving a group", () => {
   });
 });
 
+describe("coming back without a recorded leaving day", () => {
+  const classOn = (classDate, studentId = "ana") => ({
+    id: `c-${studentId}-${classDate}`,
+    studentId,
+    groupId: "g",
+    classDate,
+  });
+  const charges = (state, asOf) =>
+    deriveMonthlyCharges(state, asOf).map(
+      (charge) => `${charge.period}:${charge.status}:${charge.balance}:${charge.dueDate}`,
+    );
+
+  it("owes nothing for the months away when she left while the group billed per class", () => {
+    // March: the group bills per class and Ana is deactivated, so no leaving day is stored.
+    const perClass = stayFixture();
+    const groupPerClass = { ...perClass.groups[0], billing: undefined };
+    const ana = perClass.students[0];
+    const archived = recordStays(ana, { ...ana, status: "Inactive" }, [groupPerClass], "2026-03-20");
+    expect(archived.billingByGroup).toBeUndefined();
+    // September: the group bills monthly from September. While archived she owes nothing.
+    const groups = [{ ...groupPerClass, billing: { ...perClass.groups[0].billing, effectiveFrom: "2026-09" } }];
+    const classLog = [classOn("2026-03-02"), classOn("2026-03-19")];
+    expect(charges({ ...perClass, groups, classLog, students: [archived] }, "2026-11-13")).toEqual([]);
+
+    // 13 Nov: she comes back. She was away from her last class; November is owed from today, never overdue.
+    const back = recordStays(archived, { ...archived, status: "Active" }, groups, "2026-11-13", classLog);
+    expect(back.billingByGroup).toEqual({ g: { mode: "group", away: [{ from: "2026-03-19", to: "2026-11-13" }] } });
+    const state = { ...perClass, groups, classLog, students: [back] };
+    expect(charges(state, "2026-11-13")).toEqual(["2026-11:pending:1000:2026-11-13"]);
+    expect(deriveMonthlyCharges(state, "2026-11-13")[0]).toMatchObject({ coversFrom: "2026-11-13" });
+    // From December on, the group's usual due date.
+    expect(charges(state, "2026-12-10").at(-1)).toBe("2026-12:overdue:1000:2026-12-05");
+    expect(coveredByMonthlyFee(state, "ana", "g", "2026-11-16")).toBe(true);
+
+    // Nothing on record in the group: she starts paying monthly today, as someone who joins.
+    const fresh = recordStays(archived, { ...archived, status: "Active" }, groups, "2026-11-13");
+    expect(fresh.billingByGroup).toEqual({ g: { mode: "group", joinedOn: "2026-11-13" } });
+    expect(charges({ ...perClass, groups, students: [fresh] }, "2026-11-13")).toEqual([
+      "2026-11:pending:1000:2026-11-13",
+    ]);
+  });
+
+  it("keeps the months an earlier archived student was there for, and only skips the time away", () => {
+    // Deactivated before leaving days were stored: monthly since May, last class on 30 Jul, May paid.
+    const state = stayFixture({
+      status: "Inactive",
+      monthlyPayments: [{ id: "p5", groupId: "g", period: "2026-05", amount: 1000, paidAt: "2026-05-05" }],
+    });
+    const classLog = [classOn("2026-07-30"), classOn("2026-07-30", "beto")];
+    const beto = { id: "beto", code: "B", fullName: "Beto", status: "Active", groupIds: ["g"] };
+    const ana = state.students[0];
+    // While archived nothing is billed to her; Beto, active all along, owes every month.
+    expect(charges({ ...state, classLog, students: [ana] }, "2026-10-28")).toEqual([]);
+    const betoOwes = charges({ ...state, classLog, students: [beto] }, "2026-10-28");
+    expect(betoOwes).toHaveLength(6);
+
+    const back = recordStays(ana, { ...ana, status: "Active" }, state.groups, "2026-10-20", classLog);
+    expect(back.billingByGroup).toEqual({ g: { mode: "group", away: [{ from: "2026-07-30", to: "2026-10-20" }] } });
+    expect(charges({ ...state, classLog, students: [back] }, "2026-10-28")).toEqual([
+      "2026-05:paid:0:2026-05-05",
+      "2026-06:overdue:1000:2026-06-05",
+      "2026-07:overdue:1000:2026-07-05",
+      "2026-10:overdue:1000:2026-10-20",
+    ]);
+
+    // Saving Beto again changes nothing: an active student keeps owing what he owed.
+    const saved = recordStays(beto, { ...beto, notes: "nuevo" }, state.groups, "2026-10-20", classLog);
+    expect(saved.billingByGroup).toBeUndefined();
+    expect(charges({ ...state, classLog, students: [saved] }, "2026-10-28")).toEqual(betoOwes);
+  });
+
+  it("dates the time away from the last month paid or given up when no class is on record", () => {
+    const state = stayFixture({
+      status: "Inactive",
+      monthlyPayments: [
+        { id: "p6", groupId: "g", period: "2026-06", amount: 400, paidAt: "2026-06-05", partial: true },
+      ],
+      lostPayments: [{ kind: "monthly", groupId: "g", period: "2026-07", lostAt: "2026-08-01" }],
+    });
+    const ana = state.students[0];
+    const back = recordStays(ana, { ...ana, status: "Active" }, state.groups, "2026-10-20");
+    expect(back.billingByGroup).toEqual({ g: { mode: "group", away: [{ from: "2026-07-31", to: "2026-10-20" }] } });
+    expect(charges({ ...state, students: [back] }, "2026-10-28")).toEqual([
+      "2026-05:overdue:1000:2026-05-05",
+      "2026-06:overdue:600:2026-06-05",
+      "2026-07:lost:1000:2026-07-05",
+      "2026-10:overdue:1000:2026-10-20",
+    ]);
+  });
+
+  it("leaves the stored leaving day, removals and re-adds as they were", () => {
+    const state = stayFixture();
+    const ana = state.students[0];
+    const classLog = [classOn("2026-07-30")];
+    // Deactivated while monthly: the stored day wins over the classes on record.
+    const left = recordStays(ana, { ...ana, status: "Inactive" }, state.groups, "2026-08-03", classLog);
+    const back = recordStays(left, { ...left, status: "Active" }, state.groups, "2026-10-20", classLog);
+    expect(back.billingByGroup).toEqual({ g: { mode: "group", away: [{ from: "2026-08-03", to: "2026-10-20" }] } });
+    // Removed from a group that billed per class and added back once it bills monthly: joins that day.
+    const perClassGroup = { ...state.groups[0], billing: undefined };
+    const removed = recordStays(ana, { ...ana, groupIds: [] }, [perClassGroup], "2026-03-20", classLog);
+    expect(removed.billingByGroup).toBeUndefined();
+    const readded = recordStays(removed, { ...removed, groupIds: ["g"] }, state.groups, "2026-10-20", classLog);
+    expect(readded.billingByGroup).toEqual({ g: { mode: "group", joinedOn: "2026-10-20" } });
+  });
+
+  it("archived and reactivated the same day by mistake changes nothing", () => {
+    const state = stayFixture();
+    const ana = state.students[0];
+    const classLog = [classOn("2026-10-19")];
+    const before = charges({ ...state, classLog }, "2026-10-28");
+    const archived = recordStays(ana, { ...ana, status: "Inactive" }, state.groups, "2026-10-21", classLog);
+    const back = recordStays(archived, { ...archived, status: "Active" }, state.groups, "2026-10-21", classLog);
+    expect(normalizeBillingByGroup(back.billingByGroup)).toBeNull();
+    expect(charges({ ...state, classLog, students: [back] }, "2026-10-28")).toEqual(before);
+    // A group that bills per class stores nothing either way.
+    const perClassGroup = [{ ...state.groups[0], billing: undefined }];
+    const off = recordStays(ana, { ...ana, status: "Inactive" }, perClassGroup, "2026-10-21", classLog);
+    expect(recordStays(off, { ...off, status: "Active" }, perClassGroup, "2026-10-21", classLog)).toEqual(ana);
+  });
+});
+
 describe("a student's adjustment over time", () => {
   it("changes how a student pays from a month without rewriting the months before it", () => {
     const state = stayFixture();
