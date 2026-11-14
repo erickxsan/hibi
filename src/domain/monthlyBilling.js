@@ -698,6 +698,13 @@ export function groupFirstPeriod(state, group, asOf) {
   return first;
 }
 
+// True when a stored adjustment of the student in a group starts before `date`'s month: the teacher
+// changed how they pay then, so they were in the group already.
+function adjustedBefore(stay, date) {
+  const history = Array.isArray(stay?.history) ? stay.history : [];
+  return [stay, ...history].some((item) => isPeriod(item?.effectiveFrom) && item.effectiveFrom < periodOf(date));
+}
+
 /**
  * The join dates to save when a change to a group's billing (`before` → `after`) makes months before
  * `asOf`'s monthly that were not (a backdated «Aplica desde»). A student added while the group billed
@@ -705,9 +712,12 @@ export function groupFirstPeriod(state, group, asOf) {
  * Each student of the group without one (members, deactivated members and those who left with a
  * date) gets the first day the records show them there (see firstDayOnRecord) or, with nothing on
  * record, today, as joining does; a deactivated member with nothing on record keeps none, so
- * reactivating them decides (see recordStays). A month they already owed stays owed, and a date is
- * only saved when it keeps them out of a backdated month. `overrides` are the entries the same save
- * stores, by student id (their adjustments decide whether they pay monthly).
+ * reactivating them decides (see recordStays). A month they already owed stays owed, except the
+ * fees of an earlier monthly term that ended before their first record, when nothing of theirs is
+ * on record in it (no class, receipt, lost mark or adjustment): the same missing join date billed
+ * them those months. A date is only saved when it keeps them out of a backdated month. `overrides`
+ * are the entries the same save stores, by student id (their adjustments decide whether they pay
+ * monthly).
  * @returns {Record<string, string>} joinedOn by student id
  */
 export function backdatedJoins(state, before, after, asOf, overrides = {}) {
@@ -729,15 +739,21 @@ export function backdatedJoins(state, before, after, asOf, overrides = {}) {
     const stay = student.billingByGroup?.[id];
     const member = studentGroupIds(student).includes(id);
     if ((!member && !isDateOnly(stay?.leftOn)) || isDateOnly(stay?.joinedOn)) continue;
-    let joinedOn = firstDayOnRecord(student, id, state.classLog);
-    if (!joinedOn && member && student.status === "Inactive" && !isDateOnly(stay?.leftOn)) continue;
-    if (!joinedOn || joinedOn > asOf) joinedOn = asOf;
+    const recorded = firstDayOnRecord(student, id, state.classLog);
+    if (!recorded && member && student.status === "Inactive" && !isDateOnly(stay?.leftOn)) continue;
+    let joinedOn = !recorded || recorded > asOf ? asOf : recorded;
     // Months the old arrangement already billed them keep their fee.
     let owed = "";
     for (let month = wasMonthlyFrom; isPeriod(month) && month <= period && !owed; month = nextPeriod(month))
       if (paysMonthly(student, before, month)) owed = month;
-    if (owed && owed < first) continue;
-    if (owed && periodStart(owed) < joinedOn) joinedOn = periodStart(owed);
+    if (owed && owed < first) {
+      // An earlier monthly stretch billed them only because nothing said when they joined. When their
+      // first record comes after it, in a month the group billed per class, its fees go: nothing of
+      // theirs is on record before that day (a class, receipt or lost mark would be the first record)
+      // and no adjustment of theirs starts earlier. Otherwise they stay, and so does every later month.
+      if (joinedOn !== recorded || isMonthlyGroup(before, periodOf(recorded)) || adjustedBefore(stay, recorded))
+        continue;
+    } else if (owed && periodStart(owed) < joinedOn) joinedOn = periodStart(owed);
     if (joinedOn <= periodStart(first)) continue;
     // Only when the new arrangement would bill them a month before it.
     const entry = Object.hasOwn(overrides, student.id) ? overrides[student.id] : stay;

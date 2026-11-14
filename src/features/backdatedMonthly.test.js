@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { deriveAll } from "../domain/calculations.js";
 import { setGroupArchived } from "../domain/groupArchiving.js";
+import { markLost } from "../domain/lostPayments.js";
 import { sumMoney } from "../domain/money.js";
 import {
   deriveMonthlyCharges,
   groupFirstPeriod,
   normalizeBillingByGroup,
+  recordMonthlyPayment,
   recordStays,
   resumeGroupBilling,
   startGroupBilling,
@@ -352,6 +354,81 @@ describe("a backdated start never bills a student before they joined", () => {
     // Capped to October 1: October stays as it was, August and September are not his.
     expect(saved.overrides.beto).toEqual({ mode: "group", joinedOn: "2026-10-01" });
     expect(feesOf(saved.state, "beto")).toEqual(before);
+  });
+
+  describe("when the group had an earlier monthly term (audit of the fixes, finding 2)", () => {
+    // Monthly January to March, per class since April. Ana came from January 5; Beto was added on
+    // October 20 with no join date (the group billed per class) and came first on October 22.
+    const earlier = { mode: "perClass", effectiveFrom: "2026-04", history: [{ ...MONTHLY, effectiveFrom: "2026-01" }] };
+    const withBeto = () =>
+      recordClasses(
+        fixture({ group: { billing: earlier, scheduleResumeDate: "2026-01-05" } }),
+        "2026-01-05",
+        TODAY,
+        (date) => (date >= "2026-10-22" ? ["ana", "beto"] : ["ana"]),
+      );
+    const OLD = ["2026-01:overdue:1000", "2026-02:overdue:1000", "2026-03:overdue:1000"];
+
+    it("bills Beto from his first class, dropping the earlier term's fees nothing shows were his", () => {
+      const state = withBeto();
+      // Older data: with no join date the January-March term already billed him.
+      expect(feesOf(state, "beto")).toEqual(OLD);
+      const saved = saveBilling(state, monthlyFrom("2026-08"));
+      expect(saved.overrides.beto).toEqual({ mode: "group", joinedOn: "2026-10-22" });
+      // Before the fix nothing was saved for him: January-March and August-November, $7,000.
+      expect(feesOf(saved.state, "beto")).toEqual(["2026-10:overdue:1000", "2026-11:overdue:1000"]);
+      // Ana came in January: her January-March fees stay and she gets no join date.
+      expect(saved.overrides).not.toHaveProperty("ana");
+      expect(feesOf(saved.state, "ana").slice(0, 3)).toEqual(feesOf(state, "ana").slice(0, 3));
+    });
+
+    it("keeps the earlier fees when a receipt, a lost mark or an adjustment shows him there", () => {
+      const paid = recordMonthlyPayment(withBeto(), {
+        studentId: "beto",
+        groupId: "g",
+        period: "2026-02",
+        amount: 400,
+        paidAt: "2026-02-10",
+      });
+      const lost = markLost(
+        withBeto(),
+        [{ studentId: "beto", kind: "monthly", groupId: "g", period: "2026-03" }],
+        TODAY,
+      );
+      const adjusted = normalizeState({
+        ...withBeto(),
+        students: withBeto().students.map((student) =>
+          student.id === "beto"
+            ? { ...student, billingByGroup: { g: { mode: "customFee", fee: 800, effectiveFrom: "2026-02" } } }
+            : student,
+        ),
+      });
+      for (const state of [paid, lost, adjusted]) {
+        const before = feesOf(state, "beto");
+        const saved = saveBilling(state, monthlyFrom("2026-08"));
+        expect(saved.overrides).not.toHaveProperty("beto.joinedOn");
+        expect(feesOf(saved.state, "beto").filter((fee) => fee < "2026-04")).toEqual(
+          before.filter((fee) => fee < "2026-04"),
+        );
+      }
+    });
+
+    it("keeps them for a student with nothing on record, and while his first class falls in a monthly month", () => {
+      const nothing = normalizeState({
+        ...withBeto(),
+        classLog: withBeto().classLog.filter((row) => row.studentId !== "beto"),
+      });
+      expect(saveBilling(nothing, monthlyFrom("2026-08")).overrides).not.toHaveProperty("beto");
+      // The earlier term was January to March and October on: his first class (October 22) is in it.
+      const back = {
+        mode: "monthly",
+        ...MONTHLY,
+        effectiveFrom: "2026-10",
+        history: [earlier.history[0], { mode: "perClass", effectiveFrom: "2026-04" }],
+      };
+      const inside = normalizeState({ ...withBeto(), groups: [{ ...withBeto().groups[0], billing: back }] });
+      expect(saveBilling(inside, monthlyFrom("2026-08")).overrides).not.toHaveProperty("beto");
+    });
   });
 
   it("archived students owe only the months they were there, also after coming back", () => {
