@@ -1,4 +1,5 @@
-import { Plus, Trash2, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ChevronDown, Plus, Trash2, X } from "lucide-react";
 import { useI18n } from "../i18n/index.jsx";
 import {
   Button,
@@ -35,9 +36,39 @@ function capitalize(text) {
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
 }
 
-/** Add or edit a student: identity, avatar, enrollment, own rate and contact. */
-export function StudentEditor({ draft, setDraft, groups, defaultRate }) {
+/** «Más datos»: a quiet toggle that shows the fields most people never fill. */
+function MoreToggle({ open, onToggle, controls }) {
+  const { t } = useI18n();
+  return (
+    <button type="button" className="editor-more" aria-expanded={open} aria-controls={controls} onClick={onToggle}>
+      {t("Extra details")}
+      <ChevronDown aria-hidden="true" />
+    </button>
+  );
+}
+
+// Up to this many groups fit as one-tap chips; beyond it the searchable picker is easier.
+const GROUP_CHIP_LIMIT = 8;
+// What a new group plans per month until the teacher says otherwise (createGroup's default).
+const DEFAULT_PLANNED_SESSIONS = 8;
+
+/**
+ * Add or edit a student. Adding shows the name and the groups; the ID is already filled in and the rest
+ * waits under «Más datos». Editing shows every field. `errors` maps a field to its message.
+ */
+export function StudentEditor({
+  draft,
+  setDraft,
+  groups,
+  defaultRate,
+  errors = /** @type {Record<string, string>} */ ({}),
+  focusName = false,
+}) {
   const { t, locale } = useI18n();
+  const adding = !draft.id;
+  const nameRef = useRef(/** @type {HTMLInputElement | null} */ (null));
+  const [codeOpen, setCodeOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const activeGroups = groups.filter((group) => group.status !== "Inactive" || draft.groupIds.includes(group.id));
   const selectedGroups = draft.groupIds.map((id) => groups.find((group) => group.id === id)).filter(Boolean);
   const inheritedRate =
@@ -45,36 +76,26 @@ export function StudentEditor({ draft, setDraft, groups, defaultRate }) {
       ? selectedGroups[0].hourlyRate
       : defaultRate;
   const customRate = Number.isFinite(draft.customHourlyRate);
-  return (
-    <form id="student-editor" className="editor-form" onSubmit={(event) => event.preventDefault()}>
-      <div className="form-grid">
-        <Field label={t("Full name")} required>
-          <Input value={draft.fullName} onChange={(event) => setDraft({ ...draft, fullName: event.target.value })} />
-        </Field>
-        <Field label={t("Student ID")} required>
-          <Input value={draft.code} onChange={(event) => setDraft({ ...draft, code: event.target.value })} />
-        </Field>
-      </div>
+  const showCode = !adding || codeOpen || Boolean(errors.code);
+  const showMore = !adding || moreOpen || Boolean(errors.studentEmail);
+  const chips = activeGroups.length <= GROUP_CHIP_LIMIT;
+  const toggleGroup = (id) =>
+    setDraft((current) => ({
+      ...current,
+      groupIds: current.groupIds.includes(id)
+        ? current.groupIds.filter((groupId) => groupId !== id)
+        : [...current.groupIds, id],
+    }));
+
+  // «Guardar y agregar otro» remounts the form with a fresh draft: the cursor returns to the name.
+  useEffect(() => {
+    if (focusName) nameRef.current?.focus();
+  }, [focusName]);
+
+  const more = (
+    <>
       <AvatarPicker value={draft.avatarId} onChange={(avatarId) => setDraft({ ...draft, avatarId })} />
       <div className="field-rows">
-        <FieldRow label={t("Groups")}>
-          <MultiSelect
-            aria-label={t("Assign groups")}
-            value={draft.groupIds}
-            options={activeGroups.map((group) => ({ value: group.id, label: group.name, meta: group.subject || "" }))}
-            onChange={(groupIds) => setDraft((current) => ({ ...current, groupIds }))}
-            placeholder={t("Choose groups")}
-            emptyMessage={t("No groups match")}
-            variant="group"
-          />
-        </FieldRow>
-        <FieldRow label={t("Individual classes")} hint={t("Individual, groups, or both")}>
-          <Switch
-            label={t("Individual classes")}
-            checked={draft.isIndividual}
-            onChange={(isIndividual) => setDraft({ ...draft, isIndividual })}
-          />
-        </FieldRow>
         <FieldRow
           label={t("Own rate")}
           hint={
@@ -99,22 +120,24 @@ export function StudentEditor({ draft, setDraft, groups, defaultRate }) {
             />
           ) : null}
         </FieldRow>
-        <FieldRow label={t("Status")}>
-          <Segmented
-            tone="soft"
-            value={draft.status}
-            label={t("Status")}
-            onChange={(status) => setDraft({ ...draft, status })}
-            items={[
-              { value: "Active", label: "Active" },
-              { value: "Inactive", label: "Inactive" },
-            ]}
-          />
-        </FieldRow>
+        {adding ? null : (
+          <FieldRow label={t("Status")}>
+            <Segmented
+              tone="soft"
+              value={draft.status}
+              label={t("Status")}
+              onChange={(status) => setDraft({ ...draft, status })}
+              items={[
+                { value: "Active", label: "Active" },
+                { value: "Inactive", label: "Inactive" },
+              ]}
+            />
+          </FieldRow>
+        )}
       </div>
       <h3 className="overline editor-section">{t("Contact information")}</h3>
       <div className="form-grid">
-        <Field label={t("Student email")}>
+        <Field label={t("Student email")} error={errors.studentEmail}>
           <Input
             type="email"
             inputMode="email"
@@ -141,7 +164,7 @@ export function StudentEditor({ draft, setDraft, groups, defaultRate }) {
             onChange={(event) => setDraft({ ...draft, phone: event.target.value })}
           />
         </Field>
-        <Field label={t("Parent / tutor details")} hint={t("Name or other useful contact details")}>
+        <Field label={t("Parent / tutor details")}>
           <Input
             value={draft.guardianContact}
             onChange={(event) => setDraft({ ...draft, guardianContact: event.target.value })}
@@ -155,6 +178,91 @@ export function StudentEditor({ draft, setDraft, groups, defaultRate }) {
           onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
         />
       </Field>
+    </>
+  );
+
+  return (
+    <form id="student-editor" className="editor-form" onSubmit={(event) => event.preventDefault()}>
+      <Field label={t("Full name")} required error={errors.fullName}>
+        <Input
+          ref={nameRef}
+          id="student-editor-name"
+          value={draft.fullName}
+          onChange={(event) => setDraft({ ...draft, fullName: event.target.value })}
+        />
+      </Field>
+      {showCode ? (
+        <Field label={t("Student ID")} required error={errors.code}>
+          <Input value={draft.code} onChange={(event) => setDraft({ ...draft, code: event.target.value })} />
+        </Field>
+      ) : (
+        <div className="editor-code">
+          <span className="tnum">{t("ID {code}", { code: draft.code })}</span>
+          <button
+            type="button"
+            className="link-button"
+            aria-label={t("Change student ID")}
+            onClick={() => setCodeOpen(true)}
+          >
+            {t("Change")}
+          </button>
+        </div>
+      )}
+      {chips ? (
+        <div className="editor-groups" role="group" aria-label={t("Groups")}>
+          <span className="field-label">{t("Groups")}</span>
+          <div className="chip-row">
+            {activeGroups.map((group) => (
+              <button
+                key={group.id}
+                type="button"
+                className="chip"
+                aria-pressed={draft.groupIds.includes(group.id)}
+                onClick={() => toggleGroup(group.id)}
+              >
+                {group.name}
+              </button>
+            ))}
+            <button
+              type="button"
+              className="chip"
+              aria-pressed={Boolean(draft.isIndividual)}
+              onClick={() => setDraft((current) => ({ ...current, isIndividual: !current.isIndividual }))}
+            >
+              {t("Individual classes")}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="field-rows">
+          <FieldRow label={t("Groups")}>
+            <MultiSelect
+              aria-label={t("Assign groups")}
+              value={draft.groupIds}
+              options={activeGroups.map((group) => ({ value: group.id, label: group.name, meta: group.subject || "" }))}
+              onChange={(groupIds) => setDraft((current) => ({ ...current, groupIds }))}
+              placeholder={t("Choose groups")}
+              emptyMessage={t("No groups match")}
+              variant="group"
+            />
+          </FieldRow>
+          <FieldRow label={t("Individual classes")}>
+            <Switch
+              label={t("Individual classes")}
+              checked={draft.isIndividual}
+              onChange={(isIndividual) => setDraft({ ...draft, isIndividual })}
+            />
+          </FieldRow>
+        </div>
+      )}
+      {adding ? (
+        <MoreToggle open={showMore} onToggle={() => setMoreOpen(!showMore)} controls="student-editor-more" />
+      ) : null}
+      {showMore ? (
+        <div className="editor-more-body" id="student-editor-more">
+          {more}
+        </div>
+      ) : null}
     </form>
   );
 }
@@ -177,27 +285,25 @@ export function GroupEditor({ draft, setDraft, defaultHours, defaultRate, childr
     }));
   const removeSchedule = (id) =>
     setDraft((current) => ({ ...current, weeklySchedule: current.weeklySchedule.filter((slot) => slot.id !== id) }));
+  // The rarely used fields wait under «Más datos» unless one of them already says something.
+  const [moreOpen, setMoreOpen] = useState(() =>
+    Boolean(
+      [draft.grade, draft.subject, draft.schedule, draft.assistantContact, draft.notes].some((value) =>
+        String(value || "").trim(),
+      ) ||
+      (!draft.weeklySchedule.length && draft.id && Number(draft.plannedSessionsPerMonth) !== DEFAULT_PLANNED_SESSIONS),
+    ),
+  );
   return (
     <form className="editor-form" onSubmit={(event) => event.preventDefault()}>
       <Field label={t("Group name")} required>
         <Input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
       </Field>
-      <div className="form-grid">
-        <Field label={t("School grade")}>
-          <Input value={draft.grade} onChange={(event) => setDraft({ ...draft, grade: event.target.value })} />
-        </Field>
-        <Field label={t("Subject")}>
-          <Input value={draft.subject} onChange={(event) => setDraft({ ...draft, subject: event.target.value })} />
-        </Field>
-      </div>
       <section className="schedule-editor" aria-labelledby="weekly-schedule-heading">
         <div className="block-head">
-          <div>
-            <h3 className="overline" id="weekly-schedule-heading">
-              {t("Weekly schedule")}
-            </h3>
-            <small className="muted">{t("Add every regular meeting time for this group.")}</small>
-          </div>
+          <h3 className="overline" id="weekly-schedule-heading">
+            {t("Weekly schedule")}
+          </h3>
           <Button icon={Plus} onClick={addSchedule}>
             {t("Add time")}
           </Button>
@@ -239,45 +345,61 @@ export function GroupEditor({ draft, setDraft, defaultHours, defaultRate, childr
         ) : null}
       </section>
       {children}
-      <div className="form-grid">
-        <Field label={t("Schedule note / room")}>
-          <Input
-            value={draft.schedule}
-            onChange={(event) => setDraft({ ...draft, schedule: event.target.value })}
-            placeholder={t("Optional room or legacy schedule note")}
-          />
-        </Field>
-        {!draft.weeklySchedule.length ? (
-          <Field label={t("Planned sessions / month")}>
-            <Input
-              type="number"
-              min="0"
-              value={draft.plannedSessionsPerMonth}
-              onChange={(event) => setDraft({ ...draft, plannedSessionsPerMonth: Number(event.target.value) })}
+      <MoreToggle open={moreOpen} onToggle={() => setMoreOpen(!moreOpen)} controls="group-editor-more" />
+      {moreOpen ? (
+        <div className="editor-more-body" id="group-editor-more">
+          <div className="form-grid">
+            <Field label={t("School grade")}>
+              <Input value={draft.grade} onChange={(event) => setDraft({ ...draft, grade: event.target.value })} />
+            </Field>
+            <Field label={t("Subject")}>
+              <Input value={draft.subject} onChange={(event) => setDraft({ ...draft, subject: event.target.value })} />
+            </Field>
+          </div>
+          <div className="form-grid">
+            <Field label={t("Schedule note / room")}>
+              <Input
+                value={draft.schedule}
+                onChange={(event) => setDraft({ ...draft, schedule: event.target.value })}
+                placeholder={t("Optional room or legacy schedule note")}
+              />
+            </Field>
+            {!draft.weeklySchedule.length ? (
+              <Field label={t("Planned sessions / month")}>
+                <Input
+                  type="number"
+                  min="0"
+                  value={draft.plannedSessionsPerMonth}
+                  onChange={(event) => setDraft({ ...draft, plannedSessionsPerMonth: Number(event.target.value) })}
+                />
+              </Field>
+            ) : null}
+          </div>
+          <Field label={t("Assistant / contact")}>
+            <TextArea
+              rows="2"
+              value={draft.assistantContact}
+              onChange={(event) => setDraft({ ...draft, assistantContact: event.target.value })}
             />
           </Field>
-        ) : null}
-      </div>
-      <Field label={t("Assistant / contact")}>
-        <TextArea
-          rows="2"
-          value={draft.assistantContact}
-          onChange={(event) => setDraft({ ...draft, assistantContact: event.target.value })}
-        />
-      </Field>
-      <Field label={t("Notes")}>
-        <TextArea
-          rows="3"
-          value={draft.notes}
-          onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
-        />
-      </Field>
-      <p className="muted editor-hint">
-        {Number.isFinite(draft.hourlyRate)
-          ? t("{p0} / hour", { p0: formatMoney(draft.hourlyRate, locale) })
-          : t("{p0} / hour inherited", { p0: formatMoney(defaultRate, locale) })}{" "}
-        · {formatHours(defaultHours, locale)}
-      </p>
+          <Field label={t("Notes")}>
+            <TextArea
+              rows="3"
+              value={draft.notes}
+              onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
+            />
+          </Field>
+        </div>
+      ) : null}
+      {/* A new group shows its billing above; an existing one is reminded of its rate here. */}
+      {draft.id ? (
+        <p className="muted editor-hint">
+          {Number.isFinite(draft.hourlyRate)
+            ? t("{p0} / hour", { p0: formatMoney(draft.hourlyRate, locale) })
+            : t("{p0} / hour inherited", { p0: formatMoney(defaultRate, locale) })}{" "}
+          · {formatHours(defaultHours, locale)}
+        </p>
+      ) : null}
     </form>
   );
 }

@@ -115,15 +115,21 @@ test.describe("pagos perdidos en escritorio", () => {
 
     await page.goto("/community");
     await page.getByRole("button", { name: "Abrir Luna Ortiz" }).click();
-    await page.getByLabel("Notas breves").fill("Paga en efectivo");
     await page.locator(".debts").getByRole("button", { name: "Dar por perdido: Abril" }).click();
     await expect(page.locator(".debt-row.is-lost")).toHaveCount(1);
-    await expect(page.getByLabel("Notas breves")).toHaveValue("Paga en efectivo");
-    await page.getByRole("button", { name: "Guardar cambios" }).click();
+    // Editing the student afterwards keeps the debt given up.
+    await page.getByRole("button", { name: "Editar alumno" }).click();
+    const editor = page.getByRole("dialog", { name: "Editar alumno" });
+    await editor.getByLabel("Notas").fill("Paga en efectivo");
+    await editor.getByRole("button", { name: "Guardar alumno" }).click();
+    await expect(editor).toHaveCount(0);
     await page.reload();
     await page.getByRole("button", { name: "Abrir Luna Ortiz" }).click();
-    await expect(page.getByLabel("Notas breves")).toHaveValue("Paga en efectivo");
     await expect(page.locator(".debt-row.is-lost")).toHaveCount(1);
+    await page.getByRole("button", { name: "Editar alumno" }).click();
+    await expect(page.getByRole("dialog", { name: "Editar alumno" }).getByLabel("Notas")).toHaveValue(
+      "Paga en efectivo",
+    );
   });
 
   test("el aviso de Inicio junta lo viejo y nada viene marcado", async ({ page }) => {

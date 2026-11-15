@@ -102,10 +102,12 @@ describe("unsaved Community changes guard", () => {
     await user.click(screen.getByRole("tab", { name: "Students" }));
     await waitFor(() => expect(screen.getByRole("tab", { name: "Students" })).toHaveAttribute("aria-selected", "true"));
     await user.click(await screen.findByRole("button", { name: "Open Ana" }, { timeout: 10000 }));
-    await user.type(await screen.findByLabelText("Short notes"), "dirty");
+    await user.click(screen.getByRole("button", { name: "Edit student" }));
+    const editor = await screen.findByRole("dialog", { name: "Edit student" });
+    await user.type(within(editor).getByLabelText("Notes"), "dirty");
 
-    // Back two entries (Students view, then Home): the view and drawer guards must not ask again.
-    window.history.go(-2);
+    // Back three entries (the editor, the Students view, then Home): the view and drawer guards must not ask again.
+    window.history.go(-3);
     const question = await screen.findByRole("alertdialog");
     await waitFor(() => expect(window.location.pathname).toBe("/community"));
     await user.click(within(question).getByRole("button", { name: "Discard changes" }));

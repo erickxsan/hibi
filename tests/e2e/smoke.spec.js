@@ -20,7 +20,6 @@ test("loads the local workspace and preserves a student interaction", async ({ p
   await expect(page.getByRole("heading", { name: "Community" })).toBeVisible();
 
   await page.getByRole("button", { name: "Add student" }).click();
-  await page.getByLabel("Student ID").fill("E2E-1");
   await page.getByLabel("Full name").fill("Playwright Student");
   await page.getByRole("button", { name: "Save student" }).click();
 
@@ -32,14 +31,14 @@ test("loads the local workspace and preserves a student interaction", async ({ p
 test("updates the active student count after deactivation", async ({ page }) => {
   await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "Community" }).click();
   await page.getByRole("button", { name: "Add student" }).click();
-  await page.getByLabel("Student ID").fill("ACTIVE-1");
   await page.getByLabel("Full name").fill("Active Student");
   await page.getByRole("button", { name: "Save student" }).click();
 
   const counter = page.getByText(/^\d+ active students? in /);
   await expect(counter).toHaveText(/^1 active student in /);
 
-  await page.getByRole("button", { name: "Deactivate student" }).click();
+  await page.getByRole("button", { name: "Edit student" }).click();
+  await page.getByRole("dialog", { name: "Edit student" }).getByRole("button", { name: "Deactivate student" }).click();
   const dialog = page.getByRole("dialog", { name: /Deactivate .+\?/ });
   await dialog.getByRole("button", { name: "Deactivate student" }).click();
 

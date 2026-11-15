@@ -1,6 +1,7 @@
 import { roundMoney, sumMoney } from "../domain/money.js";
 import { addDays, startOfMonth } from "../domain/dates";
 import { gradeGroupId } from "../domain/semanticIdentity";
+import { validateStudent } from "../domain/validation.js";
 import {
   adjustmentFor,
   changeGroupBilling,
@@ -529,4 +530,25 @@ export function joinGroup(student, group, asOf, choice = null) {
 /** Suggested monthly fee for the «Usar» link (a full month of classes, shared with the tutorial). */
 export function feeSuggestion(state, group, asOf) {
   return suggestedMonthlyFee(state, group, periodOf(asOf));
+}
+
+// The messages name the field by its label, so they read right under it.
+const STUDENT_FIELD_MESSAGES = Object.freeze({
+  fullName: { required: "Full name is required." },
+  code: { required: "Student ID is required.", duplicate: "Student ID is already in use." },
+  studentEmail: { invalid_email: "Student email must be a valid email address." },
+});
+
+/**
+ * What the student editor must say under its fields before saving: the same rules the save applies
+ * (validateStudent), mapped to the field each one belongs to. Anything else is left to the save.
+ */
+export function studentFieldErrors(draft, state) {
+  const { errors } = validateStudent({ ...draft, id: draft.id || "new-student" }, state);
+  const fields = /** @type {Record<string, string>} */ ({});
+  for (const error of errors) {
+    const message = STUDENT_FIELD_MESSAGES[error.path]?.[error.code];
+    if (message && !fields[error.path]) fields[error.path] = message;
+  }
+  return fields;
 }

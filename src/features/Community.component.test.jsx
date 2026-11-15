@@ -136,14 +136,32 @@ describe("Community students", () => {
     expect(within(detail).queryByRole("columnheader", { name: "Group" })).not.toBeInTheDocument();
   });
 
-  it("saves contact details, deactivates and reactivates from the archive", async () => {
+  it("edits a student only through «Edit student», which also deactivates and deletes", async () => {
     const user = userEvent.setup();
     const { saved, persistence } = setup();
     await user.click(screen.getByRole("button", { name: "Open Diego Soto" }));
-    fireEvent.change(screen.getByLabelText("Short notes"), { target: { value: "Likes drawings" } });
-    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    const detail = screen.getByRole("region", { name: "Diego Soto" });
+    // One editor: the card has no inline form and no second link.
+    expect(within(detail).queryByRole("textbox")).not.toBeInTheDocument();
+    expect(within(detail).queryByRole("button", { name: "Edit enrollment and rate" })).not.toBeInTheDocument();
+    expect(within(detail).queryByRole("button", { name: "Deactivate student" })).not.toBeInTheDocument();
+    await user.click(within(detail).getByRole("button", { name: "Edit student" }));
+    const editor = await screen.findByRole("dialog", { name: "Edit student" });
+    // Editing keeps every field in view, the ID and the status included.
+    expect(within(editor).getByLabelText(/Student ID/)).toHaveValue("DIE-2");
+    expect(within(editor).getByRole("button", { name: "Inactive" })).toBeInTheDocument();
+    expect(within(editor).queryByRole("button", { name: "Save and add another" })).not.toBeInTheDocument();
+    fireEvent.change(within(editor).getByLabelText("Notes"), { target: { value: "Likes drawings" } });
+    await user.click(within(editor).getByRole("button", { name: "Save student" }));
     await waitFor(() => expect(saved().students.find((s) => s.id === "s2").notes).toBe("Likes drawings"));
-    await user.click(screen.getByRole("button", { name: "Deactivate student" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Edit student" })).not.toBeInTheDocument());
+
+    await user.click(
+      within(screen.getByRole("region", { name: "Diego Soto" })).getByRole("button", { name: "Edit student" }),
+    );
+    const again = await screen.findByRole("dialog", { name: "Edit student" });
+    expect(within(again).getByRole("button", { name: "Delete student" })).toBeInTheDocument();
+    await user.click(within(again).getByRole("button", { name: "Deactivate student" }));
     const dialog = await screen.findByRole("dialog", { name: "Deactivate Diego Soto?" });
     await user.click(within(dialog).getByRole("button", { name: "Deactivate student" }));
     await waitFor(() => expect(saved().students.find((s) => s.id === "s2").status).toBe("Inactive"));
@@ -158,27 +176,94 @@ describe("Community students", () => {
     await waitFor(() => expect(persistence.save).toHaveBeenCalled());
   });
 
-  it("creates and edits a student through the drawer", async () => {
+  it("adds a student with a name and a group tap; the ID comes filled in", async () => {
     const user = userEvent.setup();
     const { saved } = setup();
     await user.click(screen.getByRole("button", { name: "Add student" }));
     const drawer = await screen.findByRole("dialog", { name: "Add student" });
-    fireEvent.change(within(drawer).getByLabelText(/Student ID/), { target: { value: "NEW-1" } });
+    // Name, ID row and group chips; no status, no avatar, no contact fields until «Extra details».
+    expect(within(drawer).getByText("ID HIBI-001")).toBeInTheDocument();
+    expect(within(drawer).queryByLabelText(/Student ID/)).not.toBeInTheDocument();
+    expect(within(drawer).queryByRole("button", { name: "Inactive" })).not.toBeInTheDocument();
+    expect(within(drawer).queryByLabelText("Student email")).not.toBeInTheDocument();
+    expect(within(drawer).queryByRole("button", { name: /Inglés/ })).not.toBeInTheDocument();
     fireEvent.change(within(drawer).getByLabelText(/Full name/), { target: { value: "Nora León" } });
+    const chip = within(drawer).getByRole("button", { name: "Primaria 5A" });
+    await user.click(chip);
+    expect(chip).toHaveAttribute("aria-pressed", "true");
+    await user.click(within(drawer).getByRole("button", { name: "Extra details" }));
     await user.click(within(drawer).getByRole("switch", { name: "Override inherited rate" }));
     fireEvent.change(within(drawer).getByLabelText("Custom hourly rate"), { target: { value: "120" } });
     await user.click(within(drawer).getByRole("button", { name: "Save student" }));
     await waitFor(() =>
-      expect(saved().students.find((s) => s.code === "NEW-1")).toMatchObject({
+      expect(saved().students.find((s) => s.code === "HIBI-001")).toMatchObject({
         fullName: "Nora León",
+        groupIds: ["g1"],
+        status: "Active",
         customHourlyRate: 120,
       }),
     );
-    await user.click(screen.getByRole("button", { name: "Edit enrollment and rate" }));
+    await user.click(await screen.findByRole("button", { name: "Edit student" }));
     const editor = await screen.findByRole("dialog", { name: "Edit student" });
     await user.click(within(editor).getByRole("button", { name: "Inactive" }));
     await user.click(within(editor).getByRole("button", { name: "Save student" }));
-    await waitFor(() => expect(saved().students.find((s) => s.code === "NEW-1").status).toBe("Inactive"));
+    await waitFor(() => expect(saved().students.find((s) => s.code === "HIBI-001").status).toBe("Inactive"));
+  });
+
+  it("shows what is missing under its field and keeps the drawer open", async () => {
+    const user = userEvent.setup();
+    const { persistence } = setup();
+    await user.click(screen.getByRole("button", { name: "Add student" }));
+    const drawer = await screen.findByRole("dialog", { name: "Add student" });
+    await user.click(within(drawer).getByRole("button", { name: "Save student" }));
+    expect(within(drawer).getByRole("alert")).toHaveTextContent("Full name is required.");
+    expect(within(drawer).getByLabelText(/Full name/)).toHaveAttribute("aria-invalid", "true");
+    expect(persistence.save).not.toHaveBeenCalled();
+    // Typing the name clears its message; a taken ID is named under the ID field.
+    fireEvent.change(within(drawer).getByLabelText(/Full name/), { target: { value: "Nora León" } });
+    expect(within(drawer).queryByRole("alert")).not.toBeInTheDocument();
+    await user.click(within(drawer).getByRole("button", { name: "Change student ID" }));
+    fireEvent.change(within(drawer).getByLabelText(/Student ID/), { target: { value: "lun-1" } });
+    await user.click(within(drawer).getByRole("button", { name: "Save student" }));
+    expect(within(drawer).getByRole("alert")).toHaveTextContent("Student ID is already in use.");
+    expect(persistence.save).not.toHaveBeenCalled();
+  });
+
+  it("«Save and add another» keeps the groups, gives a fresh ID and returns to the name", async () => {
+    const user = userEvent.setup();
+    const { saved } = setup();
+    await user.click(screen.getByRole("button", { name: "Add student" }));
+    const drawer = await screen.findByRole("dialog", { name: "Add student" });
+    fireEvent.change(within(drawer).getByLabelText(/Full name/), { target: { value: "Nora León" } });
+    await user.click(within(drawer).getByRole("button", { name: "Primaria 5A" }));
+    await user.click(within(drawer).getByRole("button", { name: "Save and add another" }));
+    await waitFor(() => expect(saved().students.find((s) => s.code === "HIBI-001")?.fullName).toBe("Nora León"));
+    const next = screen.getByRole("dialog", { name: "Add student" });
+    await waitFor(() => expect(within(next).getByLabelText(/Full name/)).toHaveFocus());
+    expect(within(next).getByLabelText(/Full name/)).toHaveValue("");
+    expect(within(next).getByText("ID HIBI-002")).toBeInTheDocument();
+    expect(within(next).getByRole("button", { name: "Primaria 5A" })).toHaveAttribute("aria-pressed", "true");
+    await user.type(within(next).getByLabelText(/Full name/), "Pablo Ruiz");
+    await user.click(within(next).getByRole("button", { name: "Save student" }));
+    await waitFor(() =>
+      expect(saved().students.find((s) => s.code === "HIBI-002")).toMatchObject({
+        fullName: "Pablo Ruiz",
+        groupIds: ["g1"],
+      }),
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add student" })).not.toBeInTheDocument());
+  });
+
+  it("keeps the searchable group picker when there are more than eight groups", async () => {
+    const user = userEvent.setup();
+    const state = communityState();
+    for (let index = 0; index < 8; index += 1)
+      state.groups.push(createGroup({ id: `gx${index}`, name: `Extra ${index}` }));
+    setup(state);
+    await user.click(screen.getByRole("button", { name: "Add student" }));
+    const drawer = await screen.findByRole("dialog", { name: "Add student" });
+    expect(within(drawer).queryByRole("button", { name: "Extra 0" })).not.toBeInTheDocument();
+    expect(within(drawer).getByRole("combobox", { name: "Assign groups" })).toBeInTheDocument();
   });
 });
 
@@ -204,29 +289,18 @@ describe("Community debts", () => {
   }
   const rosa = (saved) => saved().students.find((student) => student.id === "s9");
 
-  it("keeps what was typed in the card when a debt is given up or paid", async () => {
+  it("keeps a debt given up when the student is edited afterwards", async () => {
     const user = userEvent.setup();
     const { saved } = setup(owing());
     await user.click(screen.getAllByRole("button", { name: "Open Rosa Peña" })[0]);
-    fireEvent.change(screen.getByLabelText("Short notes"), { target: { value: "Paga en efectivo" } });
     await user.click(screen.getByRole("button", { name: /^Mark as lost: September/ }));
     await waitFor(() => expect(rosa(saved).lostPayments).toHaveLength(1));
-    expect(screen.getByLabelText("Short notes")).toHaveValue("Paga en efectivo");
-    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await user.click(screen.getByRole("button", { name: "Edit student" }));
+    const editor = await screen.findByRole("dialog", { name: "Edit student" });
+    fireEvent.change(within(editor).getByLabelText("Notes"), { target: { value: "Paga en efectivo" } });
+    await user.click(within(editor).getByRole("button", { name: "Save student" }));
     await waitFor(() => expect(rosa(saved).notes).toBe("Paga en efectivo"));
     expect(rosa(saved).lostPayments).toHaveLength(1);
-    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
-  });
-
-  it("is clean again once the mark is undone with nothing typed", async () => {
-    const user = userEvent.setup();
-    const { saved } = setup(owing());
-    await user.click(screen.getAllByRole("button", { name: "Open Rosa Peña" })[0]);
-    await user.click(screen.getByRole("button", { name: /^Mark as lost: September/ }));
-    await waitFor(() => expect(rosa(saved).lostPayments).toHaveLength(1));
-    await user.click(screen.getByRole("button", { name: /^Recover: September/ }));
-    await waitFor(() => expect(rosa(saved)).not.toHaveProperty("lostPayments"));
-    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
   });
 
   it("records one payment for a double tap while the cloud answers", async () => {
@@ -406,6 +480,11 @@ describe("Community groups", () => {
     const { saved } = setup();
     await user.click(screen.getByRole("button", { name: "Create group" }));
     const drawer = await screen.findByRole("dialog", { name: "Create group" });
+    // Name, weekly schedule and billing in view; grade, subject, room and notes wait under «Extra details».
+    expect(within(drawer).queryByLabelText("School grade")).not.toBeInTheDocument();
+    expect(within(drawer).queryByLabelText("Assistant / contact")).not.toBeInTheDocument();
+    await user.click(within(drawer).getByRole("button", { name: "Extra details" }));
+    fireEvent.change(within(drawer).getByLabelText("Subject"), { target: { value: "Matemáticas" } });
     fireEvent.change(within(drawer).getByLabelText(/Group name/), { target: { value: "Prepa" } });
     await user.click(within(drawer).getByRole("button", { name: "Monthly" }));
     fireEvent.change(within(drawer).getByLabelText("Monthly fee per student"), { target: { value: "1000" } });
@@ -416,6 +495,20 @@ describe("Community groups", () => {
         monthlyFee: 1000,
       }),
     );
+    expect(saved().groups.find((g) => g.name === "Prepa").subject).toBe("Matemáticas");
+  });
+
+  it("opens «Extra details» of a group that already has one of them filled in", async () => {
+    const user = userEvent.setup();
+    const state = communityState();
+    state.groups[0] = { ...state.groups[0], subject: "Inglés" };
+    setup(state);
+    await user.click(screen.getByRole("tab", { name: "Groups" }));
+    await user.click(screen.getByRole("button", { name: "Open Primaria 5A" }));
+    await user.click(screen.getByRole("button", { name: "Schedule" }));
+    const editor = await screen.findByRole("dialog", { name: "Edit group" });
+    expect(within(editor).getByRole("button", { name: "Extra details" })).toHaveAttribute("aria-expanded", "true");
+    expect(within(editor).getByLabelText("Subject")).toHaveValue("Inglés");
   });
 });
 
@@ -457,19 +550,42 @@ describe("Community on a phone", () => {
     return { ...result, billing: () => screen.getAllByRole("dialog").at(-1) };
   }
 
-  it("keeps an unsaved billing change while the schedule editor saves the group", async () => {
+  it("opens the group editor in one tap from the group sheet; «Forma de cobro» only bills", async () => {
     const user = userEvent.setup();
     const { saved, billing } = await openBillingSheet(user);
-    await user.click(within(billing()).getByRole("button", { name: "Mensual" }));
-    await user.click(within(billing()).getByRole("button", { name: "Editar horario y datos" }));
+    expect(within(billing()).queryByLabelText("Nombre del grupo")).not.toBeInTheDocument();
+    expect(within(billing()).queryByRole("button", { name: "Editar horario y datos" })).not.toBeInTheDocument();
+    await user.click(within(billing()).getByRole("button", { name: "Atrás" }));
+    await waitFor(() => expect(screen.getAllByRole("dialog")).toHaveLength(1));
+    const group = screen.getByRole("dialog", { name: "Primaria 5A" });
+    await user.click(within(group).getByRole("button", { name: "Editar grupo" }));
     const editor = await screen.findByRole("dialog", { name: "Editar grupo" });
+    expect(within(editor).getByRole("heading", { name: "Horario semanal" })).toBeInTheDocument();
     fireEvent.change(within(editor).getByLabelText(/Nombre del grupo/), { target: { value: "Primaria 5B" } });
     await user.click(within(editor).getByRole("button", { name: "Guardar grupo" }));
     await waitFor(() => expect(saved().groups.find((g) => g.id === "g1").name).toBe("Primaria 5B"));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Editar grupo" })).not.toBeInTheDocument());
-    expect(within(billing()).getByRole("button", { name: "Mensual" })).toHaveAttribute("aria-pressed", "true");
-    expect(within(billing()).getByLabelText("Cuota mensual por alumno")).toBeInTheDocument();
-    expect(within(billing()).getByLabelText("Nombre del grupo")).toHaveValue("Primaria 5B");
+  });
+
+  it("adds a student or a group from «Agregar» on either tab", async () => {
+    setCompact(true);
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, "es");
+    const user = userEvent.setup();
+    setup();
+    await user.click(screen.getByRole("button", { name: "Agregar" }));
+    let menu = await screen.findByRole("dialog", { name: "Agregar" });
+    await user.click(within(menu).getByRole("button", { name: "Grupo" }));
+    const group = await screen.findByRole("dialog", { name: "Crear grupo" });
+    await user.click(within(group).getByRole("button", { name: "Cancelar" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    await user.click(screen.getByRole("button", { name: "Grupos" }));
+    await user.click(screen.getByRole("button", { name: "Agregar" }));
+    menu = await screen.findByRole("dialog", { name: "Agregar" });
+    await user.click(within(menu).getByRole("button", { name: "Alumno" }));
+    const student = await screen.findByRole("dialog", { name: "Agregar alumno" });
+    expect(within(student).getByText("ID HIBI-001")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Agregar" })).not.toBeInTheDocument();
   });
 
   it("asks before «Atrás» drops an unsaved billing change", async () => {
@@ -516,16 +632,16 @@ describe("Community unsaved changes", () => {
     expect(confirm).not.toHaveBeenCalled();
   });
 
-  it("asks in-app before leaving an edited student card for another one", async () => {
+  it("asks in-app before leaving an edited group card for a student", async () => {
     const user = userEvent.setup();
     const confirm = vi.spyOn(globalThis, "confirm");
     setup();
-    await user.click(screen.getByRole("button", { name: "Open Diego Soto" }));
-    fireEvent.change(screen.getByLabelText("Short notes"), { target: { value: "Likes drawings" } });
+    await user.click(screen.getByRole("button", { name: "View group Primaria 5A" }));
+    fireEvent.change(screen.getByLabelText(/Group name/), { target: { value: "Primaria 5B" } });
     await user.click(screen.getByRole("button", { name: "Open Luna López" }));
     const question = await screen.findByRole("alertdialog", { name: "Discard your unsaved community changes?" });
     await user.click(within(question).getByRole("button", { name: "Keep editing" }));
-    expect(screen.getByRole("region", { name: "Diego Soto" })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Group name/)).toHaveValue("Primaria 5B");
 
     await user.click(screen.getByRole("button", { name: "Open Luna López" }));
     const second = await screen.findByRole("alertdialog", { name: "Discard your unsaved community changes?" });
@@ -537,8 +653,8 @@ describe("Community unsaved changes", () => {
   it("asks in-app before switching the view with edits pending", async () => {
     const user = userEvent.setup();
     setup();
-    await user.click(screen.getByRole("button", { name: "Open Diego Soto" }));
-    fireEvent.change(screen.getByLabelText("Short notes"), { target: { value: "Likes drawings" } });
+    await user.click(screen.getByRole("button", { name: "View group Primaria 5A" }));
+    fireEvent.change(screen.getByLabelText(/Group name/), { target: { value: "Primaria 5B" } });
     await user.click(screen.getByRole("tab", { name: "Groups" }));
     const question = await screen.findByRole("alertdialog", { name: "Discard your unsaved community changes?" });
     expect(screen.getByRole("tab", { name: "Groups" })).toHaveAttribute("aria-selected", "false");

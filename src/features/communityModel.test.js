@@ -14,6 +14,7 @@ import {
   monthlyTotal,
   nextDueDates,
   sortStudentsByAttention,
+  studentFieldErrors,
   studentMonth,
   studentMonths,
   studentRecentClasses,
@@ -308,5 +309,26 @@ describe("monthly billing editor", () => {
     });
     expect(joinGroup(state.students[3], state.groups[0], AS_OF).billingByGroup).toBeUndefined();
     expect(joiningOptions(state, state.groups[0], state.students[3], AS_OF)).toBeNull();
+  });
+});
+
+describe("studentFieldErrors", () => {
+  const state = { students: [{ id: "s1", code: "LUN-1", fullName: "Luna", status: "Active" }], groups: [] };
+  const draft = { id: "", code: "HIBI-001", fullName: "Nora", status: "Active", groupIds: [], studentEmail: "" };
+
+  it("names each problem after the field it belongs to", () => {
+    expect(studentFieldErrors(draft, state)).toEqual({});
+    expect(studentFieldErrors({ ...draft, fullName: " ", code: "" }, state)).toEqual({
+      fullName: "Full name is required.",
+      code: "Student ID is required.",
+    });
+    expect(studentFieldErrors({ ...draft, code: "lun-1", studentEmail: "nora@" }, state)).toEqual({
+      code: "Student ID is already in use.",
+      studentEmail: "Student email must be a valid email address.",
+    });
+  });
+
+  it("lets a student keep their own ID when edited", () => {
+    expect(studentFieldErrors({ ...state.students[0], groupIds: [] }, state)).toEqual({});
   });
 });

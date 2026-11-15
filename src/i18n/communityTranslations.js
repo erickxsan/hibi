@@ -26,8 +26,14 @@ export const COMMUNITY_TRANSLATIONS = Object.freeze({
   "{count} students · their history is kept in full": "{count} alumnos · su historial se conserva completo",
   "Schedule and details": "Horario y datos",
   "New group": "Nuevo grupo",
-  "Edit enrollment and rate": "Editar grupos y tarifa",
-  "Edit schedule and details": "Editar horario y datos",
+  // Agregar y editar alumno o grupo
+  "Extra details": "Más datos",
+  "ID {code}": "ID {code}",
+  "Change student ID": "Cambiar ID del alumno",
+  "Save and add another": "Guardar y agregar otro",
+  "Full name is required.": "Falta el nombre completo.",
+  "Student ID is required.": "Falta el ID del alumno.",
+  "Student ID is already in use.": "Ese ID del alumno ya está en uso.",
   // Lista de grupos
   // Ficha del alumno
   "Attendance {value}": "Asistencia {value}",
@@ -39,7 +45,6 @@ export const COMMUNITY_TRANSLATIONS = Object.freeze({
   "No classes this month": "Sin clases este mes",
   "No group": "Sin grupo",
   Details: "Datos",
-  "Short notes": "Notas breves",
   "Classes of {month}": "Clases de {month}",
   "Note: {text}": "Nota: {text}",
   "Call the tutor": "Llamar al tutor",

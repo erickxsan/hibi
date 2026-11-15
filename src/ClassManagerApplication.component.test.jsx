@@ -37,8 +37,8 @@ describe("application with the real local manager", () => {
     await waitFor(() => expect(screen.getByRole("tab", { name: "Groups" })).toHaveAttribute("aria-selected", "true"));
     await user.click(screen.getByRole("button", { name: "Add student", exact: true }));
     const student = await screen.findByRole("dialog", { name: "Add student" });
-    fireEvent.change(within(student).getByLabelText(/Student ID/), { target: { value: "APP-1" } });
     fireEvent.change(within(student).getByLabelText(/Full name/), { target: { value: "Tracking" } });
+    await user.click(within(student).getByRole("button", { name: "Home" }));
     await user.click(within(student).getByRole("button", { name: "Save student" }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add student" })).not.toBeInTheDocument());
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
@@ -46,7 +46,11 @@ describe("application with the real local manager", () => {
       name: "Home",
       weeklySchedule: [expect.objectContaining({ startTime: "18:30" })],
     });
-    expect(stored.students[0]).toMatchObject({ code: "APP-1", fullName: "Tracking" });
+    expect(stored.students[0]).toMatchObject({
+      code: "HIBI-001",
+      fullName: "Tracking",
+      groupIds: [stored.groups[0].id],
+    });
     view.unmount();
     render(
       <I18nProvider>

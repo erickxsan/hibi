@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Archive, ChevronRight, RotateCcw, UserPlus } from "lucide-react";
+import { Archive, ChevronRight, Pencil, RotateCcw, UserPlus } from "lucide-react";
 import { useI18n } from "../i18n/index.jsx";
 import { BottomSheet, Button, Drawer, Field, Input, ListRow, StudentSelect } from "../components/ui";
 import { StudentAvatar } from "../components/StudentAvatar";
@@ -337,6 +337,7 @@ export function GroupSheet({
   asOf,
   state,
   onEditBilling,
+  onEditGroup,
   onOpenStudent,
   onAddStudent,
   onArchive,
@@ -361,6 +362,9 @@ export function GroupSheet({
         {next ? (
           <p className="muted">{t("Next class: {when}", { when: nextClassLabel(next, asOf, t, locale) })}</p>
         ) : null}
+        <Button className="group-sheet-edit" icon={Pencil} onClick={onEditGroup}>
+          {t("Edit group")}
+        </Button>
       </div>
       <div className="figs">
         <div className="fig">

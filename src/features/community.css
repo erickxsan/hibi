@@ -872,6 +872,95 @@
   font-size: 13px;
 }
 
+/* «ID HIBI-016 · Cambiar»: the generated ID is shown, not asked for. */
+.editor-code {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  color: var(--sumi-muted);
+  font: 500 14px/20px var(--font-sans);
+}
+
+.editor-code .link-button {
+  min-height: 44px;
+}
+
+.editor-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.editor-groups .chip {
+  min-height: 44px;
+  white-space: normal;
+  text-align: left;
+}
+
+/* «Más datos»: a quiet full-width toggle for the fields most people never fill. */
+.editor-more {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: none;
+  color: var(--sumi);
+  font: 700 14px/20px var(--font-sans);
+  cursor: pointer;
+}
+
+.editor-more svg {
+  width: 18px;
+  height: 18px;
+  transition: transform 160ms ease;
+}
+
+.editor-more[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
+.editor-more-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* «Desactivar alumno» and «Eliminar alumno» close the student editor, apart from the fields. */
+.editor-danger {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+/* Phone «Agregar»: «Alumno» or «Grupo». */
+.add-menu {
+  display: grid;
+  gap: 10px;
+}
+
+.add-menu .button {
+  justify-content: flex-start;
+  min-height: 52px;
+}
+
+.group-sheet-head p {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.group-sheet .group-sheet-head .group-sheet-edit {
+  flex: 0 0 auto;
+  width: auto;
+  margin-left: auto;
+}
+
 .schedule-editor {
   display: flex;
   flex-direction: column;
