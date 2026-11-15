@@ -258,6 +258,27 @@
   }
 }
 
+/* On a phone every control of the card is a full touch target. */
+@media (max-width: 780px) {
+  .tracking-fees .mrow {
+    min-height: 52px;
+  }
+
+  .tracking-fees .mbtn {
+    min-width: 88px;
+    height: 44px;
+    padding: 0 14px;
+    font-size: 14px;
+  }
+
+  .tracking-fees .mlk {
+    min-height: 44px;
+  }
+
+  .tracking-fees .fee-undo select {
+    min-height: 44px;
+  }
+}
 /* Resumen: gráfica y lista ligada */
 .tracking-cols {
   display: grid;

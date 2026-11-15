@@ -16,7 +16,8 @@ import {
 } from "../components/ui";
 import { StudentAvatar } from "../components/StudentAvatar";
 import { useSpotlight } from "../components/useSpotlight";
-import { MonthlyFeePay, MonthlyFeeUndo } from "./MonthlyFeePay";
+import { MonthlyFeeUndo } from "./MonthlyFeePay";
+import { CollectSheet } from "./CollectSheet";
 import { TrackingStudentSheet } from "./TrackingStudentSheet";
 import {
   LostIconButton,
@@ -131,7 +132,7 @@ function paymentWord(record, t) {
 }
 
 /** One monthly group under «Mensualidades · octubre»: a line with fee, due date and progress, then dense rows. */
-function MonthlyBlock({ block, asOf, editable, onPay, onUndo, onRecover, busy, spotlit }) {
+function MonthlyBlock({ block, asOf, editable, onCollect, onUndo, onRecover, busy, spotlit }) {
   const { t, locale } = useI18n();
   const month = monthLong(`${block.period}-01`, locale);
   const due = block.billing?.due;
@@ -254,14 +255,19 @@ function MonthlyBlock({ block, asOf, editable, onPay, onUndo, onRecover, busy, s
               ) : !editable ? (
                 <span className="mamt">{formatMoney(charge.balance, locale)}</span>
               ) : (
-                <MonthlyFeePay
-                  key={`${charge.id}:${charge.balance}`}
-                  charge={charge}
-                  studentName={student.fullName}
-                  onPay={onPay}
-                  busy={busy}
-                  fullLabel={t("Mark paid (fee)")}
-                />
+                // «Cobrar» opens every debt of the student, this month checked with the rest.
+                <span className="fee-pay">
+                  <span className="mamt">{formatMoney(charge.balance, locale)}</span>
+                  <button
+                    type="button"
+                    className="mbtn"
+                    aria-label={`${t("Collect")}: ${student.fullName}`}
+                    disabled={busy}
+                    onClick={() => onCollect(student)}
+                  >
+                    {t("Collect")}
+                  </button>
+                </span>
               )}
             </div>
           );
@@ -272,7 +278,7 @@ function MonthlyBlock({ block, asOf, editable, onPay, onUndo, onRecover, busy, s
 }
 
 /** «Mensualidades · octubre» below the charts: one card holding every monthly group. */
-function MonthlyFees({ blocks, asOf, editable, onPay, onUndo, onRecover, busy, spotlit = (_kind, _id) => "" }) {
+function MonthlyFees({ blocks, asOf, editable, onCollect, onUndo, onRecover, busy, spotlit = (_kind, _id) => "" }) {
   const { t, locale } = useI18n();
   if (!blocks.length) return null;
   return (
@@ -286,7 +292,7 @@ function MonthlyFees({ blocks, asOf, editable, onPay, onUndo, onRecover, busy, s
           block={block}
           asOf={asOf}
           editable={editable}
-          onPay={onPay}
+          onCollect={onCollect}
           onUndo={onUndo}
           onRecover={onRecover}
           busy={busy}
@@ -466,6 +472,27 @@ export default function Tracking({
   const debtRows = useMemo(
     () => (tab === "payments" && studentId ? studentDebtRows(state, derived, { studentId, asOf, scope }) : []),
     [asOf, derived, scope, state, studentId, tab],
+  );
+  // «Cobrar» from a row of «Mensualidades»: that student's debts in this scope.
+  const [collectFor, setCollectFor] = useState(/** @type {any} */ (null));
+  const collectRows = useMemo(
+    () => (collectFor ? studentDebtRows(state, derived, { studentId: collectFor.id, asOf, scope }) : []),
+    [asOf, collectFor, derived, scope, state],
+  );
+  const collectSheet = (
+    <CollectSheet
+      open={Boolean(collectFor) && canLose}
+      onClose={() => setCollectFor(null)}
+      studentId={collectFor?.id || ""}
+      studentName={collectFor?.fullName || ""}
+      rows={collectRows}
+      lostActions={lostActions}
+      busy={busy}
+    />
+  );
+  // On a phone the fees still owed this month come before the list of students.
+  const feesPending = blocks.some((block) =>
+    block.rows.some(({ charge }) => ["pending", "overdue"].includes(charge.status)),
   );
   const stale = useMemo(
     () =>
@@ -690,6 +717,18 @@ export default function Tracking({
       paid: false,
       paymentId: charge.paymentId,
     });
+  const monthlyFees = (
+    <MonthlyFees
+      blocks={blocks}
+      asOf={asOf}
+      editable={canLose}
+      onCollect={setCollectFor}
+      onUndo={undoMonthly}
+      onRecover={lostActions.recover}
+      busy={busy || lostActions.busy}
+      spotlit={spotlit}
+    />
+  );
 
   const exportVisible = () => {
     const rows =
@@ -1085,6 +1124,7 @@ export default function Tracking({
         ) : (
           <p className="muted">{t("No data in this period.")}</p>
         )}
+        {feesPending ? monthlyFees : null}
         <section>
           <div className="sh">
             <h2>{t("Students")}</h2>
@@ -1139,16 +1179,7 @@ export default function Tracking({
             {!mobileList.length ? <p className="muted">{t("Nobody in this filter.")}</p> : null}
           </div>
         </section>
-        <MonthlyFees
-          blocks={blocks}
-          asOf={asOf}
-          editable={canLose}
-          onPay={payMonthly}
-          onUndo={undoMonthly}
-          onRecover={lostActions.recover}
-          busy={busy || lostActions.busy}
-          spotlit={spotlit}
-        />
+        {feesPending ? null : monthlyFees}
         <Button icon={Download} className="tracking-export" onClick={exportVisible}>
           {t("Export to Excel")}
         </Button>
@@ -1265,6 +1296,7 @@ export default function Tracking({
         </BottomSheet>
         {rangeDrawer}
         {lostPanels}
+        {collectSheet}
       </div>
     );
   }
@@ -1564,16 +1596,8 @@ export default function Tracking({
           </div>
         </section>
       )}
-      <MonthlyFees
-        blocks={blocks}
-        asOf={asOf}
-        editable={canLose}
-        onPay={payMonthly}
-        onUndo={undoMonthly}
-        onRecover={lostActions.recover}
-        busy={busy || lostActions.busy}
-        spotlit={spotlit}
-      />
+      {monthlyFees}
+
       <Drawer
         open={dateOpen}
         onClose={() => setDateOpen(false)}
@@ -1610,6 +1634,7 @@ export default function Tracking({
       </Drawer>
       {rangeDrawer}
       {lostPanels}
+      {collectSheet}
     </div>
   );
 }

@@ -167,6 +167,26 @@ export const TRACKING_TRANSLATIONS = Object.freeze({
   "The {amount} paid for this class will be removed.": "Se quitará el pago de {amount} de esta clase.",
   "Mark absent": "Marcar ausente",
   "Overdue (fee)": "Vencida",
+  // Cobrar
+  Collect: "Cobrar",
+  "Collect {amount}": "Cobrar {amount}",
+  Owes: "Debe",
+  "Months this payment covers": "Meses que cubre este pago",
+  "What this payment covers": "Lo que cubre este pago",
+  "Show {count} more": "Ver {count} más",
+  "Give up a debt…": "Dar un adeudo por perdido…",
+  "Nothing overdue to give up.": "Nada vencido que dar por perdido.",
+  "the oldest is from {month}": "la más antigua es de {month}",
+  "the oldest is from {date}": "la más antigua es del {date}",
+  "{name} paid {amount}": "{name} pagó {amount}",
+  "Less than the total is saved as a partial payment.": "Si cobras menos del total, se guarda como abono.",
+  "Saved as a partial payment of {amount} toward {name}.": "Se guarda como abono de {amount} a {name}.",
+  "Covers {count} debt in full and puts {amount} toward {name}.": "Cubre {count} completa y abona {amount} a {name}.",
+  "Covers {count} debts in full and puts {amount} toward {name}.": "Cubre {count} completas y abona {amount} a {name}.",
+  "Classes are paid in full: the one of {date} stays pending and {amount} is recorded.":
+    "Las clases se cobran completas: la del {date} queda pendiente y se registran {amount}.",
+  "Classes are paid in full: the one of {date} costs {amount}.":
+    "Las clases se cobran completas: la del {date} cuesta {amount}.",
   "Up {value} vs. {previous}": "Sube {value} vs. {previous}",
   "Down {value} vs. {previous}": "Baja {value} vs. {previous}",
 });

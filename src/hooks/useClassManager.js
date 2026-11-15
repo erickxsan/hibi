@@ -1224,6 +1224,76 @@ export function useClassManager({ persistence } = {}) {
     [commit, notify, operationalDate],
   );
 
+  // «Cobrar»: several of one student's debts in one change, each stored as payFee and markClassPaid
+  // store it, with one notice whose Undo takes all of them back.
+  const collectDebts = useCallback(
+    async (items, message) => {
+      const current = stateRef.current;
+      const fees = items
+        .filter((item) => item.kind === "monthly" && Number(item.amount) > 0)
+        .map((item) => ({ ...item, paymentId: createStableId("monthly") }));
+      // A class settled in the meantime keeps the day its money really came in.
+      const rows = items
+        .filter((item) => item.kind === "class")
+        .map((item) => (current.classLog || []).find((row) => row.id === item.classId))
+        .filter((row) => row && calculateOutstanding(current, row, operationalDate) > 0);
+      if (!fees.length && !rows.length) return false;
+      const before = new Map(
+        rows.map(({ id, amountPaid, paymentDate, paymentMethod, paymentState }) => [
+          id,
+          { amountPaid, paymentDate, paymentMethod, paymentState },
+        ]),
+      );
+      const paid = new Map(
+        rows.map((row) => [
+          row.id,
+          {
+            amountPaid: calculateCharge(current, row),
+            paymentDate: operationalDate,
+            paymentMethod: row.paymentMethod || "Cash",
+            paymentState: "Paid",
+          },
+        ]),
+      );
+      const classes = (fields) => (state) =>
+        fields.size
+          ? {
+              ...state,
+              classLog: state.classLog.map((item) =>
+                fields.has(item.id) ? { ...item, ...fields.get(item.id) } : item,
+              ),
+            }
+          : state;
+      const pay = (state) =>
+        fees.reduce(
+          (next, { studentId, groupId, period, amount, paymentId }) =>
+            setMonthlyPayment(next, {
+              studentId,
+              groupId,
+              period,
+              amount,
+              paid: true,
+              paymentId,
+              paidAt: operationalDate,
+            }),
+          classes(paid)(state),
+        );
+      if (!(await commit(pay))) return false;
+      notify(message, "success", {
+        label: "Undo",
+        run: () =>
+          commit((state) =>
+            fees.reduce(
+              (next, { studentId, paymentId }) => removeMonthlyPayment(next, { studentId, paymentId }),
+              classes(before)(state),
+            ),
+          ),
+      });
+      return true;
+    },
+    [commit, notify, operationalDate],
+  );
+
   // Saves a group and its per-student billing adjustments in one change.
   const saveGroupBilling = useCallback(
     (draft, overrides = {}) => {
@@ -1601,6 +1671,7 @@ export function useClassManager({ persistence } = {}) {
       giveUpPayments,
       recoverPayments,
       markClassPaid,
+      collectDebts,
       saveGroupBilling,
       editScheduledClass,
       removeScheduledClass,
@@ -1662,6 +1733,7 @@ export function useClassManager({ persistence } = {}) {
       giveUpPayments,
       recoverPayments,
       markClassPaid,
+      collectDebts,
       saveGroupBilling,
       upsertGrade,
       upsertGroup,
