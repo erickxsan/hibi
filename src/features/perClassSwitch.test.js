@@ -330,3 +330,53 @@ describe("a student who joined this month and is then set per class", () => {
     expect(owedBy(state, "bea", END)).toEqual({ classes: 1000, fees: [] });
   });
 });
+
+/*
+ * A fee already past its due date (second review of the fixes, item 2): it was owed before the switch,
+ * so per class waits for the next month even with nothing recorded, unless the student joined that
+ * month (adding a student and then choosing «Por clase» is how a new student pays per class).
+ */
+describe("a fee already past its due date when switching to per class", () => {
+  const paidUntilOctober = () => payFees(fixture(), ["ana", "beto"], ["2026-09", "2026-10"]);
+
+  it("keeps November's unpaid fee, due on the 5th, with nothing recorded yet", () => {
+    const state = paidUntilOctober();
+    expect(owed(state)).toEqual({ classes: 0, fees: 1000 });
+    const saved = saveBilling(state, adjust({ ana: PER_CLASS }));
+    // Before: per class from November and the overdue $1,000 vanished.
+    expect(saved.starts.ana).toBe("2026-12");
+    expect(owed(saved.state)).toEqual({ classes: 0, fees: 1000 });
+  });
+
+  it("keeps it when she missed every November class recorded", () => {
+    const state = recordClasses(paidUntilOctober(), "2026-11-01", TODAY, [], { ana: "A" });
+    const saved = saveBilling(state, adjust({ ana: PER_CLASS }));
+    expect(saved.starts.ana).toBe("2026-12");
+    expect(owed(saved.state)).toEqual({ classes: 0, fees: 1000 });
+  });
+
+  it("starts this month when switched before the due date with nothing recorded", () => {
+    const saved = saveBilling(paidUntilOctober(), adjust({ ana: PER_CLASS }), "2026-11-03");
+    expect(saved.starts.ana).toBe("2026-11");
+    expect(feeOf(saved.state, "2026-11", "2026-11-03")).toBeUndefined();
+  });
+
+  it("does not count a month with nothing to pay (an own fee of $0)", () => {
+    const state = fixture({ ana: { billingByGroup: { g: { mode: "customFee", fee: 0, effectiveFrom: "2026-09" } } } });
+    expect(saveBilling(state, adjust({ ana: PER_CLASS })).starts.ana).toBe("2026-11");
+  });
+
+  it("still lets a student added this month go per class a week later with nothing recorded", () => {
+    const bea = joinGroup(
+      { id: "bea", code: "C", fullName: "Bea", status: "Active", groupIds: [] },
+      fixture().groups[0],
+      TODAY,
+      {
+        amount: 1000,
+      },
+    );
+    const state = normalizeState({ ...paidUntilOctober(), students: [...paidUntilOctober().students, bea] });
+    // Her fee fell due the day she joined (13th); on the 20th it is past due, but it is her first month.
+    expect(saveBilling(state, adjust({ bea: PER_CLASS }), "2026-11-20").starts.bea).toBe("2026-11");
+  });
+});

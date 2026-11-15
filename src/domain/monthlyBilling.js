@@ -516,15 +516,18 @@ function paysMonthly(student, group, period) {
 }
 
 /**
- * True when the records show a student lived `period` paying a group monthly, so turning that month
- * per class would forgive part of it or charge it twice: a receipt or a lost mark of its fee, money
- * paid on one of their classes that month (the fee credits it), or a class they came to, which was
- * stored at $0 because the fee covered it and would stay $0 per class. A class they missed or whose
- * attendance is not taken costs nothing either way, and a cancelled one did not happen. Classes of a
- * month whose fee the teacher set to nothing (`firstMonthAmount` 0, a $0 fee) were free already:
- * per class keeps them so and only prices the classes still to come.
+ * True when a student lived `period` paying a group monthly by `asOf`, so turning that month per
+ * class would forgive part of it or charge it twice. The records show it with a receipt or a lost
+ * mark of its fee, money paid on one of their classes that month (the fee credits it), or a class
+ * they came to, which was stored at $0 because the fee covered it and would stay $0 per class. A
+ * class they missed or whose attendance is not taken costs nothing either way, and a cancelled one
+ * did not happen. A fee already past its due date (theirs, while they were there) was owed before
+ * the switch and counts too, except in the month they joined: adding a student and then choosing
+ * per class is how a new student pays per class. A month with nothing to pay (the teacher set its fee
+ * or their first month to nothing) counts only through money: its classes were free already and stay
+ * so per class, which only prices the classes still to come.
  */
-function livedMonthly(state, student, group, period) {
+function livedMonthly(state, student, group, period, asOf) {
   const ofMonth = (item) => item?.groupId === group.id && item.period === period;
   if (normalizeMonthlyPayments(student.monthlyPayments).some(ofMonth)) return true;
   if (normalizeLostPayments(student.lostPayments).some((mark) => mark.kind === "monthly" && ofMonth(mark))) return true;
@@ -532,8 +535,12 @@ function livedMonthly(state, student, group, period) {
     (row) => row?.studentId === student.id && row.groupId === group.id && periodOf(row.classDate) === period,
   );
   if (classes.some((row) => row.amountPaid > 0)) return true;
-  const came = classes.some((row) => row.classStatus !== "Cancelled" && attendanceBilling(row) === "billable");
-  return came && (studentMonthlyPlan(state, student, group, period, 0)?.amount || 0) > 0;
+  if (!((studentMonthlyPlan(state, student, group, period, 0)?.amount || 0) > 0)) return false;
+  if (classes.some((row) => row.classStatus !== "Cancelled" && attendanceBilling(row) === "billable")) return true;
+  const override = overrideOf(student, group, period);
+  if (periodOf(override?.joinedOn) === period) return false;
+  const due = dueWhileThere(override, period, studentMonthlyDueDate(state, student, group, period));
+  return Boolean(due) && due < asOf;
 }
 
 /**
@@ -541,15 +548,16 @@ function livedMonthly(state, student, group, period) {
  * already lived (through `asOf`'s) in which they paid the group monthly keeps its fee: its classes
  * were recorded as covered and the fee may be paid, so turning it per class would forgive the fee or
  * charge the month twice. The same rule keeps a group's lived monthly months (see applyFromOptions).
- * With the workspace (`state`), a month counts as lived only when the records show it (see
- * livedMonthly): someone added this month and set per class before anything was recorded starts
- * now, since joining always stamps the month monthly. Without it, every month they paid monthly.
+ * With the workspace (`state`), a month counts as lived only when the records or a fee already past
+ * due show it (see livedMonthly): someone added this month and set per class before anything was
+ * recorded starts now, since joining always stamps the month monthly. Without it, every month they
+ * paid monthly.
  */
 export function perClassStart(student, group, asOf, from, state = null) {
   const period = periodOf(asOf);
   let start = from;
   for (let month = from; isPeriod(month) && month <= period; month = nextPeriod(month))
-    if (paysMonthly(student, group, month) && (!state || livedMonthly(state, student, group, month)))
+    if (paysMonthly(student, group, month) && (!state || livedMonthly(state, student, group, month, asOf)))
       start = nextPeriod(month);
   return start;
 }
