@@ -1585,3 +1585,10 @@
   background: var(--bermellon);
   box-shadow: none;
 }
+
+/* Paired fields of «Nueva clase» stack on phones: two columns overflow a 390px screen. */
+@media (max-width: 479.98px) {
+  .class-form .form-grid.cols-2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

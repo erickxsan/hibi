@@ -266,7 +266,11 @@ describe("Classes remote draft safety", () => {
     const view = renderClasses();
 
     await user.click(screen.getByRole("button", { name: "New class" }));
-    await user.click(within(screen.getByRole("group", { name: "Class frequency" })).getAllByRole("button")[0]);
+    // A new class starts as one-time.
+    expect(within(screen.getByRole("group", { name: "Class frequency" })).getAllByRole("button")[0]).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     await user.click(screen.getByRole("button", { name: "Create class" }));
 
     await waitFor(() => expect(view.actions.upsertClassSchedule).toHaveBeenCalledOnce());
@@ -661,6 +665,8 @@ describe("new recurring class for a group", () => {
     expect(within(drawer).queryByText("Weekly schedule of Math")).not.toBeInTheDocument();
     expect(within(drawer).getByRole("button", { name: "Create class" })).toBeEnabled();
 
+    // The drawer opens on a one-time class; a recurring one shows the weekday buttons.
+    await user.click(within(drawer).getByRole("button", { name: "Recurring" }));
     // Adding Thursday repeats the Thu 4:00 p.m. slot: the schedule note appears with the warning.
     await user.click(within(drawer).getByRole("button", { name: "Thursday" }));
     expect(within(drawer).getByText("Weekly schedule of Math")).toBeInTheDocument();

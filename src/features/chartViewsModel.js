@@ -103,10 +103,11 @@ function throughOf(scope) {
  */
 export function attendanceCalendar(scope) {
   const { state, asOf, group = "all" } = scope;
-  // A calendar always shows at least the whole week of its range (Inicio's «Hoy» is one day).
+  // A short range shows the whole weeks it touches, Monday of its start to Sunday of its end
+  // (Inicio's «Hoy» is one day; «Este mes» on the 5th can start on a Sunday).
   const short = daysBetween(scope.start, scope.end) < 6;
   const start = short ? startOfWeek(scope.start, 1) : scope.start;
-  const end = short ? addDays(start, 6) : scope.end;
+  const end = short ? addDays(startOfWeek(scope.end, 1), 6) : scope.end;
   const sessions = sessionsIn(state, start, end, asOf, group);
   if (daysBetween(start, end) > DAY_GRID_LIMIT) {
     const months = [];

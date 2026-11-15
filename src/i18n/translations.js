@@ -443,6 +443,7 @@ const EXPLICIT_TRANSLATIONS = Object.freeze({
   "Student phone": "Teléfono del alumno",
   "Important notes": "Notas importantes",
   "Group name": "Nombre del grupo",
+  "School grade": "Grado",
   "Planned sessions per month": "Sesiones planeadas por mes",
   "Group notes": "Notas del grupo",
   Mathematics: "Matemáticas",

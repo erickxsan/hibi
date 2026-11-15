@@ -185,7 +185,7 @@ export function GroupEditor({ draft, setDraft, defaultHours, defaultRate, childr
         <Input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
       </Field>
       <div className="form-grid">
-        <Field label={t("Grade")}>
+        <Field label={t("School grade")}>
           <Input value={draft.grade} onChange={(event) => setDraft({ ...draft, grade: event.target.value })} />
         </Field>
         <Field label={t("Subject")}>

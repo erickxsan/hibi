@@ -161,7 +161,7 @@ export function validateStudent(student, state = null) {
   const warnings = [];
   if (!isRecord(student)) return result([issue("", "invalid_type", "Student must be an object.")]);
   requiredText(errors, student.id, "id", "Stable student ID");
-  requiredText(errors, student.code, "code", "Student code");
+  requiredText(errors, student.code, "code", "Student ID");
   requiredText(errors, student.fullName, "fullName", "Student name");
   enumValue(errors, student.status, STUDENT_STATUSES, "status", "Student status");
   if (student.avatarId) enumValue(errors, student.avatarId, STUDENT_AVATAR_IDS, "avatarId", "Student avatar");

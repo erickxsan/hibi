@@ -53,7 +53,7 @@ function initialDraft(asOfDate, state) {
   const weekday = new Date(`${asOfDate}T00:00:00Z`).getUTCDay();
   const minutes = Math.round((Number(state.settings?.defaultClassHours) || 2) * 60);
   return {
-    frequency: "recurring",
+    frequency: "once",
     format: group ? "group" : "individual",
     groupId: group?.id || "",
     studentId: student?.id || "",
