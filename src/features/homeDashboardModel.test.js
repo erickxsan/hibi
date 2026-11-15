@@ -12,6 +12,7 @@ import {
   monthProjection,
   periodRange,
   shortNames,
+  staleDebts,
   studentPeriodRows,
 } from "./homeDashboardModel";
 
@@ -221,39 +222,90 @@ describe("home agenda", () => {
   it("lists what to attend to with where each item leads", () => {
     const { state, derived } = setup();
     const items = buildAttentionItems(state, derived, AS_OF);
-    expect(items.map((item) => item.kind)).toEqual([
-      "unrecorded",
-      "lowAttendance",
-      "lowGrade",
-      "overdue",
-      "monthlyDue",
-    ]);
+    expect(items.map((item) => item.kind)).toEqual(["unrecorded", "lowAttendance", "lowGrade", "overdue"]);
     expect(items[0].action.type).toBe("record");
     expect(items[0].session.classDate).toBe("2026-10-20");
     expect(items[0].count).toBeGreaterThan(1);
     expect(items[1].students.map((student) => student.id)).toEqual(["s2"]);
     expect(items[2]).toMatchObject({ value: 5, assessment: "Quiz" });
-    // One «vencido» everywhere: class balances and monthly fees of active students.
+    // One «vencido» everywhere: class balances and monthly fees of active students, in one alert that leads to
+    // Seguimiento › Pagos (where the overdue monthly fee, folded in here, is listed too).
     expect(items[3]).toMatchObject({
       amount: 1200,
-      owed: 1200,
-      overdueThisMonth: 1200,
-      overdueEarlier: 0,
-      names: ["Ava Kim", "Maya Torres"],
+      studentCount: 2,
+      staleAmount: 0,
       inactiveAmount: 0,
-      action: { type: "metric", metric: "collections", focus: "debts" },
+      action: { type: "monthly" },
     });
-    expect(items[4]).toMatchObject({ overdue: true, count: 1, amount: 1000 });
+    expect(items[3].seenKeys.filter((key) => key.startsWith("attention:fee:"))).toHaveLength(1);
     // What each alert's page marks when it opens.
     expect(attentionSpotlight(items[0])).toEqual({ kind: "class", ids: [items[0].session.key] });
     expect(attentionSpotlight(items[1])).toEqual({ kind: "students", ids: ["s2"] });
     expect(attentionSpotlight(items[2])).toEqual({ kind: "students", ids: [items[2].student.id] });
     expect(attentionSpotlight(items[3]).kind).toBe("students");
     expect(attentionSpotlight(items[3]).ids).toHaveLength(2);
-    expect(attentionSpotlight(items[4])).toEqual({
-      kind: "fees",
-      ids: [expect.stringMatching(new RegExp(`:${items[4].group.id}$`))],
+  });
+
+  it("folds overdue money, old debts, inactive debts and overdue fees into one alert, and fees due today into another", () => {
+    const state = fixture();
+    state.students.push({ id: "s9", code: "S9", fullName: "Old Student", groupIds: ["g1"], status: "Inactive" });
+    // Maya owes since July (over 3 months), and an inactive student owes September.
+    state.classLog.push(row("jul-maya", "2026-07-06", "s1", "P", 0), row("sep-old", "2026-09-14", "s9", "P", 0));
+    // A second monthly group whose fee falls due today.
+    state.groups.push({
+      ...state.groups[1],
+      id: "g3",
+      name: "Writing",
+      billing: { ...state.groups[1].billing, due: { type: "dayOfMonth", day: Number(AS_OF.slice(8)) } },
     });
+    state.students.push({ id: "s4", code: "S4", fullName: "Nora Diaz", groupIds: ["g3"], status: "Active" });
+    const { derived } = setup(state);
+    const items = buildAttentionItems(state, derived, AS_OF);
+    const kinds = items.map((item) => item.kind);
+    expect(kinds).not.toContain("staleDebts");
+    expect(kinds).not.toContain("monthlyDue");
+    expect(kinds.filter((kind) => kind === "overdue")).toHaveLength(1);
+    const money = items.find((item) => item.kind === "overdue");
+    const debts = debtSummary(state, derived.classLog, AS_OF);
+    const stale = staleDebts(state, derived.classLog, AS_OF);
+    expect(stale.total).toBeGreaterThan(0);
+    expect(money).toMatchObject({
+      tone: "bad",
+      amount: debts.overdue,
+      studentCount: debts.overdueStudents.length,
+      staleAmount: stale.total,
+      inactiveAmount: 200,
+      inactiveNames: ["Old Student"],
+      action: { type: "monthly" },
+    });
+    // Hiding it hides every part; a newly old debt, a new overdue fee or a new debt brings it back.
+    const prefixes = ["attention:debt:", "attention:stale:", "attention:fee:"];
+    prefixes.forEach((prefix) => expect(money.seenKeys.some((key) => key.startsWith(prefix))).toBe(true));
+    expect(attentionSpotlight(money).ids).toEqual(expect.arrayContaining(["s1", "s3", "s9"]));
+    const dueToday = items.find((item) => item.kind === "dueToday");
+    expect(dueToday).toMatchObject({
+      tone: "pend",
+      count: 1,
+      names: ["Nora Diaz"],
+      groupNames: ["Writing"],
+      action: { type: "monthly" },
+    });
+    expect(attentionSpotlight(dueToday)).toEqual({ kind: "fees", ids: ["s4:g3"] });
+    // The fee due today is not counted as overdue.
+    expect(money.seenKeys.some((key) => key.includes(":s4:g3:"))).toBe(false);
+  });
+
+  it("raises the money alert for a debt over 3 months old alone, with that debt's own seen key", () => {
+    const state = fixture();
+    state.groups[1].billing = undefined;
+    state.classLog = [
+      ...state.classLog.filter((item) => item.amountPaid > 0 || item.attendance === "A"),
+      row("jul-maya", "2026-07-06", "s1", "P", 0),
+    ];
+    const { derived } = setup(state);
+    const money = buildAttentionItems(state, derived, AS_OF).find((item) => item.kind === "overdue");
+    expect(money.staleAmount).toBeGreaterThan(0);
+    expect(money.seenKeys.some((key) => key.startsWith("attention:stale:s1:"))).toBe(true);
   });
 
   it("keeps an item marked as seen hidden until something new causes it", () => {
@@ -293,7 +345,7 @@ describe("home agenda", () => {
     });
     expect(unmarked.session.classDate).toBe("2026-10-12");
     expect(attentionSpotlight(unmarked)).toEqual({ kind: "students", ids: ["s1"] });
-    expect(items.find((item) => item.kind === "overdue")).toMatchObject({ amount: 1000, names: ["Ava Kim"] });
+    expect(items.find((item) => item.kind === "overdue")).toMatchObject({ amount: 1000, studentIds: ["s3"] });
   });
 
   it("needs at least two classes before flagging low attendance", () => {
@@ -348,10 +400,7 @@ describe("home money", () => {
     // The inactive student's debt is not in the headline nor in the names.
     expect(alert).toMatchObject({
       amount: 1400,
-      owed: 1600,
-      overdueThisMonth: 1200,
-      overdueEarlier: 200,
-      names: ["Ava Kim", "Maya Torres"],
+      studentCount: 2,
       inactiveAmount: 200,
       inactiveNames: ["Old Student"],
     });

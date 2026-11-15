@@ -712,10 +712,6 @@ export function buildTodayTimeline(state, derived, asOf, nowTime) {
   };
 }
 
-/**
- * «Para atender»: unrecorded classes, saved classes with unmarked students, low attendance this month, a recent low grade, overdue
- * balances and monthly fees due today or overdue. Each item says where it leads.
- */
 /** Seen key of one student's debt: its newest class and monthly debt, so paying keeps it hidden and a new debt does not. */
 function debtSeenKey(debt, counts) {
   const reasons = debt.reasons.filter(counts);
@@ -729,7 +725,9 @@ function debtSeenKey(debt, counts) {
 }
 
 /**
- * «Para atender»: what needs the teacher's attention. Each item carries `seenKeys` (one per thing that
+ * «Para atender»: one alert per topic — unrecorded classes, saved classes with unmarked students, low attendance
+ * this month, a recent low grade, overdue money (old and inactive debts and overdue fees included) and monthly
+ * fees due today. Each item says where it leads and carries `seenKeys` (one per thing that
  * caused it) and `dismissed` once all of them were marked as seen, so a new cause brings it back.
  */
 export function buildAttentionItems(state, derived, asOf) {
@@ -810,83 +808,69 @@ function attentionItems(state, derived, asOf) {
       action: { type: "metric", metric: "grade" },
       seenKeys: [`attention:grade:${recentLow.studentId}:${recentLow.item.date}:${recentLow.item.assessment}`],
     });
-  // The same figure the collections chart and Seguimiento show: active students' overdue money,
-  // split by month, with what inactive students owe kept apart.
+  // Overdue money is one alert: the figure the collections chart and Seguimiento show (active students'
+  // overdue money), with debts over 3 months, inactive students' debts and overdue monthly fees folded in.
+  // It leads to Seguimiento › Pagos, where each of those parts (and «Revisar» for the old ones) lives.
   const debts = debtSummary(state, derivedRows, asOf);
-  if (debts.overdue > 0 || debts.inactive.owed > 0) {
-    items.push({
-      kind: "overdue",
-      tone: debts.overdue > 0 ? "bad" : "pend",
-      amount: debts.overdue,
-      owed: debts.owed,
-      overdueThisMonth: debts.overdueThisMonth,
-      overdueEarlier: debts.overdueEarlier,
-      period: debts.period,
-      names: debts.overdueStudents.map((item) => nameOf(item.studentId)).filter(Boolean),
-      // Who the figure is about, active and inactive alike, for the rows the alert lands on.
-      studentIds: [...debts.overdueStudents, ...debts.inactive.debts].map((item) => item.studentId),
-      inactiveAmount: debts.inactive.owed,
-      inactiveNames: debts.inactive.debts.map((item) => nameOf(item.studentId)).filter(Boolean),
-      action: { type: "metric", metric: "collections", focus: "debts" },
-      seenKeys: [
-        ...debts.overdueStudents.map((debt) => debtSeenKey(debt, (reason) => reason.overdue)),
-        ...debts.inactive.debts.map((debt) => debtSeenKey(debt, () => true)),
-      ],
-    });
-  }
   const stale = staleDebts(state, derivedRows, asOf);
-  if (stale.total > 0)
-    items.push({
-      kind: "staleDebts",
-      tone: "pend",
-      amount: stale.total,
-      names: stale.students.map((item) => nameOf(item.studentId)).filter(Boolean),
-      action: { type: "stale" },
-      // One per debt, so a debt that grows old brings the alert back after it was marked as seen.
-      seenKeys: stale.students.flatMap((student) =>
-        student.items.map(
-          (item) => `attention:stale:${student.studentId}:${item.classId || `${item.groupId}:${item.period}`}`,
-        ),
-      ),
-    });
   // Inactive students' fees are named apart, with their debts, never among a group's students.
   const inactiveIds = new Set(
     (state.students || []).filter((student) => student.status === "Inactive").map((student) => student.id),
   );
-  const dueMonthly = deriveMonthlyCharges(state, asOf, { includeArchived: false }).filter(
-    (charge) =>
-      !inactiveIds.has(charge.studentId) &&
-      ((charge.status === "pending" && charge.dueDate === asOf) || charge.status === "overdue"),
+  const charges = deriveMonthlyCharges(state, asOf, { includeArchived: false }).filter(
+    (charge) => !inactiveIds.has(charge.studentId),
   );
-  const byGroup = new Map();
-  dueMonthly.forEach((charge) => byGroup.set(charge.groupId, [...(byGroup.get(charge.groupId) || []), charge]));
-  for (const [groupId, charges] of byGroup) {
-    const group = (state.groups || []).find((item) => item.id === groupId);
-    const overdue = charges.filter((charge) => charge.status === "overdue");
-    const dueToday = charges.filter((charge) => charge.status !== "overdue");
-    const main = overdue.length ? overdue : dueToday;
+  const overdueFees = charges.filter((charge) => charge.status === "overdue");
+  const feeSeenKey = (charge) =>
+    `attention:fee:${charge.studentId}:${charge.groupId}:${charge.period}:${charge.status}`;
+  if (debts.overdue > 0 || debts.inactive.owed > 0 || stale.total > 0 || overdueFees.length) {
     items.push({
-      kind: "monthlyDue",
-      tone: overdue.length ? "bad" : "pend",
-      group,
-      overdue: overdue.length > 0,
-      count: main.length,
-      amount: sumMoney(main, (charge) => charge.amount),
-      names: main.map((charge) => nameOf(charge.studentId)).filter(Boolean),
-      // Fees due today are named apart, so «vencidas» never includes someone who still has today to pay.
-      dueToday:
-        overdue.length && dueToday.length
-          ? {
-              names: dueToday.map((charge) => nameOf(charge.studentId)).filter(Boolean),
-              amount: sumMoney(dueToday, (charge) => charge.amount),
-            }
-          : null,
-      // The fees the alert counts, as Seguimiento's monthly rows key them.
-      feeIds: charges.map((charge) => `${charge.studentId}:${charge.groupId}`),
+      kind: "overdue",
+      tone: debts.overdue > 0 || overdueFees.length ? "bad" : "pend",
+      amount: debts.overdue,
+      studentCount: debts.overdueStudents.length,
+      staleAmount: stale.total,
+      inactiveAmount: debts.inactive.owed,
+      inactiveNames: debts.inactive.debts.map((item) => nameOf(item.studentId)).filter(Boolean),
+      // Who the figure is about, active, old and inactive alike, for the rows the alert lands on.
+      studentIds: [
+        ...new Set(
+          [...debts.overdueStudents, ...debts.inactive.debts, ...stale.students, ...overdueFees].map(
+            (item) => item.studentId,
+          ),
+        ),
+      ],
       action: { type: "monthly" },
-      seenKeys: charges.map(
-        (charge) => `attention:fee:${charge.studentId}:${charge.groupId}:${charge.period}:${charge.status}`,
-      ),
+      seenKeys: [
+        ...debts.overdueStudents.map((debt) => debtSeenKey(debt, (reason) => reason.overdue)),
+        ...debts.inactive.debts.map((debt) => debtSeenKey(debt, () => true)),
+        // One per old debt, so a debt that grows old brings the alert back after it was hidden.
+        ...stale.students.flatMap((student) =>
+          student.items.map(
+            (item) => `attention:stale:${student.studentId}:${item.classId || `${item.groupId}:${item.period}`}`,
+          ),
+        ),
+        ...overdueFees.map(feeSeenKey),
+      ],
+    });
+  }
+  // Monthly fees due today, every group in one alert: they are not overdue yet.
+  const dueToday = charges.filter((charge) => charge.status === "pending" && charge.dueDate === asOf);
+  if (dueToday.length) {
+    const groupNames = [
+      ...new Set(dueToday.map((charge) => (state.groups || []).find((item) => item.id === charge.groupId)?.name || "")),
+    ].filter(Boolean);
+    items.push({
+      kind: "dueToday",
+      tone: "pend",
+      count: dueToday.length,
+      amount: sumMoney(dueToday, (charge) => charge.amount),
+      names: [...new Set(dueToday.map((charge) => nameOf(charge.studentId)).filter(Boolean))],
+      groupNames,
+      // The fees the alert counts, as Seguimiento's monthly rows key them.
+      feeIds: dueToday.map((charge) => `${charge.studentId}:${charge.groupId}`),
+      action: { type: "monthly" },
+      seenKeys: dueToday.map(feeSeenKey),
     });
   }
   return items;
@@ -904,7 +888,7 @@ export function attentionSpotlight(item) {
       return { kind: "students", ids: item.students.map((student) => student.id) };
     case "lowGrade":
       return { kind: "students", ids: item.student ? [item.student.id] : [] };
-    case "monthlyDue":
+    case "dueToday":
       return { kind: "fees", ids: item.feeIds || [] };
     default:
       return null;

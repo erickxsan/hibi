@@ -148,17 +148,25 @@ describe("Home", () => {
     expect(block).toHaveAttribute("aria-pressed", "true");
     const card = screen.getByRole("article", { name: "Reading" });
     expect(within(card).getByText("owes $200 from the class on 12 Oct.")).toBeInTheDocument();
+    // The debt is said once, in «Antes de empezar»: nothing under the student's avatar repeats it.
+    expect(within(card).queryByText("Owes $200")).not.toBeInTheDocument();
     await user.click(within(card).getByRole("button", { name: "Record class" }));
     expect(props.openPage).toHaveBeenCalledWith("classes", { type: "open-class", sessionKey: "2026-10-21|g:g1|16:00" });
   });
 
-  it("marks a note as seen and shows it again", async () => {
+  it("hides a note with «Ocultar» and offers to undo it", async () => {
     const user = userEvent.setup();
     const setNotesDismissed = vi.fn();
-    renderHome({ actions: { setNotesDismissed } });
+    const notify = vi.fn();
+    renderHome({ actions: { setNotesDismissed, notify } });
     const card = screen.getByRole("article", { name: "Reading" });
-    await user.click(within(card).getByRole("button", { name: "Mark as seen: Maya" }));
+    const hide = within(card).getByRole("button", { name: "Hide: Maya" });
+    expect(hide).toHaveTextContent("Hide");
+    await user.click(hide);
     expect(setNotesDismissed).toHaveBeenCalledWith(["owes:s1:2026-10-12"], true);
+    expect(notify).toHaveBeenCalledWith("Notice hidden", "success", { label: "Undo", run: expect.any(Function) });
+    notify.mock.calls[0][2].run();
+    expect(setNotesDismissed).toHaveBeenLastCalledWith(["owes:s1:2026-10-12"], false);
   });
 
   it("hides seen notes, their chips and the badge until they are shown again", async () => {
@@ -171,7 +179,7 @@ describe("Home", () => {
     expect(within(card).queryByText("owes $200 from the class on 12 Oct.")).not.toBeInTheDocument();
     expect(within(card).queryByText("Owes $200")).not.toBeInTheDocument();
     expect(within(card).getByText("No new notices.")).toBeInTheDocument();
-    await user.click(within(card).getByRole("button", { name: "1 seen notice · Show again" }));
+    await user.click(within(card).getByRole("button", { name: "1 hidden notice · Show again" }));
     expect(setNotesDismissed).toHaveBeenCalledWith(["owes:s1:2026-10-12"], false);
   });
 
@@ -199,9 +207,13 @@ describe("Home", () => {
     const user = userEvent.setup();
     const props = renderHome();
     const attention = screen.getByRole("heading", { name: /^To attend to · / }).closest("section");
-    const lowGrade = within(attention).getByRole("button", { name: /got 5\.0/ });
+    // Each alert is a row with a short title, one line under it and a labelled action.
+    const lowGrade = within(attention)
+      .getByText(/got 5\.0$/)
+      .closest(".al-item");
+    expect(lowGrade).toHaveTextContent(/got 5\.0in Quiz, Mon 19 Oct/);
     const firstName = lowGrade.querySelector("b").textContent.split(" got")[0];
-    await user.click(lowGrade);
+    await user.click(within(lowGrade).getByRole("button", { name: /^View · / }));
     const tabs = screen.getByRole("tablist", { name: "Charts" });
     expect(within(tabs).getByRole("tab", { name: /Grade/ })).toHaveAttribute("aria-selected", "true");
     const table = screen.getByRole("table", { name: "Students · what needs attention first" });
@@ -218,7 +230,9 @@ describe("Home", () => {
     await user.click(screen.getByRole("option", { name: "Reading" }));
     await user.click(screen.getByRole("button", { name: "Close detail and return to the three charts" }));
     expect(screen.queryByRole("tablist", { name: "Charts" })).not.toBeInTheDocument();
-    await user.click(within(attention).getByRole("button", { name: /still not recorded/ }));
+    const unrecorded = within(attention).getByRole("button", { name: /^Record · \d+ classes not recorded$/ });
+    expect(unrecorded.closest(".al-item")).toHaveTextContent("6 classes not recordedLatest: Reading, Wed 7 OctRecord");
+    await user.click(unrecorded);
     expect(props.openPage).toHaveBeenCalledWith(
       "classes",
       expect.objectContaining({
@@ -245,7 +259,7 @@ describe("Home", () => {
     const setNotesDismissed = vi.fn();
     renderHome({ actions: { setNotesDismissed } });
     let attention = screen.getByRole("heading", { name: /^To attend to · / }).closest("section");
-    await user.click(within(attention).getByRole("button", { name: "Mark as seen: Maya got 5.0" }));
+    await user.click(within(attention).getByRole("button", { name: "Hide: Maya got 5.0" }));
     expect(setNotesDismissed).toHaveBeenCalledWith(["attention:grade:s1:2026-10-19:Quiz"], true);
 
     cleanup();
@@ -253,9 +267,48 @@ describe("Home", () => {
     state.settings.dismissedNotes = { "attention:grade:s1:2026-10-19:Quiz": "2026-10-21" };
     renderHome({ state, derived: deriveAll(state, AS_OF), actions: { setNotesDismissed } });
     attention = screen.getByRole("heading", { name: /^To attend to · / }).closest("section");
-    expect(within(attention).queryByRole("button", { name: /got 5\.0/ })).not.toBeInTheDocument();
-    await user.click(within(attention).getByRole("button", { name: "1 seen notice · Show again" }));
+    expect(within(attention).queryByText(/got 5\.0/)).not.toBeInTheDocument();
+    await user.click(within(attention).getByRole("button", { name: "1 hidden notice · Show again" }));
     expect(setNotesDismissed).toHaveBeenLastCalledWith(["attention:grade:s1:2026-10-19:Quiz"], false);
+  });
+
+  it("hides every note of a class at once and undoes only what it hid", async () => {
+    const user = userEvent.setup();
+    const setNotesDismissed = vi.fn();
+    const notify = vi.fn();
+    const state = homeState();
+    // Lucas also owes the 12 Oct class, so the card has two notes.
+    state.classLog = state.classLog.map((item) =>
+      item.studentId === "s2" && item.classDate === "2026-10-12"
+        ? { ...item, amountPaid: 0, paymentState: "Pending", paymentDate: null, paymentMethod: "" }
+        : item,
+    );
+    renderHome({ state, derived: deriveAll(state, AS_OF), actions: { setNotesDismissed, notify } });
+    const card = screen.getByRole("article", { name: "Reading" });
+    await user.click(within(card).getByRole("button", { name: "Hide all" }));
+    const keys = setNotesDismissed.mock.calls[0][0];
+    expect(keys.length).toBeGreaterThan(1);
+    expect(setNotesDismissed).toHaveBeenCalledWith(keys, true);
+    expect(notify).toHaveBeenCalledWith("Notices hidden", "success", { label: "Undo", run: expect.any(Function) });
+    notify.mock.calls[0][2].run();
+    expect(setNotesDismissed).toHaveBeenLastCalledWith(keys, false);
+  });
+
+  it("hides an alert with «Ocultar» and brings it back with «Deshacer»", async () => {
+    const user = userEvent.setup();
+    const setNotesDismissed = vi.fn();
+    const notify = vi.fn();
+    renderHome({ actions: { setNotesDismissed, notify } });
+    const attention = screen.getByRole("heading", { name: /^To attend to · / }).closest("section");
+    const row = within(attention)
+      .getByText(/classes not recorded$/)
+      .closest(".al-item");
+    await user.click(within(row).getByRole("button", { name: /^Hide: / }));
+    const keys = setNotesDismissed.mock.calls[0][0];
+    expect(keys.every((key) => key.startsWith("attention:unrecorded:"))).toBe(true);
+    expect(notify).toHaveBeenCalledWith("Notice hidden", "success", { label: "Undo", run: expect.any(Function) });
+    notify.mock.calls[0][2].run();
+    expect(setNotesDismissed).toHaveBeenLastCalledWith(keys, false);
   });
 
   it("changes the period and picks points", async () => {

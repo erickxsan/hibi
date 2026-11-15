@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronRight } from "lucide-react";
 import { useI18n } from "../i18n/index.jsx";
-import { EmptyState, Segmented } from "../components/ui";
+import { Button, EmptyState, Segmented } from "../components/ui";
 import { ArchivedGroupsScope } from "../components/ArchivedGroupsScope";
 import { useCompactViewport } from "../components/OverlayContext";
-import { todayDateOnly } from "../domain/dates";
+import { addDays, todayDateOnly } from "../domain/dates";
 import { memoizeRecent } from "../domain/stateMemo";
 import {
   dayNumber,
@@ -30,9 +29,8 @@ import {
 } from "./homeDashboardModel";
 import { rosterForClassSession } from "./classesWorkspaceModel";
 import { ClassCard, SeenButton, ShowSeenButton, TodayAgenda, TodayTimeline } from "./HomeToday";
-import { metricSummary, MetricCard, MetricExplorer, MetricRows, overdueSplit, thresholds } from "./HomeMetrics";
+import { metricSummary, MetricCard, MetricExplorer, MetricRows, thresholds } from "./HomeMetrics";
 import { randomChartView } from "./chartViewsModel";
-import { StaleDebtsPanel, useLostPaymentActions } from "./LostPayments";
 import "../i18n/screenTranslations.js";
 import "./home.css";
 
@@ -83,152 +81,102 @@ function periodTitle(period, asOf, t, locale) {
   return t("Your year · {year}", { year: asOf.slice(0, 4) });
 }
 
-/** One «Para atender» entry as a bold lead, the sentence and where it leads. */
-function attentionText(item, t, locale, compact) {
+/** A class an alert names: «Inglés A1, ayer» or «Clase individual de Ana, mar 3 nov». */
+function alertClass(session, asOf, t, locale) {
+  const name =
+    session.format === "individual"
+      ? t("Individual class of {name}", { name: session.title.split(" ")[0] })
+      : session.title;
+  const when = session.classDate === addDays(asOf, -1) ? t("yesterday") : formatShortDate(session.classDate, locale);
+  return `${name}, ${when}`;
+}
+
+/** One «Para atender» alert: a title with the figure first, at most one line under it and the verb of its action. */
+function attentionText(item, t, locale, asOf) {
   const names = (list) => shortNames(list, locale);
+  const money = (amount) => formatMoney(amount, locale);
   switch (item.kind) {
-    case "staleDebts":
+    case "unrecorded":
       return {
-        lead: t("{amount} over 3 months old", { amount: formatMoney(item.amount, locale) }),
-        rest: t("from {names}.", { names: names(item.names) }),
-        link: t("Review"),
-      };
-    case "unrecorded": {
-      const session = item.session;
-      const date = formatShortDate(session.classDate, locale);
-      const lead =
-        session.format === "individual"
-          ? t("Individual class of {name} on {date}", { name: session.title.split(" ")[0], date })
-          : t("{title} on {date}", { title: session.title, date });
-      return {
-        lead,
-        rest:
+        title: t(item.count === 1 ? "{count} class not recorded" : "{count} classes not recorded", {
+          count: item.count,
+        }),
+        detail:
           item.count > 1
-            ? // The count covers the last 30 days; saying so keeps it from clashing with October's figure.
-              t("is still not recorded (and {count} more in the last 30 days).", { count: item.count - 1 })
-            : t("is still not recorded."),
-        link: t("Record"),
+            ? t("Latest: {class}", { class: alertClass(item.session, asOf, t, locale) })
+            : alertClass(item.session, asOf, t, locale),
+        action: t("Record"),
       };
-    }
-    case "unmarked": {
-      const session = item.session;
-      const date = formatShortDate(session.classDate, locale);
-      const lead =
-        session.format === "individual"
-          ? t("Individual class of {name} on {date}", { name: session.title.split(" ")[0], date })
-          : t("{title} on {date}", { title: session.title, date });
-      const count = item.names.length;
+    case "unmarked":
       return {
-        lead,
-        rest: compact
-          ? t(count === 1 ? "{count} student unmarked" : "{count} students unmarked", { count })
-          : t(
-              count === 1
-                ? "{names} is still unmarked: not charged until you take attendance."
-                : "{names} are still unmarked: not charged until you take attendance.",
-              { names: names(item.names) },
-            ),
-        link: t("Take attendance"),
+        title: t(item.names.length === 1 ? "{count} student unmarked" : "{count} students unmarked", {
+          count: item.names.length,
+        }),
+        detail:
+          item.count > 1
+            ? t("Latest: {class}", { class: alertClass(item.session, asOf, t, locale) })
+            : alertClass(item.session, asOf, t, locale),
+        action: t("Take attendance"),
       };
-    }
     case "lowAttendance":
-      return compact
-        ? {
-            lead: t(item.students.length === 1 ? "{count} student" : "{count} students", {
-              count: item.students.length,
-            }),
-            rest: t("below {value}% attendance", { value: Math.round(item.threshold * 100) }),
-          }
-        : {
-            lead: names(item.students.map((student) => student.fullName)),
-            rest: t(
-              item.students.length === 1
-                ? "is below {value}% attendance this month."
-                : "are below {value}% attendance this month.",
-              {
-                value: Math.round(item.threshold * 100),
-              },
-            ),
-            link: t("View in the chart"),
-          };
+      return {
+        title: t(
+          item.students.length === 1
+            ? "{count} student below {value}% attendance"
+            : "{count} students below {value}% attendance",
+          { count: item.students.length, value: Math.round(item.threshold * 100) },
+        ),
+        detail: names(item.students.map((student) => student.fullName)),
+        action: t("View"),
+      };
     case "lowGrade":
       return {
-        lead: t("{name} got {value}", {
+        title: t("{name} got {value}", {
           name: item.student?.fullName.split(" ")[0] || "",
           value: formatScore(item.value, locale),
         }),
-        rest: compact
-          ? t("in {assessment}", { assessment: item.assessment })
-          : t("in {assessment} ({date}).", {
-              assessment: item.assessment,
-              date: formatShortDate(item.date, locale, { weekday: true }),
-            }),
-        link: t("View in the chart"),
+        detail: t("in {assessment}, {date}", {
+          assessment: item.assessment,
+          date: formatShortDate(item.date, locale, { weekday: true }),
+        }),
+        action: t("View"),
       };
     case "overdue": {
-      // Only inactive students owe: shown apart, never as the overdue headline.
+      const stale = item.staleAmount > 0 ? t("{amount} over 3 months old", { amount: money(item.staleAmount) }) : "";
+      const inactive =
+        item.inactiveAmount > 0 ? t("{amount} from inactive students", { amount: money(item.inactiveAmount) }) : "";
+      // Only inactive students (or only old debts) owe: never called «vencidos» in the headline.
       if (!(item.amount > 0))
-        return {
-          lead: t("Inactive students owe {amount}", { amount: formatMoney(item.inactiveAmount, locale) }),
-          rest: compact ? names(item.inactiveNames) : `${names(item.inactiveNames)}.`,
-          link: t("View in the chart"),
-        };
-      // «$900 vencidos · $1,125 en total»: the total is what Clases and Seguimiento show as «Debe».
-      const lead = [
-        t("{amount} overdue", { amount: formatMoney(item.amount, locale) }),
-        item.owed > item.amount ? t("{amount} in total", { amount: formatMoney(item.owed, locale) }) : "",
-      ]
-        .filter(Boolean)
-        .join(" · ");
-      const inactive = item.inactiveAmount > 0 ? formatMoney(item.inactiveAmount, locale) : "";
-      if (compact)
-        return {
-          lead,
-          rest: [
-            t("from {names}", { names: names(item.names) }),
-            inactive ? t("{amount} owed by inactive students", { amount: inactive }) : "",
-          ]
-            .filter(Boolean)
-            .join(" · "),
-        };
-      const split = overdueSplit(item, t, locale);
-      return {
-        lead,
-        rest: [
-          t("from {names}.", { names: names(item.names) }),
-          split ? t("Overdue: {split}.", { split }) : "",
-          inactive ? t("Aside, {amount} owed by inactive students.", { amount: inactive }) : "",
-        ]
-          .filter(Boolean)
-          .join(" "),
-        link: t("View in the chart"),
-      };
-    }
-    case "monthlyDue": {
-      const lead = t(item.count === 1 ? "{count} monthly fee of {group}" : "{count} monthly fees of {group}", {
-        count: item.count,
-        group: item.group?.name || "",
-      });
-      const who = names([...new Set(item.names)]);
-      const alsoToday = item.dueToday
-        ? ` ${t("Due today: {names} ({amount}).", {
-            names: names([...new Set(item.dueToday.names)]),
-            amount: formatMoney(item.dueToday.amount, locale),
-          })}`
+        return item.inactiveAmount > 0
+          ? {
+              title: inactive,
+              detail: [names(item.inactiveNames), stale].filter(Boolean).join(" · "),
+              action: t("Collect"),
+            }
+          : { title: stale, detail: "", action: t("Collect") };
+      const people = item.studentCount
+        ? t(item.studentCount === 1 ? "{count} student" : "{count} students", { count: item.studentCount })
         : "";
       return {
-        lead,
-        rest: compact
-          ? t(item.overdue ? "overdue" : "due today")
-          : `${t(item.overdue ? "are overdue: {names} ({amount})." : "due today: {names} ({amount}).", {
-              names: who,
-              amount: formatMoney(item.amount, locale),
-            })}${alsoToday}`,
-        link: t("View monthly fees"),
+        title: t("{amount} overdue", { amount: money(item.amount) }),
+        // One line: old debts matter more than inactive students' (both are in Seguimiento › Pagos).
+        detail: [people, stale || inactive].filter(Boolean).join(" · "),
+        action: t("Collect"),
+      };
+    }
+    case "dueToday": {
+      const who = names(item.names);
+      const groups = new Intl.ListFormat(locale, { type: "conjunction" }).format(item.groupNames);
+      return {
+        title: t(item.count === 1 ? "{count} monthly fee due today" : "{count} monthly fees due today", {
+          count: item.count,
+        }),
+        detail: [who, groups].filter(Boolean).join(" · "),
+        action: t("Collect"),
       };
     }
     default:
-      return { lead: "", rest: "" };
+      return { title: "", detail: "", action: "" };
   }
 }
 
@@ -262,8 +210,6 @@ export default function Home({
   }, [asOf]);
   const [period, setPeriod] = useState("weekly");
   const [explorer, setExplorer] = useState(null);
-  const [staleOpen, setStaleOpen] = useState(false);
-  const lostActions = useLostPaymentActions(actions);
   // Each card shows one of its metric's views, drawn at random on every visit; the detail opens on it.
   const [cardViews, setCardViews] = useState(() => ({
     attendance: randomChartView("attendance"),
@@ -295,11 +241,31 @@ export default function Home({
   // Items marked as seen stay out of the list and the counts until something new brings them back.
   const attention = attentionAll.filter((item) => !item.dismissed);
   const seenAttention = attentionAll.filter((item) => item.dismissed);
+  // «Ocultar» hides a notice (an alert or a note before class) and offers to undo it from the notice it leaves.
+  const dismissedNotes = today.settings?.dismissedNotes;
+  const setNotesDismissed = actions?.setNotesDismissed;
+  const notify = actions?.notify;
+  const hideNotices = useCallback(
+    (keys, dismissed = true, count = 1) => {
+      if (!setNotesDismissed) return;
+      if (!dismissed) return setNotesDismissed(keys, false);
+      // «Deshacer» brings back only what this click hid; what was already hidden stays hidden.
+      const fresh = keys.filter((key) => !Object.hasOwn(dismissedNotes || {}, key));
+      if (!fresh.length) return;
+      setNotesDismissed(fresh, true);
+      notify?.(count === 1 ? "Notice hidden" : "Notices hidden", "success", {
+        label: "Undo",
+        run: () => setNotesDismissed(fresh, false),
+      });
+    },
+    [dismissedNotes, notify, setNotesDismissed],
+  );
+  const onDismissNotes = setNotesDismissed ? hideNotices : undefined;
   const showSeenAttention = (
     <ShowSeenButton
       count={seenAttention.length}
       keys={seenAttention.flatMap((item) => item.seenKeys)}
-      onDismiss={actions?.setNotesDismissed}
+      onDismiss={onDismissNotes}
     />
   );
   const metrics = useMemo(() => periodMetrics(state, derived, asOf, shownPeriod), [asOf, derived, shownPeriod, state]);
@@ -373,7 +339,6 @@ export default function Home({
   // Each alert opens where it can be acted on, with what it named marked for a moment.
   const runAttention = (item) => {
     const spotlight = attentionSpotlight(item);
-    if (item.action.type === "stale") return setStaleOpen(true);
     if (item.action.type === "record") return openClass(item.action.session, spotlight);
     if (item.action.type === "monthly") return openTracking("collections", spotlight);
     if (compact) return openTracking(item.action.metric, spotlight);
@@ -381,6 +346,27 @@ export default function Home({
     openExplorer(item.action.metric, item.action.focus, spotlight);
     globalThis.document?.getElementById("home-period")?.scrollIntoView?.({ behavior: "smooth", block: "start" });
   };
+  // Each alert is a row: dot, title and its one line, the action and «Ocultar».
+  const attentionRows = attention.map((item) => {
+    const text = attentionText(item, t, locale, asOf);
+    return (
+      <div className="al-item" role="listitem" key={item.kind}>
+        <i className={`dot-${item.tone}`} aria-hidden="true" />
+        <span className="al-text">
+          <b>{text.title}</b>
+          {text.detail ? <span>{text.detail}</span> : null}
+        </span>
+        <Button
+          className="al-act"
+          aria-label={t("{action} · {name}", { action: text.action, name: text.title })}
+          onClick={() => runAttention(item)}
+        >
+          {text.action}
+        </Button>
+        <SeenButton keys={item.seenKeys} label={t("Hide: {name}", { name: text.title })} onDismiss={onDismissNotes} />
+      </div>
+    );
+  });
   const runDetailAction = (action) => {
     if (action.type === "record") return openClass(action.session);
     if (action.session?.statusLabel === "Registered") return openHistory(action.session);
@@ -394,17 +380,6 @@ export default function Home({
   // Archived groups stay out of Inicio's figures by default; the chip only appears to say they were let in
   // (from Seguimiento) and to take them out again.
   const scope = archiveScope?.count && archiveScope.included ? <ArchivedGroupsScope scope={archiveScope} /> : null;
-  const stalePanel = (
-    <StaleDebtsPanel
-      open={staleOpen}
-      onClose={() => setStaleOpen(false)}
-      state={today}
-      derived={todayDerived}
-      asOf={asOf}
-      kicker={t("To attend to")}
-      lostActions={lostActions}
-    />
-  );
 
   if (compact) {
     return (
@@ -429,7 +404,7 @@ export default function Home({
               timeline={timeline}
               onRecord={openClass}
               onOpen={(session) => (session.statusLabel === "Registered" ? openHistory(session) : openClass(session))}
-              onDismissNotes={actions?.setNotesDismissed}
+              onDismissNotes={onDismissNotes}
             />
           ) : (
             <p className="muted home-empty-day">{t("No classes today. A good moment to catch up.")}</p>
@@ -441,27 +416,11 @@ export default function Home({
               <h2 id="home-attention-title">{t("To attend to")}</h2>
               <span>{attention.length}</span>
             </div>
-            <div className="at">
-              {attention.map((item, index) => {
-                const text = attentionText(item, t, locale, true);
-                return (
-                  <div className="ai-item" key={`${item.kind}-${index}`}>
-                    <button type="button" className="ai" onClick={() => runAttention(item)}>
-                      <i className={`dot-${item.tone}`} />
-                      <span>
-                        <b>{text.lead}</b> {text.rest}
-                      </span>
-                      <ChevronRight className="chev" aria-hidden="true" />
-                    </button>
-                    <SeenButton
-                      keys={item.seenKeys}
-                      label={t("Mark as seen: {name}", { name: text.lead })}
-                      onDismiss={actions?.setNotesDismissed}
-                    />
-                  </div>
-                );
-              })}
-            </div>
+            {attention.length ? (
+              <div className="alerts" role="list">
+                {attentionRows}
+              </div>
+            ) : null}
             {showSeenAttention}
           </section>
         ) : null}
@@ -481,7 +440,6 @@ export default function Home({
             onOpenTracking={openTracking}
           />
         </section>
-        {stalePanel}
       </div>
     );
   }
@@ -515,7 +473,7 @@ export default function Home({
         </div>
         {classCount ? (
           <>
-            <TodayTimeline timeline={timeline} selectedKey={selectedItem?.key} onSelect={setSelectedKey} />
+            <TodayTimeline timeline={timeline} day={asOf} selectedKey={selectedItem?.key} onSelect={setSelectedKey} />
             {selectedItem ? (
               <ClassCard
                 item={selectedItem}
@@ -523,7 +481,7 @@ export default function Home({
                 derived={todayDerived}
                 onRecord={openClass}
                 onOpenRecord={openHistory}
-                onDismissNotes={actions?.setNotesDismissed}
+                onDismissNotes={onDismissNotes}
               />
             ) : null}
           </>
@@ -545,26 +503,8 @@ export default function Home({
             {showSeenAttention}
           </div>
           {attention.length ? (
-            <div className="alerts">
-              {attention.map((item, index) => {
-                const text = attentionText(item, t, locale, false);
-                return (
-                  <div className="al-item" key={`${item.kind}-${index}`}>
-                    <button type="button" className="al" onClick={() => runAttention(item)}>
-                      <i className={`dot-${item.tone}`} />
-                      <span>
-                        <b>{text.lead}</b> {text.rest}
-                        {text.link ? <small>{text.link}</small> : null}
-                      </span>
-                    </button>
-                    <SeenButton
-                      keys={item.seenKeys}
-                      label={t("Mark as seen: {name}", { name: text.lead })}
-                      onDismiss={actions?.setNotesDismissed}
-                    />
-                  </div>
-                );
-              })}
+            <div className="alerts" role="list">
+              {attentionRows}
             </div>
           ) : null}
         </section>
@@ -615,7 +555,6 @@ export default function Home({
           </div>
         )}
       </section>
-      {stalePanel}
     </div>
   );
 }

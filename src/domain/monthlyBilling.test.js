@@ -314,9 +314,19 @@ describe("monthly billing", () => {
         },
       ],
     };
-    const item = buildAttentionItems(state, {}, "2026-10-22").find((entry) => entry.kind === "monthlyDue");
-    expect(item).toMatchObject({ overdue: true, count: 2, amount: 2200, names: ["Diego", "Valeria"] });
-    expect(item.dueToday).toEqual({ names: ["Sofía"], amount: 1200 });
+    const items = buildAttentionItems(state, {}, "2026-10-22");
+    // Overdue fees fold into the overdue money alert; the fee due today has its own alert.
+    const overdueFees = items
+      .find((entry) => entry.kind === "overdue")
+      .seenKeys.filter((key) => key.startsWith("attention:fee:"));
+    expect(overdueFees).toHaveLength(2);
+    expect(overdueFees.every((key) => key.endsWith(":overdue"))).toBe(true);
+    expect(overdueFees.some((key) => key.includes(":sofia:"))).toBe(false);
+    expect(items.find((entry) => entry.kind === "dueToday")).toMatchObject({
+      count: 1,
+      amount: 1200,
+      names: ["Sofía"],
+    });
   });
 
   it("covers the classes left this month at no charge when a new group's first fee is next month", () => {
