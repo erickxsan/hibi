@@ -41,6 +41,8 @@ for (const width of [1440, 390]) {
       // The mobile header shortens the action to «Nueva».
       await page.getByRole("button", { name: width < 600 ? "Nueva" : "Nueva clase", exact: true }).click();
       const editor = page.getByRole("dialog", { name: "Nueva clase", exact: true });
+      // The drawer opens on a one-time class; the repeat controls belong to «Recurrente».
+      await editor.getByRole("button", { name: "Recurrente", exact: true }).click();
       await editor.getByRole("combobox", { name: "Empieza", exact: true }).click();
       const calendar = page.getByRole("dialog", { name: "Elegir fecha" });
       await expect(calendar).toBeVisible();

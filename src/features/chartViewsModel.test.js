@@ -150,6 +150,31 @@ describe("attendance views", () => {
     expect(calendar.weekdays[0]).toMatchObject({ days: 3, value: 4 / 6 });
   });
 
+  it("covers a short range from the Monday of its start to the Sunday of its end", () => {
+    // Thu 2026-11-05: «Este mes» is Nov 1–5 and Nov 1 is a Sunday.
+    const month = attendanceCalendar(scope({ asOf: "2026-11-05", start: "2026-11-01", end: "2026-11-05" }));
+    expect(month.weeks).toHaveLength(2);
+    expect(month.cells[0].date).toBe("2026-10-26");
+    expect(month.cells.at(-1).date).toBe("2026-11-08");
+    expect(month.cells.map((cell) => cell.date)).toEqual(
+      expect.arrayContaining(["2026-11-02", "2026-11-03", "2026-11-04", "2026-11-05"]),
+    );
+    expect(month.cells.find((cell) => cell.date === "2026-11-05")).toMatchObject({ today: true });
+
+    // Inicio's «Hoy» is one day: still a single week.
+    const today = attendanceCalendar(scope({ asOf: "2026-11-05", start: "2026-11-05", end: "2026-11-05" }));
+    expect(today.weeks).toHaveLength(1);
+    expect(today.cells.map((cell) => cell.date)).toEqual([
+      "2026-11-02",
+      "2026-11-03",
+      "2026-11-04",
+      "2026-11-05",
+      "2026-11-06",
+      "2026-11-07",
+      "2026-11-08",
+    ]);
+  });
+
   it("switches to one cell per month for long ranges", () => {
     const calendar = attendanceCalendar(scope({ start: "2026-01-01", end: "2026-12-31" }));
     expect(calendar.layout).toBe("months");
