@@ -405,8 +405,8 @@ function startChoice(state, group, members, draft, asOf) {
 
 // The figures of a start in a past month: fees born overdue and unpaid classes it forgives, then the
 // fees already owed that stop being charged, if any (one string: a single text node).
-function backdatedHint({ dropped = 0, droppedTotal = 0, ...effects }, locale, t) {
-  const main = createdHint(effects, locale, t);
+function backdatedHint({ count, total, stopped, dropped = 0, droppedTotal = 0 }, locale, t) {
+  const main = createdHint({ count, total, stopped }, locale, t);
   if (!dropped) return main;
   const values = { count: dropped, total: formatMoney(droppedTotal, locale) };
   const gone = t(
