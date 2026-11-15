@@ -287,14 +287,15 @@ describe("old debts", () => {
     const rows = derive(state).classLog;
     expect(staleDebts(state, rows, AS_OF).total).toBe(2100);
     const derived = derive(state);
-    const item = buildAttentionItems(state, derived, AS_OF).find((entry) => entry.kind === "staleDebts");
-    expect(item).toMatchObject({ tone: "pend", amount: 2100, action: { type: "stale" } });
-    expect(item.names).toEqual(["Luna Ortiz"]);
+    // Old debts fold into the overdue money alert, which leads to Seguimiento › Pagos and its «Revisar».
+    const item = buildAttentionItems(state, derived, AS_OF).find((entry) => entry.kind === "overdue");
+    expect(item).toMatchObject({ staleAmount: 2100, action: { type: "monthly" } });
+    expect(item.studentIds).toContain(state.students.find((student) => student.fullName === "Luna Ortiz").id);
     const seen = {
       ...state,
       settings: { ...state.settings, dismissedNotes: Object.fromEntries(item.seenKeys.map((key) => [key, true])) },
     };
-    expect(buildAttentionItems(seen, derive(seen), AS_OF).find((entry) => entry.kind === "staleDebts").dismissed).toBe(
+    expect(buildAttentionItems(seen, derive(seen), AS_OF).find((entry) => entry.kind === "overdue").dismissed).toBe(
       true,
     );
     const allGone = markLost(
@@ -304,9 +305,9 @@ describe("old debts", () => {
       ),
       AS_OF,
     );
-    expect(buildAttentionItems(allGone, derive(allGone), AS_OF).some((entry) => entry.kind === "staleDebts")).toBe(
-      false,
-    );
+    const after = buildAttentionItems(allGone, derive(allGone), AS_OF).find((entry) => entry.kind === "overdue");
+    expect(after?.staleAmount || 0).toBe(0);
+    expect((after?.seenKeys || []).some((key) => key.startsWith("attention:stale:"))).toBe(false);
   });
 });
 

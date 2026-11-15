@@ -1,8 +1,8 @@
-import { useState } from "react";
-import { Check, ChevronRight } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ChevronRight } from "lucide-react";
 import { useI18n } from "../i18n/index.jsx";
 import { attendanceBilling } from "../domain/attendanceBilling.js";
-import { BottomSheet, Button, IconButton, ListRow } from "../components/ui";
+import { BottomSheet, Button, ListRow } from "../components/ui";
 import { StudentAvatar } from "../components/StudentAvatar";
 import {
   formatMoney,
@@ -24,13 +24,14 @@ function firstName(name) {
   return String(name || "").split(" ")[0];
 }
 
-/** Short status under each student of a class card, or null when there is nothing to flag. */
-export function noteChip(note, t, locale) {
+/**
+ * Short status under each student of a class card, or null when there is nothing to flag. A debt has none:
+ * «Antes de empezar» already says it, so it is not repeated under the avatar.
+ */
+export function noteChip(note, t) {
   switch (note.kind) {
     case "absences":
       return { tone: "st-venc", text: t("{missed} absences of {total}", { missed: note.missed, total: note.total }) };
-    case "owes":
-      return { tone: "st-pend", text: t("Owes {amount}", { amount: formatMoney(note.amount, locale) }) };
     case "ungraded":
       return { tone: "st-pend", text: t("Ungraded") };
     case "monthlyPending":
@@ -74,10 +75,18 @@ function openNotes(item, t, locale) {
   return item.notes.filter((entry) => !entry.dismissed && noteSentence(entry.note, t, locale));
 }
 
-/** «Marcar como visto»: hides a notice until something new causes it (another unpaid class, absence, month…). */
-export function SeenButton({ keys, label, onDismiss }) {
+/**
+ * «Ocultar»: hides a notice until something new causes it (another unpaid class, absence, month…). `onDismiss`
+ * receives the keys, whether to hide them and how many notices they are, for the «Deshacer» notice.
+ */
+export function SeenButton({ keys, label, onDismiss, count = 1 }) {
+  const { t } = useI18n();
   if (!keys?.length || !onDismiss) return null;
-  return <IconButton className="note-seen" icon={Check} label={label} onClick={() => onDismiss(keys, true)} />;
+  return (
+    <button type="button" className="note-seen" aria-label={label} onClick={() => onDismiss(keys, true, count)}>
+      {t("Hide")}
+    </button>
+  );
 }
 
 function NoteSeenButton({ entry, onDismiss }) {
@@ -85,19 +94,19 @@ function NoteSeenButton({ entry, onDismiss }) {
   return (
     <SeenButton
       keys={entry.key ? [entry.key] : []}
-      label={t("Mark as seen: {name}", { name: firstName(entry.student.fullName) })}
+      label={t("Hide: {name}", { name: firstName(entry.student.fullName) })}
       onDismiss={onDismiss}
     />
   );
 }
 
-/** «N avisos vistos · Volver a mostrar» for the given seen keys. */
+/** «N avisos ocultos · Volver a mostrar» for the given hidden keys. */
 export function ShowSeenButton({ count, keys, onDismiss }) {
   const { t } = useI18n();
   if (!count || !onDismiss) return null;
   return (
     <button type="button" className="link-button note-hidden" onClick={() => onDismiss(keys, false)}>
-      {t(count === 1 ? "{count} seen notice · Show again" : "{count} seen notices · Show again", { count })}
+      {t(count === 1 ? "{count} hidden notice · Show again" : "{count} hidden notices · Show again", { count })}
     </button>
   );
 }
@@ -116,8 +125,25 @@ function stateLabel(item, now, t) {
   return t("Scheduled");
 }
 
-export function TodayTimeline({ timeline, selectedKey, onSelect }) {
+export function TodayTimeline({ timeline, day = "", selectedKey, onSelect }) {
   const { t, locale } = useI18n();
+  const wrapRef = useRef(null);
+  // When the day is wider than its box (a tablet held upright), it opens scrolled to «ahora» and the class in
+  // progress or next, instead of at the first hour. It runs on load and on a new day, never under the user's
+  // own scrolling.
+  useEffect(() => {
+    const wrap = wrapRef.current;
+    if (!wrap || wrap.scrollWidth <= wrap.clientWidth) return;
+    const needle = wrap.querySelector(".needle");
+    const block = wrap.querySelector(".blk.live, .blk.next");
+    const nowX = needle ? needle.offsetLeft : null;
+    // Room before «ahora» for its hour label; the next class wins when both do not fit.
+    let left = Math.min(nowX ?? Infinity, block ? block.offsetLeft : Infinity) - 32;
+    if (!Number.isFinite(left)) return;
+    if (block && block.offsetLeft + block.offsetWidth > left + wrap.clientWidth)
+      left = block.offsetLeft + block.offsetWidth - wrap.clientWidth + 4;
+    wrap.scrollLeft = Math.max(0, Math.min(left, wrap.scrollWidth - wrap.clientWidth));
+  }, [day]);
   const span = timeline.dayEnd - timeline.dayStart || 1;
   const pct = (minutes) => Math.max(0, Math.min(100, ((minutes - timeline.dayStart) / span) * 100));
   const hours = [];
@@ -127,7 +153,7 @@ export function TodayTimeline({ timeline, selectedKey, onSelect }) {
   const minWidth = Math.max(860, (hours.length - 1) * 72);
   const showNow = timeline.now >= timeline.dayStart && timeline.now <= timeline.dayEnd;
   return (
-    <div className="tlw" role="region" aria-label={t("Today's timeline")} tabIndex={0}>
+    <div className="tlw" ref={wrapRef} role="region" aria-label={t("Today's timeline")} tabIndex={0}>
       <div className="tl" style={{ minWidth: `${minWidth}px` }}>
         {hours.map((minute, index) => (
           <span
@@ -251,7 +277,7 @@ export function ClassCard({ item, now, derived, onRecord, onOpenRecord, onDismis
               ? recordedChip(rowsByStudent.get(person.id), t)
               : entry?.dismissed
                 ? null
-                : noteChip(entry?.note || { kind: "upToDate" }, t, locale);
+                : noteChip(entry?.note || { kind: "upToDate" }, t);
             return (
               <div className="rs" key={person.id}>
                 <StudentAvatar avatarId={person.avatarId} name={person.fullName} decorative />
@@ -283,8 +309,12 @@ export function ClassCard({ item, now, derived, onRecord, onOpenRecord, onDismis
         <div className="dside-head">
           <span className="overline">{t(done ? "Left pending" : "Before you start")}</span>
           {onDismissNotes && seenKeys.length > 1 ? (
-            <button type="button" className="link-button" onClick={() => onDismissNotes(seenKeys, true)}>
-              {t("Mark all as seen")}
+            <button
+              type="button"
+              className="link-button note-seen-all"
+              onClick={() => onDismissNotes(seenKeys, true, seenKeys.length)}
+            >
+              {t("Hide all")}
             </button>
           ) : null}
         </div>
@@ -319,8 +349,8 @@ export function ClassCard({ item, now, derived, onRecord, onOpenRecord, onDismis
   );
 }
 
+/** A later class's line on the phone: who is expected, never a debt (only «Antes de empezar» says that). */
 function agendaLine(item, t, locale) {
-  const session = item.session;
   if (item.state === "done" && item.attendance) {
     const absent = item.attendance.absentIds
       .map((id) => item.roster.find((student) => student.id === id)?.fullName)
@@ -332,10 +362,7 @@ function agendaLine(item, t, locale) {
       : base;
   }
   if (item.state === "pending") return t("Not recorded");
-  const flag = item.notes.find((entry) => !entry.dismissed && entry.note.kind === "owes");
   const when = item.state === "live" ? t("In progress") : t("Later");
-  if (session.format === "individual" && flag)
-    return `${when} · ${t("owes {amount}", { amount: formatMoney(flag.note.amount, locale) })}`;
   return `${when} · ${t(item.roster.length === 1 ? "{count} student" : "{count} students", { count: item.roster.length })}`;
 }
 
@@ -451,7 +478,7 @@ export function TodayAgenda({ timeline, onRecord, onOpen, onDismissNotes = undef
       >
         <div className="list-rows">
           {(rosterItem?.notes || []).map(({ student, note, dismissed }) => {
-            const chip = dismissed ? null : noteChip(note, t, locale);
+            const chip = dismissed ? null : noteChip(note, t);
             return (
               <ListRow
                 key={student.id}

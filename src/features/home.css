@@ -532,22 +532,18 @@
   min-width: 0;
 }
 
-/* «Marcar como visto»: quiet until hovered so the notes still read first. */
+/* «Ocultar»: a quiet text button, so the notes still read first; the hit area keeps 44px without growing the row. */
 .home-page .note-seen {
-  width: 28px;
-  height: 28px;
-  min-height: 28px;
-  margin: -4px -6px -4px 0;
   flex: none;
+  min-height: 44px;
+  margin: -12px -8px -12px 0;
+  padding: 0 8px;
   border: 0;
-  border-radius: 50%;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--sumi-muted);
-}
-
-.home-page .note-seen svg {
-  width: 16px;
-  height: 16px;
+  font: 700 13px/18px var(--font-sans);
+  cursor: pointer;
 }
 
 .home-page .note-seen:hover,
@@ -568,56 +564,57 @@
 }
 
 /* ---------- Para atender ---------- */
+/* One row per topic: dot · title and its one line · action · «Ocultar». */
 .home-page .alerts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
+  display: flex;
+  flex-direction: column;
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
 }
 
 .home-page .al-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 4px;
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 16px;
   min-width: 0;
+  padding: 10px 0;
 }
 
 .home-page .al-item + .al-item {
-  border-left: 1px solid var(--line-soft);
-  padding-left: 20px;
+  border-top: 1px solid var(--line-soft);
 }
 
-.home-page .al-item .note-seen {
-  margin: 12px 12px 0 0;
-}
-
-.home-page .al {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  padding: 16px 20px 16px 0;
-  border: 0;
-  background: transparent;
-  text-align: left;
-  font: 500 14px/20px var(--font-sans);
-  color: var(--sumi);
-  cursor: pointer;
-  min-height: 44px;
-}
-
-.home-page .al:hover b {
-  text-decoration: underline;
-}
-
-.home-page .al i,
-.home-page .ai i {
+.home-page .al-item > i {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  flex: none;
-  margin-top: 6px;
+}
+
+.home-page .al-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.home-page .al-text b {
+  font: 700 15px/20px var(--font-sans);
+  color: var(--sumi);
+}
+
+.home-page .al-text span {
+  font: 500 13px/18px var(--font-sans);
+  color: var(--sumi-muted);
+}
+
+.home-page .al-item .al-act {
+  min-height: 44px;
+  padding: 0 16px;
+}
+
+.home-page .al-item .note-seen {
+  margin: 0 -8px 0 0;
 }
 
 .home-page .dot-bad {
@@ -626,13 +623,6 @@
 
 .home-page .dot-pend {
   background: var(--ocre);
-}
-
-.home-page .al small {
-  display: block;
-  margin-top: 2px;
-  font: 700 13px/18px var(--font-sans);
-  color: var(--bermellon-strong);
 }
 
 /* ---------- Tarjetas de métricas ---------- */
@@ -1524,66 +1514,20 @@
   flex: none;
 }
 
-.home-page .flag .note-seen {
-  width: 36px;
-  height: 36px;
-  min-height: 36px;
-  margin: -9px -8px -9px 0;
-}
-
 .home-page .nx .button {
   width: 100%;
   min-height: 48px;
   font-size: 15px;
 }
 
-.home-page .at {
-  display: flex;
-  flex-direction: column;
+/* The phone keeps the same alert rows, tighter. */
+.home-page.is-compact .al-item {
+  gap: 10px;
+  padding: 8px 0;
 }
 
-.home-page .ai-item {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  border-top: 1px solid var(--line-soft);
-}
-
-.home-page .ai-item:first-child {
-  border-top: 0;
-}
-
-.home-page .ai-item .note-seen {
-  width: 36px;
-  height: 36px;
-  min-height: 36px;
-  margin: 0 -8px 0 0;
-}
-
-.home-page .ai {
-  flex: 1;
-  min-width: 0;
-  display: grid;
-  grid-template-columns: 10px minmax(0, 1fr) 18px;
-  gap: 12px;
-  align-items: center;
-  width: 100%;
-  min-height: 56px;
-  padding: 6px 0;
-  border: 0;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-  font: 500 15px/20px var(--font-sans);
-  color: var(--sumi);
-}
-
-.home-page .ai i {
-  margin-top: 0;
-}
-
-.home-page .ai b {
-  font-weight: 800;
+.home-page.is-compact .al-item .al-act {
+  padding: 0 12px;
 }
 
 .home-page .mt {

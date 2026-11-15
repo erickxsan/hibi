@@ -113,27 +113,20 @@ afterEach(() => {
 });
 
 describe("Home money", () => {
-  it("states the scope of the overdue alert and opens the chart on that same figure", async () => {
+  it("states the overdue figure in one short alert that leads to Tracking's payments", async () => {
     const user = userEvent.setup();
-    renderHome();
+    const props = renderHome();
     const attention = screen.getByRole("heading", { name: /^To attend to · / }).closest("section");
-    const alert = within(attention).getByRole("button", { name: /overdue/ });
-    // Overdue (all months) and the total with what is not due yet; the inactive student stays apart.
-    expect(alert).toHaveTextContent(
-      "$400 overdue · $600 in total from Maya. Overdue: $200 from October · $200 from earlier months. Aside, $200 owed by inactive students.",
-    );
-    expect(alert).not.toHaveTextContent(/Old/);
-    await user.click(alert);
-    const aside = document.querySelector("aside.det");
-    expect(within(aside).getByText("To collect")).toBeInTheDocument();
-    expect(aside.querySelector(".big")).toHaveTextContent("$600");
-    expect(within(aside).getByText("$400 overdue")).toBeInTheDocument();
-    const values = [...aside.querySelectorAll(".kv")].map((item) => item.textContent);
-    expect(values).toEqual(["Overdue from October$200", "Overdue from earlier months$200", "Not due yet$200"]);
-    const who = [...aside.querySelectorAll(".who")].map((item) => item.textContent);
-    expect(who[0]).toMatch(/^Maya Torres\$400 overdue · class on .*\$600$/);
-    expect(within(aside).getByText("Owed by inactive students · $200")).toBeInTheDocument();
-    expect(who[1]).toMatch(/^Old Student.*\$200$/);
+    const alert = within(attention).getByText("$400 overdue").closest(".al-item");
+    // The overdue figure first, then who and what is kept apart (the inactive student), on one line.
+    expect(alert).toHaveTextContent("$400 overdue1 student · $200 from inactive studentsCollect");
+    expect(alert).not.toHaveTextContent(/Old|Maya/);
+    await user.click(within(alert).getByRole("button", { name: "Collect · $400 overdue" }));
+    expect(props.openPage).toHaveBeenCalledWith("grades", {
+      type: "open-tracking",
+      tab: "payments",
+      spotlight: { kind: "students", ids: ["s1", "s9"] },
+    });
   });
 
   it("compares collections with the same days of the previous period", async () => {
@@ -152,8 +145,9 @@ describe("Home money", () => {
     const user = userEvent.setup();
     const props = renderHome();
     const attention = screen.getByRole("heading", { name: "To attend to" }).closest("section");
-    expect(within(attention).getByRole("button", { name: /overdue/ })).toHaveTextContent(
-      "$400 overdue · $600 in total from Maya · $200 owed by inactive students",
+    // The same alert row as on a computer: the figure, one line and «Cobrar».
+    expect(within(attention).getByText("$400 overdue").closest(".al-item")).toHaveTextContent(
+      "$400 overdue1 student · $200 from inactive studentsCollect",
     );
     const row = screen.getByRole("button", { name: /^Collections:/ });
     expect(row).toHaveTextContent("$200 overdue from October");

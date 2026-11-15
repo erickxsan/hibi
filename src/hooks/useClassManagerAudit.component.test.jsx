@@ -121,7 +121,8 @@ describe("a group created through the live manager", () => {
       expect(deriveMonthlyCharges(state, asOf)).toEqual([]);
       const kinds = buildAttentionItems(state, deriveAll(state, asOf), asOf).map((item) => item.kind);
       expect(kinds).not.toContain("unrecorded");
-      expect(kinds).not.toContain("monthlyDue");
+      expect(kinds).not.toContain("dueToday");
+      expect(kinds).not.toContain("overdue");
 
       // Editing the schedule later keeps the start date.
       await act(async () => {

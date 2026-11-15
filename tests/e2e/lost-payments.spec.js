@@ -132,16 +132,21 @@ test.describe("pagos perdidos en escritorio", () => {
     );
   });
 
-  test("el aviso de Inicio junta lo viejo y nada viene marcado", async ({ page }) => {
+  test("el aviso de Inicio junta lo viejo, lleva a revisarlo en Pagos y nada viene marcado", async ({ page }) => {
     await seed(page);
     await page.goto("/");
-    await page.locator("button.al", { hasText: "con más de 3 meses" }).click();
+    // One alert for the overdue money, with the old debts on its second line.
+    const alert = page.locator(".al-item", { hasText: "con más de 3 meses" });
+    await expect(alert).toHaveCount(1);
+    await alert.getByRole("button", { name: /^Cobrar · / }).click();
+    await page.locator(".tlist-foot").getByRole("button", { name: "Revisar" }).click();
     const panel = page.getByRole("dialog");
     await expect(panel.getByRole("button", { name: "Dar por perdido" })).toBeDisabled();
     await panel.getByRole("checkbox", { name: "Diego Mora" }).check();
     await expect(panel.locator(".lost-total")).toContainText("$250");
     await panel.getByRole("button", { name: "Dar por perdido" }).click();
     await expect(page.locator(".toast", { hasText: "$250 dados por perdidos" })).toBeVisible();
+    await page.goto("/");
     await expect(page.locator(".dnote", { hasText: "Diego" })).toHaveCount(0);
   });
 });
