@@ -1,4 +1,11 @@
-import { MAX_BACKUP_BYTES } from "../domain/index.js";
+import {
+  assertWritableDataVersion,
+  DATA_VERSION,
+  dataVersionOf,
+  MAX_BACKUP_BYTES,
+  needsNewerClient,
+  withCurrentDataVersion,
+} from "../domain/index.js";
 import { canonicalWorkspaceState } from "./canonicalWorkspaceState.js";
 import {
   canonicalWorkspaceHash,
@@ -462,6 +469,9 @@ export function createEncryptedWorkspaceRepository(
   }) {
     const baseState = canonicalState(workspace.state);
     let nextState = canonicalState(state);
+    // A newer Hibi wrote these records. This build dropped the fields it does not know while reading them,
+    // so anything it encrypted from here would erase those fields in the cloud. Nothing is prepared or queued.
+    assertWritableDataVersion(baseState, nextState);
     if (previousState && previousState !== workspace.state) {
       // The edit was made on an older view. Apply only the fields it changed.
       const viewed = canonicalState(previousState);
@@ -470,8 +480,13 @@ export function createEncryptedWorkspaceRepository(
     }
     // Order keys are sparse: only new or displaced records receive a new key.
     // Collided keys signed by older clients are re-keyed as displaced records.
-    const diff = diffWorkspaceStates(baseState, nextState, orderKeysFor(workspace));
+    let diff = diffWorkspaceStates(baseState, nextState, orderKeysFor(workspace));
     if (!diff.changeCount) return { empty: true, state: nextState };
+    if (dataVersionOf(nextState) !== DATA_VERSION) {
+      // The first save of this build stamps its data version, so tabs still running an older build stop saving.
+      nextState = canonicalState(withCurrentDataVersion(nextState));
+      diff = diffWorkspaceStates(baseState, nextState, orderKeysFor(workspace));
+    }
     if (diff.changeCount > MAX_SYNC_CHANGES) {
       throw mutationLimitFailure(
         "This change affects more than 500 records at once. Split it into smaller edits before saving.",
@@ -584,6 +599,8 @@ export function createEncryptedWorkspaceRepository(
   }
 
   async function rebaseMutation(mutation, latest, session, ownerId) {
+    // Records from a newer Hibi: the edit stays queued for the newer build instead of becoming a conflict.
+    assertWritableDataVersion(latest.state);
     if (await replacedSince(mutation, latest, ownerId)) throw contentConflict(latest, { reason: "replacement" });
     const state = mergedState(mutation, latest);
     // Same operation ID: the server still consults its receipt before applying.
@@ -750,6 +767,8 @@ export function createEncryptedWorkspaceRepository(
    * needs a decision is shown with this device's values but is not rewritten.
    */
   async function projectPendingWorkspace(confirmed, entries, session) {
+    // Written by a newer Hibi: show it as it is and keep every queued edit untouched for the newer build.
+    if (needsNewerClient(confirmed?.state)) return { workspace: confirmed, entries };
     let projected = confirmed;
     const projectedEntries = [];
     for (const entry of entries) {
@@ -808,7 +827,9 @@ export function createEncryptedWorkspaceRepository(
     const user = await requireUser(expectedOwnerId);
     const ownerId = expectedOwnerId || user.id;
     const current = cache || (await loadWorkspace(session, ownerId));
-    const nextState = canonicalState(state);
+    // A restore, import or reset by an older build would drop every field it does not know.
+    assertWritableDataVersion(current.state, state);
+    const nextState = canonicalState(withCurrentDataVersion(state));
     // A full replacement changes the synchronization baseline even for unchanged
     // records. Advance every existing revision so pending edits cannot rebase
     // across a restore/import using a recycled entity revision.
@@ -1285,6 +1306,8 @@ export function createEncryptedWorkspaceRepository(
     const user = await requireUser(expectedOwnerId);
     const ownerId = expectedOwnerId || user.id;
     const current = cache || (await loadWorkspace(oldSession, ownerId));
+    // Rotation re-encrypts the records as this build read them.
+    assertWritableDataVersion(current.state);
     const keyVersion = current.keyVersion + 1;
     const operationId = createOperationId();
     onProgress?.("Encrypting active records with the new master key…");
@@ -1328,6 +1351,7 @@ export function createEncryptedWorkspaceRepository(
         onProgress?.(`Re-encrypting recovery snapshots ${completed}/${points.length + 1}…`);
         const copy = await loadSnapshot(point.id, oldSession, ownerId);
         if (!copy) continue;
+        assertWritableDataVersion(copy.state);
         const snapshotEnvelopes = await encryptWorkspace({
           masterKey: newMasterKey,
           workspaceCryptoId: oldSession.workspaceCryptoId,

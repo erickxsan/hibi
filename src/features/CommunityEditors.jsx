@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Plus, Trash2, X } from "lucide-react";
 import { useI18n } from "../i18n/index.jsx";
 import {
@@ -24,6 +24,7 @@ import {
   adjustmentStart,
   applyFromFor,
   applyFromOptions,
+  backdatedEffects,
   billingChanges,
   billingTermChanged,
   feeSuggestion,
@@ -481,7 +482,8 @@ function monthOption(month, asOf, locale, t) {
 
 /**
  * «Aplica desde»: shown once the arrangement is monthly or changes. The hint says what happens to the
- * months around the chosen one; switching to monthly in this month lists what each student owes.
+ * months around the chosen one; switching to monthly in this month lists what each student owes, and
+ * a start in a past month that was not monthly says what it does to the money owed (`effects`).
  */
 function startChoice(state, group, members, draft, asOf) {
   const latest = groupBillingFor(group);
@@ -493,6 +495,7 @@ function startChoice(state, group, members, draft, asOf) {
   const wasMonthly = groupBillingFor(group, from)?.mode === "monthly";
   const values = { month: from };
   let hint = "";
+  let effects = null;
   if (!monthly) {
     hint = "Monthly fees end in {last}; per-class charges start in {month}.";
     values.last = periodOf(addDays(`${from}-01`, -1));
@@ -506,17 +509,58 @@ function startChoice(state, group, members, draft, asOf) {
   } else if (from === period) {
     hint = "The {month} fee is created and what they already paid per class is discounted:";
   } else if (from < period) {
-    hint = "Monthly fees from {month} on are created; what was already paid per class those months is discounted.";
+    // Backdated: fees born overdue and the unpaid classes they now cover, from what saving would store.
+    effects = backdatedEffects(state, group, members, draft, asOf);
   } else {
     hint = "Monthly fees start in {month}; until then classes are charged per class.";
   }
   return {
     from,
-    options: applyFromOptions(group, draft, asOf),
+    options: applyFromOptions(group, draft, asOf, state),
     hint,
     values,
+    effects,
     credits: monthly && !wasMonthly && from === period ? switchCredits(state, group, members, draft, asOf, from) : [],
   };
+}
+
+// The figures of a start in a past month: fees born overdue and unpaid classes it forgives, then the
+// fees already owed that stop being charged, if any (one string: a single text node).
+function backdatedHint({ count, total, stopped, dropped = 0, droppedTotal = 0 }, locale, t) {
+  const main = createdHint({ count, total, stopped }, locale, t);
+  if (!dropped) return main;
+  const values = { count: dropped, total: formatMoney(droppedTotal, locale) };
+  const gone = t(
+    dropped === 1
+      ? "1 fee already owed stops being charged ({total})."
+      : "{count} fees already owed stop being charged ({total}).",
+    values,
+  );
+  return `${main} ${gone}`;
+}
+
+function createdHint({ count, total, stopped }, locale, t) {
+  const values = { count, total: formatMoney(total, locale), debt: formatMoney(stopped, locale) };
+  if (!count)
+    return t(
+      stopped
+        ? "No fee is created overdue; unpaid classes in those months ({debt}) stop being charged."
+        : "No fee is created overdue.",
+      values,
+    );
+  if (!stopped)
+    return t(
+      count === 1
+        ? "1 fee is created already overdue ({total})."
+        : "{count} fees are created already overdue ({total}).",
+      values,
+    );
+  return t(
+    count === 1
+      ? "1 fee is created already overdue ({total}) and unpaid classes in those months ({debt}) stop being charged."
+      : "{count} fees are created already overdue ({total}) and unpaid classes in those months ({debt}) stop being charged.",
+    values,
+  );
 }
 
 /**
@@ -548,12 +592,24 @@ export function BillingFields({ draft, setDraft, group, members = [], state, asO
       else delete adjustments[id];
       return { ...current, adjustments };
     });
-  const start = chooseStart && group?.id ? startChoice(state, group, members, draft, asOf) : null;
-  // Changing how a student pays never rewrites the months before it applies.
-  const adjustmentsFrom =
-    chooseStart && monthly && group?.id && Object.keys(billingChanges(group, members, draft, asOf).overrides).length
-      ? adjustmentStart(group, draft, asOf)
-      : "";
+  // A backdated start derives the group's fees twice (before and after): only when the inputs change.
+  const start = useMemo(
+    () => (chooseStart && group?.id ? startChoice(state, group, members, draft, asOf) : null),
+    [chooseStart, group, members, draft, asOf, state],
+  );
+  // Changing how a student pays never rewrites the months before it applies. A switch to per class
+  // may start later than the other changes: its row says when. With the workspace, as saving does
+  // (the records decide whether this month was already lived monthly, see perClassStart).
+  const pending = useMemo(
+    () =>
+      chooseStart && monthly && group?.id
+        ? billingChanges(group, members, draft, asOf, draft.applyFrom ?? null, state).starts
+        : {},
+    [chooseStart, monthly, group, members, draft, asOf, state],
+  );
+  const changesFrom = Object.keys(pending).length ? adjustmentStart(group, draft, asOf) : "";
+  const adjustmentsFrom = Object.values(pending).includes(changesFrom) ? changesFrom : "";
+  const perClassFrom = (id) => (pending[id] && pending[id] !== changesFrom ? pending[id] : "");
   return (
     <div className="field-rows billing-fields">
       <FieldRow label={t("Billing")}>
@@ -673,15 +729,22 @@ export function BillingFields({ draft, setDraft, group, members = [], state, asO
                         />
                       ) : adjustment.mode === "perClass" ? (
                         <span className="field-row-hint">
-                          {t("{amount} per class attended", {
-                            amount: formatMoney(
-                              // Their own rate, when they have one, prices their classes instead of the group's.
-                              Number.isFinite(student.customHourlyRate)
-                                ? Math.round(hours * student.customHourlyRate * 100) / 100
-                                : perClass,
-                              locale,
-                            ),
-                          })}
+                          {t(
+                            perClassFrom(id)
+                              ? "{amount} per class attended from {month}"
+                              : "{amount} per class attended",
+                            {
+                              amount: formatMoney(
+                                // Their own rate, when they have one, prices their classes instead of the group's.
+                                Number.isFinite(student.customHourlyRate)
+                                  ? Math.round(hours * student.customHourlyRate * 100) / 100
+                                  : perClass,
+                                locale,
+                              ),
+                              // A month they already paid monthly keeps its fee: per class starts after it.
+                              month: perClassFrom(id) ? monthLong(`${perClassFrom(id)}-01`, locale) : "",
+                            },
+                          )}
                         </span>
                       ) : null}
                       {/* Monthly payers may fall due on their own day or class instead of the group's. */}
@@ -761,7 +824,9 @@ export function BillingFields({ draft, setDraft, group, members = [], state, asO
                 </option>
               ))}
             </Select>
-            {start.hint ? (
+            {start.effects ? (
+              <span className="field-row-hint">{backdatedHint(start.effects, locale, t)}</span>
+            ) : start.hint ? (
               <span className="field-row-hint">
                 {t(
                   start.hint,

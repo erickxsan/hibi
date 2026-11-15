@@ -538,7 +538,8 @@ export default function Community({
     runSave(async () => {
       if (!groupDraft || !billingDraft) return false;
       const members = membersOf(group);
-      const { billing, overrides } = billingChanges(group, members, billingDraft, asOf);
+      // With the workspace: a backdated start also saves who joined after it began (backdatedJoins).
+      const { billing, overrides } = billingChanges(group, members, billingDraft, asOf, billingDraft.applyFrom, state);
       const draft = { ...group, name: groupDraft.name, hourlyRate: billingDraft.hourlyRate, billing };
       const saved = actions.saveGroupBilling
         ? await actions.saveGroupBilling(draft, overrides)

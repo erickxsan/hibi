@@ -1,14 +1,17 @@
+import { calculateOutstanding } from "../domain/calculations.js";
 import { roundMoney, sumMoney } from "../domain/money.js";
 import { addDays, startOfMonth } from "../domain/dates";
 import { gradeGroupId } from "../domain/semanticIdentity";
 import { validateStudent } from "../domain/validation.js";
 import {
   adjustmentFor,
+  backdatedJoins,
   changeGroupBilling,
   changeStudentAdjustment,
   deriveMonthlyCharges,
   groupBillingFor,
   groupClassDates,
+  groupFirstPeriod,
   isMonthlyGroup,
   isPeriod,
   joiningAmounts,
@@ -16,9 +19,11 @@ import {
   nextPeriod,
   normalizeBillingByGroup,
   normalizeGroupBilling,
+  perClassStart,
   periodOf,
   studentMonthlyPlan,
   suggestedMonthlyFee,
+  switchToPerClass,
 } from "../domain/monthlyBilling";
 import { buildClassWorkspaceSessionsForRange } from "./classesWorkspaceModel";
 import { debtsThrough, isOverdueClassDebt } from "./homeDashboardModel";
@@ -371,13 +376,16 @@ function billingFrom(group, draft, from) {
 /**
  * Months the arrangement may start in, six back to six ahead. A month already lived through that
  * had a monthly fee keeps it: its classes were recorded as covered, so they cannot turn per class.
+ * With the workspace (`state`), never a month before the group is on record (see groupFirstPeriod).
  */
-export function applyFromOptions(group, draft, asOf) {
+export function applyFromOptions(group, draft, asOf, state = null) {
   const period = periodOf(asOf);
   let first = period;
   for (let step = 0; step < 6; step += 1) first = periodOf(addDays(`${first}-01`, -1));
+  const floor = state ? groupFirstPeriod(state, group, asOf) : "";
   const options = [];
   for (let month = first, step = 0; step < 13; step += 1, month = nextPeriod(month)) {
+    if (month < floor) continue;
     const after = { billing: billingFrom(group, draft, month) };
     let lived = month;
     let keeps = true;
@@ -395,16 +403,28 @@ export function applyFromOptions(group, draft, asOf) {
  * Turns the billing draft into the saved group and the per-student overrides for saveGroupBilling.
  * An existing group's change applies from `applyFrom` (see applyFromFor): earlier months keep the
  * arrangement they had. A new group starts this month (startGroupBilling may move it to the next).
+ * `starts` is the month each student's change applies from: adjustmentStart, or later for a switch
+ * to per class, which never turns a month they already lived paying monthly (see perClassStart; with
+ * the workspace, only months the records show lived that way count).
+ * With the workspace (`state`), a start before the group is on record moves to its first month, and
+ * a backdated start saves the join date (or, after an earlier monthly term that already billed
+ * them, an away stretch) of each student it would otherwise bill for months before they were in the
+ * group (see backdatedJoins); each override stays the student's whole entry.
  */
-export function billingChanges(group, members, draft, asOf, applyFrom = draft?.applyFrom ?? null) {
+export function billingChanges(group, members, draft, asOf, applyFrom = draft?.applyFrom ?? null, state = null) {
+  if (state && group?.id && isPeriod(applyFrom) && applyFrom !== (groupBillingFor(group)?.effectiveFrom || "")) {
+    const floor = groupFirstPeriod(state, group, asOf);
+    if (applyFrom < floor) applyFrom = floor;
+  }
   const billing = group?.id
     ? billingFrom(group, draft, applyFromFor(group, draft, asOf, applyFrom))
     : draft.mode === "monthly"
       ? { ...draftTerm(draft), effectiveFrom: periodOf(asOf) }
       : { mode: "perClass" };
   const overrides = {};
+  const starts = {};
   // Per class from some month on: the adjustments stay for the monthly months before it.
-  if (draft.mode !== "monthly") return { billing, overrides };
+  if (draft.mode !== "monthly") return { billing, overrides, starts };
   const from = adjustmentStart(group, draft, asOf, applyFrom);
   members.forEach((student) => {
     const current = normalizeBillingByGroup(student.billingByGroup)?.[group?.id] || null;
@@ -421,14 +441,84 @@ export function billingChanges(group, members, draft, asOf, applyFrom = draft?.a
     const termKey = ({ mode, fee, due }) => JSON.stringify(adjustmentFor({ mode, fee, due }) || { mode: "group" });
     // Unchanged (including a change already planned for a later month): nothing to save.
     if (termKey(latest) === termKey(term)) return;
-    overrides[student.id] = changeStudentAdjustment(current, term, from);
+    starts[student.id] = term.mode === "perClass" ? perClassStart(student, group, asOf, from, state) : from;
+    // Per class keeps per class the months a backdated start in the same save would make monthly.
+    overrides[student.id] =
+      term.mode === "perClass"
+        ? switchToPerClass(student, group, { ...group, billing }, starts[student.id])
+        : changeStudentAdjustment(current, term, starts[student.id]);
   });
-  return { billing, overrides };
+  if (state && group?.id) {
+    const joins = backdatedJoins(state, group, { ...group, billing }, asOf, overrides);
+    for (const [id, stayFields] of Object.entries(joins)) {
+      const student = (state.students || []).find((item) => item.id === id);
+      const entry = Object.hasOwn(overrides, id)
+        ? overrides[id]
+        : normalizeBillingByGroup(student?.billingByGroup)?.[group.id];
+      overrides[id] = { ...(entry || { mode: "group" }), ...stayFields };
+    }
+  }
+  return { billing, overrides, starts };
+}
+
+// The workspace with a group's billing saved as saveGroupBilling stores it, limited to that group.
+function groupScope(state, group, billing, overrides = {}) {
+  const classLog = (state.classLog || []).filter((row) => row.groupId === group.id);
+  const withClasses = new Set(classLog.map((row) => row.studentId));
+  const students = (state.students || [])
+    .filter(
+      (student) =>
+        studentGroupIdsOf(student).includes(group.id) ||
+        student.billingByGroup?.[group.id] ||
+        Object.hasOwn(overrides, student.id) ||
+        withClasses.has(student.id),
+    )
+    .map((student) => {
+      if (!Object.hasOwn(overrides, student.id)) return student;
+      const next = { ...(student.billingByGroup || {}) };
+      if (overrides[student.id]) next[group.id] = overrides[student.id];
+      else delete next[group.id];
+      return { ...student, billingByGroup: normalizeBillingByGroup(next) || undefined };
+    });
+  return {
+    ...state,
+    groups: [{ ...group, billing }],
+    students,
+    classLog,
+  };
+}
+
+/**
+ * What saving the draft does on `asOf` to the months already lived, for the «Aplica desde» hint: the
+ * fees it creates already overdue (`count`, their balance `total`), the unpaid per-class debt a fee
+ * now covers instead (`stopped`) and the fees owed before saving that it takes away (`dropped`, their
+ * balance `droppedTotal`; a per-class switch saved with it, say). Uses what the save stores.
+ */
+export function backdatedEffects(state, group, members, draft, asOf) {
+  const { billing, overrides } = billingChanges(group, members, draft, asOf, draft?.applyFrom ?? null, state);
+  const before = groupScope(state, group, group.billing);
+  const after = groupScope(state, group, billing, overrides);
+  const owing = (charge) => ["overdue", "pending"].includes(charge.status) && charge.balance > 0;
+  const beforeCharges = deriveMonthlyCharges(before, asOf);
+  const afterCharges = deriveMonthlyCharges(after, asOf);
+  const existing = new Set(beforeCharges.map((charge) => charge.id));
+  const kept = new Set(afterCharges.map((charge) => charge.id));
+  const created = afterCharges.filter((charge) => charge.status === "overdue" && !existing.has(charge.id));
+  const dropped = beforeCharges.filter((charge) => owing(charge) && !kept.has(charge.id));
+  const owed = (scope, row) => Math.max(0, calculateOutstanding(scope, row, asOf) || 0);
+  return {
+    count: created.length,
+    total: sumMoney(created, (charge) => charge.balance),
+    stopped: sumMoney(before.classLog, (row) => Math.max(0, owed(before, row) - owed(after, row))),
+    dropped: dropped.length,
+    droppedTotal: sumMoney(dropped, (charge) => charge.balance),
+  };
 }
 
 /**
  * The month a change to students' adjustments applies from: the group's «Aplica desde» when its
  * arrangement changes too, otherwise this month. Earlier months keep the adjustment they had.
+ * A switch to per class may start later (see perClassStart).
  */
 export function adjustmentStart(group, draft, asOf, applyFrom = draft?.applyFrom ?? null) {
   if (!group?.id || !billingTermChanged(group, draft)) return periodOf(asOf);

@@ -221,7 +221,7 @@ export function ToastRegion({ toasts, onDismiss }) {
     toasts.forEach((toast) => {
       if (soundedToastIds.current.has(toast.id)) return;
       soundedToastIds.current.add(toast.id);
-      if (toast.tone !== "error") playHibiSound("success");
+      if (toast.tone !== "error" && !toast.silent) playHibiSound("success");
     });
   }, [toasts]);
 

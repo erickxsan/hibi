@@ -162,6 +162,7 @@ export const COMMUNITY_TRANSLATIONS = Object.freeze({
   "Class {name} pays at": "Clase en que paga {name}",
   "Fee for {name}": "Cuota de {name}",
   "{amount} per class attended": "{amount} por clase asistida",
+  "{amount} per class attended from {month}": "{amount} por clase asistida desde {month}",
   "Remove adjustment for {name}": "Quitar el ajuste de {name}",
   "Adjust for a student": "Ajustar a un alumno",
   "+ Adjust for a student": "+ Ajustar a un alumno",
@@ -172,8 +173,17 @@ export const COMMUNITY_TRANSLATIONS = Object.freeze({
     "Se crea la mensualidad de {month} y se descuenta lo que ya pagaron por clase:",
   "Monthly fees start in {month}; until then classes are charged per class.":
     "Las mensualidades empiezan en {month}; antes se cobra por clase.",
-  "Monthly fees from {month} on are created; what was already paid per class those months is discounted.":
-    "Se crean las mensualidades desde {month}; lo ya pagado por clase en esos meses se descuenta.",
+  "{count} fees are created already overdue ({total}) and unpaid classes in those months ({debt}) stop being charged.":
+    "Se crean {count} cuotas ya vencidas ({total}) y las clases sin pagar de esos meses ({debt}) dejan de cobrarse.",
+  "1 fee is created already overdue ({total}) and unpaid classes in those months ({debt}) stop being charged.":
+    "Se crea 1 cuota ya vencida ({total}) y las clases sin pagar de esos meses ({debt}) dejan de cobrarse.",
+  "{count} fees are created already overdue ({total}).": "Se crean {count} cuotas ya vencidas ({total}).",
+  "1 fee is created already overdue ({total}).": "Se crea 1 cuota ya vencida ({total}).",
+  "No fee is created overdue; unpaid classes in those months ({debt}) stop being charged.":
+    "No se crea ninguna cuota vencida; las clases sin pagar de esos meses ({debt}) dejan de cobrarse.",
+  "No fee is created overdue.": "No se crea ninguna cuota vencida.",
+  "1 fee already owed stops being charged ({total}).": "Deja de cobrarse 1 cuota ya adeudada ({total}).",
+  "{count} fees already owed stop being charged ({total}).": "Dejan de cobrarse {count} cuotas ya adeudadas ({total}).",
   "The new fee starts in {month}.": "La nueva cuota empieza en {month}.",
   "Student changes apply from {month}; earlier months stay as they were.":
     "Los cambios de alumnos aplican desde {month}; los meses anteriores no cambian.",

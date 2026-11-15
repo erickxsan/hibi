@@ -1,6 +1,7 @@
 import { roundMoney } from "../domain/money.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  assertWritableDataVersion,
   createClassLogRow,
   createClassSchedule,
   createExportFilename,
@@ -15,6 +16,7 @@ import {
   editScheduledClassState,
   exportState,
   importState,
+  needsNewerClient,
   repriceUnpaidClasses,
   resolveHourlyRate,
   removeScheduledClassState,
@@ -34,6 +36,7 @@ import {
   validateGrade,
   validateGroup,
   validateStudent,
+  withCurrentDataVersion,
 } from "../domain";
 import {
   nextOnboardingStudentCodes,
@@ -48,6 +51,7 @@ import { normalizeRepeatRule } from "../domain/classRecurrence.js";
 import { normalizeGroupScheduleHistory, preserveGroupSchedule } from "../domain/groupScheduleHistory.js";
 import { updateDismissedNotes } from "../domain/noteDismissals.js";
 import { markLost, normalizeLostPayments, recoverLost } from "../domain/lostPayments.js";
+import { adoptStoredTwins } from "../domain/recordTwins.js";
 import {
   normalizeBillingByGroup,
   normalizeGroupBilling,
@@ -304,6 +308,8 @@ function upsertManyById(currentItems, nextItems) {
 }
 
 export async function persistRecipe({ baseState, recipe, adapter, replace = false, importMetadata = null }) {
+  // A newer Hibi wrote these records and this build dropped the fields it does not know: never save over them.
+  assertWritableDataVersion(baseState);
   const cloudEdit = adapter?.mode === "cloud" && !replace && !importMetadata;
   // One trip through the strict serializer normalizes and validates the edit. Its text is what this device
   // stores and what later edits compare against, so nothing serializes the whole workspace a second time.
@@ -328,7 +334,11 @@ export async function persistRecipe({ baseState, recipe, adapter, replace = fals
     return { ...settled, pending: Boolean(result?.pending) };
   };
 
-  const next = cloudEdit ? { state: recipe(baseState), serialized: null } : canonicalize(recipe(baseState));
+  // Whole-state writes carry this build's data version (and refuse a file from a newer build). The encrypted
+  // repository stamps a cloud edit itself, together with the records it changes.
+  const next = cloudEdit
+    ? { state: recipe(baseState), serialized: null }
+    : canonicalize(withCurrentDataVersion(recipe(baseState)));
   try {
     const result = await persist(next);
     return { ...result, mergedConflict: false };
@@ -338,7 +348,14 @@ export async function persistRecipe({ baseState, recipe, adapter, replace = fals
     // Full backup replacement is intentionally never merged automatically.
     if (replace || importMetadata || !error?.latestState || typeof adapter?.save !== "function") throw error;
     const latest = canonicalize(error.latestState).state;
-    const rebased = recipe(latest);
+    let rebased;
+    try {
+      rebased = recipe(latest);
+    } catch (refused) {
+      // The newest records already hold this class with other marks: show them and let the person decide.
+      if (refused?.code === "duplicate_record") refused.latestState = latest;
+      throw refused;
+    }
     const retried = await adapter.save(rebased, latest);
     return {
       state: retried?.state ?? retried ?? rebased,
@@ -451,6 +468,8 @@ export function useClassManager({ persistence } = {}) {
 
   const commit = useCallback(
     (recipe, successMessage, { replace = false, importMetadata = null } = {}) => {
+      // The «new version» dialog is already up; nothing reaches the device queue or the cloud.
+      if (needsNewerClient(stateRef.current)) return Promise.resolve(false);
       pendingWrites.current += 1;
       if (persistenceRef.current?.mode === "cloud") setSyncStatus("saving");
 
@@ -494,7 +513,9 @@ export function useClassManager({ persistence } = {}) {
               // Fall through to the original persistence error.
             }
           }
-          notify(messageForError(error), "error");
+          // Records from a newer Hibi arrived while this edit waited: the dialog explains it.
+          if (error?.code !== "newer_data_version" || !needsNewerClient(stateRef.current))
+            notify(messageForError(error), "error");
           return false;
         } finally {
           pendingWrites.current = Math.max(0, pendingWrites.current - 1);
@@ -555,6 +576,8 @@ export function useClassManager({ persistence } = {}) {
       }
     });
   }, [notify]);
+
+  const needsNewerVersion = needsNewerClient(canonicalState);
 
   const operationalState = useMemo(
     () => operationalStateForDate(canonicalState, operationalDate),
@@ -799,6 +822,7 @@ export function useClassManager({ persistence } = {}) {
               },
               stateRef.current.groups,
               operationalDate,
+              stateRef.current.classLog,
             ),
           ),
         );
@@ -892,7 +916,7 @@ export function useClassManager({ persistence } = {}) {
   const upsertStudent = useCallback(
     (draft) => {
       const previous = draft.id ? stateRef.current.students.find((student) => student.id === draft.id) : null;
-      const joined = recordStays(previous, draft, stateRef.current.groups, operationalDate);
+      const joined = recordStays(previous, draft, stateRef.current.groups, operationalDate, stateRef.current.classLog);
       const item = applyGeneratedId(createStudent, canonicalStudent(joined));
       const validation = validateStudent(item, stateRef.current);
       if (!validation.valid) {
@@ -1107,10 +1131,11 @@ export function useClassManager({ persistence } = {}) {
       }
       const studentCount = new Set(classItems.map((item) => item.studentId)).size;
       return commit(
+        // A class another tab or device saved meanwhile is edited, never added a second time (domain/recordTwins.js).
         (latest) => ({
           ...latest,
-          classLog: upsertManyById(latest.classLog, classItems),
-          grades: upsertManyById(latest.grades, gradeItems),
+          classLog: upsertManyById(latest.classLog, adoptStoredTwins("classLog", latest.classLog, classItems)),
+          grades: upsertManyById(latest.grades, adoptStoredTwins("grades", latest.grades, gradeItems)),
         }),
         `Progress saved for ${studentCount} student${studentCount === 1 ? "" : "s"}`,
       );
@@ -1467,6 +1492,8 @@ export function useClassManager({ persistence } = {}) {
 
   const previewImportRecords = useCallback(async (text, fileHash) => {
     const imported = importState(text);
+    // This build would drop the fields of a file written by a newer Hibi.
+    assertWritableDataVersion(imported);
     const plan = buildImportPlan(stateRef.current, imported);
     const findImportJob = persistenceRef.current?.findImportJob;
     const previousImport = typeof findImportJob === "function" ? await findImportJob(fileHash) : null;
@@ -1477,6 +1504,7 @@ export function useClassManager({ persistence } = {}) {
     (text, { fileHash = undefined, sourceName = undefined, decisions = {}, signature = undefined } = {}) => {
       try {
         const imported = importState(text);
+        assertWritableDataVersion(imported);
         return commit(
           (current) => {
             const fresh = buildImportPlan(current, imported, decisions);
@@ -1725,6 +1753,8 @@ export function useClassManager({ persistence } = {}) {
       syncMessage: persistence?.syncMessage || "",
       persistenceMode: persistence?.mode || "local",
       encryption: persistence?.encryption || null,
+      // A newer Hibi wrote these records: this tab shows them but must reload before saving anything.
+      needsNewerVersion,
       actions,
       toasts,
       dismissToast,
@@ -1737,6 +1767,7 @@ export function useClassManager({ persistence } = {}) {
       persistence?.mode,
       persistence?.encryption,
       persistence?.syncMessage,
+      needsNewerVersion,
       syncStatus,
       toasts,
       viewState,

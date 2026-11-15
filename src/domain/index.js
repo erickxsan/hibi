@@ -1,6 +1,7 @@
 export {
   ATTENDANCE_CODES,
   CLASS_STATUSES,
+  DATA_VERSION,
   DEFAULT_SETTINGS,
   GRADE_CATEGORIES,
   MAX_BACKUP_BYTES,
@@ -16,6 +17,13 @@ export {
 } from "./constants.js";
 
 export { attendanceBilling, isBillableAttendance } from "./attendanceBilling.js";
+export {
+  assertWritableDataVersion,
+  dataVersionOf,
+  needsNewerClient,
+  NewerDataVersionError,
+  withCurrentDataVersion,
+} from "./dataVersion.js";
 
 export {
   addDays,

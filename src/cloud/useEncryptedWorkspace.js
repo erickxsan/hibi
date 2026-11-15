@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createStarterState } from "../domain/index.js";
+import { createStarterState, needsNewerClient } from "../domain/index.js";
 import { deviceKeyStore, unlockWithPassword, wipeBytes } from "../crypto/index.js";
 import { deviceRecoveryStore } from "./deviceRecoveryStore.js";
 import { encryptedWorkspaceRepository } from "./encryptedWorkspaceRepository.js";
@@ -33,6 +33,7 @@ function rejectedBeforeQueue(error) {
   return (
     error instanceof WorkspaceConflictError ||
     error?.code === "mutation_too_large" ||
+    error?.code === "newer_data_version" ||
     error?.name === "DomainValidationError"
   );
 }
@@ -260,6 +261,14 @@ export function useEncryptedWorkspace(user, cryptoSession, security) {
           });
           reloadFlushRef.current = false;
           acceptConfirmed(await encryptedWorkspaceRepository.loadWorkspace(cryptoSession, user.id, witness || {}));
+        }
+        if (needsNewerClient(confirmedRef.current?.state)) {
+          // A newer Hibi wrote the cloud records. Nothing is sent: queued edits stay on this device for the
+          // newer build, and the records are published so the interface asks for a reload.
+          await serialize(() => publishLatest({ source: "remote" }));
+          if (queued.length) updateSync("pending", "Reload Hibi to sync the changes saved on this device.");
+          else updateSync("saved");
+          return { status: "outdated" };
         }
         const held = new Set();
         for (const entry of queued) {

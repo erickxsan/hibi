@@ -10,6 +10,10 @@ export function encryptedSyncFailure(error) {
       status: "error",
       message: "Encrypted data could not be verified or decrypted. Sync is paused; your local changes are preserved.",
     };
+  // A newer Hibi wrote the cloud while this flush ran. The next attempt reloads, publishes those records
+  // and stops (useEncryptedWorkspace); the queued edits stay on this device.
+  if (error?.code === "newer_data_version")
+    return { status: "pending", message: "Reload Hibi to sync the changes saved on this device." };
   const cause = error?.cause || error;
   const text = `${error?.code || ""} ${cause?.code || ""} ${cause?.message || ""}`.toLowerCase();
   // A revision collision means another device saved first. It is retried

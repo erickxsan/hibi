@@ -81,6 +81,35 @@ function communityState() {
   return state;
 }
 
+// Luna also came on Monday, September 7 (unpaid); Diego's first class is October 5.
+function backdatableState() {
+  const state = communityState();
+  state.classLog = [row("r0", "2026-09-07", "s1", "P", 0), ...state.classLog];
+  return state;
+}
+
+// Monthly since October; Bea was added on October 20 with a full first month and has no class yet.
+function newcomerState() {
+  const state = communityState();
+  state.groups[0].billing = {
+    mode: "monthly",
+    monthlyFee: 900,
+    due: { type: "dayOfMonth", day: 5 },
+    effectiveFrom: "2026-10",
+  };
+  state.students.push(
+    createStudent({
+      id: "s5",
+      code: "BEA-5",
+      fullName: "Bea Ruiz",
+      groupIds: ["g1"],
+      avatarId: "cat",
+      billingByGroup: { g1: { mode: "group", joinedOn: "2026-10-20", firstMonthAmount: 900 } },
+    }),
+  );
+  return state;
+}
+
 function Harness({ persistence, compactView = false }) {
   const manager = useClassManager({ persistence });
   return (
@@ -425,6 +454,145 @@ describe("Community groups", () => {
     expect(saved().groups.find((g) => g.id === "g1").billing.due).toEqual({ type: "dayOfMonth", day: 5 });
   });
 
+  it("says a switch to per class starts next month, after the month already billed monthly", async () => {
+    const user = userEvent.setup();
+    const state = communityState();
+    state.groups[0].billing = {
+      mode: "monthly",
+      monthlyFee: 900,
+      due: { type: "dayOfMonth", day: 5 },
+      effectiveFrom: "2026-10",
+    };
+    const { saved } = setup(state);
+    await user.click(screen.getByRole("tab", { name: "Groups" }));
+    await user.click(screen.getByRole("button", { name: "Open Primaria 5A" }));
+    await user.click(screen.getByRole("combobox", { name: "Adjust for a student" }));
+    await user.click(screen.getByRole("option", { name: "Diego Soto" }));
+    await user.click(screen.getByRole("combobox", { name: "How Diego Soto pays" }));
+    await user.click(screen.getByRole("option", { name: "Per class" }));
+    // October was lived with the fee: only the per-class switch waits, so the general line is gone.
+    expect(screen.getByText("$150 per class attended from November")).toBeInTheDocument();
+    expect(screen.queryByText(/Student changes apply from/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole("combobox", { name: "Adjust for a student" }));
+    await user.click(screen.getByRole("option", { name: "Luna López" }));
+    expect(
+      screen.getByText("Student changes apply from October; earlier months stay as they were."),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() =>
+      expect(saved().students.find((s) => s.id === "s2").billingByGroup).toEqual({
+        g1: { mode: "perClass", effectiveFrom: "2026-11" },
+      }),
+    );
+    expect(saved().students.find((s) => s.id === "s1").billingByGroup).toEqual({
+      g1: { mode: "customFee", fee: 900, effectiveFrom: "2026-10" },
+    });
+    // Saved: nothing is pending, so the row no longer names a month.
+    expect(await screen.findByText("$150 per class attended")).toBeInTheDocument();
+  });
+
+  it("lets a student added this month with nothing recorded pay per class from this month", async () => {
+    const user = userEvent.setup();
+    const { saved } = setup(newcomerState());
+    await user.click(screen.getByRole("tab", { name: "Groups" }));
+    await user.click(screen.getByRole("button", { name: "Open Primaria 5A" }));
+    await user.click(screen.getByRole("combobox", { name: "Adjust for a student" }));
+    await user.click(screen.getByRole("option", { name: "Bea Ruiz" }));
+    await user.click(screen.getByRole("combobox", { name: "How Bea Ruiz pays" }));
+    await user.click(screen.getByRole("option", { name: "Per class" }));
+    // Joining stamped October with a full first month, but nothing shows she lived it paying monthly.
+    expect(screen.getByText("$150 per class attended")).toBeInTheDocument();
+    expect(screen.queryByText(/per class attended from/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Student changes apply from October; earlier months stay as they were."),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() =>
+      expect(saved().students.find((s) => s.id === "s5").billingByGroup).toEqual({
+        g1: { mode: "perClass", effectiveFrom: "2026-10", joinedOn: "2026-10-20", firstMonthAmount: 900 },
+      }),
+    );
+    expect(await screen.findByText("$150 per class attended")).toBeInTheDocument();
+  });
+
+  it("says what a backdated monthly start costs and saves who joined after it began", async () => {
+    const user = userEvent.setup();
+    const { saved } = setup(backdatableState());
+    await user.click(screen.getByRole("tab", { name: "Groups" }));
+    await user.click(screen.getByRole("button", { name: "Open Primaria 5A" }));
+    await user.click(screen.getByRole("button", { name: "Monthly" }));
+    fireEvent.change(screen.getByLabelText("Monthly fee per student"), { target: { value: "1200" } });
+    await user.click(screen.getByRole("combobox", { name: "Applies from" }));
+    // The group's first class is September 7: no earlier month is offered.
+    expect(screen.queryByRole("option", { name: "August" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("option", { name: "September" }));
+    // Luna: September and October; Diego joined October 5: October less the $450 he paid per class.
+    expect(
+      screen.getByText(
+        "3 fees are created already overdue ($3,150) and unpaid classes in those months ($300) stop being charged.",
+      ),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() =>
+      expect(saved().groups.find((g) => g.id === "g1").billing).toMatchObject({
+        mode: "monthly",
+        effectiveFrom: "2026-09",
+      }),
+    );
+    expect(saved().students.find((s) => s.id === "s1").billingByGroup).toEqual({
+      g1: { mode: "group", joinedOn: "2026-09-07" },
+    });
+    expect(saved().students.find((s) => s.id === "s2").billingByGroup).toEqual({
+      g1: { mode: "group", joinedOn: "2026-10-05" },
+    });
+    // Rubén is archived with nothing on record: reactivating him decides.
+    expect(saved().students.find((s) => s.id === "s4").billingByGroup).toBeUndefined();
+  });
+
+  it("says a switch to per class waits for a month already paid in advance", async () => {
+    const user = userEvent.setup();
+    const state = newcomerState();
+    const diego = state.students.find((s) => s.id === "s2");
+    diego.monthlyPayments = [{ id: "nov", groupId: "g1", period: "2026-11", amount: 900, paidAt: "2026-10-20" }];
+    const { saved } = setup(state);
+    await user.click(screen.getByRole("tab", { name: "Groups" }));
+    await user.click(screen.getByRole("button", { name: "Open Primaria 5A" }));
+    await user.click(screen.getByRole("combobox", { name: "Adjust for a student" }));
+    await user.click(screen.getByRole("option", { name: "Diego Soto" }));
+    await user.click(screen.getByRole("combobox", { name: "How Diego Soto pays" }));
+    await user.click(screen.getByRole("option", { name: "Per class" }));
+    // November is paid already: per class starts after it.
+    expect(screen.getByText("$150 per class attended from December")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() =>
+      expect(saved().students.find((s) => s.id === "s2").billingByGroup).toEqual({
+        g1: { mode: "perClass", effectiveFrom: "2026-12" },
+      }),
+    );
+  });
+
+  it("says how many fees already owed a backdated save stops charging", async () => {
+    // Monthly since October with Bea added on October 20 (owing October since the 20th); Luna came on
+    // September 7. One save moves «Aplica desde» to September and sets Bea per class from October.
+    const state = newcomerState();
+    state.classLog = [row("r0", "2026-09-07", "s1", "P", 0), ...state.classLog];
+    const user = userEvent.setup();
+    setup(state);
+    await user.click(screen.getByRole("tab", { name: "Groups" }));
+    await user.click(screen.getByRole("button", { name: "Open Primaria 5A" }));
+    await user.click(screen.getByRole("combobox", { name: "Adjust for a student" }));
+    await user.click(screen.getByRole("option", { name: "Bea Ruiz" }));
+    await user.click(screen.getByRole("combobox", { name: "How Bea Ruiz pays" }));
+    await user.click(screen.getByRole("option", { name: "Per class" }));
+    await user.click(screen.getByRole("combobox", { name: "Applies from" }));
+    await user.click(screen.getByRole("option", { name: "September" }));
+    expect(
+      screen.getByText(
+        "1 fee is created already overdue ($900) and unpaid classes in those months ($150) stop being charged. 1 fee already owed stops being charged ($900).",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("asks before archiving, then shows the archived history and reactivates", async () => {
     const user = userEvent.setup();
     const { saved } = setup();
@@ -600,6 +768,101 @@ describe("Community on a phone", () => {
     await user.click(within(group).getByRole("button", { name: /Forma de cobro/ }));
     await waitFor(() => expect(screen.getAllByRole("dialog")).toHaveLength(2));
     expect(within(billing()).getByRole("button", { name: "Por clase" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("says in the billing sheet when a student's switch to per class starts", async () => {
+    setCompact(true);
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, "es");
+    const user = userEvent.setup();
+    const state = communityState();
+    state.groups[0].billing = {
+      mode: "monthly",
+      monthlyFee: 900,
+      due: { type: "dayOfMonth", day: 5 },
+      effectiveFrom: "2026-10",
+    };
+    const { saved } = setup(state);
+    await user.click(screen.getByRole("button", { name: "Grupos" }));
+    await user.click(screen.getByRole("button", { name: "Abrir Primaria 5A" }));
+    const group = await screen.findByRole("dialog", { name: "Primaria 5A" });
+    await user.click(within(group).getByRole("button", { name: /Forma de cobro/ }));
+    await waitFor(() => expect(screen.getAllByRole("dialog")).toHaveLength(2));
+    const billing = () => screen.getAllByRole("dialog").at(-1);
+    await user.click(within(billing()).getByRole("combobox", { name: "Ajustar a un alumno" }));
+    await user.click(screen.getByRole("option", { name: "Diego Soto" }));
+    await user.click(within(billing()).getByRole("combobox", { name: "Cómo paga Diego Soto" }));
+    await user.click(screen.getByRole("option", { name: "Por clase" }));
+    expect(within(billing()).getByText("$150 por clase asistida desde noviembre")).toBeInTheDocument();
+    await user.click(within(billing()).getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() =>
+      expect(saved().students.find((s) => s.id === "s2").billingByGroup).toEqual({
+        g1: { mode: "perClass", effectiveFrom: "2026-11" },
+      }),
+    );
+  });
+
+  it("lets a student added this month pay per class from this month in the billing sheet", async () => {
+    setCompact(true);
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, "es");
+    const user = userEvent.setup();
+    const { saved } = setup(newcomerState());
+    await user.click(screen.getByRole("button", { name: "Grupos" }));
+    await user.click(screen.getByRole("button", { name: "Abrir Primaria 5A" }));
+    const group = await screen.findByRole("dialog", { name: "Primaria 5A" });
+    await user.click(within(group).getByRole("button", { name: /Forma de cobro/ }));
+    await waitFor(() => expect(screen.getAllByRole("dialog")).toHaveLength(2));
+    const billing = () => screen.getAllByRole("dialog").at(-1);
+    await user.click(within(billing()).getByRole("combobox", { name: "Ajustar a un alumno" }));
+    await user.click(screen.getByRole("option", { name: "Bea Ruiz" }));
+    await user.click(within(billing()).getByRole("combobox", { name: "Cómo paga Bea Ruiz" }));
+    await user.click(screen.getByRole("option", { name: "Por clase" }));
+    expect(within(billing()).getByText("$150 por clase asistida")).toBeInTheDocument();
+    expect(within(billing()).queryByText(/por clase asistida desde/)).not.toBeInTheDocument();
+    await user.click(within(billing()).getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() =>
+      expect(saved().students.find((s) => s.id === "s5").billingByGroup.g1).toMatchObject({
+        mode: "perClass",
+        effectiveFrom: "2026-10",
+      }),
+    );
+  });
+
+  it("says in the billing sheet what a backdated monthly start costs, only while it is backdated", async () => {
+    setCompact(true);
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, "es");
+    const user = userEvent.setup();
+    const { saved } = setup(backdatableState());
+    await user.click(screen.getByRole("button", { name: "Grupos" }));
+    await user.click(screen.getByRole("button", { name: "Abrir Primaria 5A" }));
+    const group = await screen.findByRole("dialog", { name: "Primaria 5A" });
+    await user.click(within(group).getByRole("button", { name: /Forma de cobro/ }));
+    await waitFor(() => expect(screen.getAllByRole("dialog")).toHaveLength(2));
+    const billing = () => screen.getAllByRole("dialog").at(-1);
+    await user.click(within(billing()).getByRole("button", { name: "Mensual" }));
+    fireEvent.change(within(billing()).getByLabelText("Cuota mensual por alumno"), { target: { value: "1200" } });
+    const sentence = /cuotas ya vencidas/;
+    expect(within(billing()).queryByText(sentence)).not.toBeInTheDocument();
+    await user.click(within(billing()).getByRole("combobox", { name: "Aplica desde" }));
+    expect(screen.queryByRole("option", { name: "Agosto" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("option", { name: "Septiembre" }));
+    expect(
+      within(billing()).getByText(
+        "Se crean 3 cuotas ya vencidas ($3,150) y las clases sin pagar de esos meses ($300) dejan de cobrarse.",
+      ),
+    ).toBeInTheDocument();
+    // This month instead: the usual list of what each one owes, and no backdated sentence.
+    await user.click(within(billing()).getByRole("combobox", { name: "Aplica desde" }));
+    await user.click(screen.getByRole("option", { name: /\(este mes\)/ }));
+    expect(within(billing()).queryByText(sentence)).not.toBeInTheDocument();
+    await user.click(within(billing()).getByRole("combobox", { name: "Aplica desde" }));
+    await user.click(screen.getByRole("option", { name: "Septiembre" }));
+    await user.click(within(billing()).getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() =>
+      expect(saved().students.find((s) => s.id === "s2").billingByGroup).toEqual({
+        g1: { mode: "group", joinedOn: "2026-10-05" },
+      }),
+    );
+    expect(saved().groups.find((g) => g.id === "g1").billing.effectiveFrom).toBe("2026-09");
   });
 });
 

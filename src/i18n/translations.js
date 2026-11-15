@@ -70,6 +70,13 @@ const EXPLICIT_TRANSLATIONS = Object.freeze({
   "Your saved records are still available. Try opening the view again.":
     "Tus registros guardados siguen disponibles. Intenta abrir la vista de nuevo.",
   "Reload application": "Recargar aplicación",
+  "A new version of Hibi is available": "Hay una versión nueva de Hibi",
+  "Reload to keep saving your changes.": "Recarga para seguir guardando tus cambios.",
+  "A new version of Hibi is available. Reload to keep saving.":
+    "Hay una versión nueva de Hibi. Recarga para seguir guardando.",
+  "Reload Hibi to sync the changes saved on this device.":
+    "Recarga Hibi para sincronizar los cambios guardados en este dispositivo.",
+  Reload: "Recargar",
   "Resolve or export pending changes before reloading.": "Resuelve o exporta los cambios pendientes antes de recargar.",
   "The tutorial could not be opened": "No se pudo abrir el tutorial",
   "Reload Hibi to try again.": "Recarga Hibi para intentarlo de nuevo.",
@@ -1480,6 +1487,12 @@ const EXPLICIT_TRANSLATIONS = Object.freeze({
   "Retry synchronization": "Reintentar sincronización",
   "Saved on this device": "Guardado en este dispositivo",
   "Different values": "Valores distintos",
+  // Pagos de un alumno en la revisión: un pago, adeudo o grupo por línea.
+  "Other fee {amount}": "Otra cuota {amount}",
+  "from {month}": "desde {month}",
+  "joined {date}": "entró el {date}",
+  "left {date}": "salió el {date}",
+  "away {from} – {to}": "fuera del {from} al {to}",
   "1 change is saved on this device and will sync when the connection returns.":
     "1 cambio está guardado en este dispositivo y se sincronizará cuando vuelva la conexión.",
   "1 change needs your review": "1 cambio necesita tu revisión",
@@ -1491,6 +1504,10 @@ const EXPLICIT_TRANSLATIONS = Object.freeze({
     "Este dispositivo editó este registro, pero otro dispositivo lo eliminó.",
   "This device deleted this record.": "Este dispositivo eliminó este registro.",
   "This device added this record.": "Este dispositivo agregó este registro.",
+  "Another device saved this same class for this student. Keep this device's values or the cloud's: only one record stays.":
+    "Otro dispositivo guardó esta misma clase para este alumno. Conserva los valores de este dispositivo o los de la nube: solo queda un registro.",
+  "This class was just saved with different marks. Review it before saving again.":
+    "Esta clase se acaba de guardar con otros datos. Revísala antes de volver a guardar.",
   "Keep this device's version to replace the highlighted cloud values. Discard it to keep the cloud version; nothing else is removed.":
     "Conserva la versión de este dispositivo para reemplazar los valores resaltados de la nube. Descártala para conservar la versión de la nube; no se elimina nada más.",
   "Keep this device's version": "Conservar la versión de este dispositivo",

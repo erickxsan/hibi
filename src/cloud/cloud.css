@@ -608,6 +608,10 @@
   white-space: nowrap;
 }
 
+.pending-conflict-table td.is-list {
+  white-space: pre-line;
+}
+
 .pending-conflict-table tr.is-conflict {
   background: var(--ocre-soft);
 }
