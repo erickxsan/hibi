@@ -335,6 +335,24 @@ describe("a student's list of debts", () => {
     ]);
   });
 
+  it("lets in one fee before its due date when «Cobrar» starts from it, to pay it early", () => {
+    const state = workspace();
+    const asOf = "2026-11-03";
+    const november = deriveMonthlyCharges(state, asOf).find(
+      (charge) => charge.studentId === "luna" && charge.period === "2026-11",
+    );
+    const without = studentDebtRows(state, derive(state, asOf), { studentId: "luna", asOf });
+    expect(without.some((item) => item.period === "2026-11")).toBe(false);
+    const rows = studentDebtRows(state, derive(state, asOf), {
+      studentId: "luna",
+      asOf,
+      upcomingChargeId: november.id,
+    });
+    expect(rows.at(-1)).toMatchObject({ period: "2026-11", amount: 800, upcoming: true, canLose: false });
+    expect(rows.slice(0, -1).every((item) => !item.upcoming)).toBe(true);
+    expect(rows).toHaveLength(without.length + 1);
+  });
+
   it("keeps what was given up, marked, so it can be recovered", () => {
     const state = lostState();
     const derived = derive(state);

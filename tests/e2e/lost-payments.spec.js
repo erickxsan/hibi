@@ -206,7 +206,8 @@ test.describe("pagos perdidos en teléfono", () => {
     await seed(page);
     await page.goto("/progress");
     await page.getByText("Pagos", { exact: true }).first().click();
-    await page.getByText("Luna Ortiz", { exact: true }).first().click();
+    // Luna also has a row under «Mensualidades», which on a phone now comes first; her sheet opens from the list.
+    await page.locator("button.list-row", { hasText: "Luna Ortiz" }).click();
     await page.locator('.ssh-stamp[aria-label^="Mayo"]').click();
     await page.locator(".ssh-fee-foot .lost-icon").click();
     await expect(page.locator(".ssh-chip")).toContainText("Perdida · hoy");

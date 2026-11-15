@@ -390,9 +390,22 @@ body.onboarding-open {
   cursor: pointer;
   transition: opacity 0.3s;
 }
+.tt-alert-text {
+  flex: 1;
+  min-width: 0;
+}
+.tt-alert-hide {
+  flex: none;
+  margin-left: 12px;
+  color: var(--sumi-muted);
+  font: 700 13px/18px var(--font-sans);
+}
+/* A hidden alert fades, as it leaves Inicio's list; its «Ocultar» is spent. */
 .tt-alert.is-seen {
-  opacity: 0.5;
-  text-decoration: line-through;
+  opacity: 0.4;
+}
+.tt-alert.is-seen .tt-alert-hide {
+  visibility: hidden;
 }
 .tt-days {
   display: flex;
@@ -1017,7 +1030,13 @@ p.tt-guide-foot {
   border-top: 1px solid var(--line);
 }
 .tt-attention .tt-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-top: 6px;
+}
+.tt-attention .tt-alert-hide {
+  margin-left: 4px;
 }
 
 /* Classes */
