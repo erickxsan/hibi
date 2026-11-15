@@ -311,6 +311,45 @@ describe("Home", () => {
     expect(setNotesDismissed).toHaveBeenLastCalledWith(keys, false);
   });
 
+  it("re-dates every key of an alert that came back, and «Deshacer» shows only the new cause again", async () => {
+    const user = userEvent.setup();
+    const probe = vi.fn();
+    renderHome({ actions: { setNotesDismissed: probe, notify: vi.fn() } });
+    let attention = screen.getByRole("heading", { name: /^To attend to · / }).closest("section");
+    await user.click(
+      within(
+        within(attention)
+          .getByText(/classes not recorded$/)
+          .closest(".al-item"),
+      ).getByRole("button", {
+        name: /^Hide: /,
+      }),
+    );
+    const keys = probe.mock.calls[0][0];
+    expect(keys.length).toBeGreaterThan(1);
+    cleanup();
+
+    const setNotesDismissed = vi.fn();
+    const notify = vi.fn();
+    const state = homeState();
+    // One cause was hidden long ago; a new one brought the alert back.
+    state.settings.dismissedNotes = { [keys[0]]: "2026-05-01" };
+    renderHome({ state, derived: deriveAll(state, AS_OF), actions: { setNotesDismissed, notify } });
+    attention = screen.getByRole("heading", { name: /^To attend to · / }).closest("section");
+    await user.click(
+      within(
+        within(attention)
+          .getByText(/classes not recorded$/)
+          .closest(".al-item"),
+      ).getByRole("button", {
+        name: /^Hide: /,
+      }),
+    );
+    expect(setNotesDismissed).toHaveBeenCalledWith(keys, true);
+    notify.mock.calls[0][2].run();
+    expect(setNotesDismissed).toHaveBeenLastCalledWith(keys.slice(1), false);
+  });
+
   it("changes the period and picks points", async () => {
     const user = userEvent.setup();
     renderHome();

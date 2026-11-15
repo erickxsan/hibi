@@ -263,7 +263,7 @@ function MonthlyBlock({ block, asOf, editable, onCollect, onUndo, onRecover, bus
                     className="mbtn"
                     aria-label={`${t("Collect")}: ${student.fullName}`}
                     disabled={busy}
-                    onClick={() => onCollect(student)}
+                    onClick={() => onCollect({ student, chargeId: charge.id })}
                   >
                     {t("Collect")}
                   </button>
@@ -473,18 +473,27 @@ export default function Tracking({
     () => (tab === "payments" && studentId ? studentDebtRows(state, derived, { studentId, asOf, scope }) : []),
     [asOf, derived, scope, state, studentId, tab],
   );
-  // «Cobrar» from a row of «Mensualidades»: that student's debts in this scope.
+  // «Cobrar» from a row of «Mensualidades»: that student's debts in this scope, with the row's own fee
+  // even before it is due (paying early stays possible here).
   const [collectFor, setCollectFor] = useState(/** @type {any} */ (null));
   const collectRows = useMemo(
-    () => (collectFor ? studentDebtRows(state, derived, { studentId: collectFor.id, asOf, scope }) : []),
+    () =>
+      collectFor
+        ? studentDebtRows(state, derived, {
+            studentId: collectFor.student.id,
+            asOf,
+            scope,
+            upcomingChargeId: collectFor.chargeId,
+          })
+        : [],
     [asOf, collectFor, derived, scope, state],
   );
   const collectSheet = (
     <CollectSheet
       open={Boolean(collectFor) && canLose}
       onClose={() => setCollectFor(null)}
-      studentId={collectFor?.id || ""}
-      studentName={collectFor?.fullName || ""}
+      studentId={collectFor?.student.id || ""}
+      studentName={collectFor?.student.fullName || ""}
       rows={collectRows}
       lostActions={lostActions}
       busy={busy}

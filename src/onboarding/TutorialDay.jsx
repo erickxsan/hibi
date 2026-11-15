@@ -176,7 +176,11 @@ export default function TutorialDay({ compact, onDone }) {
           onClick={see(index)}
         >
           <span className="tt-dot is-bad" aria-hidden="true" />
-          <span>{uiT(text)}</span>
+          <span className="tt-alert-text">{uiT(text)}</span>
+          {/* The same quiet «Ocultar» as Inicio's alerts; the whole row stays the control. */}
+          <span className="tt-alert-hide" aria-hidden="true">
+            {uiT("Hide")}
+          </span>
         </button>
       ))}
       <p className="tt-hint">{uiT("Each notice takes you to the exact place")}</p>

@@ -25,15 +25,18 @@ export function chargeDebt(charge) {
 /**
  * Everything one student owes or was given up, oldest first: monthly fees already due and classes
  * with a balance. `canLose` holds only for what is overdue, the only debts that can be given up.
+ * `upcomingChargeId` also lets in that one fee before its due date (`upcoming`), to be paid early.
  */
-export function studentDebtRows(state, derived, { studentId, asOf, scope = "all" }) {
+export function studentDebtRows(state, derived, { studentId, asOf, scope = "all", upcomingChargeId = "" }) {
   const groupNames = new Map((state.groups || []).map((group) => [group.id, group.name]));
   const fees = deriveMonthlyCharges(state, asOf)
     .filter(
       (charge) =>
         charge.studentId === studentId &&
         matchesGroup(scope, charge.groupId) &&
-        (charge.status === "lost" || (["pending", "overdue"].includes(charge.status) && charge.dueDate <= asOf)),
+        (charge.status === "lost" ||
+          (["pending", "overdue"].includes(charge.status) &&
+            (charge.dueDate <= asOf || (Boolean(upcomingChargeId) && charge.id === upcomingChargeId)))),
     )
     .map((charge) => ({
       ...chargeDebt(charge),
@@ -42,6 +45,7 @@ export function studentDebtRows(state, derived, { studentId, asOf, scope = "all"
       groupName: groupNames.get(charge.groupId) || "",
       lost: charge.status === "lost",
       canLose: charge.status === "overdue",
+      ...(charge.dueDate > asOf ? { upcoming: true } : {}),
       abono: charge.paid,
     }));
   const classes = (trackingDerived(state, derived, asOf)?.classLog || [])

@@ -173,6 +173,27 @@ describe("Tracking on desktop", () => {
     expect(await screen.findByText("1 of 1")).toBeInTheDocument();
   });
 
+  it("still collects a monthly fee before its due date from its row", async () => {
+    const user = userEvent.setup();
+    const state = trackingState();
+    state.groups = state.groups.map((group) =>
+      group.billing?.mode === "monthly"
+        ? { ...group, billing: { ...group.billing, due: { type: "dayOfMonth", day: 28 } } }
+        : group,
+    );
+    const { saved } = setup(state);
+    await user.click(screen.getByRole("tab", { name: "Payments" }));
+    await user.click(screen.getByRole("button", { name: "Collect: Sofía Martín" }));
+    const sheet = screen.getByRole("dialog", { name: "Sofía Martín" });
+    expect(within(sheet).getByText(/^Due /)).toBeInTheDocument();
+    await user.click(within(sheet).getByRole("button", { name: "Collect $1,200" }));
+    await waitFor(() =>
+      expect(saved().students.find((student) => student.id === "s3").monthlyPayments).toEqual([
+        expect.objectContaining({ groupId: "g2", period: "2026-10", amount: 1200 }),
+      ]),
+    );
+  });
+
   it("records an abono typed in the labelled amount of «Cobrar»", async () => {
     const user = userEvent.setup();
     const { saved } = setup();

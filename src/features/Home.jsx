@@ -252,7 +252,8 @@ export default function Home({
       // «Deshacer» brings back only what this click hid; what was already hidden stays hidden.
       const fresh = keys.filter((key) => !Object.hasOwn(dismissedNotes || {}, key));
       if (!fresh.length) return;
-      setNotesDismissed(fresh, true);
+      // Every key gets today's date, so an older half of the alert does not expire before the new one.
+      setNotesDismissed(keys, true);
       notify?.(count === 1 ? "Notice hidden" : "Notices hidden", "success", {
         label: "Undo",
         run: () => setNotesDismissed(fresh, false),

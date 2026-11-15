@@ -35,7 +35,9 @@ function debtStatus(debt, t, locale, withGroup) {
           })
         : debt.canLose
           ? t("Overdue · {date}", { date: shortDay(debt.date, locale) })
-          : t("Due today");
+          : debt.upcoming
+            ? t("Due {date}", { date: shortDay(debt.date, locale) })
+            : t("Due today");
   return group && debt.kind === "monthly" ? `${group} · ${state}` : state;
 }
 

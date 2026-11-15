@@ -235,7 +235,9 @@ export default function TutorialPractice({ compact, backdrop = false, onFinish }
           <p className="tt-eyebrow">{uiT("Needs attention · {count}", { count: 2 })}</p>
           <p className="tt-note">
             <span className="tt-dot is-bad" aria-hidden="true" />
-            {uiT("Diego got 6.0 in Practice 9.")} <span className="tt-link">{uiT("See it in the chart")}</span>
+            <span className="tt-alert-text">{uiT("Diego got 6.0 in Practice 9.")}</span>
+            <span className="tt-link">{uiT("View")}</span>
+            <span className="tt-alert-hide">{uiT("Hide")}</span>
           </p>
         </div>
       )}
