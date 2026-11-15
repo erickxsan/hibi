@@ -29,7 +29,8 @@ import { useConfirmPrompt } from "../components/ConfirmPrompt";
 import { comparisonSpan } from "./HomeMetrics";
 import { dayCode, defaultChargeId, studentSheetModel } from "./trackingStudentSheetModel";
 import { LostIconButton, useLostPaymentActions } from "./LostPayments";
-import { chargeDebt } from "./lostPaymentsModel";
+import { chargeDebt, studentDebtRows } from "./lostPaymentsModel";
+import { CollectButton } from "./CollectSheet";
 import { isOverdueClassDebt } from "./homeDashboardModel";
 import {
   dayNumber,
@@ -220,6 +221,11 @@ export function TrackingStudentSheet({
   const lostActions = useLostPaymentActions(actions);
   // Payments and marks are dated today, so a report of an earlier day could not show the change.
   const canLose = asOf === liveDate;
+  const debtRows = useMemo(
+    () =>
+      canLose && tab === "payments" ? studentDebtRows(state, derived, { studentId: student.id, asOf, scope }) : [],
+    [asOf, canLose, derived, scope, state, student.id, tab],
+  );
 
   const firstGroup = groupsById.get(studentGroupIdsOf(student)[0]);
   const phone = student.guardianPhone || student.phone;
@@ -605,6 +611,16 @@ export function TrackingStudentSheet({
 
       {tab === "payments" ? (
         <div className="ssh-panel">
+          {canLose ? (
+            <CollectButton
+              studentId={student.id}
+              studentName={student.fullName}
+              rows={debtRows}
+              lostActions={lostActions}
+              busy={busy}
+              className="ssh-collect"
+            />
+          ) : null}
           {charge ? (
             <>
               <div className="ssh-stamps" role="group" aria-label={t("Monthly fee")}>
@@ -715,7 +731,7 @@ export function TrackingStudentSheet({
                     onPay={pay}
                     busy={busy}
                     fullLabel={t("Mark paid (fee)")}
-                    buttonClassName="button button-primary"
+                    buttonClassName="button"
                   />
                 </div>
               ) : null}

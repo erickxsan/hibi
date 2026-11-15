@@ -470,3 +470,61 @@
     bottom: auto;
   }
 }
+
+/* A touch screen has no hover for the tooltip: the word sits next to the icon. */
+.lost-icon-word {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .lost-icon[data-tip] {
+    width: auto;
+    min-width: 44px;
+    height: 44px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 10px;
+    border: 1px solid var(--line);
+    font: 700 13px/16px var(--font-sans);
+    white-space: nowrap;
+  }
+
+  .lost-icon[data-tip] svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .lost-icon-word {
+    display: inline;
+  }
+
+  .lost-icon[data-tip]::after,
+  .lost-icon[data-tip]:focus-visible::after {
+    content: none;
+  }
+
+  .debt-row,
+  .debts .debt-row {
+    grid-template-columns: 56px minmax(0, 1fr) auto auto;
+  }
+
+  .lost-row {
+    grid-template-columns: 40px minmax(0, 1fr) auto auto;
+  }
+
+  .lost-sub {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .ssh-debt {
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 8px;
+  }
+}
+
+@media (pointer: coarse) and (max-width: 780px) {
+  .debts .debt-row {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+}

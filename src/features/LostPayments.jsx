@@ -8,7 +8,7 @@ import { sumMoney } from "../domain/money.js";
 import { formatMoney, formatShortDate, monthLong, monthShort } from "../utils/displayFormat";
 import { lostSummary, staleDebts } from "./homeDashboardModel";
 import { debtItem } from "./lostPaymentsModel";
-import { MonthlyFeePay } from "./MonthlyFeePay";
+import { CollectButton } from "./CollectSheet";
 import "./lostPayments.css";
 
 const STALE_FILTERS = [3, 6, 12];
@@ -63,7 +63,10 @@ function debtSpan(items, t, locale, inactive = false) {
   return `${noun} · ${span}`;
 }
 
-/** The icon-only control of a debt: ⊘ gives it up, ↶ recovers it. The word shows on hover. */
+/**
+ * The control of a debt: ⊘ gives it up, ↶ recovers it. With a mouse the word shows on hover; a touch
+ * screen has no hover, so there it sits next to the icon.
+ */
 export function LostIconButton({ recover = false, name = "", onClick, disabled = false }) {
   const { t } = useI18n();
   const word = t(recover ? "Recover" : "Mark as lost");
@@ -78,6 +81,9 @@ export function LostIconButton({ recover = false, name = "", onClick, disabled =
       onClick={onClick}
     >
       <Icon aria-hidden="true" />
+      <span className="lost-icon-word" aria-hidden="true">
+        {word}
+      </span>
     </button>
   );
 }
@@ -132,6 +138,28 @@ export function useLostPaymentActions(actions) {
           t("Class of {date} paid · {amount}", { date: shortDay(debt.date, locale), amount: amountOf(debt) }),
         ),
       ),
+    /** «Cobrar»: what `allocatePayment` planned, in one change and one «Deshacer». */
+    collect: (studentId, studentName, plan) => {
+      const items = plan.items.map(({ debt, amount }) =>
+        debt.kind === "class"
+          ? { kind: "class", classId: debt.classId }
+          : { kind: "monthly", studentId, groupId: debt.groupId, period: debt.period, amount },
+      );
+      const [only] = plan.items;
+      const money = formatMoney(plan.applied, locale);
+      const message =
+        plan.items.length !== 1
+          ? t("{name} paid {amount}", { name: studentName, amount: money })
+          : only.debt.kind === "class"
+            ? t("Class of {date} paid · {amount}", { date: shortDay(only.debt.date, locale), amount: money })
+            : only.full
+              ? t("{month} paid · {amount}", { month: debtName(only.debt, locale), amount: money })
+              : t("{amount} paid toward {month}", {
+                  amount: money,
+                  month: monthLong(`${only.debt.period}-01`, locale),
+                });
+      return run(() => actions?.collectDebts?.(items, message));
+    },
   };
 }
 
@@ -157,7 +185,18 @@ export function StudentDebts({
   const severalGroups = new Set(rows.map((debt) => debt.groupId)).size > 1;
   return (
     <div className="debts">
-      <Heading className="overline">{t("Debts")}</Heading>
+      <div className="debts-head">
+        <Heading className="overline">{t("Debts")}</Heading>
+        {editable ? (
+          <CollectButton
+            studentId={studentId}
+            studentName={studentName}
+            rows={rows}
+            lostActions={lostActions}
+            busy={busy}
+          />
+        ) : null}
+      </div>
       {rows.map((debt) => {
         const group = severalGroups ? debt.groupName : "";
         const name = group ? `${debtName(debt, locale)} · ${group}` : debtName(debt, locale);
@@ -183,17 +222,8 @@ export function StudentDebts({
               <s className="debt-amount">{formatMoney(debt.amount, locale)}</s>
             ) : !editable ? (
               <span className="debt-amount">{formatMoney(debt.amount, locale)}</span>
-            ) : debt.kind === "monthly" ? (
-              <MonthlyFeePay
-                key={`${debt.key}:${debt.amount}`}
-                charge={debt.charge}
-                studentName={`${studentName} · ${name}`}
-                onPay={lostActions.payFee}
-                busy={working}
-                fullLabel={t("Mark paid (fee)")}
-                name={name}
-              />
             ) : (
+              // One tap settles the whole debt; an abono, or several at once, goes through «Cobrar».
               <span className="fee-pay">
                 <span className="debt-amount">{formatMoney(debt.amount, locale)}</span>
                 <button
@@ -201,7 +231,11 @@ export function StudentDebts({
                   className="mbtn"
                   aria-label={`${t("Mark paid (fee)")}: ${name}`}
                   disabled={working}
-                  onClick={() => lostActions.payClass(debt)}
+                  onClick={() =>
+                    debt.kind === "monthly"
+                      ? lostActions.payFee(debt.charge, debt.charge.balance)
+                      : lostActions.payClass(debt)
+                  }
                 >
                   {t("Mark paid (fee)")}
                 </button>

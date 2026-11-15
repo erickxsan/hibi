@@ -134,6 +134,34 @@ describe("giving up on debts through the manager", () => {
     expect(charge.balance).toBe(500);
   });
 
+  it("collects several debts in one change and takes all of them back from one notice", async () => {
+    const state = workspace();
+    state.students[1].groupIds = ["g-class", "g-month"];
+    const { manager, student, undo } = setup(state);
+    const fee = { kind: "monthly", studentId: "diego", groupId: "g-month", period: "2026-10" };
+    await act(async () => {
+      expect(
+        await manager().actions.collectDebts(
+          [
+            { kind: "class", classId: "old-class" },
+            { ...fee, amount: 300 },
+          ],
+          "Diego paid",
+        ),
+      ).toBe(true);
+    });
+    expect(manager().toasts).toHaveLength(1);
+    expect(manager().state.classLog[0]).toMatchObject({ amountPaid: 250, paymentDate: AS_OF, paymentState: "Paid" });
+    expect(student("diego").monthlyPayments).toEqual([
+      expect.objectContaining({ groupId: "g-month", period: "2026-10", amount: 300, paidAt: AS_OF, partial: true }),
+    ]);
+    const charge = deriveMonthlyCharges(manager().state, AS_OF).find((item) => item.studentId === "diego");
+    expect(charge.balance).toBe(500);
+    await undo();
+    expect(manager().state.classLog[0]).toMatchObject({ amountPaid: 0, paymentDate: null, paymentState: "Pending" });
+    expect(student("diego")).not.toHaveProperty("monthlyPayments");
+  });
+
   it("does not offer anything when the save fails", async () => {
     const persistence = {
       initialState: workspace(),

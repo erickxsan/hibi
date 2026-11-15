@@ -1,0 +1,191 @@
+/* «Cobrar»: one student's debts, checked oldest first, one amount and one button. */
+.collect-owed {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border-radius: var(--radius-lg);
+  background: var(--bermellon-soft);
+  color: var(--bermellon-ink);
+  font: 600 13px/18px var(--font-sans);
+}
+
+.collect-owed-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.collect-owed-head .overline {
+  color: inherit;
+}
+
+.collect-owed-head b {
+  font: 800 22px/28px var(--font-sans);
+  font-variant-numeric: tabular-nums;
+}
+
+.collect-overline {
+  margin: 18px 0 4px;
+}
+
+.collect-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.collect-row,
+.collect-lose-row {
+  min-height: 52px;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border-top: 1px solid var(--line-soft);
+  font: 600 14px/20px var(--font-sans);
+  color: var(--sumi);
+  cursor: pointer;
+}
+
+.collect-row:first-child {
+  border-top: 0;
+}
+
+.collect-check {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--indigo);
+  cursor: pointer;
+}
+
+.collect-row.is-off .collect-what,
+.collect-row.is-off .collect-money {
+  opacity: 0.55;
+}
+
+.collect-what {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.collect-what b {
+  font-weight: 800;
+}
+
+.collect-what small {
+  overflow: hidden;
+  color: var(--sumi-muted);
+  font: 500 12px/16px var(--font-sans);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.collect-what small.is-bad {
+  color: var(--bermellon-ink);
+}
+
+.collect-what small.is-pend {
+  color: var(--ocre-ink);
+}
+
+.collect-money {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.collect-more,
+.collect-link {
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sumi-muted);
+  font: 700 13px/18px var(--font-sans);
+  text-decoration: underline;
+  text-decoration-color: var(--line-control);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.collect-more {
+  align-self: flex-start;
+  color: var(--indigo);
+}
+
+.collect-link:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.collect-foot {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.collect-amount {
+  margin: 0;
+}
+
+.collect-input {
+  position: relative;
+  display: block;
+}
+
+.collect-input > span {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  transform: translateY(-50%);
+  color: var(--sumi-muted);
+  font: 700 16px/1 var(--font-sans);
+  pointer-events: none;
+}
+
+.collect-input .control {
+  width: 100%;
+  min-height: var(--control-height);
+  padding-left: 26px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.collect-go {
+  width: 100%;
+  min-height: var(--control-height);
+}
+
+.collect-foot .collect-link {
+  align-self: center;
+}
+
+.collect-lose {
+  display: flex;
+  flex-direction: column;
+}
+
+.collect-lose-row {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  cursor: default;
+}
+
+.collect-lose-row .button {
+  min-height: var(--control-height);
+}
+
+/* Where the debts are listed, the button sits next to their heading. */
+.debts-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* In the student sheet of Seguimiento it leads the payments tab. */
+.ssh-collect {
+  width: 100%;
+  margin-bottom: 12px;
+}

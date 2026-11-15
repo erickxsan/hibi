@@ -161,13 +161,33 @@ describe("Tracking on desktop", () => {
     await user.click(screen.getByRole("tab", { name: "Payments" }));
     expect(screen.getByText("Monthly fees · October")).toBeInTheDocument();
     expect(screen.getByText("0 of 1")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Mark paid" }));
+    await user.click(screen.getByRole("button", { name: "Collect: Sofía Martín" }));
+    const sheet = screen.getByRole("dialog", { name: "Sofía Martín" });
+    expect(within(sheet).getByRole("checkbox")).toBeChecked();
+    await user.click(within(sheet).getByRole("button", { name: "Collect $1,200" }));
     await waitFor(() =>
       expect(saved().students.find((student) => student.id === "s3").monthlyPayments).toEqual([
         expect.objectContaining({ groupId: "g2", period: "2026-10", amount: 1200 }),
       ]),
     );
     expect(await screen.findByText("1 of 1")).toBeInTheDocument();
+  });
+
+  it("records an abono typed in the labelled amount of «Cobrar»", async () => {
+    const user = userEvent.setup();
+    const { saved } = setup();
+    await user.click(screen.getByRole("tab", { name: "Payments" }));
+    await user.click(screen.getByRole("button", { name: "Collect: Sofía Martín" }));
+    const sheet = screen.getByRole("dialog", { name: "Sofía Martín" });
+    const amount = within(sheet).getByRole("textbox", { name: "Amount" });
+    await user.clear(amount);
+    await user.type(amount, "500");
+    await user.click(within(sheet).getByRole("button", { name: "Collect $500" }));
+    await waitFor(() =>
+      expect(saved().students.find((student) => student.id === "s3").monthlyPayments).toEqual([
+        expect.objectContaining({ groupId: "g2", period: "2026-10", amount: 500, partial: true }),
+      ]),
+    );
   });
 
   it("lands an Inicio alert on the students and fees it named", () => {
