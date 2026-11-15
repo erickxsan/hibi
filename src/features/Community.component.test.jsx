@@ -475,6 +475,28 @@ describe("Community groups", () => {
     expect(saved().students.find((s) => s.id === "s4").billingByGroup).toBeUndefined();
   });
 
+  it("says a switch to per class waits for a month already paid in advance", async () => {
+    const user = userEvent.setup();
+    const state = newcomerState();
+    const diego = state.students.find((s) => s.id === "s2");
+    diego.monthlyPayments = [{ id: "nov", groupId: "g1", period: "2026-11", amount: 900, paidAt: "2026-10-20" }];
+    const { saved } = setup(state);
+    await user.click(screen.getByRole("tab", { name: "Groups" }));
+    await user.click(screen.getByRole("button", { name: "Open Primaria 5A" }));
+    await user.click(screen.getByRole("combobox", { name: "Adjust for a student" }));
+    await user.click(screen.getByRole("option", { name: "Diego Soto" }));
+    await user.click(screen.getByRole("combobox", { name: "How Diego Soto pays" }));
+    await user.click(screen.getByRole("option", { name: "Per class" }));
+    // November is paid already: per class starts after it.
+    expect(screen.getByText("$150 per class attended from December")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() =>
+      expect(saved().students.find((s) => s.id === "s2").billingByGroup).toEqual({
+        g1: { mode: "perClass", effectiveFrom: "2026-12" },
+      }),
+    );
+  });
+
   it("says how many fees already owed a backdated save stops charging", async () => {
     // Monthly since October with Bea added on October 20 (owing October since the 20th); Luna came on
     // September 7. One save moves «Aplica desde» to September and sets Bea per class from October.

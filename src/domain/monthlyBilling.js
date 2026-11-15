@@ -551,14 +551,28 @@ function livedMonthly(state, student, group, period, asOf) {
  * With the workspace (`state`), a month counts as lived only when the records or a fee already past
  * due show it (see livedMonthly): someone added this month and set per class before anything was
  * recorded starts now, since joining always stamps the month monthly. Without it, every month they
- * paid monthly.
+ * paid monthly. A later month with a receipt or a lost mark of theirs (paid in advance) keeps its
+ * fee as well, so per class starts after it.
  */
 export function perClassStart(student, group, asOf, from, state = null) {
   const period = periodOf(asOf);
+  // A month paid in advance (or given up on) keeps its fee too: its receipt would belong to no month.
+  const ofGroup = (item) => item?.groupId === group?.id && isPeriod(item.period);
+  const money = new Set(
+    [
+      ...normalizeMonthlyPayments(student?.monthlyPayments),
+      ...normalizeLostPayments(student?.lostPayments).filter((mark) => mark.kind === "monthly"),
+    ]
+      .filter(ofGroup)
+      .map((item) => item.period),
+  );
+  const last = [...money].reduce((latest, month) => (month > latest ? month : latest), period);
   let start = from;
-  for (let month = from; isPeriod(month) && month <= period; month = nextPeriod(month))
-    if (paysMonthly(student, group, month) && (!state || livedMonthly(state, student, group, month, asOf)))
-      start = nextPeriod(month);
+  for (let month = from; isPeriod(month) && month <= last; month = nextPeriod(month)) {
+    if (!paysMonthly(student, group, month)) continue;
+    const lived = month > period ? money.has(month) : !state || livedMonthly(state, student, group, month, asOf);
+    if (lived) start = nextPeriod(month);
+  }
   return start;
 }
 

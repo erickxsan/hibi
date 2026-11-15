@@ -380,3 +380,39 @@ describe("a fee already past its due date when switching to per class", () => {
     expect(saveBilling(state, adjust({ bea: PER_CLASS }), "2026-11-20").starts.bea).toBe("2026-11");
   });
 });
+
+// A month paid in advance (second review of the fixes, item 3): its receipt keeps it monthly.
+describe("a month already paid in advance when switching to per class", () => {
+  it("starts after December when Ana paid December on November 13", () => {
+    let state = recordClasses(
+      payFees(fixture(), ["ana", "beto"], ["2026-09", "2026-10", "2026-11"]),
+      "2026-11-01",
+      TODAY,
+    );
+    state = recordMonthlyPayment(state, { studentId: "ana", groupId: "g", period: "2026-12", paidAt: TODAY });
+    const saved = saveBilling(state, adjust({ ana: PER_CLASS }));
+    // Before: per class from December, the $1,000 receipt belonged to no month and December's classes cost $1,800.
+    expect(saved.starts.ana).toBe("2027-01");
+    expect(saved.overrides.ana).toEqual({ mode: "perClass", effectiveFrom: "2027-01" });
+    const end = "2026-12-31";
+    const december = recordClasses(saved.state, "2026-12-01", end);
+    expect(feeOf(december, "2026-12", end)).toMatchObject({ status: "paid", paid: 1000, balance: 0 });
+    expect(owed(december, end)).toEqual({ classes: 0, fees: 0 });
+    // January is per class.
+    const january = recordClasses(december, "2027-01-01", "2027-01-07");
+    expect(
+      deriveAll(january, "2027-01-07")
+        .classLog.filter((row) => row.studentId === "ana" && row.classDate >= "2027-01-01")
+        .map((row) => row.outstanding),
+    ).toEqual([200, 200]);
+  });
+
+  it("also waits for a future month the teacher gave up on", () => {
+    const state = markLost(
+      payFees(fixture(), ["ana"], ["2026-09", "2026-10", "2026-11"]),
+      [{ studentId: "ana", kind: "monthly", groupId: "g", period: "2026-12" }],
+      TODAY,
+    );
+    expect(saveBilling(state, adjust({ ana: PER_CLASS })).starts.ana).toBe("2027-01");
+  });
+});
