@@ -134,7 +134,7 @@ describe("never a start before the group existed", () => {
     const saved = saveBilling(state, monthlyFrom("2026-05"), today);
     expect(saved.billing).toMatchObject({ mode: "monthly", effectiveFrom: "2026-08" });
     expect(owed(saved.state, today)).toEqual({ classes: 0, fees: 2000 });
-    expect(saved.effects).toEqual({ count: 2, total: 2000, stopped: 1200 });
+    expect(saved.effects).toEqual({ count: 2, total: 2000, stopped: 1200, dropped: 0, droppedTotal: 0 });
   });
 
   it("dates a group by its first class, schedule start, schedule history, billing or a join date", () => {
@@ -412,17 +412,51 @@ describe("a backdated start never bills a student before they joined", () => {
       );
     const OLD = ["2026-01:overdue:1000", "2026-02:overdue:1000", "2026-03:overdue:1000"];
 
-    it("bills Beto from his first class, dropping the earlier term's fees nothing shows were his", () => {
+    it("keeps the fees Beto already owed and leaves out only the backdated months before his first class", () => {
       const state = withBeto();
       // Older data: with no join date the January-March term already billed him.
       expect(feesOf(state, "beto")).toEqual(OLD);
+      expect(owed(state, TODAY, "beto")).toEqual({ classes: 1400, fees: 3000 });
       const saved = saveBilling(state, monthlyFrom("2026-08"));
-      expect(saved.overrides.beto).toEqual({ mode: "group", joinedOn: "2026-10-22" });
-      // Before the fix nothing was saved for him: January-March and August-November, $7,000.
-      expect(feesOf(saved.state, "beto")).toEqual(["2026-10:overdue:1000", "2026-11:overdue:1000"]);
-      // Ana came in January: her January-March fees stay and she gets no join date.
+      // Away from April 1 to his first class: January-March stay owed, August and September are not his.
+      expect(saved.overrides.beto).toEqual({ mode: "group", away: [{ from: "2026-04-01", to: "2026-10-22" }] });
+      // Before 43beef0's follow-up: January-March and August-November ($7,000); then October-November only.
+      expect(feesOf(saved.state, "beto")).toEqual([...OLD, "2026-10:overdue:1000", "2026-11:overdue:1000"]);
+      expect(owed(saved.state, TODAY, "beto")).toEqual({ classes: 0, fees: 5000 });
+      // October is owed from the day he came, as joining does.
+      const october = deriveMonthlyCharges(saved.state, TODAY).find(
+        (charge) => charge.studentId === "beto" && charge.period === "2026-10",
+      );
+      expect(october).toMatchObject({ dueDate: "2026-10-22", coversFrom: "2026-10-22", coversTo: "2026-11-04" });
+      // Ana came in January: her January-March fees stay and nothing is saved for her.
       expect(saved.overrides).not.toHaveProperty("ana");
       expect(feesOf(saved.state, "ana").slice(0, 3)).toEqual(feesOf(state, "ana").slice(0, 3));
+      // No fee already shown disappears, and the hint counts the new ones.
+      expect(saved.effects).toMatchObject({ dropped: 0, droppedTotal: 0 });
+    });
+
+    it("composes the away stretch with a later archive and reactivation", () => {
+      const saved = saveBilling(withBeto(), monthlyFrom("2026-08")).state;
+      const status = (current, day, value) =>
+        normalizeState({
+          ...current,
+          students: current.students.map((s) =>
+            s.id === "beto" ? recordStays(s, { ...s, status: value }, current.groups, day, current.classLog) : s,
+          ),
+        });
+      const archived = status(saved, "2026-11-10", "Inactive");
+      const back = status(archived, "2026-12-20", "Active");
+      expect(back.students[1].billingByGroup.g.away).toEqual([
+        { from: "2026-04-01", to: "2026-10-22" },
+        { from: "2026-11-10", to: "2026-12-20" },
+      ]);
+      // November fell due (5th) before he left (10th); December is owed from the day he came back.
+      expect(feesOf(back, "beto", "2026-12-31")).toEqual([
+        ...OLD,
+        "2026-10:overdue:1000",
+        "2026-11:overdue:1000",
+        "2026-12:overdue:1000",
+      ]);
     });
 
     it("keeps the earlier fees when a receipt, a lost mark or an adjustment shows him there", () => {
@@ -449,7 +483,7 @@ describe("a backdated start never bills a student before they joined", () => {
       for (const state of [paid, lost, adjusted]) {
         const before = feesOf(state, "beto");
         const saved = saveBilling(state, monthlyFrom("2026-08"));
-        expect(saved.overrides).not.toHaveProperty("beto.joinedOn");
+        expect(saved.overrides).not.toHaveProperty("beto");
         expect(feesOf(saved.state, "beto").filter((fee) => fee < "2026-04")).toEqual(
           before.filter((fee) => fee < "2026-04"),
         );
@@ -550,7 +584,7 @@ describe("what the hint says before saving", () => {
     const saved = saveBilling(state, monthlyFrom("2026-10"));
     // Unchanged meaning: the two classes are now part of the fee and two fees are born overdue. Now it is said.
     expect(owed(saved.state)).toEqual({ classes: 0, fees: 2000 });
-    expect(saved.effects).toEqual({ count: 2, total: 2000, stopped: 400 });
+    expect(saved.effects).toEqual({ count: 2, total: 2000, stopped: 400, dropped: 0, droppedTotal: 0 });
   });
 
   it("counts what was paid per class as already credited to the fee", () => {
@@ -562,7 +596,7 @@ describe("what the hint says before saving", () => {
       ),
     });
     const { effects } = saveBilling(state, monthlyFrom("2026-10"));
-    expect(effects).toEqual({ count: 4, total: 3600, stopped: 400 });
+    expect(effects).toEqual({ count: 4, total: 3600, stopped: 400, dropped: 0, droppedTotal: 0 });
   });
 
   it("tells also the debt of a former student whose classes the fee now covers", () => {
@@ -575,7 +609,7 @@ describe("what the hint says before saving", () => {
     expect(owed(state, TODAY, "fer")).toEqual({ classes: 400, fees: 0 });
     const { effects, state: after } = saveBilling(state, monthlyFrom("2026-10"));
     // Ana's $400 become part of her fee; Fer's $400 are simply no longer charged, and the hint counts them.
-    expect(effects).toEqual({ count: 2, total: 2000, stopped: 800 });
+    expect(effects).toEqual({ count: 2, total: 2000, stopped: 800, dropped: 0, droppedTotal: 0 });
     expect(owed(after, TODAY, "fer")).toEqual({ classes: 0, fees: 0 });
   });
 });

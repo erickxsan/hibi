@@ -475,6 +475,28 @@ describe("Community groups", () => {
     expect(saved().students.find((s) => s.id === "s4").billingByGroup).toBeUndefined();
   });
 
+  it("says how many fees already owed a backdated save stops charging", async () => {
+    // Monthly since October with Bea added on October 20 (owing October since the 20th); Luna came on
+    // September 7. One save moves «Aplica desde» to September and sets Bea per class from October.
+    const state = newcomerState();
+    state.classLog = [row("r0", "2026-09-07", "s1", "P", 0), ...state.classLog];
+    const user = userEvent.setup();
+    setup(state);
+    await user.click(screen.getByRole("tab", { name: "Groups" }));
+    await user.click(screen.getByRole("button", { name: "Open Primaria 5A" }));
+    await user.click(screen.getByRole("combobox", { name: "Adjust for a student" }));
+    await user.click(screen.getByRole("option", { name: "Bea Ruiz" }));
+    await user.click(screen.getByRole("combobox", { name: "How Bea Ruiz pays" }));
+    await user.click(screen.getByRole("option", { name: "Per class" }));
+    await user.click(screen.getByRole("combobox", { name: "Applies from" }));
+    await user.click(screen.getByRole("option", { name: "September" }));
+    expect(
+      screen.getByText(
+        "1 fee is created already overdue ($900) and unpaid classes in those months ($150) stop being charged. 1 fee already owed stops being charged ($900).",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("asks before archiving, then shows the archived history and reactivates", async () => {
     const user = userEvent.setup();
     const { saved } = setup();

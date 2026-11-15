@@ -406,8 +406,9 @@ export function applyFromOptions(group, draft, asOf, state = null) {
  * to per class, which never turns a month they already lived paying monthly (see perClassStart; with
  * the workspace, only months the records show lived that way count).
  * With the workspace (`state`), a start before the group is on record moves to its first month, and
- * a backdated start saves the join date of each student it would otherwise bill for months before
- * they were in the group (see backdatedJoins); each override stays the student's whole entry.
+ * a backdated start saves the join date (or, after an earlier monthly term that already billed
+ * them, an away stretch) of each student it would otherwise bill for months before they were in the
+ * group (see backdatedJoins); each override stays the student's whole entry.
  */
 export function billingChanges(group, members, draft, asOf, applyFrom = draft?.applyFrom ?? null, state = null) {
   if (state && group?.id && isPeriod(applyFrom) && applyFrom !== (groupBillingFor(group)?.effectiveFrom || "")) {
@@ -448,12 +449,12 @@ export function billingChanges(group, members, draft, asOf, applyFrom = draft?.a
   });
   if (state && group?.id) {
     const joins = backdatedJoins(state, group, { ...group, billing }, asOf, overrides);
-    for (const [id, joinedOn] of Object.entries(joins)) {
+    for (const [id, stayFields] of Object.entries(joins)) {
       const student = (state.students || []).find((item) => item.id === id);
       const entry = Object.hasOwn(overrides, id)
         ? overrides[id]
         : normalizeBillingByGroup(student?.billingByGroup)?.[group.id];
-      overrides[id] = { ...(entry || { mode: "group" }), joinedOn };
+      overrides[id] = { ...(entry || { mode: "group" }), ...stayFields };
     }
   }
   return { billing, overrides, starts };
@@ -488,22 +489,28 @@ function groupScope(state, group, billing, overrides = {}) {
 
 /**
  * What saving the draft does on `asOf` to the months already lived, for the «Aplica desde» hint: the
- * fees it creates already overdue (`count`, their balance `total`) and the unpaid per-class debt a
- * fee now covers instead (`stopped`). Uses the same join dates the save stores.
+ * fees it creates already overdue (`count`, their balance `total`), the unpaid per-class debt a fee
+ * now covers instead (`stopped`) and the fees owed before saving that it takes away (`dropped`, their
+ * balance `droppedTotal`; a per-class switch saved with it, say). Uses what the save stores.
  */
 export function backdatedEffects(state, group, members, draft, asOf) {
   const { billing, overrides } = billingChanges(group, members, draft, asOf, draft?.applyFrom ?? null, state);
   const before = groupScope(state, group, group.billing);
   const after = groupScope(state, group, billing, overrides);
-  const existing = new Set(deriveMonthlyCharges(before, asOf).map((charge) => charge.id));
-  const created = deriveMonthlyCharges(after, asOf).filter(
-    (charge) => charge.status === "overdue" && !existing.has(charge.id),
-  );
+  const owing = (charge) => ["overdue", "pending"].includes(charge.status) && charge.balance > 0;
+  const beforeCharges = deriveMonthlyCharges(before, asOf);
+  const afterCharges = deriveMonthlyCharges(after, asOf);
+  const existing = new Set(beforeCharges.map((charge) => charge.id));
+  const kept = new Set(afterCharges.map((charge) => charge.id));
+  const created = afterCharges.filter((charge) => charge.status === "overdue" && !existing.has(charge.id));
+  const dropped = beforeCharges.filter((charge) => owing(charge) && !kept.has(charge.id));
   const owed = (scope, row) => Math.max(0, calculateOutstanding(scope, row, asOf) || 0);
   return {
     count: created.length,
     total: sumMoney(created, (charge) => charge.balance),
     stopped: sumMoney(before.classLog, (row) => Math.max(0, owed(before, row) - owed(after, row))),
+    dropped: dropped.length,
+    droppedTotal: sumMoney(dropped, (charge) => charge.balance),
   };
 }
 

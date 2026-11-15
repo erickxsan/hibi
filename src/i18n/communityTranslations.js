@@ -177,6 +177,8 @@ export const COMMUNITY_TRANSLATIONS = Object.freeze({
   "No fee is created overdue; unpaid classes in those months ({debt}) stop being charged.":
     "No se crea ninguna cuota vencida; las clases sin pagar de esos meses ({debt}) dejan de cobrarse.",
   "No fee is created overdue.": "No se crea ninguna cuota vencida.",
+  "1 fee already owed stops being charged ({total}).": "Deja de cobrarse 1 cuota ya adeudada ({total}).",
+  "{count} fees already owed stop being charged ({total}).": "Dejan de cobrarse {count} cuotas ya adeudadas ({total}).",
   "The new fee starts in {month}.": "La nueva cuota empieza en {month}.",
   "Student changes apply from {month}; earlier months stay as they were.":
     "Los cambios de alumnos aplican desde {month}; los meses anteriores no cambian.",

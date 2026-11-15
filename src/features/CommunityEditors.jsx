@@ -403,8 +403,22 @@ function startChoice(state, group, members, draft, asOf) {
   };
 }
 
-// One sentence with the figures of a start in a past month: fees born overdue and unpaid classes it forgives.
-function backdatedHint({ count, total, stopped }, locale, t) {
+// The figures of a start in a past month: fees born overdue and unpaid classes it forgives, then the
+// fees already owed that stop being charged, if any (one string: a single text node).
+function backdatedHint({ dropped = 0, droppedTotal = 0, ...effects }, locale, t) {
+  const main = createdHint(effects, locale, t);
+  if (!dropped) return main;
+  const values = { count: dropped, total: formatMoney(droppedTotal, locale) };
+  const gone = t(
+    dropped === 1
+      ? "1 fee already owed stops being charged ({total})."
+      : "{count} fees already owed stop being charged ({total}).",
+    values,
+  );
+  return `${main} ${gone}`;
+}
+
+function createdHint({ count, total, stopped }, locale, t) {
   const values = { count, total: formatMoney(total, locale), debt: formatMoney(stopped, locale) };
   if (!count)
     return t(
