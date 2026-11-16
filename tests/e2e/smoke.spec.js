@@ -39,7 +39,8 @@ test("updates the active student count after deactivation", async ({ page }) => 
   const counter = page.getByText(/^\d+ active students? in /);
   await expect(counter).toHaveText(/^1 active student in /);
 
-  await page.getByRole("button", { name: "Deactivate student" }).click();
+  await page.getByRole("button", { name: "Edit student" }).click();
+  await page.getByRole("dialog", { name: "Edit student" }).getByRole("button", { name: "Deactivate student" }).click();
   const dialog = page.getByRole("dialog", { name: /Deactivate .+\?/ });
   await dialog.getByRole("button", { name: "Deactivate student" }).click();
 

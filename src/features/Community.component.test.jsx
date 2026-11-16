@@ -165,14 +165,28 @@ describe("Community students", () => {
     expect(within(detail).queryByRole("columnheader", { name: "Group" })).not.toBeInTheDocument();
   });
 
-  it("saves contact details, deactivates and reactivates from the archive", async () => {
+  it("edits a student only through «Edit student», which also deactivates and deletes", async () => {
     const user = userEvent.setup();
     const { saved, persistence } = setup();
     await user.click(screen.getByRole("button", { name: "Open Diego Soto" }));
-    fireEvent.change(screen.getByLabelText("Short notes"), { target: { value: "Likes drawings" } });
-    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    const detail = screen.getByRole("region", { name: "Diego Soto" });
+    // One editor: the card has no inline form and no second link.
+    expect(within(detail).queryByRole("textbox")).not.toBeInTheDocument();
+    expect(within(detail).queryByRole("button", { name: "Edit enrollment and rate" })).not.toBeInTheDocument();
+    expect(within(detail).queryByRole("button", { name: "Deactivate student" })).not.toBeInTheDocument();
+    await user.click(within(detail).getByRole("button", { name: "Edit student" }));
+    const editor = await screen.findByRole("dialog", { name: "Edit student" });
+    fireEvent.change(within(editor).getByLabelText("Notes"), { target: { value: "Likes drawings" } });
+    await user.click(within(editor).getByRole("button", { name: "Save student" }));
     await waitFor(() => expect(saved().students.find((s) => s.id === "s2").notes).toBe("Likes drawings"));
-    await user.click(screen.getByRole("button", { name: "Deactivate student" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Edit student" })).not.toBeInTheDocument());
+
+    await user.click(
+      within(screen.getByRole("region", { name: "Diego Soto" })).getByRole("button", { name: "Edit student" }),
+    );
+    const again = await screen.findByRole("dialog", { name: "Edit student" });
+    expect(within(again).getByRole("button", { name: "Delete student" })).toBeInTheDocument();
+    await user.click(within(again).getByRole("button", { name: "Deactivate student" }));
     const dialog = await screen.findByRole("dialog", { name: "Deactivate Diego Soto?" });
     await user.click(within(dialog).getByRole("button", { name: "Deactivate student" }));
     await waitFor(() => expect(saved().students.find((s) => s.id === "s2").status).toBe("Inactive"));
@@ -203,7 +217,7 @@ describe("Community students", () => {
         customHourlyRate: 120,
       }),
     );
-    await user.click(screen.getByRole("button", { name: "Edit enrollment and rate" }));
+    await user.click(await screen.findByRole("button", { name: "Edit student" }));
     const editor = await screen.findByRole("dialog", { name: "Edit student" });
     await user.click(within(editor).getByRole("button", { name: "Inactive" }));
     await user.click(within(editor).getByRole("button", { name: "Save student" }));
@@ -233,29 +247,18 @@ describe("Community debts", () => {
   }
   const rosa = (saved) => saved().students.find((student) => student.id === "s9");
 
-  it("keeps what was typed in the card when a debt is given up or paid", async () => {
+  it("keeps a debt given up when the student is edited afterwards", async () => {
     const user = userEvent.setup();
     const { saved } = setup(owing());
     await user.click(screen.getAllByRole("button", { name: "Open Rosa Peña" })[0]);
-    fireEvent.change(screen.getByLabelText("Short notes"), { target: { value: "Paga en efectivo" } });
     await user.click(screen.getByRole("button", { name: /^Mark as lost: September/ }));
     await waitFor(() => expect(rosa(saved).lostPayments).toHaveLength(1));
-    expect(screen.getByLabelText("Short notes")).toHaveValue("Paga en efectivo");
-    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await user.click(screen.getByRole("button", { name: "Edit student" }));
+    const editor = await screen.findByRole("dialog", { name: "Edit student" });
+    fireEvent.change(within(editor).getByLabelText("Notes"), { target: { value: "Paga en efectivo" } });
+    await user.click(within(editor).getByRole("button", { name: "Save student" }));
     await waitFor(() => expect(rosa(saved).notes).toBe("Paga en efectivo"));
     expect(rosa(saved).lostPayments).toHaveLength(1);
-    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
-  });
-
-  it("is clean again once the mark is undone with nothing typed", async () => {
-    const user = userEvent.setup();
-    const { saved } = setup(owing());
-    await user.click(screen.getAllByRole("button", { name: "Open Rosa Peña" })[0]);
-    await user.click(screen.getByRole("button", { name: /^Mark as lost: September/ }));
-    await waitFor(() => expect(rosa(saved).lostPayments).toHaveLength(1));
-    await user.click(screen.getByRole("button", { name: /^Recover: September/ }));
-    await waitFor(() => expect(rosa(saved)).not.toHaveProperty("lostPayments"));
-    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
   });
 
   it("records one payment for a double tap while the cloud answers", async () => {
@@ -779,16 +782,16 @@ describe("Community unsaved changes", () => {
     expect(confirm).not.toHaveBeenCalled();
   });
 
-  it("asks in-app before leaving an edited student card for another one", async () => {
+  it("asks in-app before leaving an edited group card for a student", async () => {
     const user = userEvent.setup();
     const confirm = vi.spyOn(globalThis, "confirm");
     setup();
-    await user.click(screen.getByRole("button", { name: "Open Diego Soto" }));
-    fireEvent.change(screen.getByLabelText("Short notes"), { target: { value: "Likes drawings" } });
+    await user.click(screen.getByRole("button", { name: "View group Primaria 5A" }));
+    fireEvent.change(screen.getByLabelText(/Group name/), { target: { value: "Primaria 5B" } });
     await user.click(screen.getByRole("button", { name: "Open Luna López" }));
     const question = await screen.findByRole("alertdialog", { name: "Discard your unsaved community changes?" });
     await user.click(within(question).getByRole("button", { name: "Keep editing" }));
-    expect(screen.getByRole("region", { name: "Diego Soto" })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Group name/)).toHaveValue("Primaria 5B");
 
     await user.click(screen.getByRole("button", { name: "Open Luna López" }));
     const second = await screen.findByRole("alertdialog", { name: "Discard your unsaved community changes?" });
@@ -800,8 +803,8 @@ describe("Community unsaved changes", () => {
   it("asks in-app before switching the view with edits pending", async () => {
     const user = userEvent.setup();
     setup();
-    await user.click(screen.getByRole("button", { name: "Open Diego Soto" }));
-    fireEvent.change(screen.getByLabelText("Short notes"), { target: { value: "Likes drawings" } });
+    await user.click(screen.getByRole("button", { name: "View group Primaria 5A" }));
+    fireEvent.change(screen.getByLabelText(/Group name/), { target: { value: "Primaria 5B" } });
     await user.click(screen.getByRole("tab", { name: "Groups" }));
     const question = await screen.findByRole("alertdialog", { name: "Discard your unsaved community changes?" });
     expect(screen.getByRole("tab", { name: "Groups" })).toHaveAttribute("aria-selected", "false");

@@ -1221,3 +1221,13 @@
     animation: none;
   }
 }
+
+/* Student editor: «Desactivar» / «Eliminar» close the form, away from «Guardar». */
+.editor-danger {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}

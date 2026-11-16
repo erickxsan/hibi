@@ -97,12 +97,6 @@ const NEW_GROUP_BILLING = Object.freeze({
   adjustments: {},
 });
 
-/** The record as it is now, keeping only the fields edited in the draft since `baseline`. */
-function rebaseDraft(draft, baseline, latest) {
-  const edited = Object.keys(draft).filter((key) => draftChanged(draft[key], baseline[key]));
-  return { ...latest, ...Object.fromEntries(edited.map((key) => [key, draft[key]])) };
-}
-
 /** @param {any} [student] */
 function cloneStudent(student = EMPTY_STUDENT) {
   return {
@@ -175,7 +169,6 @@ export default function Community({
   const [selected, setSelected] = useState(() => ({ type: "", id: "" }));
   const [sheet, setSheet] = useState(null);
   const [billingSheet, setBillingSheet] = useState(false);
-  const [studentDraft, setStudentDraft] = useState(null);
   const [groupDraft, setGroupDraft] = useState(null);
   const [billingDraft, setBillingDraft] = useState(null);
   const [studentEditor, setStudentEditor] = useState(null);
@@ -201,7 +194,7 @@ export default function Community({
   );
   const colsRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const revealDetail = useRef(false);
-  const baselines = useRef({ student: null, group: null, billing: null, studentEditor: null, groupEditor: null });
+  const baselines = useRef({ group: null, billing: null, studentEditor: null, groupEditor: null });
 
   const groupsById = useMemo(() => new Map(state.groups.map((group) => [group.id, group])), [state.groups]);
   const activeStudents = useMemo(
@@ -324,21 +317,7 @@ export default function Community({
     if (created.status === "Inactive") setStudentArchivesOpen(true);
   }, [pendingCode, state.students]);
 
-  // Drafts follow the selected record.
-  useEffect(() => {
-    if (!selectedStudent) {
-      setStudentDraft(null);
-      return;
-    }
-    const next = cloneStudent(selectedStudent);
-    const previous = baselines.current.student;
-    const sameStudent = previous?.id === selectedStudent.id;
-    baselines.current.student = next;
-    // A payment or a lost mark refreshes the record; unsaved edits here survive it.
-    setStudentDraft((current) =>
-      sameStudent && current && draftChanged(current, previous) ? rebaseDraft(current, previous, next) : next,
-    );
-  }, [selectedStudent]);
+  // The group drafts follow the selected record.
   useEffect(() => {
     if (!focusGroup || isGroupArchived(focusGroup)) {
       setGroupDraft(null);
@@ -358,14 +337,13 @@ export default function Community({
     );
   }, [focusGroup, focusMembers]);
 
-  const studentDirty = Boolean(studentDraft) && draftChanged(studentDraft, baselines.current.student);
   const groupDirty =
     (Boolean(groupDraft) && draftChanged(groupDraft, baselines.current.group)) ||
     (Boolean(billingDraft) && draftChanged(billingDraft, baselines.current.billing));
   const editorDirty =
     (Boolean(studentEditor) && draftChanged(studentEditor, baselines.current.studentEditor)) ||
     (Boolean(groupEditor) && draftChanged(groupEditor, baselines.current.groupEditor));
-  const dirty = studentDirty || groupDirty || editorDirty;
+  const dirty = groupDirty || editorDirty;
   useUnsavedChanges(registerNavigationBlocker, dirty, DISCARD);
 
   // In-app «discard?» questions (no native confirm). Guards that must answer synchronously block, ask, and
@@ -392,7 +370,7 @@ export default function Community({
     defaultValue: initialCommunityView(initialView),
     allowedValues: COMMUNITY_VIEWS,
     canChange: ({ to, reason }) => {
-      if (!(studentDirty || groupDirty) || viewPass.current.consume(to)) return true;
+      if (!groupDirty || viewPass.current.consume(to)) return true;
       const replayHistory = reason === "popstate" ? replayableHistoryMove() : null;
       askDiscard(DISCARD).then((accepted) => {
         if (!accepted) return;
@@ -412,7 +390,7 @@ export default function Community({
       return;
     }
     if (selected.type === type && selected.id === id) return;
-    proceedOrAsk(studentDirty || groupDirty, DISCARD, () => {
+    proceedOrAsk(groupDirty, DISCARD, () => {
       revealDetail.current = true;
       setSelected({ type, id });
     });
@@ -491,16 +469,6 @@ export default function Community({
       setSaving(false);
     }
   };
-  const saveStudentDetail = () =>
-    runSave(async () => {
-      if (!studentDraft) return false;
-      // Before saving, so the refreshed record replaces this draft instead of counting as unsaved edits.
-      const previous = baselines.current.student;
-      baselines.current.student = cloneStudent(studentDraft);
-      const saved = await actions.upsertStudent(studentDraft);
-      if (!saved) baselines.current.student = previous;
-      return saved;
-    });
   const saveStudentEditor = () =>
     runSave(async () => {
       if (!studentEditor) return false;
@@ -873,71 +841,62 @@ export default function Community({
       ? !visibleGroups.length && !visibleArchivedGroups.length
       : !visibleActive.length && !visibleInactive.length) && !(view === "all" && visibleGroups.length);
 
-  const detail =
-    selectedStudent && studentDraft ? (
-      <StudentDetail
-        student={selectedStudent}
-        draft={studentDraft}
-        setDraft={setStudentDraft}
-        month={
-          months.get(selectedStudent.id) ||
-          studentMonths(state, derived, asOf, [selectedStudent]).get(selectedStudent.id)
-        }
-        recent={studentRecentClasses(state, derived, selectedStudent.id)}
-        groupsById={groupsById}
-        onSave={saveStudentDetail}
-        onArchive={() => setConfirmTarget({ action: "archive-student", item: selectedStudent })}
-        onReactivate={() => reactivateStudent(selectedStudent)}
-        onEdit={() => openStudentEditor(selectedStudent)}
-        onOpenTracking={openTracking}
-        saving={saving}
-        dirty={studentDirty}
-        debts={debtsOf(selectedStudent)}
+  const detail = selectedStudent ? (
+    <StudentDetail
+      student={selectedStudent}
+      month={
+        months.get(selectedStudent.id) || studentMonths(state, derived, asOf, [selectedStudent]).get(selectedStudent.id)
+      }
+      recent={studentRecentClasses(state, derived, selectedStudent.id)}
+      groupsById={groupsById}
+      onEdit={() => openStudentEditor(selectedStudent)}
+      onOpenTracking={openTracking}
+      debts={debtsOf(selectedStudent)}
+    />
+  ) : selectedGroup && isGroupArchived(selectedGroup) ? (
+    <ArchivedGroupView
+      key={selectedGroup.id}
+      group={selectedGroup}
+      members={selectedMembers}
+      history={archivedGroupHistory(state, derived, selectedGroup, selectedMembers)}
+      includedInStatistics={archiveScope?.included}
+      onReactivate={() => reactivateGroup(selectedGroup)}
+      saving={saving}
+    />
+  ) : selectedGroup && groupDraft && billingDraft ? (
+    <GroupDetail
+      key={selectedGroup.id}
+      group={selectedGroup}
+      members={selectedMembers}
+      summary={groupSummaries.get(selectedGroup.id)}
+      grid={groupAttendanceGrid(state, selectedGroup, selectedMembers, asOf)}
+      monthsById={months}
+      next={nextFor(selectedGroup)}
+      asOf={asOf}
+      state={state}
+      draft={groupDraft}
+      setDraft={setGroupDraft}
+      billingDraft={billingDraft}
+      setBillingDraft={setBillingDraft}
+      onSave={() => saveGroupDetail(selectedGroup)}
+      onArchive={() => setArchiveTarget(selectedGroup)}
+      onEditSchedule={() => openGroupEditor(selectedGroup)}
+      onAddStudent={() => setJoinTarget(selectedGroup)}
+      onOpenStudent={(student) => select("student", student.id)}
+      onOpenNext={() => openNextClass(selectedGroup)}
+      onChangeBadge={(badge) => actions.setGroupBadge(selectedGroup.id, badge)}
+      saving={saving}
+      dirty={groupDirty}
+    />
+  ) : (
+    <section className="detail">
+      <EmptyState
+        icon={UsersRound}
+        title={t("Select a student or group")}
+        description={t("Details and editing tools will appear here.")}
       />
-    ) : selectedGroup && isGroupArchived(selectedGroup) ? (
-      <ArchivedGroupView
-        key={selectedGroup.id}
-        group={selectedGroup}
-        members={selectedMembers}
-        history={archivedGroupHistory(state, derived, selectedGroup, selectedMembers)}
-        includedInStatistics={archiveScope?.included}
-        onReactivate={() => reactivateGroup(selectedGroup)}
-        saving={saving}
-      />
-    ) : selectedGroup && groupDraft && billingDraft ? (
-      <GroupDetail
-        key={selectedGroup.id}
-        group={selectedGroup}
-        members={selectedMembers}
-        summary={groupSummaries.get(selectedGroup.id)}
-        grid={groupAttendanceGrid(state, selectedGroup, selectedMembers, asOf)}
-        monthsById={months}
-        next={nextFor(selectedGroup)}
-        asOf={asOf}
-        state={state}
-        draft={groupDraft}
-        setDraft={setGroupDraft}
-        billingDraft={billingDraft}
-        setBillingDraft={setBillingDraft}
-        onSave={() => saveGroupDetail(selectedGroup)}
-        onArchive={() => setArchiveTarget(selectedGroup)}
-        onEditSchedule={() => openGroupEditor(selectedGroup)}
-        onAddStudent={() => setJoinTarget(selectedGroup)}
-        onOpenStudent={(student) => select("student", student.id)}
-        onOpenNext={() => openNextClass(selectedGroup)}
-        onChangeBadge={(badge) => actions.setGroupBadge(selectedGroup.id, badge)}
-        saving={saving}
-        dirty={groupDirty}
-      />
-    ) : (
-      <section className="detail">
-        <EmptyState
-          icon={UsersRound}
-          title={t("Select a student or group")}
-          description={t("Details and editing tools will appear here.")}
-        />
-      </section>
-    );
+    </section>
+  );
 
   const archiveSummary = archiveTarget
     ? {
@@ -950,6 +909,9 @@ export default function Community({
       }
     : null;
 
+  // The saved record behind the student editor: «Desactivar» and «Eliminar» act on it, not on the draft.
+  const editedStudent = studentEditor?.id ? state.students.find((item) => item.id === studentEditor.id) || null : null;
+
   const overlays = (
     <>
       {confirmPrompt}
@@ -960,15 +922,6 @@ export default function Community({
         description={t("Use individual classes, one or many groups, or both.")}
         footer={
           <>
-            {studentEditor?.id ? (
-              <Button
-                variant="ghost"
-                className="is-danger-text footer-start"
-                onClick={() => setConfirmTarget({ action: "delete-student", item: studentEditor })}
-              >
-                {t("Delete student")}
-              </Button>
-            ) : null}
             <Button onClick={closeStudentEditor}>{t("Cancel")}</Button>
             <Button variant="primary" onClick={saveStudentEditor} disabled={saving}>
               {saving ? t("Saving…") : t("Save student")}
@@ -977,12 +930,46 @@ export default function Community({
         }
       >
         {studentEditor ? (
-          <StudentEditor
-            draft={studentEditor}
-            setDraft={setStudentEditor}
-            groups={state.groups}
-            defaultRate={state.settings.hourlyRate}
-          />
+          <>
+            <StudentEditor
+              draft={studentEditor}
+              setDraft={setStudentEditor}
+              groups={state.groups}
+              defaultRate={state.settings.hourlyRate}
+            />
+            {editedStudent ? (
+              <div className="editor-danger">
+                {editedStudent.status === "Inactive" ? (
+                  <Button
+                    variant="ghost"
+                    onClick={async () => {
+                      if (await reactivateStudent(editedStudent)) setStudentEditor(null);
+                    }}
+                    disabled={saving}
+                  >
+                    {t("Reactivate")}
+                  </Button>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    className="is-danger-text"
+                    onClick={() => setConfirmTarget({ action: "archive-student", item: editedStudent })}
+                    disabled={saving}
+                  >
+                    {t("Deactivate student")}
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  className="is-danger-text"
+                  onClick={() => setConfirmTarget({ action: "delete-student", item: editedStudent })}
+                  disabled={saving}
+                >
+                  {t("Delete student")}
+                </Button>
+              </div>
+            ) : null}
+          </>
         ) : null}
       </Drawer>
       <Drawer

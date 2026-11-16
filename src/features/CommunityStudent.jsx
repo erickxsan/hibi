@@ -1,6 +1,6 @@
-import { Mail, Phone } from "lucide-react";
+import { Mail, Pencil, Phone } from "lucide-react";
 import { useI18n } from "../i18n/index.jsx";
-import { Button, Field, Input } from "../components/ui";
+import { Button } from "../components/ui";
 import { StudentAvatar } from "../components/StudentAvatar";
 import {
   dayNumber,
@@ -118,22 +118,8 @@ function MonthFigures({ month, t, locale, compact = false }) {
   );
 }
 
-export function StudentDetail({
-  student,
-  draft,
-  setDraft,
-  month,
-  recent,
-  groupsById,
-  onSave,
-  onArchive,
-  onReactivate,
-  onEdit,
-  onOpenTracking,
-  saving,
-  dirty,
-  debts = null,
-}) {
+/** Desktop card: the month, debts and latest classes; every edit goes through «Editar alumno». */
+export function StudentDetail({ student, month, recent, groupsById, onEdit, onOpenTracking, debts = null }) {
   const { t, locale } = useI18n();
   const inactive = student.status === "Inactive";
   // A student whose recent classes are all in one group gets no Group column: it repeated one name per row.
@@ -150,16 +136,16 @@ export function StudentDetail({
             {inactive ? <span className="st st-prog">{t("Inactive")}</span> : null}
           </span>
         </div>
-        <button type="button" className="link-button" onClick={onEdit}>
-          {t("Edit enrollment and rate")}
-        </button>
+        <Button icon={Pencil} onClick={onEdit}>
+          {t("Edit student")}
+        </Button>
       </div>
       <div className="blk">
         <h3 className="overline">{t("This month")}</h3>
         <MonthFigures month={month} t={t} locale={locale} />
       </div>
       {debts ? <div className="blk">{debts}</div> : null}
-      <div className="blk">
+      <div className="blk is-last">
         <div className="blk-head">
           <h3 className="overline">{t("Latest classes")}</h3>
           <button type="button" className="link-button" onClick={onOpenTracking}>
@@ -214,54 +200,6 @@ export function StudentDetail({
         ) : (
           <p className="muted">{t("No classes recorded yet.")}</p>
         )}
-      </div>
-      <div className="blk is-last">
-        <h3 className="overline">{t("Details")}</h3>
-        <div className="form-grid is-three">
-          <Field label={t("Full name")} required>
-            <Input value={draft.fullName} onChange={(event) => setDraft({ ...draft, fullName: event.target.value })} />
-          </Field>
-          <Field label={t("Student email")}>
-            <Input
-              type="email"
-              value={draft.studentEmail}
-              onChange={(event) => setDraft({ ...draft, studentEmail: event.target.value })}
-            />
-          </Field>
-          <Field label={t("Guardian phone")}>
-            <Input
-              type="tel"
-              className="tnum"
-              value={draft.guardianPhone}
-              onChange={(event) => setDraft({ ...draft, guardianPhone: event.target.value })}
-            />
-          </Field>
-          <Field label={t("Student phone")}>
-            <Input
-              type="tel"
-              placeholder={t("Optional")}
-              value={draft.phone}
-              onChange={(event) => setDraft({ ...draft, phone: event.target.value })}
-            />
-          </Field>
-        </div>
-        <Field label={t("Short notes")}>
-          <Input value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} />
-        </Field>
-        <div className="detail-actions">
-          {inactive ? (
-            <Button variant="ghost" onClick={onReactivate} disabled={saving}>
-              {t("Reactivate")}
-            </Button>
-          ) : (
-            <Button variant="ghost" className="is-danger-text" onClick={onArchive} disabled={saving}>
-              {t("Deactivate student")}
-            </Button>
-          )}
-          <Button onClick={onSave} disabled={saving || !dirty}>
-            {saving ? t("Saving…") : t("Save changes")}
-          </Button>
-        </div>
       </div>
     </section>
   );
