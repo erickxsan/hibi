@@ -37,7 +37,6 @@ export const COMMUNITY_TRANSLATIONS = Object.freeze({
   "Did not miss": "No faltó",
   "No classes this month": "Sin clases este mes",
   "No group": "Sin grupo",
-  Details: "Datos",
   "Classes of {month}": "Clases de {month}",
   "Note: {text}": "Nota: {text}",
   "Call the tutor": "Llamar al tutor",

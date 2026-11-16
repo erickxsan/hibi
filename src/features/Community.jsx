@@ -421,6 +421,14 @@ export default function Community({
       "Discard your unsaved student changes?",
       () => setStudentEditor(null),
     );
+  // «Desactivar», «Reactivar» and «Eliminar» act on the saved student and close the editor: edits typed in it
+  // are asked about first instead of being dropped.
+  const afterStudentEditorDiscard = (proceed) =>
+    proceedOrAsk(
+      Boolean(studentEditor) && draftChanged(studentEditor, baselines.current.studentEditor),
+      "Discard your unsaved student changes?",
+      proceed,
+    );
   const openGroupEditor = (group = EMPTY_GROUP) => {
     const next = cloneGroup(group);
     baselines.current.groupEditor = next;
@@ -942,9 +950,11 @@ export default function Community({
                 {editedStudent.status === "Inactive" ? (
                   <Button
                     variant="ghost"
-                    onClick={async () => {
-                      if (await reactivateStudent(editedStudent)) setStudentEditor(null);
-                    }}
+                    onClick={() =>
+                      afterStudentEditorDiscard(async () => {
+                        if (await reactivateStudent(editedStudent)) setStudentEditor(null);
+                      })
+                    }
                     disabled={saving}
                   >
                     {t("Reactivate")}
@@ -953,7 +963,11 @@ export default function Community({
                   <Button
                     variant="ghost"
                     className="is-danger-text"
-                    onClick={() => setConfirmTarget({ action: "archive-student", item: editedStudent })}
+                    onClick={() =>
+                      afterStudentEditorDiscard(() =>
+                        setConfirmTarget({ action: "archive-student", item: editedStudent }),
+                      )
+                    }
                     disabled={saving}
                   >
                     {t("Deactivate student")}
@@ -962,7 +976,9 @@ export default function Community({
                 <Button
                   variant="ghost"
                   className="is-danger-text"
-                  onClick={() => setConfirmTarget({ action: "delete-student", item: editedStudent })}
+                  onClick={() =>
+                    afterStudentEditorDiscard(() => setConfirmTarget({ action: "delete-student", item: editedStudent }))
+                  }
                   disabled={saving}
                 >
                   {t("Delete student")}

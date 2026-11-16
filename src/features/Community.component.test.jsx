@@ -165,7 +165,7 @@ describe("Community students", () => {
     expect(within(detail).queryByRole("columnheader", { name: "Group" })).not.toBeInTheDocument();
   });
 
-  it("edits a student only through «Edit student», which also deactivates and deletes", async () => {
+  it("edits a student only through «Edit student», which also holds deactivate and delete", async () => {
     const user = userEvent.setup();
     const { saved, persistence } = setup();
     await user.click(screen.getByRole("button", { name: "Open Diego Soto" }));
@@ -186,7 +186,20 @@ describe("Community students", () => {
     );
     const again = await screen.findByRole("dialog", { name: "Edit student" });
     expect(within(again).getByRole("button", { name: "Delete student" })).toBeInTheDocument();
+    // Something typed in the editor is asked about before «Deactivate» drops it.
+    fireEvent.change(within(again).getByLabelText("Notes"), { target: { value: "Typed, not saved" } });
     await user.click(within(again).getByRole("button", { name: "Deactivate student" }));
+    const discard = await screen.findByRole("alertdialog", { name: "Discard your unsaved student changes?" });
+    await user.click(within(discard).getByRole("button", { name: "Keep editing" }));
+    expect(screen.queryByRole("dialog", { name: "Deactivate Diego Soto?" })).not.toBeInTheDocument();
+    expect(within(again).getByLabelText("Notes")).toHaveValue("Typed, not saved");
+    await user.click(within(again).getByRole("button", { name: "Deactivate student" }));
+    await user.click(
+      within(await screen.findByRole("alertdialog", { name: "Discard your unsaved student changes?" })).getByRole(
+        "button",
+        { name: "Discard changes" },
+      ),
+    );
     const dialog = await screen.findByRole("dialog", { name: "Deactivate Diego Soto?" });
     await user.click(within(dialog).getByRole("button", { name: "Deactivate student" }));
     await waitFor(() => expect(saved().students.find((s) => s.id === "s2").status).toBe("Inactive"));
