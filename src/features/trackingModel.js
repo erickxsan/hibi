@@ -1,6 +1,7 @@
 import { sumMoney } from "../domain/money.js";
 import { isBillableAttendance } from "../domain/attendanceBilling.js";
 import { addDays, addMonths, endOfMonth, startOfMonth, startOfWeek } from "../domain/dates";
+import { isGroupDeleted } from "../domain/groupArchiving";
 import { deriveMonthlyCharges, groupBillingFor, isMonthlyGroup, periodOf } from "../domain/monthlyBilling";
 import { buildClassWorkspaceSessionsForRange } from "./classesWorkspaceModel";
 import {
@@ -346,7 +347,9 @@ export function monthlyBlocks(state, asOf, scope = "all") {
   const period = periodOf(asOf);
   const charges = deriveMonthlyCharges(state, asOf).filter((charge) => charge.period === period);
   return (state.groups || [])
-    .filter((group) => isMonthlyGroup(group, period) && (scope === "all" || scope === group.id))
+    .filter(
+      (group) => !isGroupDeleted(group) && isMonthlyGroup(group, period) && (scope === "all" || scope === group.id),
+    )
     .map((group) => {
       const rows = charges
         .filter((charge) => charge.groupId === group.id)

@@ -5,7 +5,6 @@ import {
   formatOnboardingDate,
   INITIAL_ONBOARDING_DRAFT,
   nextDateForDay,
-  nextOnboardingStudentCodes,
   onboardingGroupPayload,
   removeOnboardingStudents,
   shouldAutoStartOnboarding,
@@ -33,10 +32,6 @@ describe("onboarding model", () => {
     expect(shouldAutoStartOnboarding(existing)).toBe(false);
     existing.settings.onboardingStep = "bad";
     expect(shouldAutoStartOnboarding(existing)).toBe(false);
-  });
-
-  it("generates collision-free student codes", () => {
-    expect(nextOnboardingStudentCodes([{ code: "HIBI-001" }, { code: "CUSTOM" }], 2)).toEqual(["HIBI-002", "HIBI-003"]);
   });
 
   it("moves a class that already started today to next week", () => {

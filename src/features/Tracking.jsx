@@ -32,6 +32,7 @@ import { useCompactViewport } from "../components/OverlayContext";
 import { useHistoryBackedState } from "../hooks/useHistoryNavigation";
 import { attendanceBilling } from "../domain/attendanceBilling.js";
 import { todayDateOnly } from "../domain/dates";
+import { isGroupDeleted } from "../domain/groupArchiving";
 import {
   axisTickLabels,
   dayNumber,
@@ -440,6 +441,7 @@ export default function Tracking({
   useEffect(() => {
     if (intent?.type !== "open-tracking") return;
     if (TAB_VALUES.includes(intent.tab)) changeTab(intent.tab, { replace: true });
+    if (intent.group) setScope(intent.group);
     if (intent.spotlight) {
       // Show every student, so the ones the alert named are in the list to be marked.
       setChip("all");
@@ -568,7 +570,10 @@ export default function Tracking({
 
   const groupChips = [
     { value: "all", label: t("All groups") },
-    ...(state.groups || []).map((group) => ({ value: group.id, label: group.name })),
+    // A group deleted for good still counts in the figures, but is not offered as a filter.
+    ...(state.groups || [])
+      .filter((group) => !isGroupDeleted(group))
+      .map((group) => ({ value: group.id, label: group.name })),
     ...((state.students || []).some(
       (student) => student.status !== "Inactive" && (student.isIndividual || !(student.groupIds || []).length),
     ) || (state.classLog || []).some((row) => !row.groupId)

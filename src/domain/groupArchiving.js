@@ -5,6 +5,14 @@ export function isGroupArchived(group) {
   return group?.status === "Inactive";
 }
 
+/**
+ * A group deleted for good that keeps its history (groupDeletion.js): stored archived with `deletedAt`,
+ * never listed again, while what it recorded counts like any other past record.
+ */
+export function isGroupDeleted(group) {
+  return Boolean(group?.deletedAt);
+}
+
 /*
  * `scheduleResumeDate` is the first day a group's weekly schedule counts: earlier weekdays never
  * become scheduled (or unrecorded) classes. Creating a group sets it to that day and reactivating
@@ -35,7 +43,10 @@ export function setGroupArchived(state, groupId, archived, date = todayDateOnly(
 // Report scope is a derived view. Saved records and original memberships stay intact.
 export function statisticsStateForGroups(state, includeArchivedGroups = false) {
   if (includeArchivedGroups) return state;
-  const archivedIds = new Set((state.groups || []).filter(isGroupArchived).map((group) => group.id));
+  // A deleted group is not archived for the figures: its history always counts.
+  const archivedIds = new Set(
+    (state.groups || []).filter((group) => isGroupArchived(group) && !isGroupDeleted(group)).map((group) => group.id),
+  );
   if (!archivedIds.size) return state;
   const groups = state.groups.filter((group) => !archivedIds.has(group.id));
   const classLog = (state.classLog || []).filter((row) => !archivedIds.has(row.groupId));

@@ -27,8 +27,8 @@ export const COMMUNITY_TRANSLATIONS = Object.freeze({
   "Delete for good": "Eliminar para siempre",
   "{names} stays in Hibi, without this group.": "{names} sigue en Hibi, sin este grupo.",
   "{names} stay in Hibi, without this group.": "{names} siguen en Hibi, sin este grupo.",
-  "The {amount} you already collected is kept in your history.":
-    "Los {amount} que ya cobraste se conservan en tu historial.",
+  "The {amount} you already collected still counts in your income.":
+    "Los {amount} que ya cobraste siguen contando en tus ingresos.",
   "Its recorded class stays in each student's history.": "Su clase registrada se queda en el historial de cada alumno.",
   "Its {count} recorded classes stay in each student's history.":
     "Sus {count} clases registradas se quedan en el historial de cada alumno.",
@@ -60,9 +60,7 @@ export const COMMUNITY_TRANSLATIONS = Object.freeze({
   "No matches.": "Sin resultados.",
   "Archived · {date}": "Archivado · {date}",
   "{count} students · their history is kept in full": "{count} alumnos · su historial se conserva completo",
-  "Schedule and details": "Horario y datos",
   "New group": "Nuevo grupo",
-  "Edit schedule and details": "Editar horario y datos",
   // Lista de grupos
   // Ficha del alumno
   "Attendance {value}": "Asistencia {value}",
@@ -88,16 +86,11 @@ export const COMMUNITY_TRANSLATIONS = Object.freeze({
   "Tap a student to highlight them": "Toca un alumno para resaltarlo",
   Directory: "Directorio",
   "Copy emails": "Copiar correos",
-  "Add to group": "Agregar al grupo",
   "Emails copied": "Correos copiados",
-  "Also in {groups}": "También en {groups}",
-  "Also individual": "También individual",
   "This group only": "Solo este grupo",
   "No email": "Sin correo",
   "Tutor · {phone}": "Tutor · {phone}",
   "No active students in this group yet.": "Este grupo aún no tiene alumnos activos.",
-  "Group data": "Datos del grupo",
-  "Add a schedule": "Agregar horario",
   "Class length": "Duración por clase",
   "Next class: {when}": "Próxima clase: {when}",
   "{count} absences": "{count} faltas",
@@ -138,9 +131,6 @@ export const COMMUNITY_TRANSLATIONS = Object.freeze({
     "Tiene {amount} por cobrar. El saldo se guarda, pero ya no aparecerá en tus cobros.",
   // Agregar a un grupo
   "To {group}": "A {group}",
-  "Monthly group · {amount} a month": "Grupo mensual · {amount} al mes",
-  "Add to {group}": "Agregar a {group}",
-  "Every active student is already in this group.": "Todos los alumnos activos ya están en este grupo.",
   "What do they pay for {month}?": "¿Qué se le cobra de {month}?",
   "{month} already started · what do they pay?": "{month} ya empezó · ¿qué se le cobra?",
   "Full month · {amount}": "Mes completo · {amount}",
@@ -153,8 +143,6 @@ export const COMMUNITY_TRANSLATIONS = Object.freeze({
   "Count what was paid · {amount}": "Descontar lo ya pagado · {amount}",
   "The {paid} paid in {from} counts toward {month}.": "Los {paid} que pagó en {from} cuentan para {month}.",
   // Editor del alumno
-  "Own rate": "Tarifa propia",
-  "Overrides the group rate for this student.": "Reemplaza la tarifa del grupo para este alumno.",
   "/ hour": "/ hora",
   "/ month": "/ mes",
   // Forma de cobro
@@ -194,8 +182,6 @@ export const COMMUNITY_TRANSLATIONS = Object.freeze({
   "{amount} per class attended": "{amount} por clase asistida",
   "{amount} per class attended from {month}": "{amount} por clase asistida desde {month}",
   "Remove adjustment for {name}": "Quitar el ajuste de {name}",
-  "Adjust for a student": "Ajustar a un alumno",
-  "+ Adjust for a student": "+ Ajustar a un alumno",
   "Applies from": "Aplica desde",
   "Since it started": "Desde el inicio",
   "This month": "Este mes",
@@ -232,7 +218,6 @@ export const COMMUNITY_TRANSLATIONS = Object.freeze({
   "Delete {p0}?": "¿Eliminar {p0}?",
   "Deactivate {p0}?": "¿Desactivar a {p0}?",
   "Open {name}": "Abrir {name}",
-  "{p0} / hour inherited": "{p0} / hora · heredada",
   "Billing starts in {month}. Classes before then are not charged.":
     "El cobro empieza en {month}. Las clases de antes no se cobran.",
   "Change the icon of {name}": "Cambiar el ícono de {name}",

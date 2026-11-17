@@ -4,7 +4,7 @@ import {
   contactForStudent,
   extractLegacyGuardianPhone,
   groupContactRows,
-  primaryContactForStudent,
+  groupMemberContact,
   uniqueAvailableContacts,
 } from "./communityContacts";
 
@@ -15,7 +15,13 @@ describe("community contact directory", () => {
       value: "student@example.com",
       inferred: false,
     });
-    expect(primaryContactForStudent(student)).toMatchObject({ value: "student@example.com", label: "Student email" });
+    // In a group, the tutor's phone comes first, then the student's, then the email.
+    expect(groupMemberContact(student)).toEqual({ value: "272 100 2000", view: CONTACT_VIEWS.GUARDIAN_PHONE });
+    expect(groupMemberContact({ studentEmail: "student@example.com" })).toEqual({
+      value: "student@example.com",
+      view: CONTACT_VIEWS.STUDENT_EMAIL,
+    });
+    expect(groupMemberContact({})).toBeNull();
   });
 
   it("uses a legacy guardian contact as a non-destructive phone fallback", () => {

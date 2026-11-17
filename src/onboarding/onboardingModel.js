@@ -30,9 +30,6 @@ export function shouldAutoStartOnboarding(state) {
   );
 }
 
-// The tutorial and «Agregar alumno» draw from the same «HIBI-001» sequence.
-export { nextStudentCodes as nextOnboardingStudentCodes } from "../domain/studentCodes.js";
-
 // Students removed during setup leave the group. Those created by the setup and
 // without history are deleted; anyone with records or other groups is kept.
 export function removeOnboardingStudents(state, groupId, removedIds) {

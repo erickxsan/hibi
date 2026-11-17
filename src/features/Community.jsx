@@ -18,9 +18,9 @@ import { useCompactViewport } from "../components/OverlayContext";
 import { discardChangesRequest, draftChanged, useUnsavedChanges } from "../hooks/useUnsavedChanges";
 import { useConfirmPrompt } from "../components/ConfirmPrompt";
 import { useHistoryBackedState } from "../hooks/useHistoryNavigation";
-import { isGroupArchived } from "../domain/groupArchiving";
-import { groupDeletionPreview, isGroupDeleted } from "../domain/groupDeletion";
-import { nextStudentCode } from "../domain/studentCodes";
+import { isGroupArchived, isGroupDeleted } from "../domain/groupArchiving";
+import { groupDeletionPreview } from "../domain/groupDeletion";
+import { nextStudentCodes } from "../domain/studentCodes";
 import { gradeGroupId } from "../domain/semanticIdentity";
 import { periodOf, startGroupBilling } from "../domain/monthlyBilling";
 import { todayDateOnly } from "../domain/dates";
@@ -264,7 +264,8 @@ export default function Community({
   const groupMatches = useCallback(
     (group) =>
       !needle ||
-      normalizeSearchText([group.name, group.subject, group.grade, group.schedule].join(" ")).includes(needle),
+      // Only what the screen shows: grade, subject and room notes are no longer visible anywhere.
+      normalizeSearchText(group.name).includes(needle),
     [needle],
   );
   const visibleActive = activeStudents.filter(studentMatches);
@@ -381,7 +382,7 @@ export default function Community({
   // A new student starts with the next free «HIBI-001» ID (`taken` adds codes the state does not show yet).
   const openStudentEditor = (student = EMPTY_STUDENT, taken = []) => {
     const next = cloneStudent(
-      student.id ? student : { ...student, code: nextStudentCode([...state.students, ...taken]) },
+      student.id ? student : { ...student, code: nextStudentCodes([...state.students, ...taken], 1)[0] },
     );
     baselines.current.studentEditor = next;
     setStudentEditor(next);
@@ -408,11 +409,15 @@ export default function Community({
     setNewGroupBilling(NEW_GROUP_BILLING);
     setGroupEditor(next);
   };
-  const closeGroupEditor = () =>
+  // `then` runs once it closed: «Archivar grupo» and «Eliminar grupo» act on the saved group.
+  const closeGroupEditor = (then = null) =>
     proceedOrAsk(
       Boolean(groupEditor) && draftChanged(groupEditor, baselines.current.groupEditor),
       "Discard your unsaved group changes?",
-      () => setGroupEditor(null),
+      () => {
+        setGroupEditor(null);
+        then?.();
+      },
     );
   const openBillingEditor = (group) => {
     const draft = billingDraftFor(group, membersOf(group));
@@ -421,16 +426,6 @@ export default function Community({
   };
   const closeBillingEditor = () =>
     proceedOrAsk(billingDirty, "Discard your unsaved group changes?", () => setBillingDraft(null));
-  // «Archivar grupo» and «Eliminar grupo» in the group editor act on the saved group and close the editor.
-  const leaveGroupEditorFor = (proceed) =>
-    proceedOrAsk(
-      Boolean(groupEditor) && draftChanged(groupEditor, baselines.current.groupEditor),
-      "Discard your unsaved group changes?",
-      () => {
-        setGroupEditor(null);
-        proceed();
-      },
-    );
 
   useEffect(() => {
     if (intent?.type === "open-group-archives") {
@@ -595,7 +590,9 @@ export default function Community({
     });
 
   const nextFor = (group) => upcoming.find((session) => session.groupId === group.id) || null;
-  const openTracking = () => openPage?.("grades", { type: "open-tracking", tab: "attendance" });
+  // A student's detail opens all of Seguimiento; a group's opens it on that group.
+  const openTracking = (group = null) =>
+    openPage?.("grades", { type: "open-tracking", tab: "attendance", ...(group ? { group: group.id } : {}) });
   const openNextClass = (group) => {
     const next = nextFor(group);
     if (next) openPage?.("classes", { type: "open-class", sessionKey: next.key });
@@ -886,7 +883,7 @@ export default function Community({
       recent={studentRecentClasses(state, derived, selectedStudent.id)}
       groupsById={groupsById}
       onEdit={() => openStudentEditor(selectedStudent)}
-      onOpenTracking={openTracking}
+      onOpenTracking={() => openTracking()}
       debts={debtsOf(selectedStudent)}
     />
   ) : selectedGroup && isGroupArchived(selectedGroup) ? (
@@ -913,7 +910,7 @@ export default function Community({
       onChangeMembers={() => setMembersTarget(selectedGroup)}
       onOpenStudent={(student) => select("student", student.id)}
       onOpenNext={() => openNextClass(selectedGroup)}
-      onOpenTracking={openTracking}
+      onOpenTracking={() => openTracking(selectedGroup)}
       onChangeBadge={(badge) => actions.setGroupBadge(selectedGroup.id, badge)}
     />
   ) : (
@@ -1017,12 +1014,12 @@ export default function Community({
       </Drawer>
       <BottomSheet
         open={Boolean(groupEditor)}
-        onClose={closeGroupEditor}
+        onClose={() => closeGroupEditor()}
         title={editedGroup?.name || t("Create group")}
         kicker={groupEditor?.id ? t("Edit group") : undefined}
         footer={
           <>
-            <Button onClick={closeGroupEditor}>{t("Cancel")}</Button>
+            <Button onClick={() => closeGroupEditor()}>{t("Cancel")}</Button>
             <Button variant="primary" onClick={saveGroupEditor} disabled={saving}>
               {saving ? t("Saving…") : groupEditor?.id ? t("Save group") : t("Create group")}
             </Button>
@@ -1049,14 +1046,14 @@ export default function Community({
               avatar={<Archive className="list-row-icon" aria-hidden="true" />}
               name={t("Archive group")}
               context={t("It leaves your agenda and everything is kept")}
-              onClick={() => leaveGroupEditorFor(() => setArchiveTarget(editedGroup))}
+              onClick={() => closeGroupEditor(() => setArchiveTarget(editedGroup))}
             />
             <ListRow
               className="is-danger"
               avatar={<Trash2 className="list-row-icon" aria-hidden="true" />}
               name={t("Delete group")}
               context={t("For good; first you will see what is lost")}
-              onClick={() => leaveGroupEditorFor(() => setDeleteTarget(editedGroup))}
+              onClick={() => closeGroupEditor(() => setDeleteTarget(editedGroup))}
             />
           </div>
         ) : null}
@@ -1096,7 +1093,9 @@ export default function Community({
         groupsById={groupsById}
         firstMonth={membersTarget ? joiningOptions(state, membersTarget, null, asOf) : null}
         asOf={asOf}
-        onClose={() => setMembersTarget(null)}
+        onClose={(changed) =>
+          proceedOrAsk(changed, "Discard your unsaved group changes?", () => setMembersTarget(null))
+        }
         onSave={saveMembers}
         saving={saving}
       />
@@ -1321,7 +1320,7 @@ export default function Community({
               onEditBilling={() => openBillingEditor(sheetGroup)}
               onChangeMembers={() => setMembersTarget(sheetGroup)}
               onOpenStudent={(student) => setSheet({ type: "student", id: student.id })}
-              onOpenTracking={openTracking}
+              onOpenTracking={() => openTracking(sheetGroup)}
               onChangeBadge={(badge) => actions.setGroupBadge(sheetGroup.id, badge)}
             />
           ) : null}

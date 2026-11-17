@@ -628,7 +628,7 @@ describe("Community groups", () => {
     );
     const dialog = await screen.findByRole("dialog", { name: "Delete Primaria 5A?" });
     expect(dialog).toHaveTextContent("Luna and Diego stay in Hibi, without this group.");
-    expect(dialog).toHaveTextContent("The $450 you already collected is kept in your history.");
+    expect(dialog).toHaveTextContent("The $450 you already collected still counts in your income.");
     expect(dialog).toHaveTextContent("Its 3 recorded classes stay in each student's history.");
     // Luna's class of October 19 was never paid.
     expect(dialog).toHaveTextContent("The $150 this group has to collect is cancelled");

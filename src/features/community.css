@@ -348,23 +348,6 @@
   color: var(--sumi-muted);
 }
 
-.community-page .detail-next {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-  text-align: right;
-}
-
-.community-page .detail-next span {
-  font: 700 12px/16px var(--font-sans);
-  color: var(--sumi-muted);
-}
-
-.community-page .detail-next .link-button {
-  font: 800 15px/20px var(--font-sans);
-}
-
 .community-page .blk {
   padding: 26px 0;
   border-top: 1px solid var(--line-soft);
@@ -612,11 +595,6 @@
 }
 
 /* Forma de cobro */
-.billing-block {
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid var(--line-soft);
-}
 
 .billing-adjustments {
   display: flex;
@@ -791,11 +769,6 @@
   margin: 8px 0 -4px;
 }
 
-.editor-hint {
-  margin: 0;
-  font-size: 13px;
-}
-
 .schedule-editor {
   display: flex;
   flex-direction: column;
@@ -835,10 +808,6 @@
   .schedule-slot > :nth-child(4) {
     grid-column: auto;
   }
-}
-
-.drawer-footer .footer-start {
-  margin-right: auto;
 }
 
 /* Unirse a un grupo */
@@ -953,8 +922,7 @@
 
 .student-sheet,
 .group-sheet,
-.archived-sheet,
-.billing-sheet {
+.archived-sheet {
   display: flex;
   flex-direction: column;
   gap: 18px;

@@ -19,8 +19,3 @@ export function nextStudentCodes(students, count) {
   }
   return codes;
 }
-
-/** One free student ID. */
-export function nextStudentCode(students) {
-  return nextStudentCodes(students, 1)[0];
-}

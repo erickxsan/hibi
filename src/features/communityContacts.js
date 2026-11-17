@@ -29,19 +29,6 @@ export function contactForStudent(student, view) {
   return { value: clean(student?.studentEmail ?? student?.email), inferred: false };
 }
 
-export function primaryContactForStudent(student) {
-  const priority = [
-    [CONTACT_VIEWS.STUDENT_EMAIL, "Student email"],
-    [CONTACT_VIEWS.GUARDIAN_PHONE, "Guardian phone"],
-    [CONTACT_VIEWS.STUDENT_PHONE, "Student phone"],
-  ];
-  for (const [view, label] of priority) {
-    const contact = contactForStudent(student, view);
-    if (contact.value) return { ...contact, view, label };
-  }
-  return { value: "", inferred: false, view: CONTACT_VIEWS.STUDENT_EMAIL, label: "No contact" };
-}
-
 /** The one way to reach a student shown in their group: the tutor's phone, else theirs, else their email. */
 export function groupMemberContact(student) {
   for (const view of [CONTACT_VIEWS.GUARDIAN_PHONE, CONTACT_VIEWS.STUDENT_PHONE, CONTACT_VIEWS.STUDENT_EMAIL]) {

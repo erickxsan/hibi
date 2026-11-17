@@ -5,11 +5,6 @@ import { deriveMonthlyCharges, groupMoneyOnRecord, normalizeMonthlyPayments, rec
 import { roundMoney, sumMoney } from "./money.js";
 import { gradeGroupId } from "./semanticIdentity.js";
 
-/** A group deleted for good that keeps its history: archived, never listed again. */
-export function isGroupDeleted(group) {
-  return Boolean(group?.deletedAt);
-}
-
 function studentGroupIds(student) {
   return Array.isArray(student?.groupIds) ? student.groupIds : [];
 }
@@ -82,17 +77,19 @@ export function groupDeletionPreview(state, groupId, date) {
  * Deletes a group for good on `date`. Its students stay, without the group, and what it still had to
  * collect is given up (lostPayments.js), so nothing of it is owed any more. A group with classes,
  * grades or money on record keeps them: it stays stored, archived and marked `deletedAt`, is never
- * listed again and counts wherever archived groups are included. A group with nothing on record is
- * simply removed.
+ * listed again and its history keeps counting in the figures (see isGroupDeleted). A group with nothing
+ * on record is simply removed.
  */
 export function deleteGroup(state, groupId, date) {
   const group = (state.groups || []).find((item) => item.id === groupId);
   if (!group) return state;
   const left = withoutMembers(state, groupId, date);
-  if (hasHistory(state, groupId)) {
+  const debts = pendingDebts(left, groupId, date);
+  // A debt given up is history too: it stays listed among the lost payments.
+  if (debts.length || hasHistory(state, groupId)) {
     const givenUp = markLost(
       left,
-      pendingDebts(left, groupId, date).map((debt) => debt.item),
+      debts.map((debt) => debt.item),
       date,
     );
     const archived = setGroupArchived(givenUp, groupId, true, date);

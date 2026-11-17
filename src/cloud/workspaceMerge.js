@@ -320,11 +320,12 @@ function mergeLostMarks(base, local, remote, prefer) {
   return { value: value.length ? value : undefined, collisions: merged.collisions };
 }
 
-// How the student pays in a group (mode, fee, due and its earlier adjustments) is one timeline: mixing
-// one device's fee with the other's start month would invent an adjustment nobody chose. Their stay
-// (joinedOn, firstMonthAmount, leftOn, away) is another: leaving turns into an away stretch on return.
-// The two parts are written by different screens, so they merge separately.
-const ADJUSTMENT_FIELDS = new Set(["mode", "fee", "due", "effectiveFrom", "history"]);
+// How the student pays in a group (mode, fee, due, their own price per hour and the earlier adjustments)
+// is one timeline: mixing one device's fee with the other's start month would invent an adjustment nobody
+// chose. Their stay (joinedOn, firstMonthAmount, leftOn, away) is another: leaving turns into an away
+// stretch on return. The two parts are written by different screens («Editar cobro», «Cambiar
+// integrantes»), so they merge separately.
+const ADJUSTMENT_FIELDS = new Set(["mode", "fee", "due", "effectiveFrom", "history", "hourlyRate"]);
 
 function overridePart(override, adjustment) {
   return Object.fromEntries(

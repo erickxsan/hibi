@@ -324,7 +324,7 @@ export function GroupSheet({
 /**
  * «Cambiar integrantes»: every active student with a check; saving adds and removes them at once. In a
  * monthly group whose month already started (`firstMonth`, see joiningOptions), whoever joins is asked
- * what that month costs, as one choice for all of them.
+ * what that month costs, as one choice for all of them. `onClose(changed)` says whether any box changed.
  */
 export function MembersSheet({ group, students, groupsById, firstMonth, asOf, onClose, onSave, saving }) {
   const { t, locale } = useI18n();
@@ -332,7 +332,11 @@ export function MembersSheet({ group, students, groupsById, firstMonth, asOf, on
   const [checked, setChecked] = useState(() => new Set(students.filter(isMember).map((student) => student.id)));
   const [query, setQuery] = useState("");
   const [choice, setChoice] = useState("prorated");
-  const joining = students.some((student) => checked.has(student.id) && !isMember(student));
+  const changed = students.some((student) => checked.has(student.id) !== isMember(student));
+  // Someone coming back keeps the day they first joined: the question is for those joining now (joinGroup).
+  const joining = students.some(
+    (student) => checked.has(student.id) && !isMember(student) && !student.billingByGroup?.[group?.id]?.leftOn,
+  );
   const choices = joining && firstMonth?.started ? firstMonthChoices(firstMonth, asOf, t, locale) : [];
   const month = monthLong(asOf, locale);
   const needle = normalizeSearchText(query);
@@ -352,7 +356,7 @@ export function MembersSheet({ group, students, groupsById, firstMonth, asOf, on
   return (
     <BottomSheet
       open={Boolean(group)}
-      onClose={onClose}
+      onClose={() => onClose(changed)}
       kicker={t("Members")}
       title={group?.name || ""}
       footer={
@@ -452,7 +456,7 @@ export function DeleteGroupDialog({ group, members, preview, onClose, onArchive,
             ) : null}
             {preview.collected ? (
               <li>
-                {t("The {amount} you already collected is kept in your history.", {
+                {t("The {amount} you already collected still counts in your income.", {
                   amount: formatMoney(preview.collected, locale),
                 })}
               </li>

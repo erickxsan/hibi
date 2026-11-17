@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { deriveMonthlyCharges, monthlyPaymentsBetween } from "./monthlyBilling.js";
 import { calculateOutstanding } from "./calculations.js";
-import { deleteGroup, groupDeletionPreview, isGroupDeleted } from "./groupDeletion.js";
+import { deleteGroup, groupDeletionPreview } from "./groupDeletion.js";
+import { isGroupDeleted, statisticsStateForGroups } from "./groupArchiving.js";
+import { validateGroup } from "./validation.js";
 
 const AS_OF = "2026-11-10";
 
@@ -79,5 +81,21 @@ describe("deleting a group for good", () => {
     const next = deleteGroup(state, "g-class", AS_OF);
     expect(next.groups.map((item) => item.id)).toEqual(["g-month"]);
     expect(next.students[0].groupIds).toEqual(["g-month"]);
+  });
+
+  it("keeps a group whose fees are only owed, so they are listed as lost", () => {
+    const state = workspace();
+    state.students = [{ ...state.students[0], monthlyPayments: undefined }];
+    const next = deleteGroup(state, "g-month", AS_OF);
+    expect(isGroupDeleted(next.groups.find((item) => item.id === "g-month"))).toBe(true);
+    expect(next.students[0].lostPayments.map((mark) => mark.period)).toEqual(["2026-10", "2026-11"]);
+  });
+
+  it("frees its name, and its history keeps counting in the figures", () => {
+    const next = deleteGroup(workspace(), "g-month", AS_OF);
+    const named = validateGroup({ id: "new", name: "Prepa" }, next).errors.filter((error) => error.path === "name");
+    expect(named).toEqual([]);
+    expect(statisticsStateForGroups(next).groups.map((item) => item.id)).toContain("g-month");
+    expect(monthlyPaymentsBetween(statisticsStateForGroups(next), "2026-10-01", AS_OF)).toHaveLength(1);
   });
 });

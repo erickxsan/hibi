@@ -5,6 +5,7 @@ import { ArchivedGroupsScope } from "../components/ArchivedGroupsScope";
 import { useCompactViewport } from "../components/OverlayContext";
 import { addDays, todayDateOnly } from "../domain/dates";
 import { memoizeRecent } from "../domain/stateMemo";
+import { isGroupDeleted } from "../domain/groupArchiving";
 import {
   dayNumber,
   formatDayMonth,
@@ -307,7 +308,8 @@ export default function Home({
     [context, metrics],
   );
   const groupChips = useMemo(() => {
-    const active = state.groups || [];
+    // A group deleted for good still counts in the figures, but is not offered as a filter.
+    const active = (state.groups || []).filter((group) => !isGroupDeleted(group));
     const hasIndividual =
       (state.students || []).some(
         (student) => student.status !== "Inactive" && (student.isIndividual || !(student.groupIds || []).length),

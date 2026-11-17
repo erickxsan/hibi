@@ -35,13 +35,19 @@ export function settingsEffects(state, derived, draft, asOf) {
         (isMonthlyGroup(group, period) || (finite(group.hourlyRate) && group.hourlyRate !== settings.hourlyRate)),
     )
     .map((group) => group.name);
+  // Students with a price of their own: for individual classes, or in a group that uses the general rate.
+  const generalRateGroups = new Set(
+    (state.groups || []).filter((group) => group.status !== "Inactive" && !finite(group.hourlyRate)).map((g) => g.id),
+  );
+  const ownPrice = (rate) => finite(rate) && rate !== settings.hourlyRate;
   const ownRateStudents = (state.students || [])
     .filter(
       (student) =>
         student.status !== "Inactive" &&
-        student.isIndividual &&
-        finite(student.individualHourlyRate) &&
-        student.individualHourlyRate !== settings.hourlyRate,
+        ((student.isIndividual && ownPrice(student.individualHourlyRate)) ||
+          (student.groupIds || []).some(
+            (id) => generalRateGroups.has(id) && ownPrice(student.billingByGroup?.[id]?.hourlyRate),
+          )),
     )
     .map((student) => student.fullName.split(" ")[0]);
   const ownRates = [...ownRateGroups, ...ownRateStudents];

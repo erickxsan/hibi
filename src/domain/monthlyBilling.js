@@ -1055,8 +1055,8 @@ function monthlyCharges(state, asOfDate, { through = periodOf(asOfDate), include
 }
 
 /**
- * True when deleting a group would lose money on record: a monthly payment made for it, a fee given
- * up in it, or a student who left it and may still owe its fees. Such a group is archived instead.
+ * True when a group has money on record: a monthly payment made for it, a fee given up in it, or a
+ * student who left it and may still owe its fees. Deleting such a group keeps it stored (groupDeletion.js).
  */
 export function groupMoneyOnRecord(state, groupId) {
   return (state.students || []).some(

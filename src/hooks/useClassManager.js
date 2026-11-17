@@ -38,11 +38,7 @@ import {
   validateStudent,
   withCurrentDataVersion,
 } from "../domain";
-import {
-  nextOnboardingStudentCodes,
-  ONBOARDING_VERSION,
-  removeOnboardingStudents,
-} from "../onboarding/onboardingModel";
+import { ONBOARDING_VERSION, removeOnboardingStudents } from "../onboarding/onboardingModel";
 import { canonicalStringify } from "../crypto/canonical.js";
 import { isBillableAttendance } from "../domain/attendanceBilling.js";
 import { setGroupArchived, startGroupSchedule } from "../domain/groupArchiving.js";
@@ -53,6 +49,7 @@ import { normalizeGroupScheduleHistory, preserveGroupSchedule } from "../domain/
 import { updateDismissedNotes } from "../domain/noteDismissals.js";
 import { markLost, normalizeLostPayments, recoverLost } from "../domain/lostPayments.js";
 import { adoptStoredTwins } from "../domain/recordTwins.js";
+import { nextStudentCodes } from "../domain/studentCodes.js";
 import {
   normalizeBillingByGroup,
   normalizeGroupBilling,
@@ -808,7 +805,7 @@ export function useClassManager({ persistence } = {}) {
         return false;
       }
       const newCount = drafts.filter((draft) => !draft.id).length;
-      const codes = nextOnboardingStudentCodes(stateRef.current.students, newCount);
+      const codes = nextStudentCodes(stateRef.current.students, newCount);
       const avatarIds = ["cat", "dog", "penguin", "fox", "rabbit", "bear", "frog", "owl"];
       let nextCodeIndex = 0;
       const items = drafts.map((draft, index) => {

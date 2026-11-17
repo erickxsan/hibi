@@ -17,7 +17,7 @@ import { useConfirmPrompt } from "./components/ConfirmPrompt";
 import { useI18n } from "./i18n";
 import { deriveAll } from "./domain";
 import { archivedGroupsOwed } from "./domain/monthlyBilling.js";
-import { isGroupArchived, statisticsStateForGroups } from "./domain/groupArchiving";
+import { isGroupArchived, isGroupDeleted, statisticsStateForGroups } from "./domain/groupArchiving";
 import { shouldAutoStartOnboarding } from "./onboarding/onboardingModel";
 import "./i18n/screenTranslations.js";
 const NAV_ITEMS = [
@@ -116,10 +116,12 @@ export default function ClassManagerApplication({
     (id) => (id === NEW_DEPLOY_TOAST.id ? setNewDeployDismissed(true) : dismissToast(id)),
     [dismissToast],
   );
-  const archivedGroupIds = useMemo(
-    () => new Set(manager.state.groups.filter(isGroupArchived).map((group) => group.id)),
+  // Archived groups the figures can leave out; a deleted group's history always counts.
+  const archivedGroups = useMemo(
+    () => manager.state.groups.filter((group) => isGroupArchived(group) && !isGroupDeleted(group)),
     [manager.state.groups],
   );
+  const archivedGroupIds = useMemo(() => new Set(archivedGroups.map((group) => group.id)), [archivedGroups]);
   const archivedPendingBalance = useMemo(
     () => archivedGroupsOwed(manager.state, manager.derived.classLog, archivedGroupIds),
     [manager.state, manager.derived.classLog, archivedGroupIds],
@@ -150,10 +152,7 @@ export default function ClassManagerApplication({
           : deriveAll(agendaState, agendaState.settings.asOfDate),
     [agendaState, manager.state, manager.derived, statisticsState, statisticsDerived],
   );
-  const archivedGroupNames = useMemo(
-    () => manager.state.groups.filter(isGroupArchived).map((group) => group.name),
-    [manager.state.groups],
-  );
+  const archivedGroupNames = useMemo(() => archivedGroups.map((group) => group.name), [archivedGroups]);
   const [intent, setIntent] = useState(null);
   const [signingOut, setSigningOut] = useState(false);
   const [onboarding, setOnboarding] = useState(() => ({ open: shouldAutoStartOnboarding(manager.state), runId: 0 }));

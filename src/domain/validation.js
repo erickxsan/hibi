@@ -150,7 +150,16 @@ export function validateGroup(group, state = null) {
     validateWeeklySchedule(errors, entry?.weeklySchedule, `scheduleHistory[${index}].weeklySchedule`);
   }
   billingIssues(group, "group").forEach(([path, message]) => errors.push(issue(path, "invalid_billing", message)));
-  if (state && duplicateIn(state.groups, "name", group.name, group.id)) {
+  // A group deleted for good is never shown again, so its name is free.
+  if (
+    state &&
+    duplicateIn(
+      state.groups.filter((item) => !item.deletedAt),
+      "name",
+      group.name,
+      group.id,
+    )
+  ) {
     errors.push(issue("name", "duplicate", "Group name must be unique.", group.name));
   }
   return result(errors, warnings);
@@ -393,7 +402,10 @@ function optionalStudentBilling(student, groupIds, legacyRate) {
           ...Object.fromEntries(
             groupIds
               .filter((id) => !Number.isFinite(stored[id]?.hourlyRate))
-              .map((id) => [id, { ...(isRecord(stored[id]) ? stored[id] : { mode: "group" }), hourlyRate: legacyRate }]),
+              .map((id) => [
+                id,
+                { ...(isRecord(stored[id]) ? stored[id] : { mode: "group" }), hourlyRate: legacyRate },
+              ]),
           ),
         };
   const billingByGroup = normalizeBillingByGroup(withLegacyRate);
