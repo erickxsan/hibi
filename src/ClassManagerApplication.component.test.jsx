@@ -37,6 +37,8 @@ describe("application with the real local manager", () => {
     await waitFor(() => expect(screen.getByRole("tab", { name: "Groups" })).toHaveAttribute("aria-selected", "true"));
     await user.click(screen.getByRole("button", { name: "Add student", exact: true }));
     const student = await screen.findByRole("dialog", { name: "Add student" });
+    // The ID comes filled in; it can still be changed.
+    await user.click(within(student).getByRole("button", { name: "Change student ID" }));
     fireEvent.change(within(student).getByLabelText(/Student ID/), { target: { value: "APP-1" } });
     fireEvent.change(within(student).getByLabelText(/Full name/), { target: { value: "Tracking" } });
     await user.click(within(student).getByRole("button", { name: "Save student" }));

@@ -39,8 +39,9 @@ export function settingsEffects(state, derived, draft, asOf) {
     .filter(
       (student) =>
         student.status !== "Inactive" &&
-        finite(student.customHourlyRate) &&
-        student.customHourlyRate !== settings.hourlyRate,
+        student.isIndividual &&
+        finite(student.individualHourlyRate) &&
+        student.individualHourlyRate !== settings.hourlyRate,
     )
     .map((student) => student.fullName.split(" ")[0]);
   const ownRates = [...ownRateGroups, ...ownRateStudents];

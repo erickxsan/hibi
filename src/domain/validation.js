@@ -174,6 +174,10 @@ export function validateStudent(student, state = null) {
   if (student.isIndividual !== undefined && typeof student.isIndividual !== "boolean")
     errors.push(issue("isIndividual", "invalid_type", "Individual enrollment must be true or false."));
   finiteNumber(errors, student.customHourlyRate, "customHourlyRate", "Custom hourly rate", { min: 0, optional: true });
+  finiteNumber(errors, student.individualHourlyRate, "individualHourlyRate", "Individual hourly rate", {
+    min: 0,
+    optional: true,
+  });
   lostPaymentsIssues(student).forEach(([path, message]) => errors.push(issue(path, "invalid_lost_payment", message)));
   billingIssues(student, "student").forEach(([path, message]) => errors.push(issue(path, "invalid_billing", message)));
   const seenGroups = new Set();
@@ -367,12 +371,37 @@ function normalizeGroupIds(student) {
   return [...new Set(source.map(normalizeText).filter(Boolean))];
 }
 
+/**
+ * «Tarifa propia» used to be one rate for every class of a student (`customHourlyRate`). A student now
+ * has a price per group (`billingByGroup[groupId].hourlyRate`) and one for individual classes
+ * (`individualHourlyRate`). A stored legacy rate becomes both, wherever the newer field is not set yet,
+ * so no class changes price; the record keeps `customHourlyRate: null` from then on.
+ */
+function legacyOwnRate(student) {
+  const rate = student?.customHourlyRate;
+  return typeof rate === "number" && Number.isFinite(rate) && rate >= 0 ? rate : null;
+}
+
 // Billing fields are optional: they are written only when present so legacy records stay byte-identical.
-function optionalStudentBilling(student) {
-  const billingByGroup = normalizeBillingByGroup(student?.billingByGroup);
+function optionalStudentBilling(student, groupIds, legacyRate) {
+  const stored = isRecord(student?.billingByGroup) ? student.billingByGroup : {};
+  const withLegacyRate =
+    legacyRate === null
+      ? stored
+      : {
+          ...stored,
+          ...Object.fromEntries(
+            groupIds
+              .filter((id) => !Number.isFinite(stored[id]?.hourlyRate))
+              .map((id) => [id, { ...(isRecord(stored[id]) ? stored[id] : { mode: "group" }), hourlyRate: legacyRate }]),
+          ),
+        };
+  const billingByGroup = normalizeBillingByGroup(withLegacyRate);
+  const individualHourlyRate = normalizeOptionalNumber(student?.individualHourlyRate) ?? legacyRate;
   const monthlyPayments = normalizeMonthlyPayments(student?.monthlyPayments);
   const lostPayments = normalizeLostPayments(student?.lostPayments);
   return {
+    ...(individualHourlyRate === null ? {} : { individualHourlyRate }),
     ...(billingByGroup ? { billingByGroup } : {}),
     ...(monthlyPayments.length ? { monthlyPayments } : {}),
     ...(lostPayments.length ? { lostPayments } : {}),
@@ -396,22 +425,27 @@ export function normalizeState(input) {
   const selectedMonth = isDateOnly(sourceSettings.selectedMonth)
     ? startOfMonth(sourceSettings.selectedMonth)
     : (sourceSettings.selectedMonth ?? DEFAULT_SETTINGS.selectedMonth);
-  const normalizedStudents = (Array.isArray(source.students) ? source.students : []).map((student) => ({
-    id: normalizeText(student?.id),
-    code: normalizeText(student?.code),
-    fullName: normalizeText(student?.fullName),
-    avatarId: STUDENT_AVATAR_IDS.includes(student?.avatarId) ? student.avatarId : "",
-    groupIds: normalizeGroupIds(student),
-    isIndividual: Boolean(student?.isIndividual),
-    customHourlyRate: normalizeOptionalNumber(student?.customHourlyRate),
-    studentEmail: normalizeText(student?.studentEmail ?? student?.email),
-    guardianPhone: normalizeText(student?.guardianPhone ?? student?.parentPhone),
-    phone: normalizeText(student?.phone),
-    guardianContact: normalizeText(student?.guardianContact),
-    notes: normalizeText(student?.notes),
-    status: normalizeText(student?.status),
-    ...optionalStudentBilling(student),
-  }));
+  const normalizedStudents = (Array.isArray(source.students) ? source.students : []).map((student) => {
+    const groupIds = normalizeGroupIds(student);
+    const legacyRate = legacyOwnRate(student);
+    return {
+      id: normalizeText(student?.id),
+      code: normalizeText(student?.code),
+      fullName: normalizeText(student?.fullName),
+      avatarId: STUDENT_AVATAR_IDS.includes(student?.avatarId) ? student.avatarId : "",
+      groupIds,
+      isIndividual: Boolean(student?.isIndividual),
+      // A valid legacy rate moved to the newer fields (legacyOwnRate); anything else stays for validation.
+      customHourlyRate: legacyRate === null ? normalizeOptionalNumber(student?.customHourlyRate) : null,
+      studentEmail: normalizeText(student?.studentEmail ?? student?.email),
+      guardianPhone: normalizeText(student?.guardianPhone ?? student?.parentPhone),
+      phone: normalizeText(student?.phone),
+      guardianContact: normalizeText(student?.guardianContact),
+      notes: normalizeText(student?.notes),
+      status: normalizeText(student?.status),
+      ...optionalStudentBilling(student, groupIds, legacyRate),
+    };
+  });
   const inferableGroupByStudent = new Map(
     normalizedStudents
       .filter((student) => student.groupIds.length === 1)
@@ -463,6 +497,7 @@ export function normalizeState(input) {
       status: group?.status ?? "Active",
       archivedAt: normalizeText(group?.archivedAt),
       scheduleResumeDate: normalizeText(group?.scheduleResumeDate),
+      ...(isDateOnly(group?.deletedAt) ? { deletedAt: group.deletedAt } : {}),
       ...(normalizeGroupScheduleHistory(group?.scheduleHistory).length
         ? { scheduleHistory: normalizeGroupScheduleHistory(group.scheduleHistory) }
         : {}),
@@ -574,7 +609,8 @@ export function normalizeState(input) {
   normalized.classLog.forEach((row) => {
     const student = studentsById.get(row.studentId);
     const group = groupsById.get(row.groupId);
-    const inheritedRate = student?.customHourlyRate ?? group?.hourlyRate ?? normalized.settings.hourlyRate;
+    const ownRate = group ? student?.billingByGroup?.[group.id]?.hourlyRate : student?.individualHourlyRate;
+    const inheritedRate = ownRate ?? group?.hourlyRate ?? normalized.settings.hourlyRate;
     if (row.appliedHourlyRate === null && Number.isFinite(inheritedRate)) row.appliedHourlyRate = inheritedRate;
     for (const field of ["appliedCharge", "amountPaid"]) {
       if (Number.isFinite(row[field])) row[field] = roundMoney(row[field]);

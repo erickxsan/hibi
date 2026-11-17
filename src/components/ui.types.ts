@@ -32,6 +32,8 @@ export interface DrawerProps {
   showHeader?: boolean;
   onKeyDown?: import("react").KeyboardEventHandler<HTMLElement>;
   kicker?: ReactNode;
+  /** One action beside the close button («Editar»). */
+  action?: ReactNode;
 }
 export interface EmptyStateProps {
   icon?: ElementType;

@@ -1,12 +1,11 @@
 import { useState } from "react";
-import { Archive, ChevronRight, RotateCcw, UserPlus } from "lucide-react";
+import { Archive, ChevronRight, Pencil, RotateCcw, Search, Trash2 } from "lucide-react";
 import { useI18n } from "../i18n/index.jsx";
-import { BottomSheet, Button, Drawer, Field, Input, ListRow, StudentSelect } from "../components/ui";
+import { BottomSheet, Button, Drawer, ListRow } from "../components/ui";
 import { StudentAvatar } from "../components/StudentAvatar";
 import { GroupBadgePicker } from "../components/GroupBadge";
 import { groupBillingFor, nextPeriod, periodOf } from "../domain/monthlyBilling";
 import {
-  dayNumber,
   formatHours,
   formatMoney,
   formatPercent,
@@ -15,17 +14,11 @@ import {
   formatTime,
   monthLong,
   relativeDay,
-  weekdayShort,
 } from "../utils/displayFormat";
+import { normalizeSearchText } from "../utils/searchText";
 import { groupDaysLong, groupScheduleLong, studentGroupIdsOf } from "./groupLabels";
-import { contactForStudent, CONTACT_VIEWS } from "./communityContacts";
-import { joiningOptions } from "./communityModel";
-import { BillingFields } from "./CommunityEditors";
-import { studentContext } from "./CommunityStudent";
-
-function capitalize(text) {
-  return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
-}
+import { contactForStudent, CONTACT_VIEWS, groupMemberContact } from "./communityContacts";
+import { billingDraftFor } from "./communityModel";
 
 function firstName(name) {
   return String(name || "").split(" ")[0];
@@ -38,115 +31,156 @@ export function nextClassLabel(next, asOf, t, locale) {
   return `${relative ? t(relative.key) : formatShortDate(next.classDate, locale)} · ${formatTime(next.startTime, locale)}`;
 }
 
-export function AttendanceGrid({ grid, asOf, highlight, onHighlight }) {
+/** The one contact under a member's name: «Tutor · 55 0142 8810», their own phone or their email. */
+function memberContactLabel(student, t) {
+  const contact = groupMemberContact(student);
+  if (!contact) return "";
+  return contact.view === CONTACT_VIEWS.GUARDIAN_PHONE ? t("Tutor · {phone}", { phone: contact.value }) : contact.value;
+}
+
+/** How the group charges, in two lines: «Mensual · $800» and «Vence el día 5 · 1 alumno paga distinto». */
+function billingLines(group, members, state, asOf, t, locale) {
+  // The arrangement the editor edits: the latest one, which may start in a later month.
+  const billing = groupBillingFor(group);
+  const draft = billingDraftFor(group, members);
+  const monthly = billing?.mode === "monthly";
+  const slots = group.weeklySchedule || [];
+  const hours = slots.length ? Number(slots[0].durationHours) || 0 : Number(state.settings?.defaultClassHours) || 0;
+  const rate = Number.isFinite(group.hourlyRate) ? group.hourlyRate : state.settings?.hourlyRate;
+  const different = monthly
+    ? Object.values(draft.adjustments).filter((adjustment) => adjustment.mode !== "group").length
+    : Object.keys(draft.rates).length;
+  return {
+    title: monthly
+      ? `${t("Monthly")} · ${formatMoney(billing.monthlyFee, locale)}`
+      : `${t("Per class")} · ${t("{amount} per hour", { amount: formatMoney(rate, locale) })}`,
+    detail: [
+      billing?.effectiveFrom > periodOf(asOf)
+        ? t("From {month}", { month: monthLong(`${billing.effectiveFrom}-01`, locale) })
+        : "",
+      monthly
+        ? t("Due {when}", {
+            when:
+              billing.due.type === "dayOfMonth"
+                ? t("on day {day}", { day: billing.due.day })
+                : t("at class {nth}", { nth: billing.due.nth === "last" ? t("last (class)") : billing.due.nth }),
+          })
+        : t("{hours} per class = {amount} per student", {
+            hours: formatHours(hours, locale),
+            amount: formatMoney(hours * (Number(rate) || 0), locale),
+          }),
+      different
+        ? t(different === 1 ? "{count} student pays differently" : "{count} students pay differently", {
+            count: different,
+          })
+        : "",
+    ]
+      .filter(Boolean)
+      .join(" · "),
+  };
+}
+
+/** The month in three figures: attendance, average and what is still to collect (who owes is in Seguimiento). */
+function GroupFigures({ summary, compact = false }) {
   const { t, locale } = useI18n();
-  if (!grid.columns.length) return <p className="muted">{t("No classes recorded yet.")}</p>;
+  const attendance = summary.absences
+    ? {
+        tone: "st-pend",
+        text: compact
+          ? t("{count} absences", { count: summary.absences })
+          : t(
+              summary.sessions === 1
+                ? "{absences} absences in {count} class"
+                : "{absences} absences in {count} classes",
+              { absences: summary.absences, count: summary.sessions },
+            ),
+      }
+    : summary.sessions
+      ? { tone: "st-ok", text: t("No absences") }
+      : // «Este mes» is the block's own heading on desktop; the phone's narrow column only fits «Sin clases».
+        { tone: "", text: t(compact ? "No classes" : "No classes this month") };
+  const ungraded = summary.ungraded
+    ? compact
+      ? t("{count} ungraded", { count: summary.ungraded })
+      : t(summary.ungraded === 1 ? "{count} assignment to grade" : "{count} assignments to grade", {
+          count: summary.ungraded,
+        })
+    : "";
   return (
-    <div className="table-scroll" tabIndex={0} role="region" aria-label={t("Attendance by class")}>
-      <div
-        className="mx"
-        role="table"
-        aria-label={t("Attendance by class")}
-        style={{ gridTemplateColumns: `minmax(64px, 120px) repeat(${grid.columns.length}, minmax(48px, 56px))` }}
-      >
-        <span role="columnheader" />
-        {grid.columns.map((column) => (
-          <span className="hd" role="columnheader" key={column.key}>
-            {column.date === asOf ? t("today") : `${weekdayShort(column.date, locale)} ${dayNumber(column.date)}`}
-          </span>
-        ))}
-        {grid.rows.map((row) => (
-          <div className="mx-row" role="row" key={row.student.id}>
-            <span role="rowheader" className="nm-cell">
-              <button
-                type="button"
-                className={`nm ${highlight === row.student.id ? "on" : ""}`}
-                aria-pressed={highlight === row.student.id}
-                onClick={() => onHighlight(highlight === row.student.id ? "" : row.student.id)}
-              >
-                {firstName(row.student.fullName)}
-              </button>
-            </span>
-            {row.cells.map((cell, index) => (
-              <span
-                role="cell"
-                key={cell.key}
-                className={`cell ${cell.code} ${highlight && highlight !== row.student.id ? "dim" : ""}`}
-                aria-label={`${row.student.fullName}, ${grid.columns[index].date}: ${t(cell.code === "P" ? "Present" : cell.code === "A" ? "Absent" : "Not recorded")}`}
-              >
-                {cell.code === "U" ? "" : cell.code}
-              </span>
-            ))}
-          </div>
-        ))}
+    <div className="figs">
+      <div className="fig">
+        <span>{t("Attendance")}</span>
+        <b>{formatPercent(summary.monthAttendance, locale)}</b>
+        <span className={`st is-plain ${attendance.tone}`}>{attendance.text}</span>
+      </div>
+      <div className="fig">
+        <span>{t("Average")}</span>
+        <b>
+          {formatScore(summary.average, locale)}
+          {compact || summary.average === null ? null : <small> /10</small>}
+        </b>
+        {ungraded ? <span className="st is-plain st-pend">{ungraded}</span> : null}
+      </div>
+      <div className="fig">
+        <span>{t("To collect")}</span>
+        <b>{formatMoney(summary.owed, locale)}</b>
+        <span className={`st is-plain ${summary.owed ? (summary.overdue ? "st-venc" : "st-pend") : "st-ok"}`}>
+          {t(summary.owed ? (summary.overdue ? "Overdue" : "Pending") : "Up to date")}
+        </span>
       </div>
     </div>
   );
 }
 
-function figureNotes(summary, members, t, locale) {
-  const attendance = summary.absences
-    ? {
-        tone: "st-pend",
-        text: t(
-          summary.sessions === 1 ? "{absences} absences in {count} class" : "{absences} absences in {count} classes",
-          {
-            absences: summary.absences,
-            count: summary.sessions,
-          },
-        ),
-      }
-    : summary.sessions
-      ? { tone: "st-ok", text: t("No absences") }
-      : { tone: "", text: t("No classes this month") };
-  const grade = summary.ungraded
-    ? {
-        tone: "st-pend",
-        text: t(summary.ungraded === 1 ? "{count} assignment to grade" : "{count} assignments to grade", {
-          count: summary.ungraded,
-        }),
-      }
-    : { tone: "", text: "" };
-  const debtors = summary.debts
-    .map((item) => members.find((student) => student.id === item.studentId)?.fullName)
-    .filter(Boolean);
-  const owed = summary.owed
-    ? {
-        tone: summary.overdue ? "st-venc" : "st-pend",
-        text: `${new Intl.ListFormat(locale, { type: "conjunction" }).format(debtors.slice(0, 2).map(firstName))}${debtors.length > 2 ? ` +${debtors.length - 2}` : ""} · ${t(summary.overdue ? "overdue" : "pending")}`,
-      }
-    : { tone: "st-ok", text: t("Up to date") };
-  return { attendance, grade, owed };
+/** «Forma de cobro»: how the group charges and the way into its editor. */
+function BillingCard({ group, members, state, asOf, onEdit }) {
+  const { t, locale } = useI18n();
+  const lines = billingLines(group, members, state, asOf, t, locale);
+  return (
+    <div className="billing-card">
+      <div className="billing-card-text">
+        <h3 className="overline">{t("Billing")}</h3>
+        <strong>{lines.title}</strong>
+        <span>{lines.detail}</span>
+      </div>
+      <Button icon={Pencil} onClick={onEdit}>
+        {t("Edit billing")}
+      </Button>
+    </div>
+  );
 }
 
-/** Desktop group detail: month, attendance grid, directory and the editable group data with its billing. */
+function TrackingLink({ onClick }) {
+  const { t } = useI18n();
+  return (
+    <button type="button" className="link-button tracking-link" onClick={onClick}>
+      {t("See attendance and payments in Tracking")}
+      <ChevronRight aria-hidden="true" />
+    </button>
+  );
+}
+
+/**
+ * Desktop group detail. The group says who is in it and how it charges; attendance and who owes are
+ * tracked in Seguimiento. Its editors (group, members, billing) open in the side drawer.
+ */
 export function GroupDetail({
   group,
   members,
   summary,
-  grid,
-  monthsById,
   next,
   asOf,
   state,
-  draft,
-  setDraft,
-  billingDraft,
-  setBillingDraft,
-  onSave,
-  onArchive,
-  onEditSchedule,
-  onAddStudent,
+  onEdit,
+  onEditBilling,
+  onChangeMembers,
   onOpenStudent,
   onOpenNext,
+  onOpenTracking,
   onChangeBadge,
-  saving,
-  dirty,
 }) {
   const { t, locale } = useI18n();
-  const [highlight, setHighlight] = useState("");
   const [copied, setCopied] = useState(false);
-  const notes = figureNotes(summary, members, t, locale);
   const emails = members
     .map((student) => contactForStudent(student, CONTACT_VIEWS.STUDENT_EMAIL).value)
     .filter(Boolean);
@@ -158,8 +192,6 @@ export function GroupDetail({
       setCopied(false);
     }
   };
-  const slots = group.weeklySchedule || [];
-  const hours = slots.length ? slots[0].durationHours : state.settings?.defaultClassHours;
   return (
     <section className="detail" aria-labelledby="community-group-title">
       <div className="detail-head is-group">
@@ -168,50 +200,26 @@ export function GroupDetail({
           <h2 id="community-group-title">{group.name}</h2>
           <span className="detail-meta">
             {groupScheduleLong(group, locale) ? <span>{groupScheduleLong(group, locale)}</span> : null}
-            <span>{t(members.length === 1 ? "{count} student" : "{count} students", { count: members.length })}</span>
+            {next ? (
+              <button type="button" className="link-button" onClick={onOpenNext}>
+                {t("Next class: {when}", { when: nextClassLabel(next, asOf, t, locale) })}
+              </button>
+            ) : null}
           </span>
         </div>
-        {next ? (
-          <div className="detail-next">
-            <span>{t("Next class")}</span>
-            <button type="button" className="link-button" onClick={onOpenNext}>
-              {nextClassLabel(next, asOf, t, locale)}
-            </button>
-          </div>
-        ) : null}
+        <Button icon={Pencil} onClick={onEdit}>
+          {t("Edit group")}
+        </Button>
       </div>
       <div className="blk">
         <h3 className="overline">{t("This month")}</h3>
-        <div className="figs">
-          <div className="fig">
-            <span>{t("Attendance")}</span>
-            <b>{formatPercent(summary.monthAttendance, locale)}</b>
-            <span className={`st ${notes.attendance.tone}`}>{notes.attendance.text}</span>
-          </div>
-          <div className="fig">
-            <span>{t("Average")}</span>
-            <b>
-              {formatScore(summary.average, locale)}
-              {summary.average === null ? null : <small> /10</small>}
-            </b>
-            {notes.grade.text ? <span className={`st ${notes.grade.tone}`}>{notes.grade.text}</span> : null}
-          </div>
-          <div className="fig">
-            <span>{t("To collect")}</span>
-            <b>{formatMoney(summary.owed, locale)}</b>
-            <span className={`st ${notes.owed.tone}`}>{notes.owed.text}</span>
-          </div>
-        </div>
+        <GroupFigures summary={summary} />
       </div>
       <div className="blk">
         <div className="blk-head">
-          <h3 className="overline">{t("Attendance by class")}</h3>
-        </div>
-        <AttendanceGrid grid={grid} asOf={asOf} highlight={highlight} onHighlight={setHighlight} />
-      </div>
-      <div className="blk">
-        <div className="blk-head">
-          <h3 className="overline">{t("Directory")}</h3>
+          <h3 className="overline">
+            {t(members.length === 1 ? "{count} student" : "{count} students", { count: members.length })}
+          </h3>
           <span className="blk-actions">
             {copied ? <span className="text-ok copied">{t("Emails copied")}</span> : null}
             {emails.length ? (
@@ -219,141 +227,63 @@ export function GroupDetail({
                 {t("Copy emails")}
               </button>
             ) : null}
-            <button type="button" className="link-button" onClick={onAddStudent}>
-              {t("Add to group")}
+            <button type="button" className="link-button" onClick={onChangeMembers}>
+              {t("Change members")}
             </button>
           </span>
         </div>
-        <div className="dir" role="table" aria-label={t("Group directory")}>
-          <div className="dr th" role="row">
-            <span role="columnheader">{t("Student")}</span>
-            <span role="columnheader">{t("Contact")}</span>
-            <span role="columnheader">{t("Attendance")}</span>
-            <span role="columnheader">{t("Payments")}</span>
-          </div>
-          {members.map((student) => {
-            const month = monthsById.get(student.id);
-            const others = studentGroupIdsOf(student).filter((id) => id !== group.id);
-            const otherNames = others.map((id) => state.groups.find((item) => item.id === id)?.name).filter(Boolean);
-            const email = contactForStudent(student, CONTACT_VIEWS.STUDENT_EMAIL).value;
-            const phone = contactForStudent(student, CONTACT_VIEWS.GUARDIAN_PHONE).value;
-            const pay = month?.owed
-              ? {
-                  tone: month.overdue ? "st-venc" : "st-pend",
-                  text: `${t("Owes {amount}", { amount: formatMoney(month.owed, locale) })}${month.oldestDebt ? ` · ${formatShortDate(month.oldestDebt, locale, { weekday: false })}` : ""}`,
-                }
-              : null;
-            const low =
-              month?.attendance !== null && month?.attendance < (state.settings?.lowAttendanceThreshold ?? 0.8);
-            return (
+        {members.length ? (
+          <div className="dir is-members" role="table" aria-label={t("Group directory")}>
+            <div className="dr th" role="row">
+              <span role="columnheader">{t("Student")}</span>
+              <span role="columnheader">{t("Contact")}</span>
+            </div>
+            {members.map((student) => (
               <button
                 type="button"
                 role="row"
                 key={student.id}
-                className={`dr ${highlight === student.id ? "on" : ""}`}
+                className="dr"
                 aria-label={t("Open {name}", { name: student.fullName })}
                 onClick={() => onOpenStudent(student)}
               >
                 <span className="person" role="cell">
                   <StudentAvatar avatarId={student.avatarId} name={student.fullName} size="small" decorative />
-                  <span>
-                    <strong>{student.fullName}</strong>
-                    {/* Only what differs from the rest of the group: «Solo este grupo» was every row's default. */}
-                    {otherNames.length || student.isIndividual ? (
-                      <small>
-                        {otherNames.length
-                          ? t("Also in {groups}", { groups: otherNames.join(", ") })
-                          : t("Also individual")}
-                      </small>
-                    ) : null}
-                  </span>
+                  <strong>{student.fullName}</strong>
                 </span>
                 <span className="ct" role="cell">
-                  {email}
-                  {email && phone ? <br /> : null}
-                  {phone ? t("Tutor · {phone}", { phone }) : null}
-                  {!email && !phone ? <span className="muted">—</span> : null}
+                  {memberContactLabel(student, t)}
                 </span>
-                <span role="cell" className={`dr-pct ${low ? "text-bad" : ""}`}>
-                  {formatPercent(month?.attendance ?? null, locale)}
-                </span>
-                <span role="cell">{pay ? <span className={`st ${pay.tone}`}>{pay.text}</span> : null}</span>
               </button>
-            );
-          })}
-          {!members.length ? <p className="muted">{t("No active students in this group yet.")}</p> : null}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <p className="muted">{t("No active students in this group yet.")}</p>
+        )}
       </div>
       <div className="blk is-last">
-        <h3 className="overline">{t("Group data")}</h3>
-        <div className="form-grid is-three">
-          <Field label={t("Group name")} required>
-            <Input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
-          </Field>
-          <Field label={t("Schedule")}>
-            <button type="button" className="control control-button" onClick={onEditSchedule}>
-              {groupScheduleLong(group, locale) || t("Add a schedule")}
-            </button>
-          </Field>
-          <Field label={t("Class length")}>
-            <button type="button" className="control control-button" onClick={onEditSchedule}>
-              {hours ? formatHours(hours, locale) : "—"}
-            </button>
-          </Field>
-        </div>
-        <div className="billing-block">
-          <BillingFields
-            draft={billingDraft}
-            setDraft={setBillingDraft}
-            group={group}
-            members={members}
-            state={state}
-            asOf={asOf}
-            defaultRate={state.settings?.hourlyRate}
-            chooseStart
-          />
-        </div>
-        <div className="detail-actions">
-          <Button variant="ghost" className="is-danger-text" icon={Archive} onClick={onArchive} disabled={saving}>
-            {t("Archive group")}
-          </Button>
-          <Button onClick={onSave} disabled={saving || !dirty}>
-            {saving ? t("Saving…") : t("Save changes")}
-          </Button>
-        </div>
+        <BillingCard group={group} members={members} state={state} asOf={asOf} onEdit={onEditBilling} />
+        <TrackingLink onClick={onOpenTracking} />
       </div>
     </section>
   );
 }
 
-/** Mobile group sheet: the month, billing summary, attendance grid and students as rows. */
+/** Phone group sheet: next class, the month in three figures, its students and how it charges. */
 export function GroupSheet({
   group,
   members,
   summary,
-  grid,
-  monthsById,
   next,
   asOf,
   state,
   onEditBilling,
+  onChangeMembers,
   onOpenStudent,
-  onAddStudent,
-  onArchive,
+  onOpenTracking,
   onChangeBadge,
 }) {
   const { t, locale } = useI18n();
-  const [highlight, setHighlight] = useState("");
-  const notes = figureNotes(summary, members, t, locale);
-  // The arrangement the editor edits: the latest one, which may start in a later month.
-  const billing = groupBillingFor(group);
-  const startsLater = billing?.effectiveFrom > periodOf(asOf);
-  const slots = group.weeklySchedule || [];
-  const hours = slots.length ? Number(slots[0].durationHours) || 0 : Number(state.settings?.defaultClassHours) || 0;
-  const rate = Number.isFinite(group.hourlyRate) ? group.hourlyRate : state.settings?.hourlyRate;
-  const emails = members
-    .map((student) => contactForStudent(student, CONTACT_VIEWS.STUDENT_EMAIL).value)
-    .filter(Boolean);
   return (
     <div className="group-sheet">
       <div className="group-sheet-head">
@@ -362,100 +292,199 @@ export function GroupSheet({
           <p className="muted">{t("Next class: {when}", { when: nextClassLabel(next, asOf, t, locale) })}</p>
         ) : null}
       </div>
-      <div className="figs">
-        <div className="fig">
-          <span>{t("Attendance")}</span>
-          <b>{formatPercent(summary.monthAttendance, locale)}</b>
-          <span className={`st is-plain ${notes.attendance.tone}`}>
-            {summary.absences ? t("{count} absences", { count: summary.absences }) : notes.attendance.text}
-          </span>
-        </div>
-        <div className="fig">
-          <span>{t("Average")}</span>
-          <b>{formatScore(summary.average, locale)}</b>
-          <span className="st is-plain st-pend">
-            {summary.ungraded ? t("{count} ungraded", { count: summary.ungraded }) : ""}
-          </span>
-        </div>
-        <div className="fig">
-          <span>{t("To collect")}</span>
-          <b>{formatMoney(summary.owed, locale)}</b>
-          <span className={`st is-plain ${notes.owed.tone}`}>
-            {t(summary.owed ? (summary.overdue ? "Overdue" : "Pending") : "Up to date")}
-          </span>
-        </div>
-      </div>
-      <button type="button" className="billing-summary" onClick={onEditBilling}>
-        <span>
-          <span className="overline">{t("Billing")}</span>
-          <strong>
-            {billing?.mode === "monthly"
-              ? `${t("Monthly")} · ${formatMoney(billing.monthlyFee, locale)}`
-              : `${t("Per class")} · ${t("{amount} per hour", { amount: formatMoney(rate, locale) })}`}
-          </strong>
-          <small>
-            {startsLater ? `${t("From {month}", { month: monthLong(`${billing.effectiveFrom}-01`, locale) })} · ` : ""}
-            {billing?.mode === "monthly"
-              ? t("Due {when}", {
-                  when:
-                    billing.due.type === "dayOfMonth"
-                      ? t("on day {day}", { day: billing.due.day })
-                      : t("at class {nth}", { nth: billing.due.nth === "last" ? t("last (class)") : billing.due.nth }),
-                })
-              : t("{hours} per class = {amount} per student", {
-                  hours: formatHours(hours, locale),
-                  amount: formatMoney(hours * (Number(rate) || 0), locale),
-                })}
-          </small>
-        </span>
-        <ChevronRight aria-hidden="true" />
-      </button>
-      <div>
-        <h3 className="overline">{t("Attendance by class")}</h3>
-        <AttendanceGrid grid={grid} asOf={asOf} highlight={highlight} onHighlight={setHighlight} />
-      </div>
+      <GroupFigures summary={summary} compact />
       <div>
         <div className="blk-head">
           <h3 className="overline">
             {t(members.length === 1 ? "{count} student" : "{count} students", { count: members.length })}
           </h3>
-          {emails.length ? (
-            <button
-              type="button"
-              className="link-button"
-              onClick={() => globalThis.navigator?.clipboard?.writeText(emails.join(", ")).catch(() => {})}
-            >
-              {t("Copy emails")}
-            </button>
-          ) : null}
+          <button type="button" className="link-button" onClick={onChangeMembers}>
+            {t("Change members")}
+          </button>
         </div>
         <div className="list-rows">
-          {members.map((student) => {
-            const month = monthsById.get(student.id);
-            const context = month ? studentContext(month, t("Up to date"), t, locale) : { text: "", tone: "" };
-            return (
-              <ListRow
-                key={student.id}
-                avatar={<StudentAvatar avatarId={student.avatarId} name={student.fullName} decorative />}
-                name={student.fullName}
-                context={context.text || t("Up to date")}
-                contextTone={context.tone}
-                value={formatPercent(month?.attendance ?? null, locale)}
-                onClick={() => onOpenStudent(student)}
-              />
-            );
-          })}
+          {members.map((student) => (
+            <ListRow
+              key={student.id}
+              avatar={<StudentAvatar avatarId={student.avatarId} name={student.fullName} decorative />}
+              name={student.fullName}
+              context={memberContactLabel(student, t)}
+              label={t("Open {name}", { name: student.fullName })}
+              onClick={() => onOpenStudent(student)}
+            />
+          ))}
         </div>
       </div>
-      <div className="sheet-actions">
-        <Button icon={UserPlus} onClick={onAddStudent}>
-          {t("Add to group")}
-        </Button>
-        <Button variant="ghost" className="is-danger-text" icon={Archive} onClick={onArchive}>
-          {t("Archive group")}
-        </Button>
-      </div>
+      <BillingCard group={group} members={members} state={state} asOf={asOf} onEdit={onEditBilling} />
+      <TrackingLink onClick={onOpenTracking} />
     </div>
+  );
+}
+
+/**
+ * «Cambiar integrantes»: every active student with a check; saving adds and removes them at once. In a
+ * monthly group whose month already started (`firstMonth`, see joiningOptions), whoever joins is asked
+ * what that month costs, as one choice for all of them.
+ */
+export function MembersSheet({ group, students, groupsById, firstMonth, asOf, onClose, onSave, saving }) {
+  const { t, locale } = useI18n();
+  const isMember = (student) => studentGroupIdsOf(student).includes(group?.id);
+  const [checked, setChecked] = useState(() => new Set(students.filter(isMember).map((student) => student.id)));
+  const [query, setQuery] = useState("");
+  const [choice, setChoice] = useState("prorated");
+  const joining = students.some((student) => checked.has(student.id) && !isMember(student));
+  const choices = joining && firstMonth?.started ? firstMonthChoices(firstMonth, asOf, t, locale) : [];
+  const month = monthLong(asOf, locale);
+  const needle = normalizeSearchText(query);
+  // Members first, then everyone else, each by name.
+  const listed = students
+    .filter((student) => !needle || normalizeSearchText(student.fullName).includes(needle))
+    .sort(
+      (left, right) => Number(isMember(right)) - Number(isMember(left)) || left.fullName.localeCompare(right.fullName),
+    );
+  const toggle = (id) =>
+    setChecked((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  return (
+    <BottomSheet
+      open={Boolean(group)}
+      onClose={onClose}
+      kicker={t("Members")}
+      title={group?.name || ""}
+      footer={
+        <Button variant="primary" disabled={saving} onClick={() => onSave(checked, choices.length ? choice : null)}>
+          {saving ? t("Saving…") : t("Save members · {count}", { count: checked.size })}
+        </Button>
+      }
+    >
+      <div className="members-sheet">
+        <label className="search-control">
+          <Search aria-hidden="true" />
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={t("Search student")}
+            aria-label={t("Search student")}
+          />
+        </label>
+        <div className="member-checks">
+          {listed.map((student) => {
+            const where = [
+              ...studentGroupIdsOf(student)
+                .filter((id) => id !== group?.id)
+                .map((id) => groupsById.get(id)?.name)
+                .filter(Boolean),
+              student.isIndividual ? t("Individual") : "",
+            ]
+              .filter(Boolean)
+              .join(" · ");
+            return (
+              <label className="member-check" key={student.id}>
+                <input type="checkbox" checked={checked.has(student.id)} onChange={() => toggle(student.id)} />
+                <StudentAvatar avatarId={student.avatarId} name={student.fullName} size="small" decorative />
+                <span>
+                  <strong>{student.fullName}</strong>
+                  {where ? <small>{where}</small> : null}
+                </span>
+              </label>
+            );
+          })}
+          {!listed.length ? <p className="muted">{t("No matches.")}</p> : null}
+        </div>
+        {choices.length ? (
+          <FirstMonthChoices
+            choices={choices}
+            value={choice}
+            onChange={setChoice}
+            label={t("What do they pay for {month}?", { month })}
+            heading={t("{month} already started · what do they pay?", {
+              month: month.charAt(0).toUpperCase() + month.slice(1),
+            })}
+          />
+        ) : null}
+      </div>
+    </BottomSheet>
+  );
+}
+
+/** Deleting a group for good: what stays, what is cancelled, and archiving as the gentler way out. */
+export function DeleteGroupDialog({ group, members, preview, onClose, onArchive, onConfirm, saving }) {
+  const { t, locale } = useI18n();
+  const names = new Intl.ListFormat(locale, { type: "conjunction" }).format(
+    members.map((student) => firstName(student.fullName)),
+  );
+  return (
+    <BottomSheet
+      open={Boolean(group)}
+      onClose={onClose}
+      kicker={t("Delete group")}
+      title={group ? t("Delete {p0}?", { p0: group.name }) : ""}
+      size="compact"
+      className="archive-dialog"
+      footer={
+        <>
+          <Button icon={Archive} onClick={onArchive} disabled={saving}>
+            {t("Archive instead")}
+          </Button>
+          <Button variant="danger" icon={Trash2} onClick={onConfirm} disabled={saving}>
+            {saving ? t("Saving…") : t("Delete for good")}
+          </Button>
+        </>
+      }
+    >
+      {group && preview ? (
+        <>
+          <ul className="dialog-list">
+            {members.length ? (
+              <li>
+                {t(
+                  members.length === 1
+                    ? "{names} stays in Hibi, without this group."
+                    : "{names} stay in Hibi, without this group.",
+                  { names },
+                )}
+              </li>
+            ) : null}
+            {preview.collected ? (
+              <li>
+                {t("The {amount} you already collected is kept in your history.", {
+                  amount: formatMoney(preview.collected, locale),
+                })}
+              </li>
+            ) : null}
+            {preview.classes ? (
+              <li>
+                {t(
+                  preview.classes === 1
+                    ? "Its recorded class stays in each student's history."
+                    : "Its {count} recorded classes stay in each student's history.",
+                  { count: preview.classes },
+                )}
+              </li>
+            ) : null}
+          </ul>
+          <p className="anote warn">
+            <i />
+            <span>
+              {preview.cancelled
+                ? t(
+                    "The {amount} this group has to collect is cancelled, and its upcoming classes leave your agenda.",
+                    { amount: formatMoney(preview.cancelled, locale) },
+                  )
+                : t("Its upcoming classes leave your agenda.")}
+            </span>
+          </p>
+          <p className="muted">
+            {t("This cannot be undone. To pause it, archive it: everything is kept and you can reactivate it.")}
+          </p>
+        </>
+      ) : null}
+    </BottomSheet>
   );
 }
 
@@ -719,71 +748,6 @@ function FirstMonthChoices({ choices, value, onChange, heading, label }) {
         </button>
       ))}
     </div>
-  );
-}
-
-/** Add an existing student to a group; in a monthly group already started, choose what the first month costs. */
-export function JoinGroupSheet({ open, group, candidates, state, asOf, onClose, onJoin, saving }) {
-  const { t, locale } = useI18n();
-  const [studentId, setStudentId] = useState("");
-  const [choice, setChoice] = useState("prorated");
-  const student = candidates.find((item) => item.id === studentId) || candidates[0] || null;
-  const options = group && student ? joiningOptions(state, group, student, asOf) : null;
-  const month = monthLong(asOf, locale);
-  const billing = groupBillingFor(group, periodOf(asOf));
-  const choices = options?.started ? firstMonthChoices(options, asOf, t, locale) : [];
-  const picked = choices.find((item) => item.value === choice) || null;
-  return (
-    <BottomSheet
-      open={open}
-      onClose={onClose}
-      kicker={t("Add student")}
-      title={group ? t("To {group}", { group: group.name }) : ""}
-      description={
-        billing?.mode === "monthly"
-          ? t("Monthly group · {amount} a month", { amount: formatMoney(billing.monthlyFee, locale) })
-          : undefined
-      }
-      footer={
-        <Button
-          variant="primary"
-          disabled={!student || saving}
-          onClick={() => onJoin(student, options?.started ? { amount: picked?.amount ?? options.amounts.full } : null)}
-        >
-          {t("Add to {group}", { group: group?.name || "" })}
-        </Button>
-      }
-    >
-      <div className="join-sheet">
-        {candidates.length ? (
-          <Field label={t("Student")}>
-            <StudentSelect
-              aria-label={t("Student")}
-              students={candidates.map((item) => ({
-                ...item,
-                detail: (item.groupIds || [])
-                  .map((id) => state.groups.find((g) => g.id === id)?.name)
-                  .filter(Boolean)
-                  .join(" · "),
-              }))}
-              value={student?.id || ""}
-              onChange={(event) => setStudentId(event.target.value)}
-            />
-          </Field>
-        ) : (
-          <p className="muted">{t("Every active student is already in this group.")}</p>
-        )}
-        {choices.length ? (
-          <FirstMonthChoices
-            choices={choices}
-            value={choice}
-            onChange={setChoice}
-            label={t("What do they pay for {month}?", { month })}
-            heading={t("{month} already started · what do they pay?", { month: capitalize(month) })}
-          />
-        ) : null}
-      </div>
-    </BottomSheet>
   );
 }
 

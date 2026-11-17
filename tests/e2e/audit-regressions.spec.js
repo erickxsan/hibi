@@ -27,7 +27,6 @@ test("keeps real names and live counts correct after switching Spanish to Englis
   await page.locator(".hibi-sidebar").getByRole("link", { name: "Community", exact: true }).click();
   await page.getByRole("button", { name: "Add student", exact: true }).click();
   const editor = page.getByRole("dialog", { name: "Add student", exact: true });
-  await editor.getByLabel(/Student ID/).fill("S3");
   await editor.getByLabel(/Full name/).fill("Settings");
   await editor.getByRole("button", { name: "Save student", exact: true }).click();
   await expect(page.getByText(/^3 active students in /)).toBeVisible();

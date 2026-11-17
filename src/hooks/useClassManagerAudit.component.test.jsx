@@ -329,27 +329,37 @@ describe("deleting a monthly group through the live manager", () => {
     return renderHook(() => useClassManager({ persistence }));
   };
 
-  it("keeps a group whose monthly fees were paid, so the money still counts", async () => {
+  it("keeps a deleted group's history when its monthly fees were paid, so the money still counts", async () => {
     const hook = setupGroup({
+      groupIds: ["g-mensual"],
       monthlyPayments: [{ id: "p9", groupId: "g-mensual", period: "2026-09", amount: 1000, paidAt: "2026-09-05" }],
     });
     let deleted;
     await act(async () => {
       deleted = await hook.result.current.actions.deleteGroup("g-mensual");
     });
-    expect(deleted).toBe(false);
-    expect(hook.result.current.state.groups.map((group) => group.id)).toEqual(["g-mensual"]);
-    expect(monthlyPaymentsBetween(hook.result.current.state, "2026-09-01", "2026-09-30")).toHaveLength(1);
+    expect(deleted).toBe(true);
+    const state = hook.result.current.state;
+    expect(state.groups[0]).toMatchObject({ id: "g-mensual", status: "Inactive", deletedAt: expect.any(String) });
+    expect(state.students[0].groupIds).toEqual([]);
+    expect(monthlyPaymentsBetween(state, "2026-09-01", "2026-09-30")).toHaveLength(1);
     hook.unmount();
   });
 
-  it("keeps a group a former student still owes", async () => {
+  it("gives up what a former student still owed the deleted group", async () => {
     const hook = setupGroup({ billingByGroup: { "g-mensual": { mode: "group", leftOn: "2026-10-10" } } });
     let deleted;
     await act(async () => {
       deleted = await hook.result.current.actions.deleteGroup("g-mensual");
     });
-    expect(deleted).toBe(false);
+    expect(deleted).toBe(true);
+    const state = hook.result.current.state;
+    expect(state.groups[0].deletedAt).toEqual(expect.any(String));
+    // September and October fell due while she was there; neither is owed any more.
+    expect(state.students[0].lostPayments.map((item) => [item.groupId, item.period]).sort()).toEqual([
+      ["g-mensual", "2026-09"],
+      ["g-mensual", "2026-10"],
+    ]);
     hook.unmount();
   });
 

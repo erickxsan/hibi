@@ -535,78 +535,6 @@
   text-overflow: ellipsis;
 }
 
-/* Asistencia por clase */
-.mx {
-  display: grid;
-  gap: 4px 6px;
-  align-items: center;
-}
-
-.mx-row {
-  display: contents;
-}
-
-.mx .nm-cell {
-  min-width: 0;
-}
-
-.mx .nm {
-  max-width: 100%;
-  margin-left: -8px;
-  padding: 4px 8px;
-  overflow: hidden;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  text-align: left;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  cursor: pointer;
-  font: 700 13px/18px var(--font-sans);
-  color: var(--sumi);
-}
-
-.mx .nm.on {
-  background: var(--washi);
-}
-
-.mx .hd {
-  font: 700 11px/14px var(--font-sans);
-  color: var(--sumi-muted);
-  text-align: center;
-  white-space: nowrap;
-}
-
-.mx .cell {
-  height: 28px;
-  display: grid;
-  place-items: center;
-  border-radius: 7px;
-  font: 800 11px/1 var(--font-sans);
-  transition: opacity 0.15s;
-}
-
-.mx .cell.P {
-  background: var(--sumi);
-  color: var(--papel);
-}
-
-.mx .cell.A {
-  background: var(--bermellon-soft);
-  color: var(--bermellon-ink);
-  box-shadow: inset 0 0 0 1.5px var(--bermellon-ink);
-}
-
-.mx .cell.U {
-  background: transparent;
-  box-shadow: inset 0 0 0 1.5px var(--line-control);
-  opacity: 0.6;
-}
-
-.mx .cell.dim {
-  opacity: 0.25;
-}
-
 /* Directorio */
 .dir {
   display: flex;
@@ -677,10 +605,6 @@
   color: var(--sumi-muted);
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.dr-pct {
-  font: 800 15px/20px var(--font-sans);
 }
 
 .dr-owed {
@@ -1147,41 +1071,6 @@
   height: 17px;
 }
 
-.billing-summary {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-  font-family: var(--font-sans);
-  color: var(--sumi);
-}
-
-.billing-summary > span {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.billing-summary strong {
-  font: 800 16px/22px var(--font-sans);
-}
-
-.billing-summary small {
-  font: 500 14px/20px var(--font-sans);
-  color: var(--sumi-muted);
-}
-
-.billing-summary svg {
-  width: 18px;
-  height: 18px;
-  color: var(--sumi-subtle);
-}
-
 @media (max-width: 780px) {
   .community-page .list {
     max-width: none;
@@ -1230,4 +1119,140 @@
   margin-top: 24px;
   padding-top: 16px;
   border-top: 1px solid var(--line);
+}
+
+/* A group's students: name and the one contact (communityContacts.groupMemberContact). */
+.dir.is-members .dr {
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+}
+
+/* «Forma de cobro» card with «Editar cobro». */
+.billing-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: var(--washi);
+}
+
+.billing-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.billing-card-text strong {
+  font: 800 16px/22px var(--font-sans);
+}
+
+.billing-card-text > span {
+  font: 500 14px/20px var(--font-sans);
+  color: var(--sumi-muted);
+}
+
+.group-sheet .billing-card .button {
+  width: 100%;
+}
+
+.tracking-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+}
+
+.tracking-link svg {
+  width: 16px;
+  height: 16px;
+}
+
+.community-page .blk.is-last .tracking-link {
+  margin-top: 12px;
+}
+
+/* «Cambiar integrantes» */
+.members-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.member-checks {
+  display: flex;
+  flex-direction: column;
+}
+
+.member-check {
+  display: grid;
+  grid-template-columns: 22px 36px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-height: 54px;
+  border-top: 1px solid var(--line-soft);
+  cursor: pointer;
+}
+
+.member-check:first-child {
+  border-top: 0;
+}
+
+.member-check input {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--sumi);
+  cursor: pointer;
+}
+
+.member-check strong {
+  display: block;
+  font: 700 15px/20px var(--font-sans);
+}
+
+.member-check small {
+  display: block;
+  font: 500 13px/18px var(--font-sans);
+  color: var(--sumi-muted);
+}
+
+/* «Editar grupo»: archive and delete under the form, each saying what it does. */
+.group-editor-actions {
+  display: flex;
+  flex-direction: column;
+  margin-top: 20px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
+.group-editor-actions .list-row.is-danger strong {
+  color: var(--bermellon-ink);
+}
+
+.group-editor-actions .list-row-icon {
+  box-sizing: border-box;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--washi);
+}
+
+.group-editor-actions .list-row.is-danger .list-row-icon {
+  background: var(--bermellon-soft);
+  color: var(--bermellon-ink);
+}
+
+/* «ID HIBI-012 · Cambiar» in the student form: the ID is generated, changing it is rare. */
+.editor-code {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+  font: 600 14px/20px var(--font-sans);
+  color: var(--sumi-muted);
 }

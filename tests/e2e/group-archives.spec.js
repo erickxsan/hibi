@@ -17,7 +17,9 @@ for (const width of [390, 1440]) {
       const archive = page.getByRole("button", { name: "Grupos archivados · 2", exact: true });
       await expect(archive).toHaveAttribute("aria-expanded", "false");
       await page.getByRole("button", { name: "Abrir Álgebra · Grupo A", exact: true }).click();
-      await page.getByRole("button", { name: "Archivar grupo", exact: true }).click();
+      // Archiving lives in the group editor: «Editar» in the phone sheet, «Editar grupo» on desktop.
+      await page.getByRole("button", { name: compact ? "Editar" : "Editar grupo", exact: true }).click();
+      await page.getByRole("button", { name: /^Archivar grupo/ }).click();
       const dialog = page.getByRole("dialog", { name: "¿Archivar el grupo Álgebra · Grupo A?", exact: true });
       await expect(dialog).toContainText("Se conservan sus");
       await expect(dialog.getByRole("button", { name: "Archivar grupo", exact: true })).toBeInViewport();

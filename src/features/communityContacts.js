@@ -42,6 +42,15 @@ export function primaryContactForStudent(student) {
   return { value: "", inferred: false, view: CONTACT_VIEWS.STUDENT_EMAIL, label: "No contact" };
 }
 
+/** The one way to reach a student shown in their group: the tutor's phone, else theirs, else their email. */
+export function groupMemberContact(student) {
+  for (const view of [CONTACT_VIEWS.GUARDIAN_PHONE, CONTACT_VIEWS.STUDENT_PHONE, CONTACT_VIEWS.STUDENT_EMAIL]) {
+    const { value } = contactForStudent(student, view);
+    if (value) return { value, view };
+  }
+  return null;
+}
+
 export function groupContactRows(students, view, { missingOnly = false } = {}) {
   const rows = (Array.isArray(students) ? students : []).map((student) => {
     const contact = contactForStudent(student, view);

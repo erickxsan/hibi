@@ -35,6 +35,18 @@ describe("state and entity validation", () => {
     );
   });
 
+  it("turns a legacy own rate into a price per group and one for individual classes", () => {
+    const state = createSeedState();
+    const groupId = state.groups[0].id;
+    state.students[0] = { ...state.students[0], groupIds: [groupId], customHourlyRate: 80 };
+    const student = normalizeState(state).students[0];
+    expect(student.customHourlyRate).toBeNull();
+    expect(student.individualHourlyRate).toBe(80);
+    expect(student.billingByGroup[groupId]).toEqual({ mode: "group", hourlyRate: 80 });
+    // Normalizing again changes nothing.
+    expect(normalizeState({ ...state, students: [student] }).students[0]).toEqual(student);
+  });
+
   it("normalizes form strings without collapsing blank and zero", () => {
     const state = createSeedState();
     state.grades[0].score = "";

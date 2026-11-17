@@ -47,20 +47,22 @@ export function resolveHourlyRate(state, studentOrId, groupOrId = "") {
   const groups = Array.isArray(state?.groups) ? state.groups : [];
   const student = typeof studentOrId === "object" ? studentOrId : students.find((item) => item.id === studentOrId);
   const group = typeof groupOrId === "object" ? groupOrId : groups.find((item) => item.id === groupOrId);
-  if (finiteNumber(student?.customHourlyRate)) return student.customHourlyRate;
+  // In a group, the student's own price there; on their own, their price for individual classes.
+  const own = group ? student?.billingByGroup?.[group.id]?.hourlyRate : student?.individualHourlyRate;
+  if (finiteNumber(own)) return own;
   if (finiteNumber(group?.hourlyRate)) return group.hourlyRate;
   return finiteNumber(state?.settings?.hourlyRate) ? state.settings.hourlyRate : null;
 }
 
 /**
- * A student's own rate also prices the classes they still owe: unpaid records saved at their previous
- * rate, or at the group's rate before the own rate existed, take the new one. Paid classes, cancelled
- * ones and hand-set prices keep their amount.
+ * A student's own prices (one per group, one for individual classes) also price the classes they still
+ * owe: unpaid records saved at their previous price, or at the inherited one before they had their own,
+ * take the new one. Paid classes, cancelled ones and hand-set prices keep their amount.
  */
 export function repriceUnpaidClasses(state, previous, student) {
   const classLog = Array.isArray(state?.classLog) ? state.classLog : [];
   if (!previous || !student) return classLog;
-  const inherited = { ...student, customHourlyRate: null };
+  const inherited = { ...student, individualHourlyRate: null, billingByGroup: undefined };
   const defaultHours = state?.settings?.defaultClassHours;
   return classLog.map((row) => {
     if (row.studentId !== student.id || row.classStatus === "Cancelled" || Number(row.amountPaid) > 0) return row;

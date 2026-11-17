@@ -248,7 +248,7 @@ export function NewClassDrawer({ open, onClose, state, asOfDate, actions, onEdit
       if (rateChanged) {
         const saved = isGroup
           ? await actions.upsertGroup?.({ ...group, hourlyRate: rate })
-          : await actions.upsertStudent?.({ ...student, customHourlyRate: rate });
+          : await actions.upsertStudent?.({ ...student, individualHourlyRate: rate });
         if (!saved) return;
       }
       const fields = recurring
@@ -347,17 +347,17 @@ export function NewClassDrawer({ open, onClose, state, asOfDate, actions, onEdit
               placeholder="Choose a student"
               searchable
               students={students.map((item) => {
-                const own = Number.isFinite(item.customHourlyRate);
+                const own = Number.isFinite(item.individualHourlyRate);
                 const names = (state.groups || [])
                   .filter((groupItem) => (item.groupIds || []).includes(groupItem.id))
                   .map((groupItem) => groupItem.name);
                 return {
                   ...item,
                   meta: own
-                    ? t("Own rate {amount}/h", { amount: formatMoney(item.customHourlyRate, locale) })
+                    ? t("Own rate {amount}/h", { amount: formatMoney(item.individualHourlyRate, locale) })
                     : [...names, item.isIndividual ? t("individual") : ""].filter(Boolean).join(" · ") ||
                       t("General rate {amount}/h", { amount: formatMoney(state.settings?.hourlyRate || 0, locale) }),
-                  detail: own ? `${formatMoney(item.customHourlyRate, locale)}/h` : "",
+                  detail: own ? `${formatMoney(item.individualHourlyRate, locale)}/h` : "",
                 };
               })}
             />

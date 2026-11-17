@@ -46,6 +46,7 @@ import {
 import { canonicalStringify } from "../crypto/canonical.js";
 import { isBillableAttendance } from "../domain/attendanceBilling.js";
 import { setGroupArchived, startGroupSchedule } from "../domain/groupArchiving.js";
+import { deleteGroup as deleteGroupForGood } from "../domain/groupDeletion.js";
 import { groupBadgeFields, withGroupBadge } from "../domain/groupBadge.js";
 import { normalizeRepeatRule } from "../domain/classRecurrence.js";
 import { normalizeGroupScheduleHistory, preserveGroupSchedule } from "../domain/groupScheduleHistory.js";
@@ -57,7 +58,6 @@ import {
   normalizeGroupBilling,
   normalizeMonthlyPayments,
   monthlyBalance,
-  groupMoneyOnRecord,
   studentMoneyOnRecord,
   recordStays,
   removeMonthlyPayment,
@@ -125,6 +125,7 @@ export function canonicalGroup(draft) {
     status: draft.status ?? "Active",
     archivedAt: draft.archivedAt ?? "",
     scheduleResumeDate: draft.scheduleResumeDate ?? "",
+    ...(draft.deletedAt ? { deletedAt: draft.deletedAt } : {}),
     ...(normalizeGroupScheduleHistory(draft.scheduleHistory).length
       ? { scheduleHistory: normalizeGroupScheduleHistory(draft.scheduleHistory) }
       : {}),
@@ -170,6 +171,9 @@ export function canonicalStudent(draft) {
     isIndividual: Boolean(draft.isIndividual),
     customHourlyRate:
       draft.customHourlyRate === "" || draft.customHourlyRate == null ? null : Number(draft.customHourlyRate),
+    ...(draft.individualHourlyRate === "" || draft.individualHourlyRate == null
+      ? {}
+      : { individualHourlyRate: Number(draft.individualHourlyRate) }),
     studentEmail: draft.studentEmail ?? draft.email ?? "",
     guardianPhone: draft.guardianPhone ?? draft.parentPhone ?? "",
     phone: draft.phone ?? draft.studentPhone ?? "",
@@ -878,39 +882,10 @@ export function useClassManager({ persistence } = {}) {
     [commit, operationalDate],
   );
 
+  // For good: its students stay without it, what it still had to collect is given up and its history is kept.
   const deleteGroup = useCallback(
-    (id) => {
-      if (stateRef.current.students.some((student) => student.groupIds?.includes(id))) {
-        notify("Unassign or move every student before deleting this group.", "error");
-        return Promise.resolve(false);
-      }
-      // Its monthly payments and the fees former students owe only count while the group exists.
-      if (groupMoneyOnRecord(stateRef.current, id)) {
-        notify("This group has monthly fees on record. Archive it instead to keep them.", "error");
-        return Promise.resolve(false);
-      }
-      return commit(
-        (current) => ({
-          ...current,
-          groups: current.groups.filter((group) => group.id !== id),
-          // Nobody is in the group and nothing is owed to it: its billing adjustments go with it.
-          students: current.students.map((student) => {
-            if (!student.billingByGroup?.[id]) return student;
-            const { [id]: _removed, ...rest } = student.billingByGroup;
-            const { billingByGroup: _previous, ...fields } = student;
-            return Object.keys(rest).length ? { ...fields, billingByGroup: rest } : fields;
-          }),
-          classLog: current.classLog.map((row) => (row.groupId === id ? { ...row, groupId: "" } : row)),
-          classSchedules: current.classSchedules.filter((item) => item.groupId !== id),
-          scheduleExceptions: current.scheduleExceptions.filter(
-            (item) => item.groupId !== id && item.sourceGroupId !== id,
-          ),
-          scheduleChanges: current.scheduleChanges.filter((item) => item.groupId !== id),
-        }),
-        "Group deleted",
-      );
-    },
-    [commit, notify],
+    (id) => commit((current) => deleteGroupForGood(current, id, operationalDate), "Group deleted"),
+    [commit, operationalDate],
   );
 
   const upsertStudent = useCallback(
@@ -936,6 +911,41 @@ export function useClassManager({ persistence } = {}) {
           };
         },
         draft.id ? "Student updated" : "Student added",
+      );
+    },
+    [commit, notify, operationalDate],
+  );
+
+  // A group's member list, saved as one change: each draft is an existing student who joins or leaves.
+  const saveGroupMembers = useCallback(
+    (drafts) => {
+      const { students, groups, classLog } = stateRef.current;
+      const items = drafts.map((draft) =>
+        canonicalStudent(
+          recordStays(
+            students.find((student) => student.id === draft.id),
+            draft,
+            groups,
+            operationalDate,
+            classLog,
+          ),
+        ),
+      );
+      const byId = new Map(items.map((item) => [item.id, item]));
+      const proposed = { ...stateRef.current, students: students.map((student) => byId.get(student.id) || student) };
+      const invalid = items.map((item) => validateStudent(item, proposed)).find((validation) => !validation.valid);
+      if (invalid) {
+        notify(invalid.errors[0].message, "error");
+        return false;
+      }
+      return commit(
+        (current) => ({
+          ...current,
+          students: current.students.map((student) =>
+            byId.has(student.id) ? withLiveMoney(byId.get(student.id), student) : student,
+          ),
+        }),
+        "Group members updated",
       );
     },
     [commit, notify, operationalDate],
@@ -1315,11 +1325,24 @@ export function useClassManager({ persistence } = {}) {
           return billingByGroup ? { ...rest, billingByGroup } : rest;
         });
       return commit(
-        (current) => ({
-          ...current,
-          groups: placeSavedGroup(current.groups, item, draft, operationalDate),
-          students: applyOverrides(current.students),
-        }),
+        (current) => {
+          const students = applyOverrides(current.students);
+          return {
+            ...current,
+            groups: placeSavedGroup(current.groups, item, draft, operationalDate),
+            students,
+            // A student's own price in the group also prices the classes they still owe (see upsertStudent).
+            classLog: Object.keys(overrides).reduce(
+              (classLog, id) =>
+                repriceUnpaidClasses(
+                  { ...current, classLog },
+                  current.students.find((student) => student.id === id),
+                  students.find((student) => student.id === id),
+                ),
+              current.classLog,
+            ),
+          };
+        },
         draft.id ? "Group updated" : "Group added",
       );
     },
@@ -1654,6 +1677,7 @@ export function useClassManager({ persistence } = {}) {
       archiveGroup,
       reactivateGroup,
       deleteGroup,
+      saveGroupMembers,
       upsertStudent,
       archiveStudent,
       deleteStudent,
@@ -1703,6 +1727,7 @@ export function useClassManager({ persistence } = {}) {
       deleteClassLog,
       deleteGrade,
       deleteGroup,
+      saveGroupMembers,
       deleteStudent,
       dismissOnboarding,
       editScheduledClass,

@@ -241,12 +241,12 @@ describe("saving a student around payments and marks", () => {
 
   it("does not reprice a class given up after the draft with a new rate was opened", async () => {
     const { manager, student } = setup();
-    const draft = { ...student("diego"), customHourlyRate: 200 };
+    const draft = { ...student("diego"), billingByGroup: { "g-class": { mode: "group", hourlyRate: 200 } } };
     await act(async () => {
       await manager().actions.giveUpPayments([CLASS], "Lost");
       await manager().actions.upsertStudent(draft);
     });
-    expect(student("diego").customHourlyRate).toBe(200);
+    expect(student("diego").billingByGroup["g-class"].hourlyRate).toBe(200);
     expect(manager().state.classLog[0].appliedCharge).toBe(250);
     expect(student("diego").lostPayments).toHaveLength(1);
   });

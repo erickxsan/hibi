@@ -20,7 +20,10 @@ import { memoizeOnState } from "./stateMemo.js";
  *   `effectiveFrom` are part of the monthly arrangement, so they are not charged per class.
  *     due = { type: "dayOfMonth", day: 1–28 } | { type: "nthClass", nth: 1–4 | "last" }
  *   student.billingByGroup[groupId] = { mode: "group" | "customFee" | "perClass", fee, due, effectiveFrom: "YYYY-MM",
- *                                      history?: [earlier adjustments], joinedOn, firstMonthAmount, leftOn, away }
+ *                                      history?: [earlier adjustments], joinedOn, firstMonthAmount, leftOn, away,
+ *                                      hourlyRate }
+ *   `hourlyRate` is the student's own price per hour in that group, for the classes they pay per class
+ *   (schedule.js, resolveHourlyRate); absent, they pay the group's.
  *   `due` (same shape as the group's) moves that student's due date; absent, they follow the group's.
  *   The adjustment (mode, fee, due) has a start month and earlier ones, like the group's terms, so changing
  *   it from a month never rewrites the months before it; before its first start the student pays the group fee.
@@ -227,6 +230,7 @@ function normalizeStay(value) {
  * @property {number} [firstMonthAmount]
  * @property {string} [leftOn]
  * @property {{ from: string, to: string }[]} [away]
+ * @property {number} [hourlyRate]
  */
 
 /** @returns {StudentOverride | null} */
@@ -244,9 +248,11 @@ function normalizeOverride(value) {
         .sort((a, b) => (a.effectiveFrom || "").localeCompare(b.effectiveFrom || ""))
         .filter((item, index, list) => index === 0 || item.effectiveFrom !== list[index - 1].effectiveFrom)
     : [];
-  const stay = normalizeStay(value);
-  if (adjustment.mode === "group" && !adjustment.due && !history.length && !Object.keys(stay).length) return null;
-  return { ...adjustment, ...(history.length ? { history } : {}), ...stay };
+  const rate = toNumber(value.hourlyRate);
+  // Their own price in the group travels with their stay: changing how they pay keeps both.
+  const kept = { ...normalizeStay(value), ...(rate !== null && rate >= 0 ? { hourlyRate: roundMoney(rate) } : {}) };
+  if (adjustment.mode === "group" && !adjustment.due && !history.length && !Object.keys(kept).length) return null;
+  return { ...adjustment, ...(history.length ? { history } : {}), ...kept };
 }
 
 /**

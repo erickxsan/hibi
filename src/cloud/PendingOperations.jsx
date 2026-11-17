@@ -29,6 +29,7 @@ const FIELD_LABELS = {
   groupIds: "Groups",
   isIndividual: "Individual classes",
   customHourlyRate: "Custom hourly rate",
+  individualHourlyRate: "Individual hourly rate",
   monthlyPayments: "Monthly payments",
   lostPayments: "Lost payments",
   billingByGroup: "Billing",

@@ -30,17 +30,8 @@ export function shouldAutoStartOnboarding(state) {
   );
 }
 
-export function nextOnboardingStudentCodes(students, count) {
-  const used = new Set((Array.isArray(students) ? students : []).map((student) => String(student?.code || "")));
-  const codes = [];
-  let candidate = 1;
-  while (codes.length < count) {
-    const code = `HIBI-${String(candidate).padStart(3, "0")}`;
-    if (!used.has(code)) codes.push(code);
-    candidate += 1;
-  }
-  return codes;
-}
+// The tutorial and «Agregar alumno» draw from the same «HIBI-001» sequence.
+export { nextStudentCodes as nextOnboardingStudentCodes } from "../domain/studentCodes.js";
 
 // Students removed during setup leave the group. Those created by the setup and
 // without history are deleted; anyone with records or other groups is kept.

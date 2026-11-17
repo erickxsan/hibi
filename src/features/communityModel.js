@@ -25,7 +25,6 @@ import {
   suggestedMonthlyFee,
   switchToPerClass,
 } from "../domain/monthlyBilling";
-import { buildClassWorkspaceSessionsForRange } from "./classesWorkspaceModel";
 import { debtsThrough, isOverdueClassDebt } from "./homeDashboardModel";
 import { studentGroupIdsOf } from "./groupLabels";
 
@@ -211,33 +210,6 @@ export function groupMonth(state, derived, group, asOf, members) {
   };
 }
 
-/** Attendance grid: the latest recorded classes of the group plus today's class if it is still open. */
-export function groupAttendanceGrid(state, group, members, asOf, limit = 6) {
-  const sessions = buildClassWorkspaceSessionsForRange(state, addDays(asOf, -120), asOf, asOf).filter(
-    (session) => session.groupId === group.id && session.statusLabel !== "Cancelled",
-  );
-  const recorded = sessions.filter((session) => (session.rows || []).some((row) => row.classStatus === "Completed"));
-  const today = sessions.find((session) => session.classDate === asOf && !(session.rows || []).length);
-  const columns = [...recorded.slice(-limit), ...(today ? [today] : [])];
-  return {
-    columns: columns.map((session) => ({
-      key: session.key,
-      date: session.classDate,
-      today: session.classDate === asOf && !(session.rows || []).length,
-    })),
-    rows: members.map((student) => ({
-      student,
-      cells: columns.map((session) => {
-        const row = (session.rows || []).find(
-          (item) => item.studentId === student.id && item.classStatus === "Completed",
-        );
-        if (!row || !["P", "L", "A"].includes(row.attendance)) return { key: session.key, code: "U" };
-        return { key: session.key, code: row.attendance === "A" ? "A" : "P" };
-      }),
-    })),
-  };
-}
-
 /** History of an archived group: classes, attendance, collected, average, balance left and per-student lines. */
 export function archivedGroupHistory(state, derived, group, members) {
   const asOf = state.settings?.asOfDate;
@@ -324,7 +296,29 @@ export function billingDraftFor(group, members) {
         .filter(([, override]) => override && (override.mode !== "group" || override.due))
         .map(([id, override]) => [id, { mode: override.mode, fee: override.fee ?? null, due: override.due ?? null }]),
     ),
+    // Students with their own price per hour in the group (a key with no number: being typed).
+    rates: Object.fromEntries(
+      members
+        .map((student) => [student.id, student.billingByGroup?.[group?.id]?.hourlyRate])
+        .filter(([, rate]) => finite(rate)),
+    ),
   };
+}
+
+// The own prices of the draft, onto the entry each student ends up with (the one this save stores,
+// else the stored one). A student left without a number pays the group's price again.
+function applyRates(group, members, draft, overrides) {
+  members.forEach((student) => {
+    const stored = normalizeBillingByGroup(student.billingByGroup)?.[group?.id] || null;
+    const wanted = draft.rates?.[student.id];
+    const rate = finite(wanted) && wanted >= 0 ? roundMoney(wanted) : null;
+    if ((stored?.hourlyRate ?? null) === rate) return;
+    const { hourlyRate: _previous, ...entry } = (Object.hasOwn(overrides, student.id)
+      ? overrides[student.id]
+      : stored) || { mode: "group" };
+    overrides[student.id] = rate === null ? entry : { ...entry, hourlyRate: rate };
+  });
+  return overrides;
 }
 
 // The arrangement the draft describes, without its start.
@@ -424,7 +418,7 @@ export function billingChanges(group, members, draft, asOf, applyFrom = draft?.a
   const overrides = {};
   const starts = {};
   // Per class from some month on: the adjustments stay for the monthly months before it.
-  if (draft.mode !== "monthly") return { billing, overrides, starts };
+  if (draft.mode !== "monthly") return { billing, overrides: applyRates(group, members, draft, overrides), starts };
   const from = adjustmentStart(group, draft, asOf, applyFrom);
   members.forEach((student) => {
     const current = normalizeBillingByGroup(student.billingByGroup)?.[group?.id] || null;
@@ -458,7 +452,7 @@ export function billingChanges(group, members, draft, asOf, applyFrom = draft?.a
       overrides[id] = { ...(entry || { mode: "group" }), ...stayFields };
     }
   }
-  return { billing, overrides, starts };
+  return { billing, overrides: applyRates(group, members, draft, overrides), starts };
 }
 
 // The workspace with a group's billing saved as saveGroupBilling stores it, limited to that group.

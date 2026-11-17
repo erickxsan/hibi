@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Plus, Trash2, X } from "lucide-react";
 import { useI18n } from "../i18n/index.jsx";
 import {
@@ -37,26 +37,36 @@ function capitalize(text) {
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
 }
 
-/** Add or edit a student: identity, avatar, enrollment, own rate and contact. */
+/**
+ * Add or edit a student: who they are, their groups and how to reach them. What they pay is set in
+ * each group; only individual classes, which have no group, are priced here.
+ */
 export function StudentEditor({ draft, setDraft, groups, defaultRate }) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
+  const [codeOpen, setCodeOpen] = useState(false);
   const activeGroups = groups.filter((group) => group.status !== "Inactive" || draft.groupIds.includes(group.id));
-  const selectedGroups = draft.groupIds.map((id) => groups.find((group) => group.id === id)).filter(Boolean);
-  const inheritedRate =
-    selectedGroups.length === 1 && Number.isFinite(selectedGroups[0].hourlyRate)
-      ? selectedGroups[0].hourlyRate
-      : defaultRate;
-  const customRate = Number.isFinite(draft.customHourlyRate);
   return (
     <form id="student-editor" className="editor-form" onSubmit={(event) => event.preventDefault()}>
-      <div className="form-grid">
-        <Field label={t("Full name")} required>
-          <Input value={draft.fullName} onChange={(event) => setDraft({ ...draft, fullName: event.target.value })} />
-        </Field>
+      <Field label={t("Full name")} required>
+        <Input value={draft.fullName} onChange={(event) => setDraft({ ...draft, fullName: event.target.value })} />
+      </Field>
+      {codeOpen ? (
         <Field label={t("Student ID")} required>
           <Input value={draft.code} onChange={(event) => setDraft({ ...draft, code: event.target.value })} />
         </Field>
-      </div>
+      ) : (
+        <p className="editor-code">
+          <span className="tnum">{t("ID {code}", { code: draft.code })}</span>
+          <button
+            type="button"
+            className="link-button"
+            aria-label={t("Change student ID")}
+            onClick={() => setCodeOpen(true)}
+          >
+            {t("Change")}
+          </button>
+        </p>
+      )}
       <AvatarPicker value={draft.avatarId} onChange={(avatarId) => setDraft({ ...draft, avatarId })} />
       <div className="field-rows">
         <FieldRow label={t("Groups")}>
@@ -76,42 +86,15 @@ export function StudentEditor({ draft, setDraft, groups, defaultRate }) {
             checked={draft.isIndividual}
             onChange={(isIndividual) => setDraft({ ...draft, isIndividual })}
           />
-        </FieldRow>
-        <FieldRow
-          label={t("Own rate")}
-          hint={
-            customRate
-              ? t("Overrides the group rate for this student.")
-              : selectedGroups.length > 1
-                ? t("Uses each group rate")
-                : t("{p0} / hour inherited", { p0: formatMoney(inheritedRate, locale) })
-          }
-        >
-          <Switch
-            label={t("Override inherited rate")}
-            checked={customRate}
-            onChange={(checked) => setDraft({ ...draft, customHourlyRate: checked ? inheritedRate : null })}
-          />
-          {customRate ? (
+          {draft.isIndividual ? (
             <MoneyInput
-              label={t("Custom hourly rate")}
-              value={draft.customHourlyRate}
+              label={t("Price of their individual classes")}
+              value={draft.individualHourlyRate ?? ""}
+              placeholder={String(defaultRate ?? "")}
               suffix={t("/ hour")}
-              onChange={(value) => setDraft({ ...draft, customHourlyRate: value === "" ? 0 : Number(value) })}
+              onChange={(value) => setDraft({ ...draft, individualHourlyRate: value === "" ? null : Number(value) })}
             />
           ) : null}
-        </FieldRow>
-        <FieldRow label={t("Status")}>
-          <Segmented
-            tone="soft"
-            value={draft.status}
-            label={t("Status")}
-            onChange={(status) => setDraft({ ...draft, status })}
-            items={[
-              { value: "Active", label: "Active" },
-              { value: "Inactive", label: "Inactive" },
-            ]}
-          />
         </FieldRow>
       </div>
       <h3 className="overline editor-section">{t("Contact information")}</h3>
@@ -161,9 +144,9 @@ export function StudentEditor({ draft, setDraft, groups, defaultRate }) {
   );
 }
 
-/** Group identity and its weekly times; billing comes from BillingFields. */
-export function GroupEditor({ draft, setDraft, defaultHours, defaultRate, children = null }) {
-  const { t, locale } = useI18n();
+/** A group's name and weekly times; a new group adds its billing (`children`, see BillingFields). */
+export function GroupEditor({ draft, setDraft, defaultHours, children = null }) {
+  const { t } = useI18n();
   const addSchedule = () =>
     setDraft((current) => ({
       ...current,
@@ -184,14 +167,6 @@ export function GroupEditor({ draft, setDraft, defaultHours, defaultRate, childr
       <Field label={t("Group name")} required>
         <Input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
       </Field>
-      <div className="form-grid">
-        <Field label={t("School grade")}>
-          <Input value={draft.grade} onChange={(event) => setDraft({ ...draft, grade: event.target.value })} />
-        </Field>
-        <Field label={t("Subject")}>
-          <Input value={draft.subject} onChange={(event) => setDraft({ ...draft, subject: event.target.value })} />
-        </Field>
-      </div>
       <section className="schedule-editor" aria-labelledby="weekly-schedule-heading">
         <div className="block-head">
           <div>
@@ -241,45 +216,17 @@ export function GroupEditor({ draft, setDraft, defaultHours, defaultRate, childr
         ) : null}
       </section>
       {children}
-      <div className="form-grid">
-        <Field label={t("Schedule note / room")}>
+      {/* Without weekly times, the month's income is estimated from this number. */}
+      {!draft.weeklySchedule.length ? (
+        <Field label={t("Planned sessions / month")}>
           <Input
-            value={draft.schedule}
-            onChange={(event) => setDraft({ ...draft, schedule: event.target.value })}
-            placeholder={t("Optional room or legacy schedule note")}
+            type="number"
+            min="0"
+            value={draft.plannedSessionsPerMonth}
+            onChange={(event) => setDraft({ ...draft, plannedSessionsPerMonth: Number(event.target.value) })}
           />
         </Field>
-        {!draft.weeklySchedule.length ? (
-          <Field label={t("Planned sessions / month")}>
-            <Input
-              type="number"
-              min="0"
-              value={draft.plannedSessionsPerMonth}
-              onChange={(event) => setDraft({ ...draft, plannedSessionsPerMonth: Number(event.target.value) })}
-            />
-          </Field>
-        ) : null}
-      </div>
-      <Field label={t("Assistant / contact")}>
-        <TextArea
-          rows="2"
-          value={draft.assistantContact}
-          onChange={(event) => setDraft({ ...draft, assistantContact: event.target.value })}
-        />
-      </Field>
-      <Field label={t("Notes")}>
-        <TextArea
-          rows="3"
-          value={draft.notes}
-          onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
-        />
-      </Field>
-      <p className="muted editor-hint">
-        {Number.isFinite(draft.hourlyRate)
-          ? t("{p0} / hour", { p0: formatMoney(draft.hourlyRate, locale) })
-          : t("{p0} / hour inherited", { p0: formatMoney(defaultRate, locale) })}{" "}
-        · {formatHours(defaultHours, locale)}
-      </p>
+      ) : null}
     </form>
   );
 }
@@ -460,9 +407,6 @@ export function BillingFields({ draft, setDraft, group, members = [], state, asO
   const nextDues = monthly && group ? nextDueDates(state, group, draft, asOf) : [];
   const adjustedIds = Object.keys(draft.adjustments || {}).filter((id) => members.some((student) => student.id === id));
   const unadjusted = members.filter((student) => !adjustedIds.includes(student.id));
-  const groupFeePayers = members.filter(
-    (student) => !adjustedIds.includes(student.id) || draft.adjustments[student.id].mode === "group",
-  ).length;
   const totals = monthlyTotal(state, group, members, draft);
   const setAdjustment = (id, value) =>
     setDraft((current) => {
@@ -471,6 +415,16 @@ export function BillingFields({ draft, setDraft, group, members = [], state, asO
       else delete adjustments[id];
       return { ...current, adjustments };
     });
+  // Own prices per hour in this group, by student id (an entry without a number is still being typed).
+  const rates = draft.rates || {};
+  const ownRateIds = Object.keys(rates).filter((id) => members.some((student) => student.id === id));
+  const setRate = (id, value) =>
+    setDraft((current) => {
+      const { [id]: _previous, ...rest } = current.rates || {};
+      return { ...current, rates: value === undefined ? rest : { ...rest, [id]: value } };
+    });
+  const classPrice = (id) =>
+    Math.round(hours * (Number.isFinite(rates[id]) ? rates[id] : Number(rate) || 0) * 100) / 100;
   // A backdated start derives the group's fees twice (before and after): only when the inputs change.
   const start = useMemo(
     () => (chooseStart && group?.id ? startChoice(state, group, members, draft, asOf) : null),
@@ -523,7 +477,61 @@ export function BillingFields({ draft, setDraft, group, members = [], state, asO
             onChange={(value) => setDraft({ ...draft, hourlyRate: value === "" ? null : Number(value) })}
           />
         </FieldRow>
-      ) : (
+      ) : null}
+      {!monthly && members.length ? (
+        <FieldRow label={t("Different price")}>
+          <div className="billing-adjustments">
+            {ownRateIds.length ? (
+              <span className="field-row-hint">
+                {t("The rest pay {amount} per hour", { amount: formatMoney(rate, locale) })}
+              </span>
+            ) : null}
+            {ownRateIds.map((id) => {
+              const student = members.find((item) => item.id === id);
+              return (
+                <div className="billing-adjustment" key={id}>
+                  <b>{student.fullName}</b>
+                  <MoneyInput
+                    label={t("Price per hour for {name}", { name: student.fullName })}
+                    value={rates[id] ?? ""}
+                    suffix={t("/ hour")}
+                    onChange={(value) => setRate(id, value === "" ? null : Number(value))}
+                  />
+                  <span className="field-row-hint">
+                    {t("{amount} per class attended", { amount: formatMoney(classPrice(id), locale) })}
+                  </span>
+                  <IconButton
+                    className="billing-remove"
+                    label={t("Remove the different price for {name}", { name: student.fullName })}
+                    icon={X}
+                    onClick={() => setRate(id)}
+                  />
+                </div>
+              );
+            })}
+            {members.length > ownRateIds.length ? (
+              <Select
+                small
+                className="billing-add"
+                aria-label={t("Different price for a student")}
+                placeholder={t("+ Different price for a student")}
+                value=""
+                onChange={(event) => event.target.value && setRate(event.target.value, Number(rate) || 0)}
+              >
+                <option value="">{t("+ Different price for a student")}</option>
+                {members
+                  .filter((student) => !ownRateIds.includes(student.id))
+                  .map((student) => (
+                    <option key={student.id} value={student.id}>
+                      {student.fullName}
+                    </option>
+                  ))}
+              </Select>
+            ) : null}
+          </div>
+        </FieldRow>
+      ) : null}
+      {monthly ? (
         <>
           <FieldRow label={t("Fee")}>
             <MoneyInput
@@ -564,16 +572,13 @@ export function BillingFields({ draft, setDraft, group, members = [], state, asO
             ) : null}
           </FieldRow>
           {members.length ? (
-            <FieldRow label={t("Students")}>
+            <FieldRow label={t("Different price")}>
               <div className="billing-adjustments">
-                <span className="field-row-hint">
-                  {t(
-                    adjustedIds.length === 1
-                      ? "{group} pay the group fee · {count} with an adjustment:"
-                      : "{group} pay the group fee · {count} with adjustments:",
-                    { group: groupFeePayers, count: adjustedIds.length },
-                  )}
-                </span>
+                {adjustedIds.length ? (
+                  <span className="field-row-hint">
+                    {t("The rest pay {amount}", { amount: formatMoney(Number(draft.monthlyFee) || 0, locale) })}
+                  </span>
+                ) : null}
                 {adjustedIds.map((id) => {
                   const student = members.find((item) => item.id === id);
                   const adjustment = draft.adjustments[id];
@@ -607,24 +612,28 @@ export function BillingFields({ draft, setDraft, group, members = [], state, asO
                           }
                         />
                       ) : adjustment.mode === "perClass" ? (
-                        <span className="field-row-hint">
-                          {t(
-                            perClassFrom(id)
-                              ? "{amount} per class attended from {month}"
-                              : "{amount} per class attended",
-                            {
-                              amount: formatMoney(
-                                // Their own rate, when they have one, prices their classes instead of the group's.
-                                Number.isFinite(student.customHourlyRate)
-                                  ? Math.round(hours * student.customHourlyRate * 100) / 100
-                                  : perClass,
-                                locale,
-                              ),
-                              // A month they already paid monthly keeps its fee: per class starts after it.
-                              month: perClassFrom(id) ? monthLong(`${perClassFrom(id)}-01`, locale) : "",
-                            },
-                          )}
-                        </span>
+                        <>
+                          {/* Blank: the group's price per hour. */}
+                          <MoneyInput
+                            label={t("Price per hour for {name}", { name: student.fullName })}
+                            value={rates[id] ?? ""}
+                            placeholder={String(rate ?? "")}
+                            suffix={t("/ hour")}
+                            onChange={(value) => setRate(id, value === "" ? undefined : Number(value))}
+                          />
+                          <span className="field-row-hint">
+                            {t(
+                              perClassFrom(id)
+                                ? "{amount} per class attended from {month}"
+                                : "{amount} per class attended",
+                              {
+                                amount: formatMoney(classPrice(id), locale),
+                                // A month they already paid monthly keeps its fee: per class starts after it.
+                                month: perClassFrom(id) ? monthLong(`${perClassFrom(id)}-01`, locale) : "",
+                              },
+                            )}
+                          </span>
+                        </>
                       ) : null}
                       {/* Monthly payers may fall due on their own day or class instead of the group's. */}
                       {adjustment.mode !== "perClass" ? (
@@ -659,15 +668,15 @@ export function BillingFields({ draft, setDraft, group, members = [], state, asO
                   <Select
                     small
                     className="billing-add"
-                    aria-label={t("Adjust for a student")}
-                    placeholder={t("+ Adjust for a student")}
+                    aria-label={t("Different price for a student")}
+                    placeholder={t("+ Different price for a student")}
                     value=""
                     onChange={(event) =>
                       event.target.value &&
                       setAdjustment(event.target.value, { mode: "customFee", fee: draft.monthlyFee ?? 0 })
                     }
                   >
-                    <option value="">{t("+ Adjust for a student")}</option>
+                    <option value="">{t("+ Different price for a student")}</option>
                     {unadjusted.map((student) => (
                       <option key={student.id} value={student.id}>
                         {student.fullName}
@@ -686,7 +695,7 @@ export function BillingFields({ draft, setDraft, group, members = [], state, asO
             </FieldRow>
           ) : null}
         </>
-      )}
+      ) : null}
       {start ? (
         <FieldRow label={t("Applies from")}>
           <div className="billing-adjustments">
@@ -741,12 +750,19 @@ export function BillingFields({ draft, setDraft, group, members = [], state, asO
             </>
           ) : (
             <>
-              <span className="billing-total">{formatMoney(perClass * members.length, locale)}</span>
+              <span className="billing-total">
+                {formatMoney(
+                  members.reduce((sum, student) => sum + classPrice(student.id), 0),
+                  locale,
+                )}
+              </span>
               <span className="field-row-hint">
-                {t(members.length === 1 ? "{count} student × {amount}" : "{count} students × {amount}", {
-                  count: members.length,
-                  amount: formatMoney(perClass, locale),
-                })}
+                {ownRateIds.length
+                  ? t(members.length === 1 ? "{count} student" : "{count} students", { count: members.length })
+                  : t(members.length === 1 ? "{count} student × {amount}" : "{count} students × {amount}", {
+                      count: members.length,
+                      amount: formatMoney(perClass, locale),
+                    })}
               </span>
             </>
           )}

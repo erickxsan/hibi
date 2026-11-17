@@ -2546,3 +2546,11 @@
   font: 700 13px/18px var(--font-sans);
   cursor: pointer;
 }
+
+/* The header's own action («Editar») sits beside the close button. */
+.drawer-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}

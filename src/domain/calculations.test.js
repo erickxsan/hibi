@@ -199,7 +199,7 @@ describe("minimal class-manager calculations", () => {
       code: "RATE-2",
       fullName: "Custom rate",
       groupIds: [group.id],
-      customHourlyRate: 120,
+      billingByGroup: { [group.id]: { mode: "group", hourlyRate: 120 } },
     });
     state.groups = [group];
     state.students = [groupRateStudent, customRateStudent];
@@ -210,7 +210,7 @@ describe("minimal class-manager calculations", () => {
       calculateCharge(state, { ...base, studentId: customRateStudent.id, appliedHourlyRate: 70, appliedCharge: 140 }),
     ).toBe(140);
     state.groups[0].hourlyRate = 200;
-    state.students[1].customHourlyRate = 300;
+    state.students[1].billingByGroup[group.id].hourlyRate = 300;
     expect(
       calculateCharge(state, { ...base, studentId: customRateStudent.id, appliedHourlyRate: 70, appliedCharge: 140 }),
     ).toBe(140);
@@ -227,7 +227,13 @@ describe("minimal class-manager calculations", () => {
     });
     state.groups = [group];
     state.students = [
-      createStudent({ id: "one", code: "ONE", fullName: "One", groupIds: [group.id], customHourlyRate: 80 }),
+      createStudent({
+        id: "one",
+        code: "ONE",
+        fullName: "One",
+        groupIds: [group.id],
+        billingByGroup: { [group.id]: { mode: "group", hourlyRate: 80 } },
+      }),
       createStudent({ id: "two", code: "TWO", fullName: "Two", groupIds: [group.id] }),
     ];
     const summary = deriveGroup(state, group.id, "2026-07-31");
@@ -270,7 +276,7 @@ describe("minimal class-manager calculations", () => {
       code: "INDIVIDUAL-1",
       fullName: "Individual student",
       isIndividual: true,
-      customHourlyRate: 100,
+      individualHourlyRate: 100,
     });
     state.students = [student];
     state.classSchedules = [

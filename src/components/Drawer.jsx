@@ -75,6 +75,7 @@ export function Drawer({
   showHeader = true,
   onKeyDown,
   kicker,
+  action = null,
 }) {
   const { t: uiT } = useI18n();
   const depth = useContext(OverlayDepthContext);
@@ -253,12 +254,15 @@ export function Drawer({
                 <h2 id={titleId}>{title}</h2>
                 {description ? <p id={descriptionId}>{description}</p> : null}
               </div>
-              <IconButton
-                label={uiT("Close")}
-                icon={X}
-                onClick={requestClose}
-                className={presentation === "sheet" ? "bottom-sheet-close" : ""}
-              />
+              <span className="drawer-header-actions">
+                {action}
+                <IconButton
+                  label={uiT("Close")}
+                  icon={X}
+                  onClick={requestClose}
+                  className={presentation === "sheet" ? "bottom-sheet-close" : ""}
+                />
+              </span>
             </header>
           ) : null}
           <div className={presentation === "drawer" ? "drawer-body" : "picker-body"}>{children}</div>

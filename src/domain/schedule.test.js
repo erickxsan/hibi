@@ -149,7 +149,7 @@ describe("a student's own rate on classes they still owe", () => {
   const state = {
     settings: { hourlyRate: 50, defaultClassHours: 2 },
     groups: [{ id: "g1", hourlyRate: null }],
-    students: [{ id: "s1", customHourlyRate: null }],
+    students: [{ id: "s1" }],
     classLog: [
       row({ id: "owed" }),
       row({ id: "absent", attendance: "A", appliedCharge: 0 }),
@@ -160,9 +160,17 @@ describe("a student's own rate on classes they still owe", () => {
     ],
   };
   const byId = (log) => Object.fromEntries(log.map((item) => [item.id, item]));
+  // Their own price in the group the classes belong to.
+  const own = { id: "s1", billingByGroup: { g1: { mode: "group", hourlyRate: 80 } } };
+
+  it("prices individual classes with their price for individual classes", () => {
+    const solo = { ...state, classLog: [row({ id: "solo", groupId: "" })] };
+    const log = byId(repriceUnpaidClasses(solo, state.students[0], { id: "s1", individualHourlyRate: 60, ...own }));
+    expect(log.solo).toMatchObject({ appliedHourlyRate: 60, appliedCharge: 120 });
+  });
 
   it("reprices unpaid classes and leaves paid, cancelled and hand-set ones alone", () => {
-    const log = byId(repriceUnpaidClasses(state, state.students[0], { id: "s1", customHourlyRate: 80 }));
+    const log = byId(repriceUnpaidClasses(state, state.students[0], own));
     expect(log.owed).toMatchObject({ appliedHourlyRate: 80, appliedCharge: 160 });
     expect(log.absent).toMatchObject({ appliedHourlyRate: 80, appliedCharge: 0 });
     expect(log.paid).toBe(state.classLog[2]);
@@ -172,15 +180,13 @@ describe("a student's own rate on classes they still owe", () => {
   });
 
   it("corrects classes still at the group rate when the own rate was already saved", () => {
-    const own = { id: "s1", customHourlyRate: 80 };
     const log = byId(repriceUnpaidClasses({ ...state, students: [own] }, own, own));
     expect(log.owed).toMatchObject({ appliedHourlyRate: 80, appliedCharge: 160 });
   });
 
   it("goes back to the group rate when the own rate is removed", () => {
-    const own = { id: "s1", customHourlyRate: 80 };
     const priced = repriceUnpaidClasses(state, state.students[0], own);
-    const log = byId(repriceUnpaidClasses({ ...state, classLog: priced }, own, { id: "s1", customHourlyRate: null }));
+    const log = byId(repriceUnpaidClasses({ ...state, classLog: priced }, own, { id: "s1" }));
     expect(log.owed).toMatchObject({ appliedHourlyRate: 50, appliedCharge: 100 });
   });
 });

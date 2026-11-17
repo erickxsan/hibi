@@ -8,7 +8,6 @@ import {
   billingDraftFor,
   feeSuggestion,
   groupChangeQuestion,
-  groupAttendanceGrid,
   groupMonth,
   joinGroup,
   joiningOptions,
@@ -147,9 +146,6 @@ describe("group figures", () => {
     const summary = groupMonth(state, derived, state.groups[0], AS_OF, members(state));
     expect(summary).toMatchObject({ absences: 2, sessions: 3, average: 9, ungraded: 1, owed: 150, overdue: 0 });
     expect(summary.monthAttendance).toBeCloseTo(7 / 9);
-    const grid = groupAttendanceGrid(state, state.groups[0], members(state), AS_OF);
-    expect(grid.columns.map((column) => column.date)).toEqual(["2026-10-05", "2026-10-12", "2026-10-19"]);
-    expect(grid.rows[0].cells.map((cell) => cell.code)).toEqual(["A", "A", "P"]);
   });
 
   it("keeps an archived group's history and what was left owed", () => {
@@ -159,6 +155,44 @@ describe("group figures", () => {
     expect(history).toMatchObject({ classes: 1, attendance: 1, collected: 0, outstanding: 150 });
     expect(history.owing.map((item) => item.student.id)).toEqual(["s4"]);
     expect(history.members[0]).toMatchObject({ attended: 1, total: 1, owed: 150 });
+  });
+});
+
+describe("a different price for a student", () => {
+  it("saves their own price per hour in the group, and removing it gives them the group's again", () => {
+    const { state } = setup();
+    const group = state.groups[0];
+    const draft = billingDraftFor(group, members(state));
+    const priced = billingChanges(group, members(state), { ...draft, rates: { s1: 60 } }, AS_OF);
+    expect(priced.overrides).toEqual({ s1: { mode: "group", hourlyRate: 60 } });
+
+    const saved = {
+      ...state,
+      students: state.students.map((item) =>
+        item.id === "s1" ? { ...item, billingByGroup: { g1: priced.overrides.s1 } } : item,
+      ),
+    };
+    const again = billingDraftFor(group, members(saved));
+    expect(again.rates).toEqual({ s1: 60 });
+    expect(billingChanges(group, members(saved), { ...again, rates: {} }, AS_OF).overrides).toEqual({
+      s1: { mode: "group" },
+    });
+  });
+
+  it("keeps the price with a monthly adjustment saved in the same change", () => {
+    const { state } = setup();
+    const group = state.groups[0];
+    const draft = {
+      ...billingDraftFor(group, members(state)),
+      mode: "monthly",
+      monthlyFee: 1200,
+      adjustments: { s2: { mode: "perClass", fee: null, due: null } },
+      rates: { s2: 90 },
+    };
+    expect(billingChanges(group, members(state), draft, AS_OF).overrides.s2).toMatchObject({
+      mode: "perClass",
+      hourlyRate: 90,
+    });
   });
 });
 

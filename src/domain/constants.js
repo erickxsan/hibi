@@ -5,7 +5,9 @@ export const SCHEMA_VERSION = 1;
 // A build that finds a higher number stops saving, because normalizeState drops the fields it does not
 // know and a save would upload the record without them.
 // BUMP IT whenever a persisted field is added to any record or to the settings, or a field changes meaning.
-export const DATA_VERSION = 1;
+// 2: a student's price per group (`billingByGroup[groupId].hourlyRate`) and for individual classes
+//    (`individualHourlyRate`) replace `customHourlyRate`; a deleted group keeps its history (`deletedAt`).
+export const DATA_VERSION = 2;
 export const MAX_BACKUP_BYTES = 5 * 1024 * 1024;
 
 export const STORAGE_KEY = "minimal-class-manager:v1";

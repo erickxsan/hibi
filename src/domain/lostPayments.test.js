@@ -222,7 +222,7 @@ describe("classes", () => {
 
   it("is not repriced when the student's rate changes", () => {
     const state = markLost(workspace(), [CLASS], AS_OF);
-    const student = { ...state.students[0], customHourlyRate: 300 };
+    const student = { ...state.students[0], billingByGroup: { "g-class": { mode: "group", hourlyRate: 300 } } };
     expect(repriceUnpaidClasses(state, state.students[0], student)[0].appliedCharge).toBe(200);
   });
 });

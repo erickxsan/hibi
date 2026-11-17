@@ -32,10 +32,15 @@ describe("routed group archive flow", () => {
     await screen.findByRole("button", { name: "Abrir Álgebra · Grupo A" });
     const archiveToggle = screen.getByRole("button", { name: "Grupos archivados · 2" });
     expect(archiveToggle).toHaveAttribute("aria-expanded", "false");
+    // Archiving lives in «Editar grupo», with deleting for good.
     await user.click(
       within(await screen.findByRole("region", { name: "Álgebra · Grupo A", exact: true })).getByRole("button", {
-        name: "Archivar grupo",
-        exact: true,
+        name: "Editar grupo",
+      }),
+    );
+    await user.click(
+      within(await screen.findByRole("dialog", { name: "Álgebra · Grupo A" })).getByRole("button", {
+        name: /^Archivar grupo/,
       }),
     );
     const dialog = await screen.findByRole("dialog", { name: "¿Archivar el grupo Álgebra · Grupo A?" });

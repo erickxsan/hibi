@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, ChevronRight, Plus, Search, UsersRound } from "lucide-react";
+import { Archive, ChevronRight, Pencil, Plus, Search, Trash2, UsersRound } from "lucide-react";
 import { useI18n } from "../i18n/index.jsx";
 import {
   BottomSheet,
@@ -7,8 +7,6 @@ import {
   ConfirmDialog,
   Drawer,
   EmptyState,
-  Field,
-  Input,
   ListRow,
   SectionHeading,
   Segmented,
@@ -17,16 +15,12 @@ import {
 import { StudentAvatar } from "../components/StudentAvatar";
 import { GroupBadge } from "../components/GroupBadge";
 import { useCompactViewport } from "../components/OverlayContext";
-import {
-  createNavigationPass,
-  discardChangesRequest,
-  draftChanged,
-  replayableHistoryMove,
-  useUnsavedChanges,
-} from "../hooks/useUnsavedChanges";
+import { discardChangesRequest, draftChanged, useUnsavedChanges } from "../hooks/useUnsavedChanges";
 import { useConfirmPrompt } from "../components/ConfirmPrompt";
 import { useHistoryBackedState } from "../hooks/useHistoryNavigation";
 import { isGroupArchived } from "../domain/groupArchiving";
+import { groupDeletionPreview, isGroupDeleted } from "../domain/groupDeletion";
+import { nextStudentCode } from "../domain/studentCodes";
 import { gradeGroupId } from "../domain/semanticIdentity";
 import { periodOf, startGroupBilling } from "../domain/monthlyBilling";
 import { todayDateOnly } from "../domain/dates";
@@ -41,10 +35,10 @@ import {
   archivedGroupHistory,
   billingChanges,
   billingDraftFor,
-  groupAttendanceGrid,
   groupChangeQuestion,
   groupMonth,
   joinGroup,
+  joiningOptions,
   sortStudentsByAttention,
   studentMonths,
   studentRecentClasses,
@@ -54,10 +48,11 @@ import { groupNamesOf, StudentDetail, StudentSheet } from "./CommunityStudent";
 import {
   ArchiveGroupDialog,
   ArchivedGroupView,
+  DeleteGroupDialog,
   GroupChangeSheet,
   GroupDetail,
   GroupSheet,
-  JoinGroupSheet,
+  MembersSheet,
 } from "./CommunityGroup";
 import "../i18n/screenTranslations.js";
 import "./community.css";
@@ -176,15 +171,15 @@ export default function Community({
   const [groupArchivesOpen, setGroupArchivesOpen] = useState(false);
   const [selected, setSelected] = useState(() => ({ type: "", id: "" }));
   const [sheet, setSheet] = useState(null);
-  const [billingSheet, setBillingSheet] = useState(false);
-  const [groupDraft, setGroupDraft] = useState(null);
+  // «Editar cobro», open while it holds a draft.
   const [billingDraft, setBillingDraft] = useState(null);
   const [studentEditor, setStudentEditor] = useState(null);
   const [groupEditor, setGroupEditor] = useState(null);
   const [newGroupBilling, setNewGroupBilling] = useState(NEW_GROUP_BILLING);
   const [confirmTarget, setConfirmTarget] = useState(null);
   const [archiveTarget, setArchiveTarget] = useState(null);
-  const [joinTarget, setJoinTarget] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [membersTarget, setMembersTarget] = useState(null);
   // A student moved to a monthly group after paying the days they move: what the first month there costs.
   const [groupChange, setGroupChange] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -204,7 +199,7 @@ export default function Community({
   );
   const colsRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const revealDetail = useRef(false);
-  const baselines = useRef({ group: null, billing: null, studentEditor: null, groupEditor: null });
+  const baselines = useRef({ billing: null, studentEditor: null, groupEditor: null });
 
   const groupsById = useMemo(() => new Map(state.groups.map((group) => [group.id, group])), [state.groups]);
   const activeStudents = useMemo(
@@ -221,7 +216,11 @@ export default function Community({
     [activeStudents, asOf, derived, state],
   );
   const activeGroups = useMemo(() => state.groups.filter((group) => !isGroupArchived(group)), [state.groups]);
-  const archivedGroups = useMemo(() => state.groups.filter(isGroupArchived), [state.groups]);
+  // A group deleted for good keeps its history but is never listed again.
+  const archivedGroups = useMemo(
+    () => state.groups.filter((group) => isGroupArchived(group) && !isGroupDeleted(group)),
+    [state.groups],
+  );
   const membersOf = useCallback(
     (group) =>
       isGroupArchived(group)
@@ -327,33 +326,11 @@ export default function Community({
     if (created.status === "Inactive") setStudentArchivesOpen(true);
   }, [pendingCode, state.students]);
 
-  // The group drafts follow the selected record.
-  useEffect(() => {
-    if (!focusGroup || isGroupArchived(focusGroup)) {
-      setGroupDraft(null);
-      setBillingDraft(null);
-      return;
-    }
-    const nextGroup = cloneGroup(focusGroup);
-    const nextBilling = billingDraftFor(focusGroup, focusMembers);
-    const { group: previousGroup, billing: previousBilling } = baselines.current;
-    const sameGroup = previousGroup?.id === focusGroup.id;
-    baselines.current.group = nextGroup;
-    baselines.current.billing = nextBilling;
-    // A save elsewhere (schedule editor, badge, a new member) refreshes the record; unsaved edits here survive it.
-    setGroupDraft((current) => (sameGroup && current && draftChanged(current, previousGroup) ? current : nextGroup));
-    setBillingDraft((current) =>
-      sameGroup && current && draftChanged(current, previousBilling) ? current : nextBilling,
-    );
-  }, [focusGroup, focusMembers]);
-
-  const groupDirty =
-    (Boolean(groupDraft) && draftChanged(groupDraft, baselines.current.group)) ||
-    (Boolean(billingDraft) && draftChanged(billingDraft, baselines.current.billing));
+  const billingDirty = Boolean(billingDraft) && draftChanged(billingDraft, baselines.current.billing);
   const editorDirty =
     (Boolean(studentEditor) && draftChanged(studentEditor, baselines.current.studentEditor)) ||
     (Boolean(groupEditor) && draftChanged(groupEditor, baselines.current.groupEditor));
-  const dirty = groupDirty || editorDirty;
+  const dirty = billingDirty || editorDirty;
   useUnsavedChanges(registerNavigationBlocker, dirty, DISCARD);
 
   // In-app «discard?» questions (no native confirm). Guards that must answer synchronously block, ask, and
@@ -371,28 +348,13 @@ export default function Community({
     });
     return false;
   };
-  const viewPass = useRef(createNavigationPass());
-  const changeViewRef = useRef(null);
   const changeView = useHistoryBackedState({
     key: "community-view",
     value: view,
     onChange: setView,
     defaultValue: initialCommunityView(initialView),
     allowedValues: COMMUNITY_VIEWS,
-    canChange: ({ to, reason }) => {
-      if (!groupDirty || viewPass.current.consume(to)) return true;
-      const replayHistory = reason === "popstate" ? replayableHistoryMove() : null;
-      askDiscard(DISCARD).then((accepted) => {
-        if (!accepted) return;
-        viewPass.current.grant(to);
-        if (replayHistory?.()) return;
-        changeViewRef.current?.(to, { replace: reason === "replace" });
-        viewPass.current.clear();
-      });
-      return false;
-    },
   });
-  changeViewRef.current = changeView;
 
   const select = (type, id) => {
     if (compact) {
@@ -400,10 +362,8 @@ export default function Community({
       return;
     }
     if (selected.type === type && selected.id === id) return;
-    proceedOrAsk(groupDirty, DISCARD, () => {
-      revealDetail.current = true;
-      setSelected({ type, id });
-    });
+    revealDetail.current = true;
+    setSelected({ type, id });
   };
 
   // After the reader picks someone, make sure the card is on screen. Side by side it is sticky, so this
@@ -418,8 +378,11 @@ export default function Community({
     if (top < 0 || top > height - 120 || bottom < 80) card.scrollIntoView({ block: "start" });
   }, [selected]);
 
-  const openStudentEditor = (student = EMPTY_STUDENT) => {
-    const next = cloneStudent(student);
+  // A new student starts with the next free «HIBI-001» ID (`taken` adds codes the state does not show yet).
+  const openStudentEditor = (student = EMPTY_STUDENT, taken = []) => {
+    const next = cloneStudent(
+      student.id ? student : { ...student, code: nextStudentCode([...state.students, ...taken]) },
+    );
     baselines.current.studentEditor = next;
     setStudentEditor(next);
   };
@@ -451,19 +414,29 @@ export default function Community({
       "Discard your unsaved group changes?",
       () => setGroupEditor(null),
     );
-  // «Atrás» or ✕ on the billing sheet: unsaved billing is asked about and then dropped, so it does not linger.
-  const closeBillingSheet = () =>
-    proceedOrAsk(groupDirty, "Discard your unsaved group changes?", () => {
-      setGroupDraft(baselines.current.group);
-      setBillingDraft(baselines.current.billing);
-      setBillingSheet(false);
-    });
+  const openBillingEditor = (group) => {
+    const draft = billingDraftFor(group, membersOf(group));
+    baselines.current.billing = draft;
+    setBillingDraft(draft);
+  };
+  const closeBillingEditor = () =>
+    proceedOrAsk(billingDirty, "Discard your unsaved group changes?", () => setBillingDraft(null));
+  // «Archivar grupo» and «Eliminar grupo» in the group editor act on the saved group and close the editor.
+  const leaveGroupEditorFor = (proceed) =>
+    proceedOrAsk(
+      Boolean(groupEditor) && draftChanged(groupEditor, baselines.current.groupEditor),
+      "Discard your unsaved group changes?",
+      () => {
+        setGroupEditor(null);
+        proceed();
+      },
+    );
 
   useEffect(() => {
     if (intent?.type === "open-group-archives") {
       changeView("groups", { replace: true });
       setGroupArchivesOpen(true);
-      const first = state.groups.find(isGroupArchived);
+      const first = archivedGroups[0];
       if (first) select("group", first.id);
     }
     if (intent?.type === "open-student" && state.students.some((student) => student.id === intent.id)) {
@@ -487,8 +460,11 @@ export default function Community({
       setSaving(false);
     }
   };
-  /** `choice` answers the group-change question: the first month in the new group (see groupChangeQuestion). */
-  const saveStudentEditor = (choice = null) =>
+  /**
+   * `choice` answers the group-change question: the first month in the new group (see groupChangeQuestion).
+   * `another` («Guardar y agregar otro») opens a blank form in the same groups once the new student is saved.
+   */
+  const saveStudentEditor = (choice = null, another = false) =>
     runSave(async () => {
       if (!studentEditor) return false;
       const record = state.students.find((item) => item.id === studentEditor.id);
@@ -502,6 +478,11 @@ export default function Community({
       );
       if (saved) {
         setGroupChange(null);
+        if (another) {
+          const { groupIds, isIndividual } = studentEditor;
+          openStudentEditor({ ...EMPTY_STUDENT, groupIds, isIndividual }, [studentEditor]);
+          return saved;
+        }
         setStudentEditor(null);
         if (!compact && studentEditor.id) setSelected({ type: "student", id: studentEditor.id });
         else if (!compact) setPendingCode(studentEditor.code);
@@ -533,21 +514,23 @@ export default function Community({
       }
       return saved;
     });
-  const saveGroupDetail = (group) =>
+  const saveBilling = (group) =>
     runSave(async () => {
-      if (!groupDraft || !billingDraft) return false;
-      const members = membersOf(group);
+      if (!billingDraft) return false;
       // With the workspace: a backdated start also saves who joined after it began (backdatedJoins).
-      const { billing, overrides } = billingChanges(group, members, billingDraft, asOf, billingDraft.applyFrom, state);
-      const draft = { ...group, name: groupDraft.name, hourlyRate: billingDraft.hourlyRate, billing };
+      const { billing, overrides } = billingChanges(
+        group,
+        membersOf(group),
+        billingDraft,
+        asOf,
+        billingDraft.applyFrom,
+        state,
+      );
+      const draft = { ...group, hourlyRate: billingDraft.hourlyRate, billing };
       const saved = actions.saveGroupBilling
         ? await actions.saveGroupBilling(draft, overrides)
         : await actions.upsertGroup(draft);
-      if (saved) {
-        baselines.current.group = { ...groupDraft };
-        baselines.current.billing = { ...billingDraft };
-        setBillingSheet(false);
-      }
+      if (saved) setBillingDraft(null);
       return saved;
     });
   const confirmAction = async () => {
@@ -556,11 +539,9 @@ export default function Community({
     let completed = false;
     if (target.action === "archive-student") completed = await actions.archiveStudent(target.item.id);
     if (target.action === "delete-student") completed = await actions.deleteStudent(target.item.id);
-    if (target.action === "delete-group") completed = await actions.deleteGroup(target.item.id);
     if (completed) {
       setConfirmTarget(null);
       setStudentEditor(null);
-      setGroupEditor(null);
       setSheet(null);
       if (selected.id === target.item.id) setSelected({ type: "", id: "" });
     }
@@ -578,11 +559,38 @@ export default function Community({
     });
   const reactivateGroup = (group) => runSave(() => actions.reactivateGroup(group.id));
   const reactivateStudent = (student) => runSave(() => actions.upsertStudent({ ...student, status: "Active" }));
-  const join = (student, choice) =>
+  const deleteGroup = () =>
     runSave(async () => {
-      if (!joinTarget || !student) return false;
-      const saved = await actions.upsertStudent(joinGroup(student, joinTarget, asOf, choice));
-      if (saved) setJoinTarget(null);
+      if (!deleteTarget) return false;
+      const done = await actions.deleteGroup(deleteTarget.id);
+      if (done) {
+        if (selected.id === deleteTarget.id) setSelected({ type: "", id: "" });
+        setDeleteTarget(null);
+        setSheet(null);
+      }
+      return done;
+    });
+  // Joins and leaves of one group, saved together: each changed student with the group added or removed.
+  // `choice` («full», «prorated», «next») prices the first month of whoever joins a monthly group already
+  // started, each at their own fee.
+  const saveMembers = (checked, choice) =>
+    runSave(async () => {
+      if (!membersTarget) return false;
+      const group = membersTarget;
+      const drafts = activeStudents
+        .filter((student) => studentGroupIdsOf(student).includes(group.id) !== checked.has(student.id))
+        .map((student) =>
+          checked.has(student.id)
+            ? joinGroup(
+                student,
+                group,
+                asOf,
+                choice ? { amount: joiningOptions(state, group, student, asOf).amounts[choice] } : null,
+              )
+            : { ...student, groupIds: studentGroupIdsOf(student).filter((id) => id !== group.id) },
+        );
+      const saved = drafts.length ? await actions.saveGroupMembers(drafts) : true;
+      if (saved) setMembersTarget(null);
       return saved;
     });
 
@@ -891,30 +899,22 @@ export default function Community({
       onReactivate={() => reactivateGroup(selectedGroup)}
       saving={saving}
     />
-  ) : selectedGroup && groupDraft && billingDraft ? (
+  ) : selectedGroup ? (
     <GroupDetail
       key={selectedGroup.id}
       group={selectedGroup}
       members={selectedMembers}
       summary={groupSummaries.get(selectedGroup.id)}
-      grid={groupAttendanceGrid(state, selectedGroup, selectedMembers, asOf)}
-      monthsById={months}
       next={nextFor(selectedGroup)}
       asOf={asOf}
       state={state}
-      draft={groupDraft}
-      setDraft={setGroupDraft}
-      billingDraft={billingDraft}
-      setBillingDraft={setBillingDraft}
-      onSave={() => saveGroupDetail(selectedGroup)}
-      onArchive={() => setArchiveTarget(selectedGroup)}
-      onEditSchedule={() => openGroupEditor(selectedGroup)}
-      onAddStudent={() => setJoinTarget(selectedGroup)}
+      onEdit={() => openGroupEditor(selectedGroup)}
+      onEditBilling={() => openBillingEditor(selectedGroup)}
+      onChangeMembers={() => setMembersTarget(selectedGroup)}
       onOpenStudent={(student) => select("student", student.id)}
       onOpenNext={() => openNextClass(selectedGroup)}
+      onOpenTracking={openTracking}
       onChangeBadge={(badge) => actions.setGroupBadge(selectedGroup.id, badge)}
-      saving={saving}
-      dirty={groupDirty}
     />
   ) : (
     <section className="detail">
@@ -937,8 +937,9 @@ export default function Community({
       }
     : null;
 
-  // The saved record behind the student editor: «Desactivar» and «Eliminar» act on it, not on the draft.
+  // The saved records behind the editors: «Desactivar», «Archivar» and «Eliminar» act on them, not on the drafts.
   const editedStudent = studentEditor?.id ? state.students.find((item) => item.id === studentEditor.id) || null : null;
+  const editedGroup = groupEditor?.id ? state.groups.find((item) => item.id === groupEditor.id) || null : null;
 
   const overlays = (
     <>
@@ -950,7 +951,13 @@ export default function Community({
         description={t("Use individual classes, one or many groups, or both.")}
         footer={
           <>
-            <Button onClick={closeStudentEditor}>{t("Cancel")}</Button>
+            {/* On the phone ✕ closes it, and three buttons would not fit in one row. */}
+            {compact ? null : <Button onClick={closeStudentEditor}>{t("Cancel")}</Button>}
+            {studentEditor?.id ? null : (
+              <Button onClick={() => saveStudentEditor(null, true)} disabled={saving}>
+                {t("Save and add another")}
+              </Button>
+            )}
             <Button variant="primary" onClick={() => saveStudentEditor()} disabled={saving}>
               {saving ? t("Saving…") : t("Save student")}
             </Button>
@@ -1008,22 +1015,13 @@ export default function Community({
           </>
         ) : null}
       </Drawer>
-      <Drawer
+      <BottomSheet
         open={Boolean(groupEditor)}
         onClose={closeGroupEditor}
-        title={groupEditor?.id ? t("Edit group") : t("Create group")}
-        kicker={groupEditor?.id ? t("Schedule and details") : undefined}
+        title={editedGroup?.name || t("Create group")}
+        kicker={groupEditor?.id ? t("Edit group") : undefined}
         footer={
           <>
-            {groupEditor?.id ? (
-              <Button
-                variant="ghost"
-                className="is-danger-text footer-start"
-                onClick={() => setConfirmTarget({ action: "delete-group", item: groupEditor })}
-              >
-                {t("Delete group")}
-              </Button>
-            ) : null}
             <Button onClick={closeGroupEditor}>{t("Cancel")}</Button>
             <Button variant="primary" onClick={saveGroupEditor} disabled={saving}>
               {saving ? t("Saving…") : groupEditor?.id ? t("Save group") : t("Create group")}
@@ -1032,12 +1030,7 @@ export default function Community({
         }
       >
         {groupEditor ? (
-          <GroupEditor
-            draft={groupEditor}
-            setDraft={setGroupEditor}
-            defaultHours={state.settings.defaultClassHours}
-            defaultRate={state.settings.hourlyRate}
-          >
+          <GroupEditor draft={groupEditor} setDraft={setGroupEditor} defaultHours={state.settings.defaultClassHours}>
             {groupEditor.id ? null : (
               <BillingFields
                 draft={newGroupBilling}
@@ -1050,7 +1043,75 @@ export default function Community({
             )}
           </GroupEditor>
         ) : null}
-      </Drawer>
+        {editedGroup ? (
+          <div className="group-editor-actions">
+            <ListRow
+              avatar={<Archive className="list-row-icon" aria-hidden="true" />}
+              name={t("Archive group")}
+              context={t("It leaves your agenda and everything is kept")}
+              onClick={() => leaveGroupEditorFor(() => setArchiveTarget(editedGroup))}
+            />
+            <ListRow
+              className="is-danger"
+              avatar={<Trash2 className="list-row-icon" aria-hidden="true" />}
+              name={t("Delete group")}
+              context={t("For good; first you will see what is lost")}
+              onClick={() => leaveGroupEditorFor(() => setDeleteTarget(editedGroup))}
+            />
+          </div>
+        ) : null}
+      </BottomSheet>
+      <BottomSheet
+        open={Boolean(billingDraft && focusGroup)}
+        onClose={closeBillingEditor}
+        title={focusGroup?.name || ""}
+        kicker={t("Billing")}
+        backLabel={compact ? t("Back") : undefined}
+        footer={
+          <>
+            {compact ? null : <Button onClick={closeBillingEditor}>{t("Cancel")}</Button>}
+            <Button variant="primary" onClick={() => saveBilling(focusGroup)} disabled={saving || !billingDirty}>
+              {saving ? t("Saving…") : t("Save billing")}
+            </Button>
+          </>
+        }
+      >
+        {billingDraft && focusGroup ? (
+          <BillingFields
+            draft={billingDraft}
+            setDraft={setBillingDraft}
+            group={focusGroup}
+            members={focusMembers}
+            state={state}
+            asOf={asOf}
+            defaultRate={state.settings?.hourlyRate}
+            chooseStart
+          />
+        ) : null}
+      </BottomSheet>
+      <MembersSheet
+        key={membersTarget?.id || "members"}
+        group={membersTarget}
+        students={activeStudents}
+        groupsById={groupsById}
+        firstMonth={membersTarget ? joiningOptions(state, membersTarget, null, asOf) : null}
+        asOf={asOf}
+        onClose={() => setMembersTarget(null)}
+        onSave={saveMembers}
+        saving={saving}
+      />
+      <DeleteGroupDialog
+        group={deleteTarget}
+        members={deleteTarget ? membersOf(deleteTarget) : []}
+        preview={deleteTarget ? groupDeletionPreview(state, deleteTarget.id, asOf) : null}
+        onClose={() => setDeleteTarget(null)}
+        onArchive={() => {
+          setArchiveTarget(deleteTarget);
+          setDeleteTarget(null);
+        }}
+        onConfirm={deleteGroup}
+        saving={saving}
+      />
       <ArchiveGroupDialog
         open={Boolean(archiveTarget)}
         group={archiveTarget}
@@ -1058,19 +1119,6 @@ export default function Community({
         summary={archiveSummary}
         onClose={() => setArchiveTarget(null)}
         onConfirm={archiveGroup}
-        saving={saving}
-      />
-      <JoinGroupSheet
-        key={joinTarget?.id || "join"}
-        open={Boolean(joinTarget)}
-        group={joinTarget}
-        candidates={
-          joinTarget ? activeStudents.filter((student) => !studentGroupIdsOf(student).includes(joinTarget.id)) : []
-        }
-        state={state}
-        asOf={asOf}
-        onClose={() => setJoinTarget(null)}
-        onJoin={join}
         saving={saving}
       />
       <GroupChangeSheet
@@ -1086,26 +1134,16 @@ export default function Community({
         title={
           confirmTarget?.action === "archive-student"
             ? t("Deactivate {p0}?", { p0: confirmTarget.item.fullName })
-            : t("Delete {p0}?", { p0: confirmTarget?.item?.fullName || confirmTarget?.item?.name })
+            : t("Delete {p0}?", { p0: confirmTarget?.item?.fullName })
         }
         description={
           confirmTarget?.action === "archive-student"
             ? t("The student becomes inactive while grades, attendance, and payment history stay available.")
-            : confirmTarget?.action === "delete-student"
-              ? t(
-                  "Students with grades, class history, or monthly billing history cannot be deleted; deactivate them instead.",
-                )
-              : t(
-                  "Groups with assigned students or monthly fees on record cannot be deleted. Existing class history remains protected.",
-                )
+            : t(
+                "Students with grades, class history, or monthly billing history cannot be deleted; deactivate them instead.",
+              )
         }
-        confirmLabel={
-          confirmTarget?.action === "archive-student"
-            ? t("Deactivate student")
-            : confirmTarget?.action === "delete-group"
-              ? t("Delete group")
-              : t("Delete student")
-        }
+        confirmLabel={confirmTarget?.action === "archive-student" ? t("Deactivate student") : t("Delete student")}
         tone={confirmTarget?.action === "archive-student" ? "primary" : "danger"}
         onClose={() => setConfirmTarget(null)}
         onConfirm={() => runSave(confirmAction)}
@@ -1252,6 +1290,13 @@ export default function Community({
               ? t("{count} students · their history is kept in full", { count: focusMembers.length })
               : undefined
           }
+          action={
+            sheetGroup && !isGroupArchived(sheetGroup) ? (
+              <Button icon={Pencil} onClick={() => openGroupEditor(sheetGroup)}>
+                {t("Edit")}
+              </Button>
+            ) : null
+          }
         >
           {sheetGroup && isGroupArchived(sheetGroup) ? (
             <ArchivedGroupView
@@ -1270,53 +1315,15 @@ export default function Community({
               group={sheetGroup}
               members={focusMembers}
               summary={groupSummaries.get(sheetGroup.id)}
-              grid={groupAttendanceGrid(state, sheetGroup, focusMembers, asOf, 3)}
-              monthsById={months}
               next={nextFor(sheetGroup)}
               asOf={asOf}
               state={state}
-              onEditBilling={() => setBillingSheet(true)}
+              onEditBilling={() => openBillingEditor(sheetGroup)}
+              onChangeMembers={() => setMembersTarget(sheetGroup)}
               onOpenStudent={(student) => setSheet({ type: "student", id: student.id })}
-              onAddStudent={() => setJoinTarget(sheetGroup)}
-              onArchive={() => setArchiveTarget(sheetGroup)}
+              onOpenTracking={openTracking}
               onChangeBadge={(badge) => actions.setGroupBadge(sheetGroup.id, badge)}
             />
-          ) : null}
-        </BottomSheet>
-        <BottomSheet
-          open={Boolean(billingSheet && sheetGroup && groupDraft && billingDraft)}
-          onClose={closeBillingSheet}
-          title={sheetGroup?.name || ""}
-          kicker={t("Edit group")}
-          backLabel={t("Back")}
-          footer={
-            <Button variant="primary" onClick={() => saveGroupDetail(sheetGroup)} disabled={saving || !groupDirty}>
-              {saving ? t("Saving…") : t("Save changes")}
-            </Button>
-          }
-        >
-          {sheetGroup && groupDraft && billingDraft ? (
-            <div className="billing-sheet">
-              <Field label={t("Group name")}>
-                <Input
-                  value={groupDraft.name}
-                  onChange={(event) => setGroupDraft({ ...groupDraft, name: event.target.value })}
-                />
-              </Field>
-              <BillingFields
-                draft={billingDraft}
-                setDraft={setBillingDraft}
-                group={sheetGroup}
-                members={focusMembers}
-                state={state}
-                asOf={asOf}
-                defaultRate={state.settings?.hourlyRate}
-                chooseStart
-              />
-              <button type="button" className="link-button" onClick={() => openGroupEditor(sheetGroup)}>
-                {t("Edit schedule and details")}
-              </button>
-            </div>
           ) : null}
         </BottomSheet>
         {overlays}
