@@ -618,9 +618,8 @@ export function joinGroup(student, group, asOf, choice = null) {
 }
 
 /**
- * A student moved from a group to a monthly one with a fee already paid for the days they are moving
- * (the month whose coverage holds `asOf`, in the groups they leave): the first month of the new group
- * may count it. Returns the group to ask about, what was paid and the joining options, or null when
+ * A student moved from a group to a monthly one after paying this month's fee (`asOf`'s month) in the
+ * groups they leave: the first month of the new group may count it. Returns the group to ask about, what was paid and the joining options, or null when
  * nothing was paid there or no monthly group is joined (a group they come back to keeps its dates).
  */
 export function groupChangeQuestion(state, before, after, asOf) {
@@ -629,16 +628,12 @@ export function groupChangeQuestion(state, before, after, asOf) {
   const afterIds = studentGroupIdsOf(after);
   const left = beforeIds.filter((id) => !afterIds.includes(id));
   if (!left.length) return null;
+  const period = periodOf(asOf);
   const covering = deriveMonthlyCharges(state, asOf).filter(
-    (charge) =>
-      charge.studentId === before.id &&
-      left.includes(charge.groupId) &&
-      charge.coversFrom <= asOf &&
-      asOf <= charge.coversTo,
+    (charge) => charge.studentId === before.id && left.includes(charge.groupId) && charge.period === period,
   );
   const paid = roundMoney(sumMoney(covering, (charge) => charge.paid));
   if (!(paid > 0)) return null;
-  const period = periodOf(asOf);
   const group = (state.groups || []).find(
     (item) =>
       afterIds.includes(item.id) &&

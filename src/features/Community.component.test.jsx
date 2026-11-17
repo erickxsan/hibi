@@ -644,7 +644,9 @@ describe("Community groups", () => {
     const state = communityState();
     const billing = { mode: "monthly", monthlyFee: 900, due: { type: "dayOfMonth", day: 5 }, effectiveFrom: "2026-10" };
     state.groups[0].billing = billing;
-    state.groups.push(createGroup({ id: "g2", name: "Secundaria", weeklySchedule: [], billing }));
+    state.groups.push(
+      createGroup({ id: "g2", name: "Secundaria", weeklySchedule: state.groups[0].weeklySchedule, billing }),
+    );
     state.students[1].monthlyPayments = [
       { id: "p1", groupId: "g1", period: "2026-10", amount: 900, paidAt: "2026-10-05" },
     ];
@@ -661,10 +663,15 @@ describe("Community groups", () => {
     // Same fee: the difference is nothing, so «$0 now» is not offered twice.
     expect(within(sheet).getByRole("radio", { name: /Count what was paid/ })).toHaveTextContent("$0");
     expect(within(sheet).queryByRole("radio", { name: /\$0 now/ })).not.toBeInTheDocument();
+    await user.click(within(sheet).getByRole("radio", { name: /Full month/ }));
     await user.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "To Secundaria" })).not.toBeInTheDocument());
     expect(screen.getByRole("dialog", { name: "Edit student" })).toBeInTheDocument();
     expect(persistence.save).not.toHaveBeenCalled();
+    // Asked again, it starts from the credit once more.
+    await user.click(within(editor).getByRole("button", { name: "Save student" }));
+    const again = await screen.findByRole("dialog", { name: "To Secundaria" });
+    expect(within(again).getByRole("radio", { name: /Count what was paid/ })).toHaveAttribute("aria-checked", "true");
   });
 
   it("creates a monthly group from the drawer", async () => {

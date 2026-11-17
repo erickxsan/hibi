@@ -348,11 +348,12 @@ describe("moving to another monthly group", () => {
     expect(groupChangeQuestion(cheaper.state, cheaper.luna, cheaper.moved, AS_OF).difference).toBe(0);
   });
 
-  it("counts the month whose days cover the move, not the calendar month", () => {
-    // Due on the 15th: September's fee covers until October 14.
-    const { state, luna, moved } = moving({ period: "2026-09", fromDay: 15 });
-    expect(groupChangeQuestion(state, luna, moved, "2026-10-10")).toMatchObject({ paid: 900 });
-    expect(groupChangeQuestion(state, luna, moved, "2026-10-16")).toBeNull();
+  it("counts this month's fee only, even when it was paid before its due date", () => {
+    // Due on the 25th: October paid early counts on the 21st; September's fee does not count for October.
+    const early = moving({ fromDay: 25 });
+    expect(groupChangeQuestion(early.state, early.luna, early.moved, AS_OF)).toMatchObject({ paid: 900 });
+    const last = moving({ period: "2026-09", fromDay: 25 });
+    expect(groupChangeQuestion(last.state, last.luna, last.moved, AS_OF)).toBeNull();
   });
 
   it("asks nothing without a payment, without leaving a group, or into a group paid per class", () => {

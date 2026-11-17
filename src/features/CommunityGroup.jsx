@@ -817,7 +817,11 @@ export function GroupChangeSheet({ question, asOf, onClose, onConfirm, saving })
   return (
     <BottomSheet
       open={Boolean(question)}
-      onClose={onClose}
+      onClose={() => {
+        // Asked again later, it starts from «Count what was paid».
+        setChoice("credit");
+        onClose();
+      }}
       kicker={t("Change of group")}
       title={question ? t("To {group}", { group: question.group.name }) : ""}
       footer={
