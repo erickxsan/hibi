@@ -585,6 +585,88 @@ describe("Community groups", () => {
     );
   });
 
+  it("asks what the first month of the new group costs when a paid student changes group", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(`${AS_OF}T12:00:00`));
+    const user = userEvent.setup();
+    const state = communityState();
+    const monthly = (monthlyFee) => ({
+      mode: "monthly",
+      monthlyFee,
+      due: { type: "dayOfMonth", day: 5 },
+      effectiveFrom: "2026-10",
+    });
+    state.groups[0].billing = monthly(900);
+    state.groups.push(
+      createGroup({
+        id: "g2",
+        name: "Secundaria",
+        weeklySchedule: state.groups[0].weeklySchedule,
+        billing: monthly(1000),
+      }),
+    );
+    // Diego paid October in Primaria 5A and moves to Secundaria (1,000 a month) on the 21st.
+    state.students[1].monthlyPayments = [
+      { id: "p1", groupId: "g1", period: "2026-10", amount: 900, paidAt: "2026-10-05" },
+    ];
+    const { saved } = setup(state);
+    await user.click(screen.getByRole("button", { name: "Open Diego Soto" }));
+    await user.click(screen.getByRole("button", { name: "Edit student" }));
+    const editor = await screen.findByRole("dialog", { name: "Edit student" });
+    await user.click(within(editor).getByRole("button", { name: "Remove Primaria 5A" }));
+    await user.click(within(editor).getByRole("combobox", { name: "Assign groups" }));
+    await user.click(await screen.findByRole("option", { name: /Secundaria/ }));
+    await user.click(within(editor).getByRole("button", { name: "Save student" }));
+
+    const sheet = await screen.findByRole("dialog", { name: "To Secundaria" });
+    const credit = within(sheet).getByRole("radio", { name: /Count what was paid/ });
+    expect(credit).toHaveAttribute("aria-checked", "true");
+    expect(credit).toHaveTextContent("Count what was paid · $100");
+    expect(credit).toHaveTextContent("The $900 paid in Primaria 5A counts toward October.");
+    expect(within(sheet).getByRole("radio", { name: /Full month/ })).toBeInTheDocument();
+    await user.click(within(sheet).getByRole("button", { name: "Save student" }));
+    await waitFor(() =>
+      expect(saved().students.find((s) => s.id === "s2")).toMatchObject({
+        groupIds: ["g2"],
+        billingByGroup: {
+          g1: { leftOn: AS_OF },
+          g2: { mode: "group", joinedOn: AS_OF, firstMonthAmount: 100 },
+        },
+      }),
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Edit student" })).not.toBeInTheDocument());
+  });
+
+  it("keeps the editor open when the group-change question is closed", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(`${AS_OF}T12:00:00`));
+    const user = userEvent.setup();
+    const state = communityState();
+    const billing = { mode: "monthly", monthlyFee: 900, due: { type: "dayOfMonth", day: 5 }, effectiveFrom: "2026-10" };
+    state.groups[0].billing = billing;
+    state.groups.push(createGroup({ id: "g2", name: "Secundaria", weeklySchedule: [], billing }));
+    state.students[1].monthlyPayments = [
+      { id: "p1", groupId: "g1", period: "2026-10", amount: 900, paidAt: "2026-10-05" },
+    ];
+    const { persistence } = setup(state);
+    await user.click(screen.getByRole("button", { name: "Open Diego Soto" }));
+    await user.click(screen.getByRole("button", { name: "Edit student" }));
+    const editor = await screen.findByRole("dialog", { name: "Edit student" });
+    await user.click(within(editor).getByRole("button", { name: "Remove Primaria 5A" }));
+    await user.click(within(editor).getByRole("combobox", { name: "Assign groups" }));
+    await user.click(await screen.findByRole("option", { name: /Secundaria/ }));
+    persistence.save.mockClear();
+    await user.click(within(editor).getByRole("button", { name: "Save student" }));
+    const sheet = await screen.findByRole("dialog", { name: "To Secundaria" });
+    // Same fee: the difference is nothing, so «$0 now» is not offered twice.
+    expect(within(sheet).getByRole("radio", { name: /Count what was paid/ })).toHaveTextContent("$0");
+    expect(within(sheet).queryByRole("radio", { name: /\$0 now/ })).not.toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "To Secundaria" })).not.toBeInTheDocument());
+    expect(screen.getByRole("dialog", { name: "Edit student" })).toBeInTheDocument();
+    expect(persistence.save).not.toHaveBeenCalled();
+  });
+
   it("creates a monthly group from the drawer", async () => {
     const user = userEvent.setup();
     const { saved } = setup();

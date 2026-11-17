@@ -113,6 +113,9 @@ export const COMMUNITY_TRANSLATIONS = Object.freeze({
   "{remaining} of {total} classes of {month} remain.": "Quedan {remaining} de {total} clases de {month}.",
   "From {month} · $0 now": "Desde {month} · $0 ahora",
   "The classes of {month} they take are free.": "Las clases de {month} que tome quedan sin costo.",
+  "Change of group": "Cambio de grupo",
+  "Count what was paid · {amount}": "Descontar lo ya pagado · {amount}",
+  "The {paid} paid in {from} counts toward {month}.": "Los {paid} que pagó en {from} cuentan para {month}.",
   // Editor del alumno
   "Own rate": "Tarifa propia",
   "Overrides the group rate for this student.": "Reemplaza la tarifa del grupo para este alumno.",

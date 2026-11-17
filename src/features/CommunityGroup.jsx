@@ -667,6 +667,61 @@ export function ArchiveGroupDialog({ open, group, members, summary, onClose, onC
   );
 }
 
+/** What the first month in a monthly group can cost: the whole fee, or, once it started, its share or nothing. */
+function firstMonthChoices(options, asOf, t, locale) {
+  const month = monthLong(asOf, locale);
+  const full = {
+    value: "full",
+    title: t("Full month · {amount}", { amount: formatMoney(options.amounts.full, locale) }),
+    text: t("They pay all of {month}.", { month }),
+    amount: options.amounts.full,
+  };
+  if (!options.started) return [full];
+  return [
+    full,
+    {
+      value: "prorated",
+      title: t("Proportional · {amount}", { amount: formatMoney(options.amounts.prorated, locale) }),
+      text: t("{remaining} of {total} classes of {month} remain.", {
+        remaining: options.amounts.remaining,
+        total: options.amounts.total,
+        month,
+      }),
+      amount: options.amounts.prorated,
+    },
+    {
+      value: "next",
+      title: t("From {month} · $0 now", { month: monthLong(`${nextPeriod(periodOf(asOf))}-01`, locale) }),
+      text: t("The classes of {month} they take are free.", { month }),
+      amount: 0,
+    },
+  ];
+}
+
+function FirstMonthChoices({ choices, value, onChange, heading, label }) {
+  return (
+    <div className="join-options" role="radiogroup" aria-label={label}>
+      <h3 className="overline">{heading}</h3>
+      {choices.map((item) => (
+        <button
+          type="button"
+          role="radio"
+          aria-checked={value === item.value}
+          key={item.value}
+          className={`ro ${value === item.value ? "on" : ""}`}
+          onClick={() => onChange(item.value)}
+        >
+          <i aria-hidden="true" />
+          <span>
+            <b>{item.title}</b>
+            <small>{item.text}</small>
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** Add an existing student to a group; in a monthly group already started, choose what the first month costs. */
 export function JoinGroupSheet({ open, group, candidates, state, asOf, onClose, onJoin, saving }) {
   const { t, locale } = useI18n();
@@ -675,34 +730,8 @@ export function JoinGroupSheet({ open, group, candidates, state, asOf, onClose, 
   const student = candidates.find((item) => item.id === studentId) || candidates[0] || null;
   const options = group && student ? joiningOptions(state, group, student, asOf) : null;
   const month = monthLong(asOf, locale);
-  const nextMonth = monthLong(`${nextPeriod(periodOf(asOf))}-01`, locale);
   const billing = groupBillingFor(group, periodOf(asOf));
-  const choices = options?.started
-    ? [
-        {
-          value: "full",
-          title: t("Full month · {amount}", { amount: formatMoney(options.amounts.full, locale) }),
-          text: t("They pay all of {month}.", { month }),
-          amount: options.amounts.full,
-        },
-        {
-          value: "prorated",
-          title: t("Proportional · {amount}", { amount: formatMoney(options.amounts.prorated, locale) }),
-          text: t("{remaining} of {total} classes of {month} remain.", {
-            remaining: options.amounts.remaining,
-            total: options.amounts.total,
-            month,
-          }),
-          amount: options.amounts.prorated,
-        },
-        {
-          value: "next",
-          title: t("From {month} · $0 now", { month: nextMonth }),
-          text: t("The classes of {month} they take are free.", { month }),
-          amount: 0,
-        },
-      ]
-    : [];
+  const choices = options?.started ? firstMonthChoices(options, asOf, t, locale) : [];
   const picked = choices.find((item) => item.value === choice) || null;
   return (
     <BottomSheet
@@ -745,28 +774,66 @@ export function JoinGroupSheet({ open, group, candidates, state, asOf, onClose, 
           <p className="muted">{t("Every active student is already in this group.")}</p>
         )}
         {choices.length ? (
-          <div className="join-options" role="radiogroup" aria-label={t("What do they pay for {month}?", { month })}>
-            <h3 className="overline">
-              {t("{month} already started · what do they pay?", { month: capitalize(month) })}
-            </h3>
-            {choices.map((item) => (
-              <button
-                type="button"
-                role="radio"
-                aria-checked={choice === item.value}
-                key={item.value}
-                className={`ro ${choice === item.value ? "on" : ""}`}
-                onClick={() => setChoice(item.value)}
-              >
-                <i aria-hidden="true" />
-                <span>
-                  <b>{item.title}</b>
-                  <small>{item.text}</small>
-                </span>
-              </button>
-            ))}
-          </div>
+          <FirstMonthChoices
+            choices={choices}
+            value={choice}
+            onChange={setChoice}
+            label={t("What do they pay for {month}?", { month })}
+            heading={t("{month} already started · what do they pay?", { month: capitalize(month) })}
+          />
         ) : null}
+      </div>
+    </BottomSheet>
+  );
+}
+
+/**
+ * A student moved to a monthly group after paying the days they move in their old group
+ * (see groupChangeQuestion): ask what the first month of the new group costs, counting what was paid.
+ */
+export function GroupChangeSheet({ question, asOf, onClose, onConfirm, saving }) {
+  const { t, locale } = useI18n();
+  const [choice, setChoice] = useState("credit");
+  const month = monthLong(asOf, locale);
+  const choices = question
+    ? [
+        {
+          value: "credit",
+          title: t("Count what was paid · {amount}", { amount: formatMoney(question.difference, locale) }),
+          text: t("The {paid} paid in {from} counts toward {month}.", {
+            paid: formatMoney(question.paid, locale),
+            from: question.from.join(" · "),
+            month,
+          }),
+          amount: question.difference,
+        },
+        // «$0 now» says the same as a difference of $0.
+        ...firstMonthChoices(question.options, asOf, t, locale).filter(
+          (item) => !(item.value === "next" && question.difference === 0),
+        ),
+      ]
+    : [];
+  const picked = choices.find((item) => item.value === choice) || choices[0];
+  return (
+    <BottomSheet
+      open={Boolean(question)}
+      onClose={onClose}
+      kicker={t("Change of group")}
+      title={question ? t("To {group}", { group: question.group.name }) : ""}
+      footer={
+        <Button variant="primary" disabled={saving} onClick={() => onConfirm({ amount: picked.amount })}>
+          {saving ? t("Saving…") : t("Save student")}
+        </Button>
+      }
+    >
+      <div className="join-sheet">
+        <FirstMonthChoices
+          choices={choices}
+          value={picked?.value}
+          onChange={setChoice}
+          label={t("What do they pay for {month}?", { month })}
+          heading={t("What do they pay for {month}?", { month })}
+        />
       </div>
     </BottomSheet>
   );

@@ -7,6 +7,7 @@ import {
   billingChanges,
   billingDraftFor,
   feeSuggestion,
+  groupChangeQuestion,
   groupAttendanceGrid,
   groupMonth,
   joinGroup,
@@ -309,5 +310,59 @@ describe("monthly billing editor", () => {
     });
     expect(joinGroup(state.students[3], state.groups[0], AS_OF).billingByGroup).toBeUndefined();
     expect(joiningOptions(state, state.groups[0], state.students[3], AS_OF)).toBeNull();
+  });
+});
+
+describe("moving to another monthly group", () => {
+  const monthly = (fee, day = 5) => ({
+    mode: "monthly",
+    monthlyFee: fee,
+    due: { type: "dayOfMonth", day },
+    effectiveFrom: "2026-09",
+  });
+  // Luna paid October in Primaria 5A (900) and moves to Secundaria (1,000 a month) on the 21st.
+  function moving({ paid = 900, period = "2026-10", fromDay = 5, to = monthly(1000) } = {}) {
+    const state = fixture();
+    state.classLog = [];
+    state.groups[0] = { ...state.groups[0], billing: monthly(900, fromDay) };
+    state.groups.push({ id: "g2", name: "Secundaria", weeklySchedule: state.groups[0].weeklySchedule, billing: to });
+    const luna = {
+      ...state.students[0],
+      monthlyPayments: paid ? [{ id: "p1", groupId: "g1", period, amount: paid, paidAt: `${period}-05` }] : [],
+    };
+    state.students[0] = luna;
+    return { state, luna, moved: { ...luna, groupIds: ["g2"] } };
+  }
+
+  it("offers what was paid for the days they move toward the new group's first month", () => {
+    const { state, luna, moved } = moving();
+    expect(groupChangeQuestion(state, luna, moved, AS_OF)).toMatchObject({
+      group: { id: "g2" },
+      paid: 900,
+      from: ["Primaria 5A"],
+      difference: 100,
+      options: { started: true, fee: 1000 },
+    });
+    // A cheaper group: nothing left to pay.
+    const cheaper = moving({ to: monthly(600) });
+    expect(groupChangeQuestion(cheaper.state, cheaper.luna, cheaper.moved, AS_OF).difference).toBe(0);
+  });
+
+  it("counts the month whose days cover the move, not the calendar month", () => {
+    // Due on the 15th: September's fee covers until October 14.
+    const { state, luna, moved } = moving({ period: "2026-09", fromDay: 15 });
+    expect(groupChangeQuestion(state, luna, moved, "2026-10-10")).toMatchObject({ paid: 900 });
+    expect(groupChangeQuestion(state, luna, moved, "2026-10-16")).toBeNull();
+  });
+
+  it("asks nothing without a payment, without leaving a group, or into a group paid per class", () => {
+    const unpaid = moving({ paid: 0 });
+    expect(groupChangeQuestion(unpaid.state, unpaid.luna, unpaid.moved, AS_OF)).toBeNull();
+    const { state, luna, moved } = moving();
+    expect(groupChangeQuestion(state, luna, { ...luna, groupIds: ["g1", "g2"] }, AS_OF)).toBeNull();
+    const perClass = moving({ to: { mode: "perClass" } });
+    expect(groupChangeQuestion(perClass.state, perClass.luna, perClass.moved, AS_OF)).toBeNull();
+    const ownPerClass = { ...moved, billingByGroup: { g2: { mode: "perClass", effectiveFrom: "2026-10" } } };
+    expect(groupChangeQuestion(state, luna, ownPerClass, AS_OF)).toBeNull();
   });
 });

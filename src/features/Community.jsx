@@ -42,6 +42,7 @@ import {
   billingChanges,
   billingDraftFor,
   groupAttendanceGrid,
+  groupChangeQuestion,
   groupMonth,
   joinGroup,
   sortStudentsByAttention,
@@ -50,7 +51,14 @@ import {
 } from "./communityModel";
 import { BillingFields, GroupEditor, StudentEditor } from "./CommunityEditors";
 import { groupNamesOf, StudentDetail, StudentSheet } from "./CommunityStudent";
-import { ArchiveGroupDialog, ArchivedGroupView, GroupDetail, GroupSheet, JoinGroupSheet } from "./CommunityGroup";
+import {
+  ArchiveGroupDialog,
+  ArchivedGroupView,
+  GroupChangeSheet,
+  GroupDetail,
+  GroupSheet,
+  JoinGroupSheet,
+} from "./CommunityGroup";
 import "../i18n/screenTranslations.js";
 import "./community.css";
 
@@ -177,6 +185,8 @@ export default function Community({
   const [confirmTarget, setConfirmTarget] = useState(null);
   const [archiveTarget, setArchiveTarget] = useState(null);
   const [joinTarget, setJoinTarget] = useState(null);
+  // A student moved to a monthly group after paying the days they move: what the first month there costs.
+  const [groupChange, setGroupChange] = useState(null);
   const [saving, setSaving] = useState(false);
   const [pendingCode, setPendingCode] = useState("");
   const lostActions = useLostPaymentActions(actions);
@@ -477,11 +487,21 @@ export default function Community({
       setSaving(false);
     }
   };
-  const saveStudentEditor = () =>
+  /** `choice` answers the group-change question: the first month in the new group (see groupChangeQuestion). */
+  const saveStudentEditor = (choice = null) =>
     runSave(async () => {
       if (!studentEditor) return false;
-      const saved = await actions.upsertStudent(studentEditor);
+      const record = state.students.find((item) => item.id === studentEditor.id);
+      const question = choice ? groupChange : groupChangeQuestion(state, record, studentEditor, asOf);
+      if (question && !choice) {
+        setGroupChange(question);
+        return false;
+      }
+      const saved = await actions.upsertStudent(
+        question ? joinGroup(studentEditor, question.group, asOf, choice) : studentEditor,
+      );
       if (saved) {
+        setGroupChange(null);
         setStudentEditor(null);
         if (!compact && studentEditor.id) setSelected({ type: "student", id: studentEditor.id });
         else if (!compact) setPendingCode(studentEditor.code);
@@ -931,7 +951,7 @@ export default function Community({
         footer={
           <>
             <Button onClick={closeStudentEditor}>{t("Cancel")}</Button>
-            <Button variant="primary" onClick={saveStudentEditor} disabled={saving}>
+            <Button variant="primary" onClick={() => saveStudentEditor()} disabled={saving}>
               {saving ? t("Saving…") : t("Save student")}
             </Button>
           </>
@@ -1051,6 +1071,14 @@ export default function Community({
         asOf={asOf}
         onClose={() => setJoinTarget(null)}
         onJoin={join}
+        saving={saving}
+      />
+      <GroupChangeSheet
+        key={groupChange?.group.id || "group-change"}
+        question={groupChange}
+        asOf={asOf}
+        onClose={() => setGroupChange(null)}
+        onConfirm={(choice) => saveStudentEditor(choice)}
         saving={saving}
       />
       <ConfirmDialog

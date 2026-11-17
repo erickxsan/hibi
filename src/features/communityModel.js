@@ -1,6 +1,7 @@
 import { calculateOutstanding } from "../domain/calculations.js";
 import { roundMoney, sumMoney } from "../domain/money.js";
-import { addDays, startOfMonth } from "../domain/dates";
+import { addDays, isDateOnly, startOfMonth } from "../domain/dates";
+import { isGroupArchived } from "../domain/groupArchiving";
 import { gradeGroupId } from "../domain/semanticIdentity";
 import {
   adjustmentFor,
@@ -614,6 +615,43 @@ export function joinGroup(student, group, asOf, choice = null) {
     firstMonthAmount: choice.amount,
   };
   return { ...student, groupIds, billingByGroup };
+}
+
+/**
+ * A student moved from a group to a monthly one with a fee already paid for the days they are moving
+ * (the month whose coverage holds `asOf`, in the groups they leave): the first month of the new group
+ * may count it. Returns the group to ask about, what was paid and the joining options, or null when
+ * nothing was paid there or no monthly group is joined (a group they come back to keeps its dates).
+ */
+export function groupChangeQuestion(state, before, after, asOf) {
+  if (!before?.id || before.status === "Inactive" || after.status === "Inactive") return null;
+  const beforeIds = studentGroupIdsOf(before);
+  const afterIds = studentGroupIdsOf(after);
+  const left = beforeIds.filter((id) => !afterIds.includes(id));
+  if (!left.length) return null;
+  const covering = deriveMonthlyCharges(state, asOf).filter(
+    (charge) =>
+      charge.studentId === before.id &&
+      left.includes(charge.groupId) &&
+      charge.coversFrom <= asOf &&
+      asOf <= charge.coversTo,
+  );
+  const paid = roundMoney(sumMoney(covering, (charge) => charge.paid));
+  if (!(paid > 0)) return null;
+  const period = periodOf(asOf);
+  const group = (state.groups || []).find(
+    (item) =>
+      afterIds.includes(item.id) &&
+      !beforeIds.includes(item.id) &&
+      !isGroupArchived(item) &&
+      !isDateOnly(after.billingByGroup?.[item.id]?.leftOn) &&
+      adjustmentFor(after.billingByGroup?.[item.id], period)?.mode !== "perClass" &&
+      isMonthlyGroup(item, period),
+  );
+  if (!group) return null;
+  const options = joiningOptions(state, group, after, asOf);
+  const from = covering.map((charge) => state.groups.find((item) => item.id === charge.groupId)?.name).filter(Boolean);
+  return { group, paid, from: [...new Set(from)], options, difference: Math.max(0, roundMoney(options.fee - paid)) };
 }
 
 /** Suggested monthly fee for the «Usar» link (a full month of classes, shared with the tutorial). */
