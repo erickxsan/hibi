@@ -48,7 +48,10 @@ function comparable(record) {
   return JSON.stringify(stableValue(fields));
 }
 
+// What makes two records the same thing besides their id (a group's name, a student's code…). A group
+// deleted for good has none: its name is free, so it never matches, nor is matched by, another group.
 function businessKey(collection, record) {
+  if (record?.deletedAt) return "";
   const semanticIdentity = workspaceEntityIdentity(collection, record);
   if (semanticIdentity) return semanticIdentity;
   switch (collection) {
@@ -99,12 +102,10 @@ function slotBusinessKey(slot) {
   return [slot?.dayOfWeek, slot?.startTime, slot?.durationHours].join("\u0000");
 }
 
-// The current records an imported one can match by meaning (name, code…), first one per key. A group
-// deleted for good is hidden: an imported group with its name is a new one.
+// The current records an imported one can match by meaning (see businessKey), first one per key.
 function byBusinessKeyOf(collection, currentItems) {
   const byKey = new Map();
   for (const item of currentItems) {
-    if (item.deletedAt) continue;
     const key = businessKey(collection, item);
     if (key && !byKey.has(key)) byKey.set(key, item);
   }

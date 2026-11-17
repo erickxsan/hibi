@@ -107,6 +107,18 @@ describe("additive record imports", () => {
     expect(plan.candidate.students.find((item) => item.code === "STU-009").groupIds).toEqual(["group-current"]);
   });
 
+  it("never attaches an imported deleted group to a live one with its name", () => {
+    const current = stateWithRoster();
+    const imported = createStarterState();
+    imported.groups.push(
+      createGroup({ id: "foreign-deleted", name: "Math", status: "Inactive", deletedAt: "2026-07-01" }),
+    );
+
+    const plan = buildImportPlan(current, imported);
+
+    expect(plan.candidate.groups.map((item) => item.id).sort()).toEqual(["foreign-deleted", "group-current"]);
+  });
+
   it("adds an imported group as new when only a deleted group had its name", () => {
     const current = createStarterState();
     current.groups.push(
