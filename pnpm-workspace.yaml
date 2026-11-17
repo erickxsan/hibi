@@ -8,3 +8,9 @@ overrides:
   "brace-expansion@^5.0.0": 5.0.12
   zod: ^4.6.6
   minimatch: ^11.0.1
+
+auditConfig:
+  ignoreGhsas:
+    # picomatch <=4.0.7 ReDoS, only through vite (build and test tooling, not the published app). No patched
+    # release exists yet (4.0.8). Remove this entry and add `picomatch: ^4.0.8` to overrides once it is out.
+    - GHSA-fc5q-39xc-vjpf
