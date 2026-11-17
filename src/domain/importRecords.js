@@ -99,16 +99,22 @@ function slotBusinessKey(slot) {
   return [slot?.dayOfWeek, slot?.startTime, slot?.durationHours].join("\u0000");
 }
 
+// The current records an imported one can match by meaning (name, code…), first one per key. A group
+// deleted for good is hidden: an imported group with its name is a new one.
+function byBusinessKeyOf(collection, currentItems) {
+  const byKey = new Map();
+  for (const item of currentItems) {
+    if (item.deletedAt) continue;
+    const key = businessKey(collection, item);
+    if (key && !byKey.has(key)) byKey.set(key, item);
+  }
+  return byKey;
+}
+
 function buildFinalIdMap(collection, currentItems, importedItems, remap = (item) => item) {
   const result = new Map();
   const byId = new Map(currentItems.map((item) => [item.id, item]));
-  const byBusinessKey = new Map();
-  for (const item of currentItems) {
-    // A group deleted for good is hidden: an imported group with its name is a new one.
-    if (item.deletedAt) continue;
-    const key = businessKey(collection, item);
-    if (key && !byBusinessKey.has(key)) byBusinessKey.set(key, item);
-  }
+  const byBusinessKey = byBusinessKeyOf(collection, currentItems);
 
   for (const source of importedItems) {
     const record = remap(source);
@@ -269,11 +275,7 @@ export function buildImportPlan(currentInput, importedInput, decisions = {}) {
   for (const collection of IMPORT_COLLECTIONS) {
     const currentItems = candidate[collection];
     const byId = new Map(currentItems.map((item) => [item.id, item]));
-    const byBusinessKey = new Map();
-    for (const item of currentItems) {
-      const key = businessKey(collection, item);
-      if (key && !byBusinessKey.has(key)) byBusinessKey.set(key, item);
-    }
+    const byBusinessKey = byBusinessKeyOf(collection, currentItems);
 
     imported[collection].forEach((source, index) => {
       const importedId = source.id;

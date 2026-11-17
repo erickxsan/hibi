@@ -107,6 +107,24 @@ describe("additive record imports", () => {
     expect(plan.candidate.students.find((item) => item.code === "STU-009").groupIds).toEqual(["group-current"]);
   });
 
+  it("adds an imported group as new when only a deleted group had its name", () => {
+    const current = createStarterState();
+    current.groups.push(
+      createGroup({ id: "group-deleted", name: "Math", status: "Inactive", deletedAt: "2026-07-01" }),
+    );
+    const imported = createStarterState();
+    imported.groups.push(createGroup({ id: "foreign-group", name: "Math" }));
+    imported.students.push(
+      createStudent({ id: "foreign-student", code: "STU-009", fullName: "Leo", groupIds: ["foreign-group"] }),
+    );
+
+    const plan = buildImportPlan(current, imported);
+
+    const added = plan.candidate.groups.find((item) => item.name === "Math" && !item.deletedAt);
+    expect(added.id).not.toBe("group-deleted");
+    expect(plan.candidate.students.find((item) => item.code === "STU-009").groupIds).toEqual([added.id]);
+  });
+
   it("moves a student's billing adjustments and monthly payments to the group they now belong to", () => {
     const current = stateWithRoster();
     current.groups[0].billing = {
