@@ -104,6 +104,8 @@ function buildFinalIdMap(collection, currentItems, importedItems, remap = (item)
   const byId = new Map(currentItems.map((item) => [item.id, item]));
   const byBusinessKey = new Map();
   for (const item of currentItems) {
+    // A group deleted for good is hidden: an imported group with its name is a new one.
+    if (item.deletedAt) continue;
     const key = businessKey(collection, item);
     if (key && !byBusinessKey.has(key)) byBusinessKey.set(key, item);
   }

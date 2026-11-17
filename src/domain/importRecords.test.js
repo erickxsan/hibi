@@ -90,6 +90,23 @@ describe("additive record imports", () => {
     expect(plan.candidate.classLog[0]).toMatchObject({ studentId: "student-current", groupId: "group-current" });
   });
 
+  it("does not match an imported group to a deleted one with the same name", () => {
+    const current = createStarterState();
+    current.groups.push(
+      createGroup({ id: "group-deleted", name: "Math", status: "Inactive", deletedAt: "2026-07-01" }),
+      createGroup({ id: "group-current", name: "Math" }),
+    );
+    const imported = createStarterState();
+    imported.groups.push(createGroup({ id: "foreign-group", name: "Math" }));
+    imported.students.push(
+      createStudent({ id: "foreign-student", code: "STU-009", fullName: "Leo", groupIds: ["foreign-group"] }),
+    );
+
+    const plan = buildImportPlan(current, imported);
+
+    expect(plan.candidate.students.find((item) => item.code === "STU-009").groupIds).toEqual(["group-current"]);
+  });
+
   it("moves a student's billing adjustments and monthly payments to the group they now belong to", () => {
     const current = stateWithRoster();
     current.groups[0].billing = {

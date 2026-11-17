@@ -40,13 +40,14 @@ export function setGroupArchived(state, groupId, archived, date = todayDateOnly(
   };
 }
 
-// Report scope is a derived view. Saved records and original memberships stay intact.
-export function statisticsStateForGroups(state, includeArchivedGroups = false) {
-  if (includeArchivedGroups) return state;
-  // A deleted group is not archived for the figures: its history always counts.
-  const archivedIds = new Set(
-    (state.groups || []).filter((group) => isGroupArchived(group) && !isGroupDeleted(group)).map((group) => group.id),
-  );
+/**
+ * Report scope is a derived view. Saved records and original memberships stay intact. A deleted group is
+ * not archived for the figures, its history always counts, but `keepDeleted: false` (today's agenda and
+ * «Para atender») leaves it out with the archived ones: nothing of it is to be done any more.
+ */
+export function statisticsStateForGroups(state, includeArchivedGroups = false, { keepDeleted = true } = {}) {
+  const hidden = (group) => isGroupArchived(group) && (isGroupDeleted(group) ? !keepDeleted : !includeArchivedGroups);
+  const archivedIds = new Set((state.groups || []).filter(hidden).map((group) => group.id));
   if (!archivedIds.size) return state;
   const groups = state.groups.filter((group) => !archivedIds.has(group.id));
   const classLog = (state.classLog || []).filter((row) => !archivedIds.has(row.groupId));

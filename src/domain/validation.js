@@ -102,6 +102,12 @@ function duplicateIn(items, field, value, exceptId) {
   });
 }
 
+// The groups whose names must be unique: a group deleted for good leaves its slot empty, so the
+// positions in error paths still point at the stored records.
+function liveGroups(groups) {
+  return (Array.isArray(groups) ? groups : []).map((group) => (group?.deletedAt ? null : group));
+}
+
 function withPrefix(validation, prefix) {
   const prepend = (entry) => ({ ...entry, path: entry.path ? `${prefix}.${entry.path}` : prefix });
   return {
@@ -151,15 +157,7 @@ export function validateGroup(group, state = null) {
   }
   billingIssues(group, "group").forEach(([path, message]) => errors.push(issue(path, "invalid_billing", message)));
   // A group deleted for good is never shown again, so its name is free.
-  if (
-    state &&
-    duplicateIn(
-      state.groups.filter((item) => !item.deletedAt),
-      "name",
-      group.name,
-      group.id,
-    )
-  ) {
+  if (state && !group.deletedAt && duplicateIn(liveGroups(state.groups), "name", group.name, group.id)) {
     errors.push(issue("name", "duplicate", "Group name must be unique.", group.name));
   }
   return result(errors, warnings);
@@ -890,7 +888,7 @@ export function validateState(input) {
   errors.push(...duplicateIdErrors(state.classSchedules || [], "classSchedules"));
   errors.push(...duplicateIdErrors(state.scheduleExceptions || [], "scheduleExceptions"));
   errors.push(...duplicateIdErrors(state.scheduleChanges || [], "scheduleChanges"));
-  errors.push(...duplicateFieldErrors(state.groups, "name", "groups", "Group name"));
+  errors.push(...duplicateFieldErrors(liveGroups(state.groups), "name", "groups", "Group name"));
   errors.push(...duplicateFieldErrors(state.students, "code", "students", "Student code"));
 
   const classKeys = new Map();

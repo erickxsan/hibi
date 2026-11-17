@@ -138,9 +138,14 @@ export default function ClassManagerApplication({
         : deriveAll(statisticsState, statisticsState.settings.asOfDate),
     [statisticsState, manager.state, manager.derived],
   );
-  // Today's line and «Para atender» always leave archived groups out, whatever the statistics scope says.
+  // Today's line and «Para atender» always leave archived and deleted groups out, whatever the statistics
+  // scope says.
   const agendaState = useMemo(
-    () => (includeArchivedGroups ? statisticsStateForGroups(manager.state, false) : statisticsState),
+    () =>
+      // The same records as the figures when no group was deleted and archived ones are out: derive once.
+      !includeArchivedGroups && !manager.state.groups.some(isGroupDeleted)
+        ? statisticsState
+        : statisticsStateForGroups(manager.state, false, { keepDeleted: false }),
     [includeArchivedGroups, manager.state, statisticsState],
   );
   const agendaDerived = useMemo(

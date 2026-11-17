@@ -3,7 +3,9 @@ import { deriveMonthlyCharges, monthlyPaymentsBetween } from "./monthlyBilling.j
 import { calculateOutstanding } from "./calculations.js";
 import { deleteGroup, groupDeletionPreview } from "./groupDeletion.js";
 import { isGroupDeleted, statisticsStateForGroups } from "./groupArchiving.js";
-import { validateGroup } from "./validation.js";
+import { validateGroup, validateState } from "./validation.js";
+import { deriveAll } from "./index.js";
+import { buildAttentionItems } from "../features/homeDashboardModel.js";
 
 const AS_OF = "2026-11-10";
 
@@ -95,7 +97,20 @@ describe("deleting a group for good", () => {
     const next = deleteGroup(workspace(), "g-month", AS_OF);
     const named = validateGroup({ id: "new", name: "Prepa" }, next).errors.filter((error) => error.path === "name");
     expect(named).toEqual([]);
+    const both = { ...next, groups: [...next.groups, { ...next.groups[0], id: "new", deletedAt: undefined }] };
+    expect(validateState({ version: 1, ...both }).errors.filter((error) => error.code === "duplicate")).toEqual([]);
     expect(statisticsStateForGroups(next).groups.map((item) => item.id)).toContain("g-month");
     expect(monthlyPaymentsBetween(statisticsStateForGroups(next), "2026-10-01", AS_OF)).toHaveLength(1);
+  });
+
+  it("leaves nothing to do in today's agenda", () => {
+    const state = workspace();
+    // A class saved without attendance, the kind «Para atender» asks to take.
+    state.classLog.push({ ...state.classLog[0], id: "c2", classDate: "2026-11-05", attendance: "" });
+    const next = deleteGroup(state, "g-class", AS_OF);
+    const agenda = statisticsStateForGroups(next, false, { keepDeleted: false });
+    expect(agenda.classLog).toEqual([]);
+    const kinds = buildAttentionItems(agenda, deriveAll(agenda, AS_OF), AS_OF).map((item) => item.kind);
+    expect(kinds).not.toContain("unmarked");
   });
 });
